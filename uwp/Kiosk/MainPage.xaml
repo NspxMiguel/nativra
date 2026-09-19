@@ -82,17 +82,11 @@
         </Style>
 
         <DataTemplate x:Key="RailTemplate" x:DataType="local:Tile">
-            <Grid>
-                <Border CornerRadius="16" Background="{StaticResource Accent}"
-                        Visibility="{x:Bind InitialVisible}">
-                    <TextBlock Text="{x:Bind Initial}" FontSize="52" FontWeight="Bold"
-                               Foreground="#FF06120C"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
-                <Border CornerRadius="16" Visibility="{x:Bind LogoVisible}">
-                    <Image Source="{x:Bind Logo}" Stretch="UniformToFill" />
-                </Border>
-            </Grid>
+            <Border CornerRadius="16" Background="{x:Bind Accent}" Opacity="{x:Bind Dimmed}">
+                <TextBlock Text="{x:Bind Initial}" FontSize="52" FontWeight="Bold"
+                           Foreground="#FF06120C"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
         </DataTemplate>
     </Page.Resources>
 

@@ -28,7 +28,8 @@
       ],
       "priority": 1,
       "gameMode": true,
-      "note": "AllCores build: every libretro core bundled, including dosbox-pure, scummvm, devilutionx, prboom and the Quake engines"
+      "note": "AllCores build: every libretro core bundled, including dosbox-pure, scummvm, devilutionx, prboom and the Quake engines",
+      "protocol": "retroarch"
     },
     {
       "slug": "xbsx2",
@@ -52,7 +53,8 @@
         "series"
       ],
       "priority": 1,
-      "gameMode": true
+      "gameMode": true,
+      "protocol": "xeniacanary"
     },
     {
       "slug": "dolphin",
@@ -65,7 +67,8 @@
         "series"
       ],
       "priority": 1,
-      "gameMode": true
+      "gameMode": true,
+      "protocol": "dolphin"
     },
     {
       "slug": "ppsspp",
@@ -91,7 +94,8 @@
         "series"
       ],
       "priority": 2,
-      "gameMode": true
+      "gameMode": true,
+      "protocol": "flycast"
     },
     {
       "slug": "gzdoom",
@@ -177,7 +181,8 @@
         "series"
       ],
       "priority": 3,
-      "gameMode": true
+      "gameMode": true,
+      "protocol": "supermodel"
     },
     {
       "slug": "ruffle",

@@ -24,7 +24,8 @@ namespace Kiosk
             { "hint.open", "Abrir" },
             { "hint.refresh", "Atualizar" },
             { "empty.title", "Nada instalado ainda" },
-            { "empty.next", "Rode xbdev kit no Mac e aperte Y aqui" },
+            { "empty.next", "Rode xbdev sync no Mac e aperte Y aqui" },
+            { "status.noprotocol", "este abre pelo Dev Home — ele não aceita ser aberto de fora" },
         };
 
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
@@ -41,7 +42,8 @@ namespace Kiosk
             { "hint.open", "Open" },
             { "hint.refresh", "Refresh" },
             { "empty.title", "Nothing installed yet" },
-            { "empty.next", "Run xbdev kit on the Mac, then press Y here" },
+            { "empty.next", "Run xbdev sync on the Mac, then press Y here" },
+            { "status.noprotocol", "this one opens from Dev Home — it accepts no outside launch" },
         };
 
         private static readonly Dictionary<string, string> Active = Pick();

@@ -35,6 +35,7 @@ type CatalogEntry = {
   gameMode?: boolean;
   note?: string;
   via?: string;
+  protocol?: string;
 };
 
 type StoredConfig = { host: string; port: number; user?: string; pass?: string };
@@ -587,6 +588,50 @@ async function cmdUninstall(args: string[]): Promise<void> {
   console.log(t("uninstall.done", { name: pkg.Name }));
 }
 
+
+/**
+ * The console refuses to let a sideloaded app enumerate other packages, so the
+ * Mac does it: cross what is installed with the catalogue and write the result
+ * into Kiosk's own folder, where it can read it without any privilege.
+ */
+async function cmdSyncKiosk(): Promise<void> {
+  const portal = await portalOrExit();
+  const catalog = await loadCatalog();
+  const installed = await portal.packages();
+
+  const entries = catalog.packages
+    .filter((entry) => entry.slug !== "kiosk")
+    .map((entry) => {
+      const match = installed.find((pkg) => {
+        const name = pkg.Name.toLowerCase();
+        const slug = entry.slug.replace(/-.*$/, "").toLowerCase();
+        return name.includes(slug) || name.includes(entry.name.toLowerCase());
+      });
+      return {
+        title: match?.Name ?? entry.name,
+        subtitle: entry.runs?.replace(/^PC NATIVE:\s*/, "") ?? "",
+        protocol: entry.protocol ?? null,
+        installed: Boolean(match),
+      };
+    })
+    .filter((item) => item.installed);
+
+  const payload = { generated: new Date().toISOString(), apps: entries };
+  const file = join(PACKAGE_DIR, "apps.json");
+  await Bun.write(file, JSON.stringify(payload, null, 2));
+
+  const kiosk = await findPackage(portal, "kiosk");
+  if (!kiosk) {
+    console.error("Kiosk is not installed");
+    process.exit(1);
+  }
+  await portal.pushFile(kiosk.PackageFullName, file, "");
+  const launchable = entries.filter((item) => item.protocol).length;
+  console.log(
+    t("sync.done", { total: entries.length, launchable }),
+  );
+}
+
 function usage(): void {
   const commands: Array<[string, string]> = [
     ["find", t("cmd.find")],
@@ -609,6 +654,7 @@ function usage(): void {
     ["verify", t("cmd.verify")],
     ["restart --sim", t("cmd.restart")],
     ["uninstall <app>", t("cmd.uninstall")],
+    ["sync", t("cmd.sync")],
   ];
   console.log(`${t("cli.usage")}: xbdev <comando>`);
   console.log();
@@ -651,6 +697,8 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   reiniciar: cmdRestart,
   uninstall: cmdUninstall,
   remover: cmdUninstall,
+  sync: cmdSyncKiosk,
+  sincronizar: cmdSyncKiosk,
 };
 
 const handler = command ? handlers[command] : undefined;

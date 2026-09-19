@@ -3,6 +3,20 @@
   "note": "Every entry runs NATIVELY on the console in Developer Mode. No PC, no streaming.",
   "packages": [
     {
+      "slug": "kiosk",
+      "name": "Kiosk",
+      "kind": "front-end",
+      "runs": "Our own front-end: every installed app on one screen, opened with the gamepad",
+      "url": "https://github.com/NspxMiguel/xboxdev/releases/latest/download/kiosk-uwp.zip",
+      "via": "gh",
+      "console": [
+        "series"
+      ],
+      "priority": 0,
+      "gameMode": false,
+      "note": "Built by .github/workflows/build-uwp.yml. Private repo, so it is fetched with the gh CLI."
+    },
+    {
       "slug": "retroarch",
       "name": "RetroArch",
       "kind": "emulator",

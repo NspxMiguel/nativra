@@ -5,6 +5,7 @@
 import { DevicePortal, probe, PortalError, type InstalledPackage } from "./portal";
 import { t } from "./i18n";
 import { $ } from "bun";
+import { human, isPackageFile, installOrder, isForThisConsole } from "./util";
 import { readdir, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
 
@@ -27,6 +28,7 @@ type CatalogEntry = {
   priority?: number;
   gameMode?: boolean;
   note?: string;
+  via?: string;
 };
 
 type StoredConfig = { host: string; port: number; user?: string; pass?: string };
@@ -63,43 +65,13 @@ async function loadCatalog(): Promise<Catalog> {
 
 // ---------------------------------------------------------------- helpers
 
-function human(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)}${units[unit]}`;
-}
-
-/** Package files the console accepts, in install order (main package first). */
-const PACKAGE_EXTENSIONS = [".msixbundle", ".appxbundle", ".msix", ".appx", ".cer"];
-
-function isPackageFile(name: string): boolean {
-  return PACKAGE_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext));
-}
-
-/** Bundles outrank single packages; certificates go last. */
-function installOrder(a: string, b: string): number {
-  const rank = (file: string) => {
-    const lower = file.toLowerCase();
-    if (lower.endsWith(".cer")) return 3;
-    if (lower.includes("vclibs") || lower.includes("ui.xaml")) return 2;
-    if (lower.endsWith("bundle")) return 0;
-    return 1;
-  };
-  return rank(a) - rank(b);
-}
-
 async function findPackageFiles(dir: string): Promise<string[]> {
   const found: string[] = [];
   const walk = async (current: string) => {
     for (const entry of await readdir(current, { withFileTypes: true })) {
       const full = join(current, entry.name);
       if (entry.isDirectory()) await walk(full);
-      else if (isPackageFile(entry.name)) found.push(full);
+      else if (isPackageFile(entry.name) && isForThisConsole(full)) found.push(full);
     }
   };
   await walk(dir);
@@ -119,13 +91,25 @@ async function download(entry: CatalogEntry): Promise<string[]> {
     console.log(t("get.cached", { name: entry.name }));
   } else {
     console.log(t("get.downloading", { name: entry.name }));
-    // curl rather than fetch: resumes a partial file, retries on a dropped
-    // connection, and streams straight to disk instead of buffering hundreds
-    // of megabytes in memory.
-    const result =
-      await $`curl -fL --retry 3 --retry-delay 2 -C - -o ${target} ${entry.url}`.nothrow();
-    if (result.exitCode !== 0) {
-      throw new Error(`curl exit ${result.exitCode}`);
+    if (entry.via === "gh") {
+      // Our own builds live in a private repo, so the gh CLI carries the auth.
+      const repo = entry.url.split("/").slice(3, 5).join("/");
+      const asset = entry.url.split("/").pop()!;
+      const result = await $`gh release download --repo ${repo} --pattern ${asset} --dir ${dirname(target)} --clobber`
+        .nothrow()
+        .quiet();
+      if (result.exitCode !== 0) {
+        throw new Error(`gh release download exit ${result.exitCode}`);
+      }
+    } else {
+      // curl rather than fetch: resumes a partial file, retries on a dropped
+      // connection, and streams straight to disk instead of buffering hundreds
+      // of megabytes in memory.
+      const result =
+        await $`curl -fL --retry 3 --retry-delay 2 -C - -o ${target} ${entry.url}`.nothrow();
+      if (result.exitCode !== 0) {
+        throw new Error(`curl exit ${result.exitCode}`);
+      }
     }
     console.log(
       t("get.done", { name: entry.name, size: human(Bun.file(target).size) }),

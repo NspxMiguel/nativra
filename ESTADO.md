@@ -48,6 +48,46 @@
 (`claude-autonomous:XBDEV`). Build: push -> GitHub Actions -> release ->
 `gh release download`.
 
+## Onde o carregador parou, exatamente
+
+O `baselib.dll` do Seraph's Last Stand mapeia, reloca, registra a tabela de
+exceções e resolve **os 140 imports contra o Windows real** — zero stubs. E
+ainda assim o processo morre dentro do `DllMain` dele.
+
+A causa é **TLS estático**: o módulo tem diretório TLS (rva 319360) e foi
+compilado com `__declspec(thread)`. O carregador de verdade dá um índice ao
+módulo, copia o template para a thread e põe o bloco na tabela que fica em
+`TEB+0x58`. Sem isso, o módulo lê um slot de outro dono.
+
+Implementei os três passos (índice por `TlsAlloc`, cópia do template, e a
+tabela medida com `HeapSize` em vez de chutada). **Continua derrubando o
+processo.** A suspeita forte é que reescrever `TEB+0x58` na thread de UI
+corrompe o TLS do próprio runtime .NET Native que hospeda o app.
+
+Caminhos a tentar, em ordem:
+1. Fazer tudo numa **thread dedicada**, criada por nós, e nunca na de UI.
+2. Não trocar o ponteiro da tabela: só escrever num índice que já cabe, e se
+   não couber, desistir em vez de crescer.
+3. Hospedar o jogo em **outro processo** (um segundo pacote UWP só para isso),
+   para que um erro não leve o front-end junto.
+
+A trava está atrás de um arquivo marcador (`LocalState/win32/tls.txt`): sem
+ele, o app nunca executa essa parte. Foi assim que o console voltou a ficar
+saudável.
+
+## Depois do TLS ainda faltam
+
+- **178 funções** que o processo não tem carregadas (user32 114, winmm 23,
+  HID 14, imm32 8, opengl32 6, setupapi 5, version 3, dbghelp 2). Cada import
+  sem resposta já recebe um stub gerado em runtime que grava o próprio nome,
+  então rodar o jogo diz **quais** desses ele realmente chama.
+- **Gráficos**: o jogo cria swapchain a partir de HWND, e o Xbox só tem
+  CoreWindow. Isso é interceptar `dxgi`/`d3d11` e devolver
+  `CreateSwapChainForCoreWindow`.
+
+Nada disso é por jogo — é a mesma camada para todos, que é o que ele pediu
+("tipo o proton, entrou jogo e GG").
+
 ## Fila (pedidos dele, em PEDIDOS.md)
 
 1. Rodar o jogo: preencher os 178 imports, começando por user32 sobre CoreWindow.

@@ -57,7 +57,7 @@ export async function plan(
     const key = await cm.depotKey(appId, depot.id);
     const code = await manifestRequestCode(cm, appId, depot.id, depot.manifestId);
     const manifest = parseManifest(
-      await fetchManifest(servers[0], depot.id, depot.manifestId, code),
+      await fetchManifest(servers, depot.id, depot.manifestId, code),
     );
 
     const names = new Map<ManifestFile, string>();
@@ -87,7 +87,6 @@ export async function downloadDepot(
 
   let doneBytes = 0;
   let filesDone = 0;
-  let serverAt = 0;
 
   for (const file of files) {
     const relative = (item.names.get(file) ?? file.name).replace(
@@ -114,10 +113,7 @@ export async function downloadDepot(
         const batch = queue.splice(0, parallel);
         await Promise.all(
           batch.map(async (chunk) => {
-            // Rotating servers spreads the load the way the real client does,
-            // and stops one slow cache from setting the pace.
-            const server = servers[serverAt++ % servers.length];
-            const raw = await fetchChunk(server, item.depot.id, chunk.sha);
+            const raw = await fetchChunk(servers, item.depot.id, chunk.sha);
             const plain = await decompressChunk(
               decryptWithDepotKey(raw, item.key),
             );

@@ -62,7 +62,6 @@ jobs:
           /p:AppxBundlePlatforms=x64
           /p:UapAppxPackageBuildMode=SideloadOnly
           /p:AppxPackageSigningEnabled=true
-          /p:PackageCertificateKeyFile=Kiosk_TemporaryKey.pfx
           /p:PackageCertificatePassword=${{ secrets.KIOSK_PFX_PASSWORD }}
           /p:AppxPackageDir=${{ github.workspace }}\out\
           /verbosity:minimal

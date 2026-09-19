@@ -97,6 +97,7 @@ namespace Kiosk
         private async Task LoadAppsAsync()
         {
             StatusText.Text = Texts.Get("status.reading");
+            await Settings.LoadAsync();
             Tiles.Clear();
 
             // Steam is part of this app, not a package on the console, so it is

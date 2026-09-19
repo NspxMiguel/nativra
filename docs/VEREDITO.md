@@ -1,5 +1,24 @@
 # Veredito — Xbox Series X como PC de jogos
 
+> **Atualização 19/09/2026 — o "impossível" caiu no ponto que importa.** Medido no
+> console: geração de código em runtime FUNCIONA no dev mode. O `JitProbe`
+> (capability `codeGeneration`) alocou memória, escreveu x64 e executou —
+> retornou 42. RWX direto falha (W^X imposto), o que é o normal e todo dynarec já
+> trata. Como o console é x86-64 e jogo de PC é x86-64, **não é preciso traduzir
+> instrução** para o caminho x64 — precisa da camada de ambiente Windows (PE
+> loader + Win32/NT ABI), que é o que o Wine faz sem traduzir nada no x86-64.
+>
+> Então a divisão real do trabalho é:
+> - **Launcher** (login/biblioteca/download de Steam/Epic/GOG): reimplementável em
+>   código aberto, como Heroic/Legendary/nile já fazem. Engenharia conhecida.
+> - **Camada tipo-Wine** dentro do que o AppContainer expõe: é o grande trabalho,
+>   mas é pesquisa e engenharia, não uma porta trancada.
+> - **Fora de alcance:** o `Steam.exe` fechado rodando como está, e jogo com
+>   anti-cheat de kernel. O resto é caminho aberto.
+>
+> A seção 1 abaixo é o veredito ANTIGO (só o cliente Steam), mantido como registro.
+
+
 Escrito em 19/09/2026, enquanto você dormia. Tudo que está marcado como
 **medido** eu medi nesta máquina ou numa fonte primária; o que é **documentado**
 veio da Microsoft ou da comunidade e ainda não passou pelo seu console, porque

@@ -88,11 +88,28 @@ namespace Kiosk.Native
                 // the attempt only happens when a marker file asks for it.
                 if (await folder.TryGetItemAsync("call.txt") != null)
                 {
-                    lines.Add("call=attempting");
-                    await WriteAsync(lines);
-                    lines[lines.Count - 1] = "call=" + CallSomething(imports);
+                    // Each step is written down before it is taken: if the
+                    // process dies inside one, the file still says which.
+                    foreach (var name in new[] { "baselib.dll", "UnityPlayer.dll", "GameAssembly.dll" })
+                    {
+                        var image = imports.Find(name);
+                        if (image == null || image.EntryPoint == IntPtr.Zero) continue;
+
+                        lines.Add("entry." + name + "=attempting");
+                        await WriteAsync(lines);
+
+                        var result = StartModule(image);
+                        lines[lines.Count - 1] = "entry." + name + "=" + result;
+                        lines.Add("stubs.called=" + imports.Shim.Called.Count);
+                        foreach (var called in imports.Shim.Called) lines.Add("  called " + called);
+                        await WriteAsync(lines);
+                        lines.RemoveRange(
+                            lines.Count - 1 - imports.Shim.Called.Count,
+                            imports.Shim.Called.Count + 1);
+                    }
                     lines.Add("stubs.called=" + imports.Shim.Called.Count);
-                    foreach (var name in imports.Shim.Called) lines.Add("  called " + name);
+                    foreach (var called in imports.Shim.Called) lines.Add("  called " + called);
+                    lines.Add("ticks=" + Ticks(imports));
                 }
             }
             catch (Exception error)
@@ -108,57 +125,39 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int DllMainDelegate(IntPtr instance, uint reason, IntPtr reserved);
 
-        /// <summary>
-        /// Starts the game's own modules. A DLL's entry point is where it sets
-        /// itself up, and it is the first thing that asks the operating system
-        /// for anything — so this is what names the functions still missing.
-        /// </summary>
-        private static string CallSomething(SystemImports imports)
+        /// <summary>Runs a module's entry point, which is where it sets itself up.</summary>
+        private static string StartModule(PeImage image)
         {
-            var report = new List<string>();
-            foreach (var name in new[] { "baselib.dll", "UnityPlayer.dll", "GameAssembly.dll" })
-            {
-                var image = imports.Find(name);
-                if (image == null) continue;
-                try
-                {
-                    if (image.EntryPoint == IntPtr.Zero)
-                    {
-                        report.Add(name + "=no entry point");
-                        continue;
-                    }
-                    var start = Marshal.GetDelegateForFunctionPointer<DllMainDelegate>(
-                        image.EntryPoint);
-                    var result = start(image.BaseAddress, 1, IntPtr.Zero);
-                    report.Add($"{name}={result}");
-                }
-                catch (Exception error)
-                {
-                    report.Add(name + "=" + error.GetType().Name);
-                }
-            }
-
-            // Something out of the game's own code, to prove it runs at all.
             try
             {
-                var baselib = imports.Find("baselib.dll");
-                const string Symbol =
-                    "?Baselib_Timer_GetHighPrecisionTimerTicks@il2cpp_baselib@@YA_KXZ";
-                var address = baselib?.Export(Symbol) ?? IntPtr.Zero;
-                if (address != IntPtr.Zero)
-                {
-                    var ticks = Marshal.GetDelegateForFunctionPointer<TicksDelegate>(address);
-                    var first = ticks();
-                    var second = ticks();
-                    report.Add(second > first ? $"ticks OK {first}->{second}" : "ticks flat");
-                }
+                var start = Marshal.GetDelegateForFunctionPointer<DllMainDelegate>(
+                    image.EntryPoint);
+                return start(image.BaseAddress, 1, IntPtr.Zero).ToString();
             }
             catch (Exception error)
             {
-                report.Add("ticks " + error.GetType().Name);
+                return error.GetType().Name + ": " + error.Message;
             }
+        }
 
-            return string.Join(" | ", report);
+        /// <summary>Something out of the game's own code, to prove it runs at all.</summary>
+        private static string Ticks(SystemImports imports)
+        {
+            try
+            {
+                const string Symbol =
+                    "?Baselib_Timer_GetHighPrecisionTimerTicks@il2cpp_baselib@@YA_KXZ";
+                var address = imports.Find("baselib.dll")?.Export(Symbol) ?? IntPtr.Zero;
+                if (address == IntPtr.Zero) return "symbol not exported";
+                var ticks = Marshal.GetDelegateForFunctionPointer<TicksDelegate>(address);
+                var first = ticks();
+                var second = ticks();
+                return second > first ? $"OK {first}->{second}" : "flat";
+            }
+            catch (Exception error)
+            {
+                return error.GetType().Name;
+            }
         }
 
         private static async Task WriteAsync(List<string> lines)

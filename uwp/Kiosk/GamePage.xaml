@@ -11,7 +11,7 @@
     <Grid>
         <!-- The game's own art fills the screen, the way its store page does. -->
         <Image x:Name="HeroImage" Stretch="UniformToFill" Opacity="0.55"
-               VerticalAlignment="Top" />
+               HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
         <Rectangle>
             <Rectangle.Fill>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">

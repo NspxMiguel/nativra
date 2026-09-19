@@ -75,12 +75,22 @@ namespace Kiosk.Native
                 }
 
                 lines.Add($"resolved.system={imports.FromSystem} resolved.images={imports.FromImages}");
-                lines.Add("call=" + CallSomething(imports));
                 lines.Add("modules.missing=" + string.Join(",", imports.MissingModules));
                 lines.Add($"functions.missing={imports.MissingFunctions.Count}");
                 // The list itself is the work queue for the shim.
                 var take = Math.Min(imports.MissingFunctions.Count, 400);
                 for (var i = 0; i < take; i++) lines.Add("  " + imports.MissingFunctions[i]);
+
+                // Calling into a module nobody initialised takes the whole
+                // process down, and an access violation is not something a
+                // managed catch can hold. So the report is on disk first, and
+                // the attempt only happens when a marker file asks for it.
+                if (await folder.TryGetItemAsync("call.txt") != null)
+                {
+                    lines.Add("call=attempting");
+                    await WriteAsync(lines);
+                    lines[lines.Count - 1] = "call=" + CallSomething(imports);
+                }
             }
             catch (Exception error)
             {
@@ -91,6 +101,9 @@ namespace Kiosk.Native
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate ulong TicksDelegate();
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int DllMainDelegate(IntPtr instance, uint reason, IntPtr reserved);
 
         /// <summary>
         /// Calls a function out of the game's own binary. Nothing about this
@@ -108,6 +121,16 @@ namespace Kiosk.Native
                     "?Baselib_Timer_GetHighPrecisionTimerTicks@il2cpp_baselib@@YA_KXZ";
                 var address = image.Export(Symbol);
                 if (address == IntPtr.Zero) return "symbol not exported";
+
+                // A DLL expects its entry point to have run: its globals are
+                // set up there, and a function that reads them before that is
+                // reading rubbish.
+                if (image.EntryPoint != IntPtr.Zero)
+                {
+                    var start = Marshal.GetDelegateForFunctionPointer<DllMainDelegate>(
+                        image.EntryPoint);
+                    start(image.BaseAddress, 1, IntPtr.Zero);
+                }
 
                 var ticks = Marshal.GetDelegateForFunctionPointer<TicksDelegate>(address);
                 var first = ticks();

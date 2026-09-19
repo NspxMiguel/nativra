@@ -242,7 +242,7 @@ namespace Kiosk
                         Initial = title.Substring(0, 1).ToUpperInvariant(),
                         Icon = Artwork(
                             "https://cdn.cloudflare.steamstatic.com/steam/apps/"
-                            + appId + "/library_600x900.jpg"),
+                            + appId + "/header.jpg"),
                     });
                 }
             }

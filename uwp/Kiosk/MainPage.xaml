@@ -13,7 +13,7 @@
         <!-- A console home screen moves one thing: the focused icon. It grows
              and takes a bright ring; everything else holds still. -->
         <Style x:Key="RailItemStyle" TargetType="ListViewItem">
-            <Setter Property="Margin" Value="0,0,26,0" />
+            <Setter Property="Margin" Value="0,0,14,0" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -22,18 +22,18 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListViewItem">
-                        <Grid x:Name="Root" Width="196" Height="196">
-                            <Grid x:Name="Box" Width="146" Height="146"
+                        <Grid x:Name="Root" Width="104" Height="104">
+                            <Grid x:Name="Box" Width="76" Height="76"
                                   RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
                                 <Border x:Name="Ring"
-                                        CornerRadius="18"
+                                        CornerRadius="12"
                                         Background="{StaticResource Tile}"
                                         BorderBrush="{StaticResource Hairline}"
                                         BorderThickness="2" />
-                                <Border CornerRadius="18" Margin="2">
+                                <Border CornerRadius="12" Margin="2">
                                     <ContentPresenter />
                                 </Border>
                             </Grid>
@@ -82,8 +82,8 @@
         </Style>
 
         <DataTemplate x:Key="RailTemplate" x:DataType="local:Tile">
-            <Border CornerRadius="16" Background="{x:Bind Accent}" Opacity="{x:Bind Dimmed}">
-                <TextBlock Text="{x:Bind Initial}" FontSize="46" FontWeight="Bold"
+            <Border CornerRadius="10" Background="{x:Bind Accent}" Opacity="{x:Bind Dimmed}">
+                <TextBlock Text="{x:Bind Initial}" FontSize="26" FontWeight="Bold"
                            Foreground="#FF06120C"
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
@@ -98,9 +98,9 @@
         </Grid.RowDefinitions>
 
         <!-- system bar -->
-        <Grid Grid.Row="0" Padding="64,20,64,0" Height="76">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="18">
-                <Border Width="42" Height="42" CornerRadius="999">
+        <Grid Grid.Row="0" Padding="28,14,28,0" Height="40">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
+                <Border Width="22" Height="22" CornerRadius="999">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                             <GradientStop Color="{StaticResource AccentColor}" Offset="0" />
@@ -108,15 +108,15 @@
                         </LinearGradientBrush>
                     </Border.Background>
                 </Border>
-                <TextBlock x:Name="MachineText" FontSize="19"
+                <TextBlock x:Name="MachineText" FontSize="12"
                            Foreground="{StaticResource TextSecondary}"
                            VerticalAlignment="Center" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                        VerticalAlignment="Center" Spacing="22">
-                <TextBlock x:Name="CountText" FontSize="18"
+                        VerticalAlignment="Center" Spacing="14">
+                <TextBlock x:Name="CountText" FontSize="12"
                            Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" />
-                <TextBlock x:Name="ClockText" FontSize="21" FontWeight="SemiBold"
+                <TextBlock x:Name="ClockText" FontSize="13" FontWeight="SemiBold"
                            Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" />
             </StackPanel>
         </Grid>
@@ -128,11 +128,11 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Padding="64,0,64,0" Margin="0,0,0,22">
-                <TextBlock x:Name="NameText" FontSize="44" FontWeight="Bold"
+            <StackPanel Grid.Row="0" Padding="28,0,28,0" Margin="0,0,0,12">
+                <TextBlock x:Name="NameText" FontSize="24" FontWeight="Bold"
                            TextTrimming="CharacterEllipsis" MaxLines="1"
                            Foreground="{StaticResource TextPrimary}" />
-                <TextBlock x:Name="SubText" FontSize="19" Margin="0,6,0,0"
+                <TextBlock x:Name="SubText" FontSize="13" Margin="0,4,0,0"
                            TextTrimming="CharacterEllipsis" MaxLines="1"
                            Foreground="{StaticResource TextSecondary}" />
             </StackPanel>
@@ -145,7 +145,7 @@
                       ItemClick="OnTileInvoked"
                       SelectionChanged="OnSelectionChanged"
                       SelectionMode="Single"
-                      Padding="64,0,64,0"
+                      Padding="28,0,28,0"
                       ScrollViewer.HorizontalScrollMode="Enabled"
                       ScrollViewer.HorizontalScrollBarVisibility="Hidden"
                       ScrollViewer.VerticalScrollMode="Disabled"
@@ -159,27 +159,27 @@
         </Grid>
 
         <!-- button hints: the most console thing on the screen -->
-        <Grid Grid.Row="2" Height="92" Padding="64,0,64,0"
+        <Grid Grid.Row="2" Height="44" Padding="28,0,28,0"
               BorderBrush="{StaticResource Hairline}" BorderThickness="0,1,0,0">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="34">
-                <StackPanel Orientation="Horizontal" Spacing="11">
-                    <Border Width="32" Height="32" CornerRadius="999" Background="{StaticResource Accent}">
-                        <TextBlock Text="A" FontSize="16" FontWeight="Bold" Foreground="#FF06120C"
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="20">
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                    <Border Width="20" Height="20" CornerRadius="999" Background="{StaticResource Accent}">
+                        <TextBlock Text="A" FontSize="11" FontWeight="Bold" Foreground="#FF06120C"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <TextBlock x:Name="HintOpenText" FontSize="18" VerticalAlignment="Center"
+                    <TextBlock x:Name="HintOpenText" FontSize="12" VerticalAlignment="Center"
                                Foreground="{StaticResource TextSecondary}" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="11">
-                    <Border Width="32" Height="32" CornerRadius="999" Background="#FFF2C94C">
-                        <TextBlock Text="Y" FontSize="16" FontWeight="Bold" Foreground="#FF1A1405"
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                    <Border Width="20" Height="20" CornerRadius="999" Background="#FFF2C94C">
+                        <TextBlock Text="Y" FontSize="11" FontWeight="Bold" Foreground="#FF1A1405"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <TextBlock x:Name="HintRefreshText" FontSize="18" VerticalAlignment="Center"
+                    <TextBlock x:Name="HintRefreshText" FontSize="12" VerticalAlignment="Center"
                                Foreground="{StaticResource TextSecondary}" />
                 </StackPanel>
             </StackPanel>
-            <TextBlock x:Name="StatusText" FontSize="17" HorizontalAlignment="Right"
+            <TextBlock x:Name="StatusText" FontSize="12" HorizontalAlignment="Right"
                        VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}" />
         </Grid>
     </Grid>

@@ -378,43 +378,15 @@ namespace Kiosk
             StatusText.Text = game.Name + "  ·  " + game.Played;
         }
 
-        private bool downloading;
-
-        /// <summary>
-        /// Pressing a game downloads it, on the console, from his own account.
-        /// Running it is the block after this one.
-        /// </summary>
-        private async void OnGameInvoked(object sender, ItemClickEventArgs e)
+        /// <summary>A game opens its own page, the way a store does.</summary>
+        private void OnGameInvoked(object sender, ItemClickEventArgs e)
         {
             if (!(e.ClickedItem is OwnedGame game)) return;
-            if (downloading)
+            Frame.Navigate(typeof(GamePage), new GameArgument
             {
-                StatusText.Text = Texts.Get("steam.busy");
-                return;
-            }
-
-            downloading = true;
-            StatusText.Text = Texts.Get("steam.starting", game.Name);
-            try
-            {
-                var where = Settings.DownloadRoot;
-                await Steam.SteamDownload.RunAsync(session, game.AppId, where, progress =>
-                {
-                    var _ = Dispatcher.RunAsync(
-                        Windows.UI.Core.CoreDispatcherPriority.Low,
-                        () => StatusText.Text = Texts.Get(
-                            "steam.downloading", game.Name, progress.Percent, progress.File));
-                });
-                StatusText.Text = Texts.Get("steam.downloaded", game.Name);
-            }
-            catch (Exception error)
-            {
-                StatusText.Text = Texts.Get("steam.downloadfailed", game.Name, error.Message);
-            }
-            finally
-            {
-                downloading = false;
-            }
+                Game = game,
+                Session = session,
+            });
         }
 
         // ------------------------------------------------------------- input

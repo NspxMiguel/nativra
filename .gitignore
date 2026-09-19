@@ -14,3 +14,6 @@ uwp/**/*.pfx
 out/
 node_modules/
 .DS_Store
+
+# Sessao da Steam dele — token, nunca vai pro GitHub
+steam.json

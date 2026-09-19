@@ -82,11 +82,20 @@
         </Style>
 
         <DataTemplate x:Key="RailTemplate" x:DataType="local:Tile">
-            <Border CornerRadius="10" Background="{x:Bind Accent}" Opacity="{x:Bind Dimmed}">
-                <TextBlock Text="{x:Bind Initial}" FontSize="26" FontWeight="Bold"
-                           Foreground="#FF06120C"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
+            <Grid>
+                <!-- The app's own logo when the package carries one; a coloured
+                     initial is the fallback, not the intent. -->
+                <Border CornerRadius="10" Background="{x:Bind Accent}"
+                        Visibility="{x:Bind LetterShown}">
+                    <TextBlock Text="{x:Bind Initial}" FontSize="26" FontWeight="Bold"
+                               Foreground="#FF06120C"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="10" Background="#FF14171C"
+                        Visibility="{x:Bind IconShown}">
+                    <Image Source="{x:Bind Icon}" Stretch="Uniform" Margin="6" />
+                </Border>
+            </Grid>
         </DataTemplate>
     </Page.Resources>
 

@@ -46,6 +46,19 @@ namespace Kiosk.Native
         [DllImport("api-ms-win-core-processthreads-l1-1-0.dll", SetLastError = true)]
         private static extern uint TlsAlloc();
 
+        [DllImport("api-ms-win-core-heap-l1-1-0.dll", SetLastError = true)]
+        private static extern IntPtr GetProcessHeap();
+
+        [DllImport("api-ms-win-core-heap-l1-1-0.dll", SetLastError = true)]
+        private static extern UIntPtr HeapSize(IntPtr heap, uint flags, IntPtr memory);
+
+        /// <summary>
+        /// Off by default. Setting up thread-local storage rewrites a pointer
+        /// inside the thread environment block, and getting that wrong takes
+        /// the process down — so it happens only when a measurement asks.
+        /// </summary>
+        public static bool EnableTls;
+
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr TebDelegate();
 
@@ -369,6 +382,7 @@ namespace Kiosk.Native
         {
             try
             {
+                if (!EnableTls) return;
                 var rva = DirectoryRva(9);
                 if (rva == 0) return;
 
@@ -393,28 +407,45 @@ namespace Kiosk.Native
                 }
 
                 var slot = (int)TlsAlloc();
-                if (slot < 0) return;
+                if (slot < 0 || slot > 1000) return;
                 Marshal.WriteInt32((IntPtr)indexAddress, slot);
 
                 var teb = CurrentTeb();
                 if (teb == IntPtr.Zero) return;
 
                 // The table of blocks lives at 0x58 in the thread environment
-                // block. It is grown rather than written into, because its
-                // length is the loader's business and not ours to assume.
+                // block. Its length belongs to the real loader, so it is
+                // measured rather than assumed: the table is a heap block, and
+                // the heap knows how big it is. Guessing here reads past the
+                // end and takes the process down.
                 var slotsPointer = teb + 0x58;
                 var existing = Marshal.ReadIntPtr(slotsPointer);
-                var grown = Marshal.AllocHGlobal((slot + 16) * 8);
-                for (var i = 0; i < slot + 16; i++) Marshal.WriteIntPtr(grown, i * 8, IntPtr.Zero);
+                var existingSlots = 0;
                 if (existing != IntPtr.Zero)
                 {
-                    for (var i = 0; i < slot; i++)
+                    var size = HeapSize(GetProcessHeap(), 0, existing);
+                    if (size == UIntPtr.Zero || (ulong)size > 1 << 20) return;
+                    existingSlots = (int)((ulong)size / 8);
+                }
+                if (existingSlots > slot)
+                {
+                    // Already long enough: one pointer, and nothing is moved.
+                    Marshal.WriteIntPtr(existing, slot * 8, block);
+                }
+                else
+                {
+                    var grown = Marshal.AllocHGlobal((slot + 16) * 8);
+                    for (var i = 0; i < slot + 16; i++)
+                    {
+                        Marshal.WriteIntPtr(grown, i * 8, IntPtr.Zero);
+                    }
+                    for (var i = 0; i < existingSlots; i++)
                     {
                         Marshal.WriteIntPtr(grown, i * 8, Marshal.ReadIntPtr(existing, i * 8));
                     }
+                    Marshal.WriteIntPtr(grown, slot * 8, block);
+                    Marshal.WriteIntPtr(slotsPointer, grown);
                 }
-                Marshal.WriteIntPtr(grown, slot * 8, block);
-                Marshal.WriteIntPtr(slotsPointer, grown);
                 TlsSlot = slot;
 
                 if (callbacks == 0) return;

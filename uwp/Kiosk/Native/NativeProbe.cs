@@ -31,6 +31,9 @@ namespace Kiosk.Native
                     return;
                 }
 
+                // The dangerous half of the loader only runs when asked.
+                PeImage.EnableTls = await folder.TryGetItemAsync("tls.txt") != null;
+
                 var imports = new SystemImports();
 
                 // A module that imports another has to be loaded after it, or

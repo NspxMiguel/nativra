@@ -4,6 +4,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kiosk", "Kiosk\Kiosk.csproj", "{8F2C4E71-5B3D-4A96-9C18-2D7E6A0B4F55}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JitProbe", "JitProbe\JitProbe.csproj", "{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -16,6 +18,12 @@ Global
 		{8F2C4E71-5B3D-4A96-9C18-2D7E6A0B4F55}.Release|x64.ActiveCfg = Release|x64
 		{8F2C4E71-5B3D-4A96-9C18-2D7E6A0B4F55}.Release|x64.Build.0 = Release|x64
 		{8F2C4E71-5B3D-4A96-9C18-2D7E6A0B4F55}.Release|x64.Deploy.0 = Release|x64
+		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Debug|x64.ActiveCfg = Debug|x64
+		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Debug|x64.Build.0 = Debug|x64
+		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Debug|x64.Deploy.0 = Debug|x64
+		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Release|x64.ActiveCfg = Release|x64
+		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Release|x64.Build.0 = Release|x64
+		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Release|x64.Deploy.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

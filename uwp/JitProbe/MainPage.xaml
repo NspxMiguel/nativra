@@ -1,0 +1,16 @@
+<Page
+    x:Class="JitProbe.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#FF000000">
+    <ScrollViewer Padding="96,64,96,64">
+        <StackPanel>
+            <TextBlock Text="JIT PROBE" FontSize="15" FontWeight="Bold"
+                       Foreground="#FF3BE081" CharacterSpacing="220" />
+            <TextBlock x:Name="Verdict" FontSize="52" FontWeight="Bold"
+                       Foreground="#FFF5F5F7" Margin="0,10,0,24" TextWrapping="Wrap" />
+            <TextBlock x:Name="Detail" FontSize="22" FontFamily="Consolas"
+                       Foreground="#CCF5F5F7" TextWrapping="Wrap" LineHeight="34" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

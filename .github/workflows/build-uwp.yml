@@ -37,9 +37,11 @@ jobs:
             Write-Error "KIOSK_PFX_BASE64 is not set — see README"
             exit 1
           }
-          [IO.File]::WriteAllBytes(
-            "uwp/Kiosk/Kiosk_TemporaryKey.pfx",
-            [Convert]::FromBase64String($env:PFX_BASE64))
+          $bytes = [Convert]::FromBase64String($env:PFX_BASE64)
+          [IO.File]::WriteAllBytes("uwp/Kiosk/Kiosk_TemporaryKey.pfx", $bytes)
+          # Same certificate for every project in the solution, so both packages
+          # carry one identity.
+          [IO.File]::WriteAllBytes("uwp/JitProbe/JitProbe_TemporaryKey.pfx", $bytes)
           $password = ConvertTo-SecureString -String $env:PFX_PASSWORD -Force -AsPlainText
           $imported = Import-PfxCertificate `
             -FilePath "uwp/Kiosk/Kiosk_TemporaryKey.pfx" `

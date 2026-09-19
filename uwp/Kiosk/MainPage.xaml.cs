@@ -94,16 +94,42 @@ namespace Kiosk
             StatusText.Text = Texts.Get("status.reading");
             var tiles = new List<Tile>();
 
+            // Counters, surfaced on screen: on a console there is no debugger, so
+            // the app has to be able to say why a list came back short.
+            var seen = 0;
+            var skippedFramework = 0;
+            var skippedSystem = 0;
+            var skippedMicrosoft = 0;
+            var skippedSelf = 0;
+            var skippedNoEntries = 0;
+
             try
             {
                 var manager = new PackageManager();
-                foreach (var package in manager.FindPackagesForUser(string.Empty))
+                var packages = manager.FindPackagesForUser(string.Empty).ToList();
+                // Some builds only return the caller's own package from the
+                // per-user query; the machine-wide one is the fallback.
+                if (packages.Count <= 1)
                 {
-                    if (package.IsFramework || package.IsResourcePackage) continue;
+                    try
+                    {
+                        var all = manager.FindPackages().ToList();
+                        if (all.Count > packages.Count) packages = all;
+                    }
+                    catch
+                    {
+                        // No privilege for the machine-wide query — keep what we have.
+                    }
+                }
+
+                foreach (var package in packages)
+                {
+                    seen++;
+                    if (package.IsFramework || package.IsResourcePackage) { skippedFramework++; continue; }
                     // Retail and system packages are not ours to launch from here.
-                    if (package.SignatureKind == PackageSignatureKind.System) continue;
-                    if (package.Id.FamilyName.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)) continue;
-                    if (package.Id.FamilyName.StartsWith("NSPX.Kiosk", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (package.SignatureKind == PackageSignatureKind.System) { skippedSystem++; continue; }
+                    if (package.Id.FamilyName.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)) { skippedMicrosoft++; continue; }
+                    if (package.Id.FamilyName.StartsWith("NSPX.Kiosk", StringComparison.OrdinalIgnoreCase)) { skippedSelf++; continue; }
 
                     IReadOnlyList<AppListEntry> entries;
                     try
@@ -112,8 +138,10 @@ namespace Kiosk
                     }
                     catch
                     {
+                        skippedNoEntries++;
                         continue;
                     }
+                    if (entries.Count == 0) skippedNoEntries++;
 
                     foreach (var entry in entries)
                     {
@@ -145,7 +173,8 @@ namespace Kiosk
             }
 
             CountText.Text = Texts.Get("status.count", Tiles.Count);
-            StatusText.Text = string.Empty;
+            StatusText.Text =
+                $"{seen} pkgs · fw {skippedFramework} · sys {skippedSystem} · ms {skippedMicrosoft} · self {skippedSelf} · noapp {skippedNoEntries}";
 
             if (Tiles.Count == 0)
             {

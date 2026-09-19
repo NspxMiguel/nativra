@@ -557,6 +557,20 @@ async function readManifest(file: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * Rebooting is how the game-mode switch takes effect, but it interrupts
+ * whatever is on screen — so it asks for --sim the way keel does.
+ */
+async function cmdRestart(args: string[]): Promise<void> {
+  if (!args.includes("--sim") && !args.includes("--yes")) {
+    console.error(t("restart.confirm"));
+    process.exit(2);
+  }
+  const portal = await portalOrExit();
+  await portal.restart();
+  console.log(t("restart.sent"));
+}
+
 function usage(): void {
   const commands: Array<[string, string]> = [
     ["find", t("cmd.find")],
@@ -577,6 +591,7 @@ function usage(): void {
     ["ls <app> [dir]", t("cmd.ls")],
     ["setup-retroarch", t("cmd.setupRetroarch")],
     ["verify", t("cmd.verify")],
+    ["restart --sim", t("cmd.restart")],
   ];
   console.log(`${t("cli.usage")}: xbdev <comando>`);
   console.log();
@@ -615,6 +630,8 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   "setup-retroarch": cmdSetupRetroarch,
   verify: cmdVerify,
   conferir: cmdVerify,
+  restart: cmdRestart,
+  reiniciar: cmdRestart,
 };
 
 const handler = command ? handlers[command] : undefined;

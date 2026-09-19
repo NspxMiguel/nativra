@@ -193,8 +193,10 @@ export class DevicePortal {
   async installState(): Promise<{ done: boolean; message: string; code: number }> {
     const res = await this.request("GET", "/api/app/packagemanager/state");
     const text = await res.text();
-    // 200 with an empty body means "nothing in flight" — i.e. the last install finished.
-    if (res.status === 200 && text.trim().length === 0) {
+    // An empty body means "nothing in flight" — the console answers 200 or 204
+    // depending on the build, and reading 204 as a failure code was wrongly
+    // reporting finished installs as broken.
+    if ((res.status === 200 || res.status === 204) && text.trim().length === 0) {
       return { done: true, message: "", code: 0 };
     }
     let parsed: Record<string, unknown> = {};
@@ -337,6 +339,14 @@ export class DevicePortal {
       throw new PortalError(`download of ${fileName} failed`, res.status, await res.text());
     }
     return res.arrayBuffer();
+  }
+
+  /** Reboot the console. The resource switch only takes effect after one. */
+  async restart(): Promise<void> {
+    const res = await this.request("POST", "/api/control/restart");
+    if (!res.ok && res.status !== 204) {
+      throw new PortalError("restart refused", res.status, await res.text());
+    }
   }
 
   async screenshot(): Promise<ArrayBuffer> {

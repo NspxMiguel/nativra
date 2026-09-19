@@ -11,6 +11,34 @@ bun src/xbdev.ts connect <ip>  # store address + Device Portal credentials
 bun src/xbdev.ts kit           # download and install everything, then enable game mode
 ```
 
+## Your Steam library, partly
+
+The console will never run the Steam client — but a good part of what people
+*buy* on Steam is an engine that has been reimplemented in the open, and those
+run natively here. You supply the game data you already own; the engine on the
+console loads it.
+
+Measured inside the RetroArch package shipped by this catalogue — **218 distinct
+cores**, among them:
+
+| Core | The PC game it runs |
+| --- | --- |
+| `boom3` | **Doom 3** |
+| `vitaquake2`, `vitaquake3` | **Quake II**, **Quake III Arena** |
+| `tyrquake`, `prboom` | **Quake**, **Doom / Doom II** |
+| `openlara` | **Tomb Raider** |
+| `ecwolf` | **Wolfenstein 3D**, Spear of Destiny |
+| `dosbox_pure`, `dosbox_core`, `dosbox_svn` | the **DOS** catalogue |
+| `scummvm` | LucasArts and Sierra adventures |
+| `nxengine` | Cave Story |
+| `reminiscence` | Flashback |
+| `easyrpg` | RPG Maker 2000/2003 games |
+| `fbneo`, `cannonball`, `mrboom` | arcade, OutRun, Bomberman |
+
+So: buy Doom on Steam, copy the `.wad` to the drive, and it runs on the console
+natively — no PC in the loop and nothing streamed. That is as close to "Steam on
+Xbox" as the hardware allows, and it is honest about what it is.
+
 ## What runs natively
 
 Everything below executes on the console itself, off an external NTFS drive.

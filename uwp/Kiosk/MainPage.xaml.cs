@@ -11,6 +11,8 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Media.Imaging;
+using Windows.Foundation;
 
 namespace Kiosk
 {
@@ -24,6 +26,9 @@ namespace Kiosk
         public string Subtitle { get; set; }
         public SolidColorBrush Accent { get; set; }
         public string Initial { get; set; }
+        public BitmapImage Logo { get; set; }
+        public Visibility LogoVisible => Logo == null ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility InitialVisible => Logo == null ? Visibility.Visible : Visibility.Collapsed;
         public AppListEntry Entry { get; set; }
     }
 
@@ -110,6 +115,7 @@ namespace Kiosk
                             Subtitle = DescribeApp(package.Id.Name, title),
                             Accent = new SolidColorBrush(Accents[index++ % Accents.Length]),
                             Initial = title.Substring(0, 1).ToUpperInvariant(),
+                            Logo = await LoadLogoAsync(entry),
                             Entry = entry,
                         });
                     }
@@ -135,6 +141,31 @@ namespace Kiosk
                 AppGrid.UpdateLayout();
                 AppGrid.SelectedIndex = 0;
                 (AppGrid.ContainerFromIndex(0) as Control)?.Focus(FocusState.Programmatic);
+            }
+        }
+
+        /// <summary>
+        /// The app's own tile art, which is what makes this read like a console
+        /// dashboard instead of a list. Falls back to the coloured initial when
+        /// a package has no usable logo.
+        /// </summary>
+        private static async Task<BitmapImage> LoadLogoAsync(AppListEntry entry)
+        {
+            try
+            {
+                var reference = entry.DisplayInfo?.GetLogo(new Size(150, 150));
+                if (reference == null) return null;
+                using (var stream = await reference.OpenReadAsync())
+                {
+                    if (stream == null || stream.Size == 0) return null;
+                    var bitmap = new BitmapImage();
+                    await bitmap.SetSourceAsync(stream);
+                    return bitmap;
+                }
+            }
+            catch
+            {
+                return null;
             }
         }
 

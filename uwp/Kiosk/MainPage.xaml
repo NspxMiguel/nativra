@@ -16,12 +16,17 @@
                         BorderBrush="#22FFFFFF" BorderThickness="1" />
                 <Border CornerRadius="14" Background="{x:Bind Accent}" Opacity="0.14" />
                 <StackPanel Margin="24" VerticalAlignment="Bottom">
-                    <Border Width="52" Height="52" CornerRadius="12" Background="{x:Bind Accent}"
-                            HorizontalAlignment="Left" Margin="0,0,0,16">
-                        <TextBlock Text="{x:Bind Initial}" FontSize="26" FontWeight="SemiBold"
-                                   Foreground="#FFFFFFFF" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </Border>
+                    <Grid Width="56" Height="56" HorizontalAlignment="Left" Margin="0,0,0,16">
+                        <Border CornerRadius="12" Background="{x:Bind Accent}"
+                                Visibility="{x:Bind InitialVisible}">
+                            <TextBlock Text="{x:Bind Initial}" FontSize="26" FontWeight="SemiBold"
+                                       Foreground="#FFFFFFFF" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <Border CornerRadius="12" Visibility="{x:Bind LogoVisible}">
+                            <Image Source="{x:Bind Logo}" Stretch="UniformToFill" />
+                        </Border>
+                    </Grid>
                     <TextBlock Text="{x:Bind Title}" FontSize="21" FontWeight="SemiBold"
                                Foreground="#FFF5F5F7" TextTrimming="CharacterEllipsis" MaxLines="1" />
                     <TextBlock Text="{x:Bind Subtitle}" FontSize="15" Foreground="#99F5F5F7"

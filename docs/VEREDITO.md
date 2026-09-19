@@ -87,6 +87,26 @@ PS2 (XBSX2), Xbox 360 (Xenia Canary), GameCube e Wii (Dolphin), Dreamcast
 São milhares de jogos, muitos deles os mesmos que você compraria na Steam — só
 que rodando de verdade no console, em 4K, com o controle do Xbox.
 
+### E tem uma ponte com a sua Steam que é real
+
+Eu abri o pacote do RetroArch que baixei (é um zip) e contei: **218 cores**.
+Entre eles, engines de jogos de PC que foram reescritos em código aberto:
+
+| Core | O jogo de PC que ele roda |
+| --- | --- |
+| `boom3` | **Doom 3** |
+| `vitaquake2`, `vitaquake3` | **Quake II** e **Quake III** |
+| `tyrquake`, `prboom` | **Quake** e **Doom / Doom II** |
+| `openlara` | **Tomb Raider** |
+| `ecwolf` | **Wolfenstein 3D** |
+| `dosbox_pure` | o catálogo **DOS** inteiro |
+| `scummvm` | as aventuras da LucasArts e Sierra |
+| `nxengine`, `reminiscence`, `easyrpg` | Cave Story, Flashback, RPG Maker |
+
+O que isso significa na prática: você **compra o jogo na Steam** (ou já tem),
+copia os arquivos de dados dele para o HD, e o engine roda **nativo no console**.
+Sem PC ligado, sem streaming. Não é o cliente Steam — é o seu jogo rodando.
+
 ---
 
 ## 5. Dual boot: já vem de fábrica, e é seguro

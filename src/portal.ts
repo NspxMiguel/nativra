@@ -28,6 +28,15 @@ export class PortalError extends Error {
   }
 }
 
+/**
+ * The portal resolves a subfolder only when the path is rooted: "LocalState"
+ * answers "the system cannot find the path specified", "/LocalState" works.
+ */
+function rootedPath(path: string): string {
+  if (!path) return "";
+  return path.startsWith("/") || path.startsWith("\\") ? path : `/${path}`;
+}
+
 export class DevicePortal {
   private csrfToken: string | null = null;
   private cookie: string | null = null;
@@ -290,7 +299,7 @@ export class DevicePortal {
     const query = new URLSearchParams({
       knownfolderid: knownFolderId,
       packagefullname: packageFullName,
-      path,
+      path: rootedPath(path),
     });
     const res = await this.request("GET", `/api/filesystem/apps/files?${query}`);
     if (!res.ok) {
@@ -310,7 +319,7 @@ export class DevicePortal {
     const query = new URLSearchParams({
       knownfolderid: knownFolderId,
       packagefullname: packageFullName,
-      path: remoteDir,
+      path: rootedPath(remoteDir),
     });
     const form = new FormData();
     form.append(name, Bun.file(localPath), name);
@@ -332,7 +341,7 @@ export class DevicePortal {
       knownfolderid: knownFolderId,
       packagefullname: packageFullName,
       filename: fileName,
-      path: remoteDir,
+      path: rootedPath(remoteDir),
     });
     const res = await this.request("GET", `/api/filesystem/apps/file?${query}`);
     if (!res.ok) {

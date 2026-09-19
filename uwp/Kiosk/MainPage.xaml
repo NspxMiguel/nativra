@@ -22,8 +22,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListViewItem">
-                        <Grid x:Name="Root" Width="228" Height="228">
-                            <Grid x:Name="Box" Width="172" Height="172"
+                        <Grid x:Name="Root" Width="196" Height="196">
+                            <Grid x:Name="Box" Width="146" Height="146"
                                   RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
@@ -56,13 +56,13 @@
                                     <VisualState x:Name="Focused">
                                         <Storyboard>
                                             <DoubleAnimation Storyboard.TargetName="Scale"
-                                                Storyboard.TargetProperty="ScaleX" To="1.32" Duration="0:0:0.16">
+                                                Storyboard.TargetProperty="ScaleX" To="1.30" Duration="0:0:0.16">
                                                 <DoubleAnimation.EasingFunction>
                                                     <CubicEase EasingMode="EaseOut" />
                                                 </DoubleAnimation.EasingFunction>
                                             </DoubleAnimation>
                                             <DoubleAnimation Storyboard.TargetName="Scale"
-                                                Storyboard.TargetProperty="ScaleY" To="1.32" Duration="0:0:0.16">
+                                                Storyboard.TargetProperty="ScaleY" To="1.30" Duration="0:0:0.16">
                                                 <DoubleAnimation.EasingFunction>
                                                     <CubicEase EasingMode="EaseOut" />
                                                 </DoubleAnimation.EasingFunction>
@@ -83,7 +83,7 @@
 
         <DataTemplate x:Key="RailTemplate" x:DataType="local:Tile">
             <Border CornerRadius="16" Background="{x:Bind Accent}" Opacity="{x:Bind Dimmed}">
-                <TextBlock Text="{x:Bind Initial}" FontSize="52" FontWeight="Bold"
+                <TextBlock Text="{x:Bind Initial}" FontSize="46" FontWeight="Bold"
                            Foreground="#FF06120C"
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
@@ -128,10 +128,12 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Padding="64,0,64,0" Margin="0,0,0,26">
-                <TextBlock x:Name="NameText" FontSize="56" FontWeight="Bold"
+            <StackPanel Grid.Row="0" Padding="64,0,64,0" Margin="0,0,0,22">
+                <TextBlock x:Name="NameText" FontSize="44" FontWeight="Bold"
+                           TextTrimming="CharacterEllipsis" MaxLines="1"
                            Foreground="{StaticResource TextPrimary}" />
-                <TextBlock x:Name="SubText" FontSize="21" Margin="0,8,0,0"
+                <TextBlock x:Name="SubText" FontSize="19" Margin="0,6,0,0"
+                           TextTrimming="CharacterEllipsis" MaxLines="1"
                            Foreground="{StaticResource TextSecondary}" />
             </StackPanel>
 

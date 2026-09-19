@@ -594,6 +594,14 @@ async function cmdUninstall(args: string[]): Promise<void> {
  * Mac does it: cross what is installed with the catalogue and write the result
  * into Kiosk's own folder, where it can read it without any privilege.
  */
+/** A subtitle has to be readable from the sofa, so it gets one clause. */
+function shorten(text: string, limit = 58): string {
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit);
+  const lastBreak = Math.max(cut.lastIndexOf(","), cut.lastIndexOf(" "));
+  return `${cut.slice(0, lastBreak > 20 ? lastBreak : limit).trim()}...`;
+}
+
 async function cmdSyncKiosk(): Promise<void> {
   const portal = await portalOrExit();
   const catalog = await loadCatalog();
@@ -609,7 +617,7 @@ async function cmdSyncKiosk(): Promise<void> {
       });
       return {
         title: match?.Name ?? entry.name,
-        subtitle: entry.runs?.replace(/^PC NATIVE:\s*/, "") ?? "",
+        subtitle: shorten(entry.runs?.replace(/^PC NATIVE:\s*/, "") ?? ""),
         protocol: entry.protocol ?? null,
         installed: Boolean(match),
       };
@@ -625,7 +633,9 @@ async function cmdSyncKiosk(): Promise<void> {
     console.error("Kiosk is not installed");
     process.exit(1);
   }
-  await portal.pushFile(kiosk.PackageFullName, file, "");
+  // ApplicationData.Current.LocalFolder is the LocalState subfolder; the root
+  // of LocalAppData is a different place the app cannot read.
+  await portal.pushFile(kiosk.PackageFullName, file, "LocalState");
   const launchable = entries.filter((item) => item.protocol).length;
   console.log(
     t("sync.done", { total: entries.length, launchable }),

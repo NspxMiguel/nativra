@@ -19,6 +19,10 @@ const pt: Dict = {
   "cmd.shot": "tira uma foto da tela do console",
   "cmd.settings": "le ou muda um ajuste de desenvolvedor",
   "cmd.gamemode": "faz os apps rodarem como JOGO (GPU inteira, mais RAM, ve o HD)",
+  "cmd.push": "manda um arquivo para a pasta de um app",
+  "cmd.pull": "traz um arquivo da pasta de um app",
+  "cmd.ls": "lista a pasta de um app no console",
+  "cmd.setupRetroarch": "configura o RetroArch apontando para o HD",
   "find.scanning": "procurando o console em {net} ...",
   "find.none":
     "nenhum console respondeu. Ligue o Xbox, entre no Dev Mode e ligue o Device Portal.",
@@ -70,6 +74,10 @@ const en: Dict = {
   "cmd.shot": "grab a screenshot from the console",
   "cmd.settings": "read or change a developer setting",
   "cmd.gamemode": "run apps as GAMES (full GPU, more RAM, sees the hard drive)",
+  "cmd.push": "send a file into an app's folder",
+  "cmd.pull": "fetch a file from an app's folder",
+  "cmd.ls": "list an app's folder on the console",
+  "cmd.setupRetroarch": "configure RetroArch to use the hard drive",
   "find.scanning": "scanning {net} for the console ...",
   "find.none":
     "no console answered. Turn the Xbox on, enter Dev Mode and enable Device Portal.",

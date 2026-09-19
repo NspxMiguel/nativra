@@ -401,6 +401,77 @@ async function cmdSettings(args: string[]): Promise<void> {
   console.log(`${args[0]} = ${args[1]}`);
 }
 
+
+async function cmdPush(args: string[]): Promise<void> {
+  const [appName, localPath, remoteDir = ""] = args;
+  if (!appName || !localPath) {
+    console.error("xbdev push <app> <file> [remote-dir]");
+    process.exit(2);
+  }
+  const portal = await portalOrExit();
+  const pkg = await findPackage(portal, appName);
+  if (!pkg) {
+    console.error(`? ${appName}`);
+    process.exit(1);
+  }
+  await portal.pushFile(pkg.PackageFullName, localPath, remoteDir);
+  console.log(`-> ${pkg.Name}:${remoteDir}/${localPath.split("/").pop()}`);
+}
+
+async function cmdPull(args: string[]): Promise<void> {
+  const [appName, fileName, remoteDir = ""] = args;
+  if (!appName || !fileName) {
+    console.error("xbdev pull <app> <file> [remote-dir]");
+    process.exit(2);
+  }
+  const portal = await portalOrExit();
+  const pkg = await findPackage(portal, appName);
+  if (!pkg) {
+    console.error(`? ${appName}`);
+    process.exit(1);
+  }
+  const data = await portal.pullFile(pkg.PackageFullName, fileName, remoteDir);
+  await Bun.write(fileName, data);
+  console.log(`<- ${fileName} (${human(data.byteLength)})`);
+}
+
+async function cmdLs(args: string[]): Promise<void> {
+  const [appName, remoteDir = ""] = args;
+  if (!appName) {
+    console.error("xbdev ls <app> [remote-dir]");
+    process.exit(2);
+  }
+  const portal = await portalOrExit();
+  const pkg = await findPackage(portal, appName);
+  if (!pkg) {
+    console.error(`? ${appName}`);
+    process.exit(1);
+  }
+  for (const item of await portal.listFiles(pkg.PackageFullName, remoteDir)) {
+    const name = String(item.Name ?? item.Id ?? "?");
+    const size = Number(item.SizeInBytes ?? 0);
+    const isFolder = Number(item.Type ?? 0) === 16 || size === 0;
+    console.log(`${isFolder ? "d" : "-"} ${name.padEnd(40)} ${size ? human(size) : ""}`);
+  }
+}
+
+/** Point RetroArch at the external drive and give it the console-grade defaults. */
+async function cmdSetupRetroarch(): Promise<void> {
+  const portal = await portalOrExit();
+  const pkg = await findPackage(portal, "retroarch");
+  if (!pkg) {
+    console.error("RetroArch is not installed — run: xbdev kit");
+    process.exit(1);
+  }
+  const config = join(ROOT, "configs", "retroarch.cfg");
+  if (!(await Bun.file(config).exists())) {
+    console.error(`missing ${config}`);
+    process.exit(1);
+  }
+  await portal.pushFile(pkg.PackageFullName, config, "");
+  console.log("retroarch.cfg sent — directories now point at E:\\");
+}
+
 function usage(): void {
   const commands: Array<[string, string]> = [
     ["find", t("cmd.find")],
@@ -416,6 +487,10 @@ function usage(): void {
     ["shot [file]", t("cmd.shot")],
     ["settings [name] [value]", t("cmd.settings")],
     ["gamemode", t("cmd.gamemode")],
+    ["push <app> <file> [dir]", t("cmd.push")],
+    ["pull <app> <file> [dir]", t("cmd.pull")],
+    ["ls <app> [dir]", t("cmd.ls")],
+    ["setup-retroarch", t("cmd.setupRetroarch")],
   ];
   console.log(`${t("cli.usage")}: xbdev <comando>`);
   console.log();
@@ -448,6 +523,10 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   settings: cmdSettings,
   ajustes: cmdSettings,
   gamemode: cmdGameMode,
+  push: cmdPush,
+  pull: cmdPull,
+  ls: cmdLs,
+  "setup-retroarch": cmdSetupRetroarch,
 };
 
 const handler = command ? handlers[command] : undefined;

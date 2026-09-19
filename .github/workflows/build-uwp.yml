@@ -10,6 +10,9 @@ on:
       - ".github/workflows/build-uwp.yml"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-2025

@@ -241,6 +241,69 @@ export class DevicePortal {
     }
   }
 
+  // ------------------------------------------------------------ file system
+  // Each sideloaded app exposes its own LocalState folder, which is how an
+  // emulator gets configured without touching the console by hand.
+
+  async listFiles(
+    packageFullName: string,
+    path = "",
+    knownFolderId = "LocalAppData",
+  ): Promise<Array<Record<string, unknown>>> {
+    const query = new URLSearchParams({
+      knownfolderid: knownFolderId,
+      packagefullname: packageFullName,
+      path,
+    });
+    const res = await this.request("GET", `/api/filesystem/apps/files?${query}`);
+    if (!res.ok) {
+      throw new PortalError("listing failed", res.status, await res.text());
+    }
+    const data = (await res.json()) as { Items?: Array<Record<string, unknown>> };
+    return data.Items ?? [];
+  }
+
+  async pushFile(
+    packageFullName: string,
+    localPath: string,
+    remoteDir = "",
+    knownFolderId = "LocalAppData",
+  ): Promise<void> {
+    const name = localPath.split("/").pop()!;
+    const query = new URLSearchParams({
+      knownfolderid: knownFolderId,
+      packagefullname: packageFullName,
+      path: remoteDir,
+    });
+    const form = new FormData();
+    form.append(name, Bun.file(localPath), name);
+    const res = await this.request("POST", `/api/filesystem/apps/file?${query}`, {
+      body: form,
+    });
+    if (!res.ok) {
+      throw new PortalError(`upload of ${name} failed`, res.status, await res.text());
+    }
+  }
+
+  async pullFile(
+    packageFullName: string,
+    fileName: string,
+    remoteDir = "",
+    knownFolderId = "LocalAppData",
+  ): Promise<ArrayBuffer> {
+    const query = new URLSearchParams({
+      knownfolderid: knownFolderId,
+      packagefullname: packageFullName,
+      filename: fileName,
+      path: remoteDir,
+    });
+    const res = await this.request("GET", `/api/filesystem/apps/file?${query}`);
+    if (!res.ok) {
+      throw new PortalError(`download of ${fileName} failed`, res.status, await res.text());
+    }
+    return res.arrayBuffer();
+  }
+
   async screenshot(): Promise<ArrayBuffer> {
     const res = await this.request("GET", "/ext/screenshot");
     if (!res.ok) {

@@ -836,8 +836,28 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   sincronizar: cmdSyncKiosk,
   steam: (args: string[]) => runSteam(ROOT, args),
   press: cmdPress,
+  type: cmdType,
   win32: cmdWin32,
 };
+
+/** Types text on the console, for fields that raise its keyboard. */
+async function cmdType(args: string[]): Promise<void> {
+  const config = await loadConfig();
+  if (!config) {
+    console.error(t("need.connect"));
+    process.exit(2);
+  }
+  const remote = new ConsoleRemote({
+    host: config.host, port: config.port ?? 11443, user: config.user, pass: config.pass,
+  });
+  await remote.open();
+  try {
+    await remote.type(args.join(" "));
+    console.log(args.join(" "));
+  } finally {
+    remote.close();
+  }
+}
 
 /**
  * Puts Windows binaries where the app's loader looks for them. This is how a

@@ -106,6 +106,29 @@ export class ConsoleRemote {
     await Bun.sleep(140);
   }
 
+  /**
+   * Types text. The same channel carries ordinary keyboard codes, which is
+   * what reaches the on-screen keyboard a console puts up for a text field.
+   */
+  async type(text: string, holdMs = 40): Promise<void> {
+    for (const character of text) {
+      const upper = character.toUpperCase();
+      const code = upper.charCodeAt(0);
+      // Letters and digits map straight onto their virtual-key codes.
+      const key =
+        (upper >= "A" && upper <= "Z") || (upper >= "0" && upper <= "9")
+          ? code
+          : character === " "
+            ? 0x20
+            : null;
+      if (key === null) continue;
+      this.send(key, DOWN);
+      await Bun.sleep(holdMs);
+      this.send(key, UP);
+      await Bun.sleep(70);
+    }
+  }
+
   /** Releases everything, which is what the clear message is for. */
   clear(): void {
     this.socket?.send(new Uint8Array([TYPE_CLEAR]));

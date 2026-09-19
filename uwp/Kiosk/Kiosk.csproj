@@ -125,6 +125,9 @@
     <PackageReference Include="ZstdSharp.Port">
       <Version>0.8.6</Version>
     </PackageReference>
+    <PackageReference Include="SharpCompress">
+      <Version>0.37.2</Version>
+    </PackageReference>
   </ItemGroup>
 
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">

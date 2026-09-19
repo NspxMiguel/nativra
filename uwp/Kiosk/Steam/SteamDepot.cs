@@ -274,8 +274,36 @@ namespace Kiosk.Steam
                 }
                 return plain;
             }
+            if (data.Length > 24 && data[0] == 0x56 && data[1] == 0x5A) return Unlzma(data);
             throw new Exception(
                 "unknown chunk container " + (char)data[0] + (char)data[1]);
+        }
+
+        /// <summary>
+        /// "VZa" is Valve's LZMA wrapper: three bytes of magic, four of
+        /// checksum, the five property bytes LZMA needs, the stream, and a
+        /// ten-byte footer whose second word is the size it comes to.
+        /// </summary>
+        private static byte[] Unlzma(byte[] data)
+        {
+            var properties = new byte[5];
+            Array.Copy(data, 7, properties, 0, 5);
+            var declared = (int)BitConverter.ToUInt32(data, data.Length - 6);
+            var payloadLength = data.Length - 12 - 10;
+
+            using (var input = new MemoryStream(data, 12, payloadLength))
+            using (var lzma = new SharpCompress.Compressors.LZMA.LzmaStream(
+                properties, input, payloadLength, declared))
+            using (var output = new MemoryStream(declared))
+            {
+                lzma.CopyTo(output);
+                var plain = output.ToArray();
+                if (plain.Length != declared)
+                {
+                    throw new Exception($"chunk came to {plain.Length}, not the stated {declared}");
+                }
+                return plain;
+            }
         }
     }
 }

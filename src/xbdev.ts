@@ -687,6 +687,13 @@ async function cmdSyncKiosk(): Promise<void> {
   );
   await portal.pushFile(kiosk.PackageFullName, catalogFile, "LocalState");
 
+  // Which games have been seen running on a console. Empty until one has.
+  const testedFile = join(PACKAGE_DIR, "tested.json");
+  if (!(await Bun.file(testedFile).exists())) {
+    await Bun.write(testedFile, JSON.stringify({ appids: [] }));
+  }
+  await portal.pushFile(kiosk.PackageFullName, testedFile, "LocalState");
+
   let pushedIcons = 0;
   for (const item of entries) {
     if (!item.icon) continue;

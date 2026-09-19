@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
+using Windows.Data.Json;
+using Windows.Storage;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
@@ -22,6 +26,17 @@ namespace Kiosk
         public ObservableCollection<OwnedGame> Games { get; } =
             new ObservableCollection<OwnedGame>();
 
+        /// <summary>Every game the account owns; Games is what the filters leave.</summary>
+        private readonly List<OwnedGame> allGames = new List<OwnedGame>();
+        private readonly HashSet<uint> tested = new HashSet<uint>();
+        private int filter;
+        private string query = string.Empty;
+
+        private static readonly string[] FilterKeys =
+        {
+            "steam.filter.all", "steam.filter.played", "steam.filter.never", "steam.filter.tested",
+        };
+
         private SteamSession session = new SteamSession();
         private QrSession challenge;
         private string shownUrl;
@@ -33,7 +48,8 @@ namespace Kiosk
             HeaderText.Text = Texts.Get("steam.header");
             HintBackText.Text = Texts.Get("hint.back");
             HintRefreshText.Text = Texts.Get("hint.refresh");
-            HintSignOutText.Text = Texts.Get("hint.signout");
+            HintSearchText.Text = Texts.Get("hint.search");
+            HintFilterText.Text = Texts.Get("hint.filter");
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -56,7 +72,9 @@ namespace Kiosk
         {
             SignInPanel.Visibility = Visibility.Visible;
             LibraryPanel.Visibility = Visibility.Collapsed;
-            SignOutHint.Visibility = Visibility.Collapsed;
+            SearchHint.Visibility = Visibility.Collapsed;
+            FilterHint.Visibility = Visibility.Collapsed;
+            FilterChip.Visibility = Visibility.Collapsed;
             AccountText.Text = string.Empty;
             SignInTitle.Text = Texts.Get("signin.title");
             SignInHow.Text = Texts.Get("signin.how");
@@ -172,31 +190,93 @@ namespace Kiosk
         {
             SignInPanel.Visibility = Visibility.Collapsed;
             LibraryPanel.Visibility = Visibility.Visible;
-            SignOutHint.Visibility = Visibility.Visible;
+            SearchHint.Visibility = Visibility.Visible;
+            FilterHint.Visibility = Visibility.Visible;
+            FilterChip.Visibility = Visibility.Visible;
             AccountText.Text = Texts.Get("signed.title", session.AccountName ?? "");
             StatusText.Text = Texts.Get("steam.loading");
 
             try
             {
+                await LoadTestedAsync();
                 var games = await SteamLibrary.OwnedAsync(session);
-                Games.Clear();
-                foreach (var game in games) Games.Add(game);
-
-                StatusText.Text = Games.Count == 0
-                    ? Texts.Get("steam.empty")
-                    : Texts.Get("steam.count", Games.Count);
-
-                if (Games.Count > 0)
+                allGames.Clear();
+                foreach (var game in games)
                 {
-                    GameGrid.UpdateLayout();
-                    GameGrid.SelectedIndex = 0;
-                    (GameGrid.ContainerFromIndex(0) as Control)?.Focus(FocusState.Programmatic);
+                    game.Tested = tested.Contains(game.AppId);
+                    allGames.Add(game);
                 }
+                ApplyFilter();
             }
             catch (Exception error)
             {
                 StatusText.Text = Texts.Get("steam.failed", error.Message);
             }
+        }
+
+        /// <summary>
+        /// Which games have been seen running on a console. The list is supplied
+        /// from outside for now; the shared one is the next step.
+        /// </summary>
+        private async Task LoadTestedAsync()
+        {
+            tested.Clear();
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder
+                    .TryGetItemAsync("tested.json") as StorageFile;
+                if (file == null) return;
+                var text = await FileIO.ReadTextAsync(file);
+                if (!JsonObject.TryParse(text, out var root)) return;
+                foreach (var value in root.GetNamedArray("appids"))
+                {
+                    tested.Add((uint)value.GetNumber());
+                }
+            }
+            catch
+            {
+                // No list means nothing is marked, which is the honest default.
+            }
+        }
+
+        private void ApplyFilter()
+        {
+            FilterText.Text = Texts.Get(FilterKeys[filter]);
+
+            var shown = allGames.Where(game =>
+            {
+                if (query.Length > 0 &&
+                    game.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    return false;
+                }
+                switch (filter)
+                {
+                    case 1: return game.MinutesPlayed > 0;
+                    case 2: return game.MinutesPlayed == 0;
+                    case 3: return game.Tested;
+                    default: return true;
+                }
+            }).ToList();
+
+            Games.Clear();
+            foreach (var game in shown) Games.Add(game);
+
+            StatusText.Text = allGames.Count == 0
+                ? Texts.Get("steam.empty")
+                : Texts.Get("steam.showing", Games.Count, allGames.Count);
+
+            if (Games.Count > 0)
+            {
+                GameGrid.UpdateLayout();
+                GameGrid.SelectedIndex = 0;
+            }
+        }
+
+        private void OnSearchChanged(object sender, TextChangedEventArgs e)
+        {
+            query = SearchBox.Text ?? string.Empty;
+            ApplyFilter();
         }
 
         private void OnGameSelected(object sender, SelectionChangedEventArgs e)
@@ -237,7 +317,29 @@ namespace Kiosk
                 case Windows.System.VirtualKey.GamepadX:
                     if (session.IsSignedIn)
                     {
+                        SearchBox.Visibility = Visibility.Visible;
+                        SearchBox.Focus(FocusState.Programmatic);
+                    }
+                    e.Handled = true;
+                    break;
+
+                case Windows.System.VirtualKey.GamepadLeftShoulder:
+                    filter = (filter + FilterKeys.Length - 1) % FilterKeys.Length;
+                    ApplyFilter();
+                    e.Handled = true;
+                    break;
+
+                case Windows.System.VirtualKey.GamepadRightShoulder:
+                    filter = (filter + 1) % FilterKeys.Length;
+                    ApplyFilter();
+                    e.Handled = true;
+                    break;
+
+                case Windows.System.VirtualKey.GamepadView:
+                    if (session.IsSignedIn)
+                    {
                         await session.ClearAsync();
+                        allGames.Clear();
                         Games.Clear();
                         HeaderText.Text = Texts.Get("steam.header");
                         await StartSignInAsync();

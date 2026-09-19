@@ -75,6 +75,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="Assets\Steam.png" />
     <Content Include="Assets\SplashScreen.png" />
     <Content Include="Assets\Square150x150Logo.png" />
     <Content Include="Assets\Square44x44Logo.png" />

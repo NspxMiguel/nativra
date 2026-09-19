@@ -23,6 +23,15 @@ namespace Kiosk
         public Windows.UI.Xaml.Media.ImageSource Art =>
             new Windows.UI.Xaml.Media.Imaging.BitmapImage(new Uri(ArtUrl));
 
+        /// <summary>Null until someone has actually run it on a console.</summary>
+        public bool Tested { get; set; }
+
+        public Windows.UI.Xaml.Media.Brush BadgeBrush =>
+            new Windows.UI.Xaml.Media.SolidColorBrush(
+                Tested
+                    ? Windows.UI.Color.FromArgb(255, 59, 224, 129)
+                    : Windows.UI.Color.FromArgb(90, 245, 245, 247));
+
         public string Played =>
             MinutesPlayed >= 60
                 ? Texts.Get("steam.hours", MinutesPlayed / 60)

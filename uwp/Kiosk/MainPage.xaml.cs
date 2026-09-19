@@ -25,8 +25,13 @@ namespace Kiosk
         public string Subtitle { get; set; }
         public string Initial { get; set; }
         public string Protocol { get; set; }
+
+        /// <summary>A screen inside this app rather than another package.</summary>
+        public string Route { get; set; }
+
         public SolidColorBrush Accent { get; set; }
-        public double Dimmed => string.IsNullOrEmpty(Protocol) ? 0.45 : 1.0;
+        public double Dimmed =>
+            string.IsNullOrEmpty(Protocol) && string.IsNullOrEmpty(Route) ? 0.45 : 1.0;
     }
 
     public sealed partial class MainPage : Page
@@ -82,18 +87,20 @@ namespace Kiosk
             StatusText.Text = Texts.Get("status.reading");
             Tiles.Clear();
 
-            var apps = await ReadListAsync();
-            if (apps == null)
+            // Steam is part of this app, not a package on the console, so it is
+            // always on the rail — signed in or not.
+            Tiles.Add(new Tile
             {
-                NameText.Text = Texts.Get("empty.title");
-                SubText.Text = Texts.Get("empty.next");
-                CountText.Text = string.Empty;
-                StatusText.Text = string.Empty;
-                return;
-            }
+                Title = Texts.Get("tile.steam"),
+                Subtitle = Texts.Get("tile.steam.sub"),
+                Route = "steam",
+                Initial = "S",
+                Accent = new SolidColorBrush(Accents[0]),
+            });
 
-            var index = 0;
-            foreach (var app in apps)
+            var apps = await ReadListAsync();
+            var index = 1;
+            foreach (var app in apps ?? new List<Tuple<string, string, string>>())
             {
                 Tiles.Add(new Tile
                 {
@@ -156,9 +163,10 @@ namespace Kiosk
             if (!(AppRail.SelectedItem is Tile tile)) return;
             NameText.Text = tile.Title;
             SubText.Text = tile.Subtitle;
-            StatusText.Text = string.IsNullOrEmpty(tile.Protocol)
-                ? Texts.Get("status.noprotocol")
-                : string.Empty;
+            StatusText.Text =
+                string.IsNullOrEmpty(tile.Protocol) && string.IsNullOrEmpty(tile.Route)
+                    ? Texts.Get("status.noprotocol")
+                    : string.Empty;
         }
 
         private async void OnTileInvoked(object sender, ItemClickEventArgs e)
@@ -174,6 +182,11 @@ namespace Kiosk
         private async Task LaunchAsync(Tile tile)
         {
             if (tile == null) return;
+            if (tile.Route == "steam")
+            {
+                Frame.Navigate(typeof(SteamPage));
+                return;
+            }
             if (string.IsNullOrEmpty(tile.Protocol))
             {
                 StatusText.Text = Texts.Get("status.noprotocol");

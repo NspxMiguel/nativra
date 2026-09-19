@@ -6,8 +6,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kiosk", "Kiosk\Kiosk.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JitProbe", "JitProbe\JitProbe.csproj", "{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vapor", "Vapor\Vapor.csproj", "{D4E5F6A7-1B2C-4D3E-9F8A-7B6C5D4E3F2A}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -26,12 +24,6 @@ Global
 		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Release|x64.ActiveCfg = Release|x64
 		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Release|x64.Build.0 = Release|x64
 		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Release|x64.Deploy.0 = Release|x64
-		{D4E5F6A7-1B2C-4D3E-9F8A-7B6C5D4E3F2A}.Debug|x64.ActiveCfg = Debug|x64
-		{D4E5F6A7-1B2C-4D3E-9F8A-7B6C5D4E3F2A}.Debug|x64.Build.0 = Debug|x64
-		{D4E5F6A7-1B2C-4D3E-9F8A-7B6C5D4E3F2A}.Debug|x64.Deploy.0 = Debug|x64
-		{D4E5F6A7-1B2C-4D3E-9F8A-7B6C5D4E3F2A}.Release|x64.ActiveCfg = Release|x64
-		{D4E5F6A7-1B2C-4D3E-9F8A-7B6C5D4E3F2A}.Release|x64.Build.0 = Release|x64
-		{D4E5F6A7-1B2C-4D3E-9F8A-7B6C5D4E3F2A}.Release|x64.Deploy.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

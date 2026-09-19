@@ -82,6 +82,24 @@ A "Proton for Xbox" would mean reimplementing Wine inside those constraints, and
 the result would still be blocked by DRM and anti-cheat. This project does not
 pretend otherwise.
 
+## Verified
+
+The console side waits on Developer Mode, but the app itself is not theory — it
+was built by the cloud pipeline, installed on a Windows 11 machine and driven
+there. What that run proved:
+
+- the package builds, signs and installs;
+- `PackageManager` enumeration works under the `packageQuery` capability, and
+  each app's real tile art is loaded through `AppListEntry.DisplayInfo`;
+- focus moves with the gamepad/keyboard and the focused icon grows and rings;
+- `AppListEntry.LaunchAsync` opens another installed app;
+- the language is picked from the host: an English Windows produced English.
+
+Two things that only bite on Windows, not on the console: AppX deployment
+refuses to run from an SSH session (a scheduled task in the interactive session
+does it), and every CI run signs with a fresh self-signed certificate, so that
+run's `.cer` must be trusted first. The Xbox Device Portal needs neither.
+
 ## Dual boot
 
 Developer Mode lives on its own partition. The retail system, its games and its

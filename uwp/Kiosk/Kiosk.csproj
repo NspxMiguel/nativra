@@ -65,6 +65,9 @@
     <Compile Include="SteamLibrary.cs" />
     <Compile Include="SteamShelves.cs" />
     <Compile Include="Settings.cs" />
+    <Compile Include="GamePage.xaml.cs">
+      <DependentUpon>GamePage.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Steam\Proto.cs" />
     <Compile Include="Steam\SteamDownload.cs" />
     <Compile Include="Steam\SteamCm.cs" />
@@ -98,6 +101,10 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Page Include="MainPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="GamePage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

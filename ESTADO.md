@@ -7,7 +7,7 @@
    `IAuthenticationService/BeginAuthSessionViaQR` -> challenge
    `https://s.team/q/1/<client_id>` -> `PollAuthSessionStatus` devolve
    `refresh_token`/`access_token`/`account_name`. Protobuf escrito à mão em
-   `uwp/Vapor/SteamAuth.cs`. Sem senha passando pelo console.
+   `uwp/Kiosk/SteamAuth.cs`. Sem senha passando pelo console.
 2. **JIT funciona no dev mode** (`uwp/JitProbe`): aloca RW, escreve x64, vira
    executável, chama, retorna 42. RWX direto falha (erro 87 = W^X imposto).
    => camada de tradução é arquiteturalmente possível.
@@ -33,19 +33,34 @@
   conserto é uninstall + install com o app parado.
 - `RequiresPointerMode.WhenRequested` tira o cursor (senão parece navegador).
 
-## Próximo bloco: FUNDIR num app só
+## Fundido num app só (19/09)
 
-Pedido dele: Kiosk + Vapor = **um app**, central de jogos plug-and-play.
-Ordem combinada: interface usável -> login -> biblioteca -> download -> rodar
-jogo -> achievements -> Steam Cloud -> Epic/GOG.
+O `Vapor` deixou de existir: a tela de QR e o cliente Steam moraram para dentro
+do `Kiosk`, que agora é **o** app do console. A home traz "Steam" no trilho ao
+lado dos emuladores; B volta, Y recarrega, X sai da conta.
 
-Imediato:
-1. Mover a tela de QR/Steam do `Vapor` para dentro do `Kiosk` como seção.
-   Aposentar o pacote `Vapor` (está travado meio-instalado no console).
-2. Biblioteca: `IPlayerService/GetOwnedGames` com o `access_token`. O
-   `refresh_token` do login dele está em `LocalState/session.txt` do Vapor.
-3. Instalar emulador de dentro do app (plug and play) e config pronta de
-   controle/BIOS, sem o usuário configurar nada.
+Arquivos: `uwp/Kiosk/SteamAuth.cs` (protobuf + QR + renovação de token),
+`SteamSession.cs` (guarda conta/tokens/steamid em `steam.json`, steamid lido do
+claim `sub` do JWT — dispensa chave de API), `SteamLibrary.cs`
+(`GetOwnedGames`), `SteamPage.xaml` (login e biblioteca).
+Pacote `Vapor` desinstalado do console; projeto fora da solução e do workflow.
+
+## Ordem combinada
+
+interface usável -> login -> biblioteca -> download -> rodar jogo ->
+achievements -> Steam Cloud -> Epic/GOG.
+
+Feito até aqui: interface, login, biblioteca. **Próximo: download.**
+
+### O que o download exige (o bloco grande)
+
+Baixar depot não é HTTP simples: a chave de descriptografia do depot só sai
+pela conexão de cliente (CM, websocket `wss://cmN.steampowered.com/cmsocket/`),
+não pela Web API. Sequência: conectar no CM -> `Logon` com o `access_token` ->
+`GetDepotDecryptionKey` -> `GetManifestRequestCode` -> baixar manifesto do CDN
+(`IContentServerDirectoryService/GetServersForSteamPipe`) -> baixar os chunks
+-> descriptografar (AES) e descomprimir (LZMA/zip). É o mesmo caminho do
+DepotDownloader.
 
 Ferramentas: `bun src/xbdev.ts <status|apps|install|launch|shot|sync|verify>`.
 Console no chaveiro (`claude-autonomous:XBDEV`). Build: push -> GitHub Actions

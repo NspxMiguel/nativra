@@ -12,7 +12,7 @@
     <Page.Resources>
         <!-- Same grammar as the home rail: only the focused card moves. -->
         <Style x:Key="GameCardStyle" TargetType="GridViewItem">
-            <Setter Property="Margin" Value="0,0,16,16" />
+            <Setter Property="Margin" Value="0,0,12,12" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -20,7 +20,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="GridViewItem">
-                        <Grid x:Name="Root" Width="212" Height="128"
+                        <Grid x:Name="Root" Width="158" Height="96"
                               RenderTransformOrigin="0.5,0.5">
                             <Grid.RenderTransform>
                                 <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
@@ -76,8 +76,8 @@
                 <Border Grid.Row="0" CornerRadius="8,8,0,0" Margin="2,2,2,0">
                     <Image Source="{x:Bind Art}" Stretch="UniformToFill" />
                 </Border>
-                <TextBlock Grid.Row="1" Text="{x:Bind Name}" FontSize="13"
-                           Margin="8,5,8,6" MaxLines="1" TextTrimming="CharacterEllipsis"
+                <TextBlock Grid.Row="1" Text="{x:Bind Name}" FontSize="11"
+                           Margin="6,4,6,5" MaxLines="1" TextTrimming="CharacterEllipsis"
                            Foreground="{StaticResource TextPrimary}" />
             </Grid>
         </DataTemplate>
@@ -90,30 +90,30 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Padding="48,16,48,0" Height="54">
-            <TextBlock x:Name="HeaderText" FontSize="22" FontWeight="SemiBold"
+        <Grid Grid.Row="0" Padding="28,12,28,0" Height="40">
+            <TextBlock x:Name="HeaderText" FontSize="16" FontWeight="SemiBold"
                        VerticalAlignment="Center"
                        Foreground="{StaticResource TextPrimary}" />
-            <TextBlock x:Name="AccountText" FontSize="15" HorizontalAlignment="Right"
+            <TextBlock x:Name="AccountText" FontSize="12" HorizontalAlignment="Right"
                        VerticalAlignment="Center"
                        Foreground="{StaticResource TextSecondary}" />
         </Grid>
 
         <!-- Sign in: the QR code and nothing else competing with it. -->
-        <Grid x:Name="SignInPanel" Grid.Row="1" Padding="48,0,48,0"
+        <Grid x:Name="SignInPanel" Grid.Row="1" Padding="28,0,28,0"
               VerticalAlignment="Center">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Border x:Name="QrFrame" Grid.Column="0" Width="248" Height="248"
+            <Border x:Name="QrFrame" Grid.Column="0" Width="230" Height="230"
                     CornerRadius="12" Background="White" Padding="10">
                 <Image x:Name="QrImage" Stretch="Uniform" />
             </Border>
-            <StackPanel Grid.Column="1" Margin="32,0,0,0" VerticalAlignment="Center">
-                <TextBlock x:Name="SignInTitle" FontSize="30" FontWeight="Bold"
+            <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center">
+                <TextBlock x:Name="SignInTitle" FontSize="22" FontWeight="Bold"
                            Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" />
-                <TextBlock x:Name="SignInHow" FontSize="16" Margin="0,10,0,0"
+                <TextBlock x:Name="SignInHow" FontSize="13" Margin="0,8,0,0"
                            Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" />
             </StackPanel>
         </Grid>
@@ -128,41 +128,41 @@
                       ItemClick="OnGameInvoked"
                       SelectionMode="Single"
                       SelectionChanged="OnGameSelected"
-                      Padding="48,8,48,8"
+                      Padding="28,6,28,6"
                       ScrollViewer.HorizontalScrollMode="Disabled"
                       ScrollViewer.VerticalScrollBarVisibility="Hidden" />
         </Grid>
 
-        <Grid Grid.Row="2" Height="52" Padding="48,0,48,0"
+        <Grid Grid.Row="2" Height="44" Padding="28,0,28,0"
               BorderBrush="{StaticResource Hairline}" BorderThickness="0,1,0,0">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="24">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="20">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Border Width="22" Height="22" CornerRadius="999" Background="#FFE05B5B">
-                        <TextBlock Text="B" FontSize="12" FontWeight="Bold" Foreground="#FF1A0505"
+                    <Border Width="20" Height="20" CornerRadius="999" Background="#FFE05B5B">
+                        <TextBlock Text="B" FontSize="11" FontWeight="Bold" Foreground="#FF1A0505"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <TextBlock x:Name="HintBackText" FontSize="14" VerticalAlignment="Center"
+                    <TextBlock x:Name="HintBackText" FontSize="12" VerticalAlignment="Center"
                                Foreground="{StaticResource TextSecondary}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Border Width="22" Height="22" CornerRadius="999" Background="#FFF2C94C">
-                        <TextBlock Text="Y" FontSize="12" FontWeight="Bold" Foreground="#FF1A1405"
+                    <Border Width="20" Height="20" CornerRadius="999" Background="#FFF2C94C">
+                        <TextBlock Text="Y" FontSize="11" FontWeight="Bold" Foreground="#FF1A1405"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <TextBlock x:Name="HintRefreshText" FontSize="14" VerticalAlignment="Center"
+                    <TextBlock x:Name="HintRefreshText" FontSize="12" VerticalAlignment="Center"
                                Foreground="{StaticResource TextSecondary}" />
                 </StackPanel>
                 <StackPanel x:Name="SignOutHint" Orientation="Horizontal" Spacing="8"
                             Visibility="Collapsed">
-                    <Border Width="22" Height="22" CornerRadius="999" Background="#FF56A8F5">
-                        <TextBlock Text="X" FontSize="12" FontWeight="Bold" Foreground="#FF04121C"
+                    <Border Width="20" Height="20" CornerRadius="999" Background="#FF56A8F5">
+                        <TextBlock Text="X" FontSize="11" FontWeight="Bold" Foreground="#FF04121C"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <TextBlock x:Name="HintSignOutText" FontSize="14" VerticalAlignment="Center"
+                    <TextBlock x:Name="HintSignOutText" FontSize="12" VerticalAlignment="Center"
                                Foreground="{StaticResource TextSecondary}" />
                 </StackPanel>
             </StackPanel>
-            <TextBlock x:Name="StatusText" FontSize="14" HorizontalAlignment="Right"
+            <TextBlock x:Name="StatusText" FontSize="12" HorizontalAlignment="Right"
                        VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}" />
         </Grid>
     </Grid>

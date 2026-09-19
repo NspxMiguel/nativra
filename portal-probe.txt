@@ -1,0 +1,8 @@
+at=2026-09-19 11:39:19
+portal.json=True
+reachable=False
+name=-
+lastError=Exception: The text associated with this error code could not be found.
+
+A connection with the server could not be established
+

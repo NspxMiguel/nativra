@@ -663,6 +663,29 @@ async function cmdSyncKiosk(): Promise<void> {
   );
   await portal.pushFile(kiosk.PackageFullName, portalFile, "LocalState");
 
+  // The catalogue rides along so the app can offer what is NOT installed yet.
+  // The repository is private, so the console cannot fetch it from GitHub; the
+  // download URLs inside it are public releases and work from the console.
+  const installedSlugs = new Set(entries.map((item) => item.slug));
+  const catalogFile = join(PACKAGE_DIR, "catalog-console.json");
+  await Bun.write(
+    catalogFile,
+    JSON.stringify({
+      generated: new Date().toISOString(),
+      packages: catalog.packages
+        .filter((entry) => entry.slug !== "kiosk")
+        .map((entry) => ({
+          slug: entry.slug,
+          name: entry.name,
+          kind: entry.kind,
+          note: shorten(entry.runs?.replace(/^PC NATIVE:\s*/, "") ?? ""),
+          url: entry.url,
+          installed: installedSlugs.has(entry.slug),
+        })),
+    }),
+  );
+  await portal.pushFile(kiosk.PackageFullName, catalogFile, "LocalState");
+
   let pushedIcons = 0;
   for (const item of entries) {
     if (!item.icon) continue;

@@ -10,94 +10,66 @@
     Background="{StaticResource Background}">
 
     <Page.Resources>
-        <!-- Focus is the whole interaction on a console: the tile lifts, the
-             hairline turns to the accent, and the art brightens. 150ms with a
-             real curve, so it answers the thumb rather than sliding. -->
-        <Style x:Key="TileContainerStyle" TargetType="GridViewItem">
-            <Setter Property="Margin" Value="0,0,28,28" />
+        <!-- A console home screen moves one thing: the focused icon. It grows
+             and takes a bright ring; everything else holds still. -->
+        <Style x:Key="RailItemStyle" TargetType="ListViewItem">
+            <Setter Property="Margin" Value="0,0,26,0" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="VerticalContentAlignment" Value="Stretch" />
             <Setter Property="UseSystemFocusVisuals" Value="False" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="GridViewItem">
-                        <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5">
-                            <Grid.RenderTransform>
-                                <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
-                            </Grid.RenderTransform>
-
-                            <!-- The one signature of this app: a soft pool of accent
-                                 light behind the focused tile, as if the console lit
-                                 it up. No drop shadow anywhere. -->
-                            <Border x:Name="Glow"
-                                    CornerRadius="{StaticResource CardRadius}"
-                                    Background="{StaticResource Accent}"
-                                    Opacity="0"
-                                    Margin="-6" />
-
-                            <Border x:Name="Card"
-                                    CornerRadius="{StaticResource CardRadius}"
-                                    Background="{StaticResource Surface}"
-                                    BorderBrush="{StaticResource Hairline}"
-                                    BorderThickness="1">
-                                <Grid>
-                                    <Border CornerRadius="{StaticResource CardRadius}"
-                                            Background="{StaticResource Sheen}" />
+                    <ControlTemplate TargetType="ListViewItem">
+                        <Grid x:Name="Root" Width="228" Height="228">
+                            <Grid x:Name="Box" Width="172" Height="172"
+                                  RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="Ring"
+                                        CornerRadius="18"
+                                        Background="{StaticResource Tile}"
+                                        BorderBrush="{StaticResource Hairline}"
+                                        BorderThickness="2" />
+                                <Border CornerRadius="18" Margin="2">
                                     <ContentPresenter />
-                                </Grid>
-                            </Border>
+                                </Border>
+                            </Grid>
 
                             <VisualStateManager.VisualStateGroups>
                                 <VisualStateGroup x:Name="CommonStates">
                                     <VisualState x:Name="Normal" />
-                                    <VisualState x:Name="PointerOver">
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="Glow"
-                                                             Storyboard.TargetProperty="Opacity"
-                                                             To="0.10" Duration="0:0:0.15" />
-                                        </Storyboard>
-                                    </VisualState>
+                                    <VisualState x:Name="PointerOver" />
                                     <VisualState x:Name="Pressed">
                                         <Storyboard>
                                             <DoubleAnimation Storyboard.TargetName="Scale"
-                                                             Storyboard.TargetProperty="ScaleX"
-                                                             To="0.975" Duration="0:0:0.15" />
+                                                Storyboard.TargetProperty="ScaleX" To="1.24" Duration="0:0:0.09" />
                                             <DoubleAnimation Storyboard.TargetName="Scale"
-                                                             Storyboard.TargetProperty="ScaleY"
-                                                             To="0.975" Duration="0:0:0.15" />
+                                                Storyboard.TargetProperty="ScaleY" To="1.24" Duration="0:0:0.09" />
                                         </Storyboard>
                                     </VisualState>
                                 </VisualStateGroup>
-
                                 <VisualStateGroup x:Name="FocusStates">
                                     <VisualState x:Name="Unfocused" />
                                     <VisualState x:Name="Focused">
                                         <Storyboard>
                                             <DoubleAnimation Storyboard.TargetName="Scale"
-                                                             Storyboard.TargetProperty="ScaleX"
-                                                             To="1.06" Duration="0:0:0.15">
+                                                Storyboard.TargetProperty="ScaleX" To="1.32" Duration="0:0:0.16">
                                                 <DoubleAnimation.EasingFunction>
                                                     <CubicEase EasingMode="EaseOut" />
                                                 </DoubleAnimation.EasingFunction>
                                             </DoubleAnimation>
                                             <DoubleAnimation Storyboard.TargetName="Scale"
-                                                             Storyboard.TargetProperty="ScaleY"
-                                                             To="1.06" Duration="0:0:0.15">
+                                                Storyboard.TargetProperty="ScaleY" To="1.32" Duration="0:0:0.16">
                                                 <DoubleAnimation.EasingFunction>
                                                     <CubicEase EasingMode="EaseOut" />
                                                 </DoubleAnimation.EasingFunction>
                                             </DoubleAnimation>
-                                            <DoubleAnimation Storyboard.TargetName="Glow"
-                                                             Storyboard.TargetProperty="Opacity"
-                                                             To="0.22" Duration="0:0:0.15" />
-                                            <ObjectAnimationUsingKeyFrames
-                                                Storyboard.TargetName="Card"
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Ring"
                                                 Storyboard.TargetProperty="BorderBrush">
-                                                <DiscreteObjectKeyFrame KeyTime="0"
-                                                    Value="{StaticResource Accent}" />
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="White" />
                                             </ObjectAnimationUsingKeyFrames>
                                         </Storyboard>
                                     </VisualState>
@@ -109,71 +81,110 @@
             </Setter>
         </Style>
 
-        <DataTemplate x:Key="TileTemplate" x:DataType="local:Tile">
-            <Grid Width="300" Height="216" Padding="26">
-                <StackPanel VerticalAlignment="Bottom">
-                    <Grid Width="60" Height="60" HorizontalAlignment="Left" Margin="0,0,0,18">
-                        <Border CornerRadius="{StaticResource IconRadius}"
-                                Background="{StaticResource Accent}"
-                                Visibility="{x:Bind InitialVisible}">
-                            <TextBlock Text="{x:Bind Initial}" FontSize="28" FontWeight="SemiBold"
-                                       Foreground="#FF000000" HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                        </Border>
-                        <Border CornerRadius="{StaticResource IconRadius}"
-                                Visibility="{x:Bind LogoVisible}">
-                            <Image Source="{x:Bind Logo}" Stretch="UniformToFill" />
-                        </Border>
-                    </Grid>
-                    <TextBlock Text="{x:Bind Title}"
-                               FontSize="{StaticResource TileTitleSize}" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimary}"
-                               TextTrimming="CharacterEllipsis" MaxLines="1" />
-                    <TextBlock Text="{x:Bind Subtitle}"
-                               FontSize="{StaticResource TileSubtitleSize}"
-                               Foreground="{StaticResource TextSecondary}"
-                               TextTrimming="CharacterEllipsis" MaxLines="1" Margin="0,5,0,0" />
-                </StackPanel>
+        <DataTemplate x:Key="RailTemplate" x:DataType="local:Tile">
+            <Grid>
+                <Border CornerRadius="16" Background="{StaticResource Accent}"
+                        Visibility="{x:Bind InitialVisible}">
+                    <TextBlock Text="{x:Bind Initial}" FontSize="52" FontWeight="Bold"
+                               Foreground="#FF06120C"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="16" Visibility="{x:Bind LogoVisible}">
+                    <Image Source="{x:Bind Logo}" Stretch="UniformToFill" />
+                </Border>
             </Grid>
         </DataTemplate>
     </Page.Resources>
 
-    <!-- 5% of the frame stays empty on every side: the TV-safe area, which is
-         also what stops the grid from feeling crammed. -->
-    <Grid Padding="96,64,96,56">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,44">
-            <TextBlock x:Name="EyebrowText"
-                       FontSize="{StaticResource LabelSize}" FontWeight="Bold"
-                       Foreground="{StaticResource Accent}" CharacterSpacing="220" />
-            <TextBlock x:Name="TitleText"
-                       FontSize="{StaticResource TitleSize}" FontWeight="SemiBold"
-                       Foreground="{StaticResource TextPrimary}" Margin="0,10,0,0" />
-        </StackPanel>
+        <!-- system bar -->
+        <Grid Grid.Row="0" Padding="64,20,64,0" Height="76">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="18">
+                <Border Width="42" Height="42" CornerRadius="999">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="{StaticResource AccentColor}" Offset="0" />
+                            <GradientStop Color="#FF1E8F55" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+                <TextBlock x:Name="MachineText" FontSize="19"
+                           Foreground="{StaticResource TextSecondary}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        VerticalAlignment="Center" Spacing="22">
+                <TextBlock x:Name="CountText" FontSize="18"
+                           Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" />
+                <TextBlock x:Name="ClockText" FontSize="21" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
 
-        <GridView x:Name="AppGrid" Grid.Row="1"
-                  ItemsSource="{x:Bind Tiles}"
-                  ItemTemplate="{StaticResource TileTemplate}"
-                  ItemContainerStyle="{StaticResource TileContainerStyle}"
-                  IsItemClickEnabled="True"
-                  ItemClick="OnTileInvoked"
-                  SelectionMode="Single"
-                  ScrollViewer.HorizontalScrollMode="Disabled"
-                  ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                  Padding="6,6,6,28" />
+        <!-- the rail, and the focused item's name above it -->
+        <Grid Grid.Row="1" VerticalAlignment="Center">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-        <!-- Empty state and status share this line: it says what to do next,
-             never only what is missing. -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="14">
-            <Border Width="9" Height="9" CornerRadius="999"
-                    Background="{StaticResource Accent}" VerticalAlignment="Center" />
-            <TextBlock x:Name="StatusText" FontSize="{StaticResource StatusSize}"
-                       Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" />
-        </StackPanel>
+            <StackPanel Grid.Row="0" Padding="64,0,64,0" Margin="0,0,0,26">
+                <TextBlock x:Name="NameText" FontSize="56" FontWeight="Bold"
+                           Foreground="{StaticResource TextPrimary}" />
+                <TextBlock x:Name="SubText" FontSize="21" Margin="0,8,0,0"
+                           Foreground="{StaticResource TextSecondary}" />
+            </StackPanel>
+
+            <ListView x:Name="AppRail" Grid.Row="1"
+                      ItemsSource="{x:Bind Tiles}"
+                      ItemTemplate="{StaticResource RailTemplate}"
+                      ItemContainerStyle="{StaticResource RailItemStyle}"
+                      IsItemClickEnabled="True"
+                      ItemClick="OnTileInvoked"
+                      SelectionChanged="OnSelectionChanged"
+                      SelectionMode="Single"
+                      Padding="64,0,64,0"
+                      ScrollViewer.HorizontalScrollMode="Enabled"
+                      ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                      ScrollViewer.VerticalScrollMode="Disabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                <ListView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsStackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ListView.ItemsPanel>
+            </ListView>
+        </Grid>
+
+        <!-- button hints: the most console thing on the screen -->
+        <Grid Grid.Row="2" Height="92" Padding="64,0,64,0"
+              BorderBrush="{StaticResource Hairline}" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="34">
+                <StackPanel Orientation="Horizontal" Spacing="11">
+                    <Border Width="32" Height="32" CornerRadius="999" Background="{StaticResource Accent}">
+                        <TextBlock Text="A" FontSize="16" FontWeight="Bold" Foreground="#FF06120C"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock x:Name="HintOpenText" FontSize="18" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondary}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="11">
+                    <Border Width="32" Height="32" CornerRadius="999" Background="#FFF2C94C">
+                        <TextBlock Text="Y" FontSize="16" FontWeight="Bold" Foreground="#FF1A1405"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock x:Name="HintRefreshText" FontSize="18" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondary}" />
+                </StackPanel>
+            </StackPanel>
+            <TextBlock x:Name="StatusText" FontSize="17" HorizontalAlignment="Right"
+                       VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}" />
+        </Grid>
     </Grid>
 </Page>

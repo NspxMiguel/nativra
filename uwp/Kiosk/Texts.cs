@@ -21,6 +21,10 @@ namespace Kiosk
             { "status.refused", "o console recusou abrir {0}" },
             { "status.failed", "não abriu {0}: {1}" },
             { "status.unreadable", "não consegui ler a lista de apps: {0}" },
+            { "hint.open", "Abrir" },
+            { "hint.refresh", "Atualizar" },
+            { "empty.title", "Nada instalado ainda" },
+            { "empty.next", "Rode xbdev kit no Mac e aperte Y aqui" },
         };
 
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
@@ -34,6 +38,10 @@ namespace Kiosk
             { "status.refused", "the console refused to open {0}" },
             { "status.failed", "could not open {0}: {1}" },
             { "status.unreadable", "could not read the app list: {0}" },
+            { "hint.open", "Open" },
+            { "hint.refresh", "Refresh" },
+            { "empty.title", "Nothing installed yet" },
+            { "empty.next", "Run xbdev kit on the Mac, then press Y here" },
         };
 
         private static readonly Dictionary<string, string> Active = Pick();

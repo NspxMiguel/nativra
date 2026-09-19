@@ -29,6 +29,8 @@
         <GradientStop Color="#02FFFFFF" Offset="1" />
     </LinearGradientBrush>
 
+    <SolidColorBrush x:Key="Tile" Color="#161A1F" />
+
     <CornerRadius x:Key="CardRadius">22</CornerRadius>
     <CornerRadius x:Key="IconRadius">14</CornerRadius>
 

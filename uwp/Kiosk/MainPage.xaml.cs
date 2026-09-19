@@ -5,20 +5,20 @@ using System.Linq;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Core;
+using Windows.Foundation;
 using Windows.Management.Deployment;
+using Windows.Security.ExchangeActiveSyncProvisioning;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
-using Windows.UI;
-using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
-using Windows.Foundation;
 
 namespace Kiosk
 {
     /// <summary>
-    /// One tile per launchable app installed on the console. Sideloaded packages
-    /// come first — those are the emulators and PC ports this system is for.
+    /// One entry per launchable app installed on the console. Sideloaded
+    /// packages only — these are the emulators and PC ports this system exists
+    /// to open.
     /// </summary>
     public sealed class Tile
     {
@@ -35,12 +35,12 @@ namespace Kiosk
     {
         public ObservableCollection<Tile> Tiles { get; } = new ObservableCollection<Tile>();
 
-        // Packages the catalogue installs, with what they actually run. Anything
-        // else that is sideloaded still shows up, just without a subtitle.
+        // What each catalogue package actually runs. Anything else that is
+        // sideloaded still appears, just without a subtitle.
         private static readonly Dictionary<string, string> KnownApps =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                { "retroarch", "200+ systems" },
+                { "retroarch", "200+ sistemas" },
                 { "xbsx2", "PlayStation 2" },
                 { "xenia", "Xbox 360" },
                 { "dolphin", "GameCube / Wii" },
@@ -49,39 +49,61 @@ namespace Kiosk
                 { "gzdoom", "Doom / Heretic / Hexen" },
                 { "zdoom", "Doom / Heretic / Hexen" },
                 { "raze", "Duke Nukem / Blood" },
-                { "scummvm", "Adventure games" },
+                { "scummvm", "ScummVM" },
                 { "dosbox", "MS-DOS" },
                 { "openbor", "Beat 'em ups" },
-                { "ikemen", "Fighting games" },
+                { "ikemen", "Luta" },
                 { "supermodel", "Sega Model 3" },
                 { "ruffle", "Flash" },
             };
 
+        private DispatcherTimer clock;
+
         public MainPage()
         {
             InitializeComponent();
+            ApplyStaticText();
+            StartClock();
             Loaded += async (s, e) => await LoadAppsAsync();
+        }
+
+        private void ApplyStaticText()
+        {
+            HintOpenText.Text = Texts.Get("hint.open");
+            HintRefreshText.Text = Texts.Get("hint.refresh");
+            try
+            {
+                MachineText.Text = new EasClientDeviceInformation().FriendlyName;
+            }
+            catch
+            {
+                MachineText.Text = Texts.Get("app.eyebrow");
+            }
+        }
+
+        private void StartClock()
+        {
+            clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+            clock.Tick += (s, e) => ClockText.Text = DateTime.Now.ToString("HH:mm");
+            ClockText.Text = DateTime.Now.ToString("HH:mm");
+            clock.Start();
         }
 
         private async Task LoadAppsAsync()
         {
-            EyebrowText.Text = Texts.Get("app.eyebrow");
-            TitleText.Text = Texts.Get("app.title");
             StatusText.Text = Texts.Get("status.reading");
             var tiles = new List<Tile>();
 
             try
             {
                 var manager = new PackageManager();
-                var packages = manager.FindPackagesForUser(string.Empty);
-
-                foreach (var package in packages)
+                foreach (var package in manager.FindPackagesForUser(string.Empty))
                 {
                     if (package.IsFramework || package.IsResourcePackage) continue;
-                    // Retail/system packages are not ours to launch from here.
+                    // Retail and system packages are not ours to launch from here.
                     if (package.SignatureKind == PackageSignatureKind.System) continue;
                     if (package.Id.FamilyName.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)) continue;
-                    if (package.Id.FamilyName.StartsWith("Kiosk", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (package.Id.FamilyName.StartsWith("NSPX.Kiosk", StringComparison.OrdinalIgnoreCase)) continue;
 
                     IReadOnlyList<AppListEntry> entries;
                     try
@@ -116,21 +138,25 @@ namespace Kiosk
                 return;
             }
 
+            Tiles.Clear();
             foreach (var tile in tiles.OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase))
             {
                 Tiles.Add(tile);
             }
 
-            StatusText.Text = Tiles.Count == 0
-                ? Texts.Get("status.empty")
-                : Texts.Get("status.count", Tiles.Count);
+            CountText.Text = Texts.Get("status.count", Tiles.Count);
+            StatusText.Text = string.Empty;
 
-            if (Tiles.Count > 0)
+            if (Tiles.Count == 0)
             {
-                AppGrid.UpdateLayout();
-                AppGrid.SelectedIndex = 0;
-                (AppGrid.ContainerFromIndex(0) as Control)?.Focus(FocusState.Programmatic);
+                NameText.Text = Texts.Get("empty.title");
+                SubText.Text = Texts.Get("empty.next");
+                return;
             }
+
+            AppRail.UpdateLayout();
+            AppRail.SelectedIndex = 0;
+            (AppRail.ContainerFromIndex(0) as Control)?.Focus(FocusState.Programmatic);
         }
 
         /// <summary>
@@ -142,7 +168,7 @@ namespace Kiosk
         {
             try
             {
-                var reference = entry.DisplayInfo?.GetLogo(new Size(150, 150));
+                var reference = entry.DisplayInfo?.GetLogo(new Size(256, 256));
                 if (reference == null) return null;
                 using (var stream = await reference.OpenReadAsync())
                 {
@@ -171,6 +197,14 @@ namespace Kiosk
             return string.Empty;
         }
 
+        /// <summary>The name above the rail belongs to whatever is focused.</summary>
+        private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!(AppRail.SelectedItem is Tile tile)) return;
+            NameText.Text = tile.Title;
+            SubText.Text = tile.Subtitle;
+        }
+
         private async void OnTileInvoked(object sender, ItemClickEventArgs e)
         {
             await LaunchAsync(e.ClickedItem as Tile);
@@ -193,12 +227,21 @@ namespace Kiosk
 
         private async void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            // Gamepad A arrives as GamepadA; Enter covers a hardware keyboard.
-            if (e.Key == Windows.System.VirtualKey.GamepadA ||
-                e.Key == Windows.System.VirtualKey.Enter)
+            switch (e.Key)
             {
-                await LaunchAsync(AppGrid.SelectedItem as Tile);
-                e.Handled = true;
+                // A on the gamepad, Enter on a keyboard.
+                case Windows.System.VirtualKey.GamepadA:
+                case Windows.System.VirtualKey.Enter:
+                    await LaunchAsync(AppRail.SelectedItem as Tile);
+                    e.Handled = true;
+                    break;
+
+                // Y re-reads the console, for right after installing something.
+                case Windows.System.VirtualKey.GamepadY:
+                case Windows.System.VirtualKey.F5:
+                    await LoadAppsAsync();
+                    e.Handled = true;
+                    break;
             }
         }
     }

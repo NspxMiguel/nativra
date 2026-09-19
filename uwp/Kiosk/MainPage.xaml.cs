@@ -129,11 +129,6 @@ namespace Kiosk
 
             // Asking the console's own portal is what reaches the apps that
             // register no protocol; without it they can only open from Dev Home.
-            portal = await ConsolePortal.LoadAsync();
-            portalReady = portal != null && await portal.ProbeAsync() != null;
-            await RecordProbeAsync();
-            await Native.NativeProbe.RunAsync();
-
             CountText.Text = Texts.Get("status.count", Tiles.Count);
             StatusText.Text = string.Empty;
 
@@ -143,6 +138,12 @@ namespace Kiosk
                 AppRail.SelectedIndex = 0;
                 (AppRail.ContainerFromIndex(0) as Control)?.Focus(FocusState.Programmatic);
             }
+
+            // The measurements run after the screen is usable, never before.
+            portal = await ConsolePortal.LoadAsync();
+            portalReady = portal != null && await portal.ProbeAsync() != null;
+            await RecordProbeAsync();
+            await Native.NativeProbe.RunAsync();
         }
 
         /// <summary>
@@ -241,6 +242,7 @@ namespace Kiosk
                         Subtitle = Texts.Get("tile.game.sub"),
                         Route = "game:" + appId,
                         Initial = title.Substring(0, 1).ToUpperInvariant(),
+                        Accent = new SolidColorBrush(Accents[(int)(appId % 6)]),
                         Icon = Artwork(
                             "https://cdn.cloudflare.steamstatic.com/steam/apps/"
                             + appId + "/header.jpg"),
@@ -263,12 +265,20 @@ namespace Kiosk
                 : null;
         }
 
+        /// <summary>
+        /// An icon that rides with the app list, or a game's own artwork on the
+        /// web. Prefixing an absolute address with the local scheme is what
+        /// left the downloaded games as empty tiles.
+        /// </summary>
         private static ImageSource Artwork(string name)
         {
             if (string.IsNullOrEmpty(name)) return null;
             try
             {
-                return new BitmapImage(new Uri("ms-appdata:///local/" + name));
+                var uri = name.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                    ? new Uri(name)
+                    : new Uri("ms-appdata:///local/" + name);
+                return new BitmapImage(uri);
             }
             catch
             {

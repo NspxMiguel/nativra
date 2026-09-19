@@ -24,7 +24,6 @@ namespace Kiosk
     {
         public string Title { get; set; }
         public string Subtitle { get; set; }
-        public SolidColorBrush Accent { get; set; }
         public string Initial { get; set; }
         public BitmapImage Logo { get; set; }
         public Visibility LogoVisible => Logo == null ? Visibility.Collapsed : Visibility.Visible;
@@ -58,16 +57,6 @@ namespace Kiosk
                 { "ruffle", "Flash" },
             };
 
-        private static readonly Color[] Accents =
-        {
-            Color.FromArgb(255, 107, 76, 230),
-            Color.FromArgb(255, 47, 168, 255),
-            Color.FromArgb(255, 35, 192, 138),
-            Color.FromArgb(255, 232, 145, 58),
-            Color.FromArgb(255, 216, 70, 110),
-            Color.FromArgb(255, 139, 92, 246),
-        };
-
         public MainPage()
         {
             InitializeComponent();
@@ -76,14 +65,15 @@ namespace Kiosk
 
         private async Task LoadAppsAsync()
         {
-            StatusText.Text = "reading the console...";
+            EyebrowText.Text = Texts.Get("app.eyebrow");
+            TitleText.Text = Texts.Get("app.title");
+            StatusText.Text = Texts.Get("status.reading");
             var tiles = new List<Tile>();
 
             try
             {
                 var manager = new PackageManager();
                 var packages = manager.FindPackagesForUser(string.Empty);
-                var index = 0;
 
                 foreach (var package in packages)
                 {
@@ -113,7 +103,6 @@ namespace Kiosk
                         {
                             Title = title,
                             Subtitle = DescribeApp(package.Id.Name, title),
-                            Accent = new SolidColorBrush(Accents[index++ % Accents.Length]),
                             Initial = title.Substring(0, 1).ToUpperInvariant(),
                             Logo = await LoadLogoAsync(entry),
                             Entry = entry,
@@ -123,7 +112,7 @@ namespace Kiosk
             }
             catch (Exception error)
             {
-                StatusText.Text = "could not read the package list: " + error.Message;
+                StatusText.Text = Texts.Get("status.unreadable", error.Message);
                 return;
             }
 
@@ -133,8 +122,8 @@ namespace Kiosk
             }
 
             StatusText.Text = Tiles.Count == 0
-                ? "nothing installed yet — run xbdev kit from the Mac"
-                : Tiles.Count + " installed";
+                ? Texts.Get("status.empty")
+                : Texts.Get("status.count", Tiles.Count);
 
             if (Tiles.Count > 0)
             {
@@ -190,15 +179,15 @@ namespace Kiosk
         private async Task LaunchAsync(Tile tile)
         {
             if (tile?.Entry == null) return;
-            StatusText.Text = "opening " + tile.Title + "...";
+            StatusText.Text = Texts.Get("status.opening", tile.Title);
             try
             {
                 var launched = await tile.Entry.LaunchAsync();
-                if (!launched) StatusText.Text = "the console refused to open " + tile.Title;
+                if (!launched) StatusText.Text = Texts.Get("status.refused", tile.Title);
             }
             catch (Exception error)
             {
-                StatusText.Text = "failed to open " + tile.Title + ": " + error.Message;
+                StatusText.Text = Texts.Get("status.failed", tile.Title, error.Message);
             }
         }
 

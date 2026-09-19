@@ -1,0 +1,195 @@
+{
+  "updated": "2026-09-19",
+  "note": "Every entry runs NATIVELY on the console in Developer Mode. No PC, no streaming.",
+  "packages": [
+    {
+      "slug": "retroarch",
+      "name": "RetroArch",
+      "kind": "emulator",
+      "runs": "Multi-system frontend: DOS (dosbox-pure), Doom, Quake, ScummVM, DevilutionX (Diablo), NES/SNES/Genesis/PS1/N64 and ~200 more cores",
+      "url": "https://github.com/XboxEmulationHub/RetroArch/releases/download/08-19-2026/RetroArch-SeriesConsoles-AllCores.appx",
+      "console": [
+        "one",
+        "series"
+      ],
+      "priority": 1,
+      "gameMode": true,
+      "note": "AllCores build: every libretro core bundled, including dosbox-pure, scummvm, devilutionx, prboom and the Quake engines"
+    },
+    {
+      "slug": "xbsx2",
+      "name": "XBSX2",
+      "kind": "emulator",
+      "runs": "PlayStation 2 (PCSX2 port). AVX2 build for Series X|S",
+      "url": "https://github.com/XboxEmulationHub/XBSX2/releases/download/v2.0.9.1/XBSX2_2.0.9.1_AVX2.msixbundle",
+      "console": [
+        "series"
+      ],
+      "priority": 1,
+      "gameMode": true
+    },
+    {
+      "slug": "xenia",
+      "name": "Xenia Canary",
+      "kind": "emulator",
+      "runs": "Xbox 360 \u2014 including 360 games never brought to back-compat",
+      "url": "https://github.com/EmulationRevival/emulationrevival-downloads/releases/download/xenia-canary-1.1.7.1/xenia-canary-uwp_1.1.7.1_x64.appxbundle",
+      "console": [
+        "series"
+      ],
+      "priority": 1,
+      "gameMode": true
+    },
+    {
+      "slug": "dolphin",
+      "name": "Dolphin",
+      "kind": "emulator",
+      "runs": "GameCube and Wii",
+      "url": "https://github.com/SternXD/dolphin/releases/download/1.1.9.0/DolphinWinRT_1.1.9.0_x64.msix",
+      "console": [
+        "one",
+        "series"
+      ],
+      "priority": 1,
+      "gameMode": true
+    },
+    {
+      "slug": "ppsspp",
+      "name": "PPSSPP",
+      "kind": "emulator",
+      "runs": "PSP, with JIT recompiler",
+      "url": "https://www.ppsspp.org/files/1_20_4/ppsspp_uwp.zip",
+      "console": [
+        "one",
+        "series"
+      ],
+      "priority": 2,
+      "gameMode": true
+    },
+    {
+      "slug": "flycast",
+      "name": "Flycast",
+      "kind": "emulator",
+      "runs": "Dreamcast, Naomi and Atomiswave arcade",
+      "url": "https://github.com/flyinghead/flycast/releases/download/v2.7/flycast-2.7.appx",
+      "console": [
+        "one",
+        "series"
+      ],
+      "priority": 2,
+      "gameMode": true
+    },
+    {
+      "slug": "gzdoom",
+      "name": "GZDoom",
+      "kind": "pc-game",
+      "runs": "PC NATIVE: Doom, Doom II, Heretic, Hexen, Strife + every mod/total conversion (Brutal Doom, Sigil, MyHouse.wad)",
+      "url": "https://github.com/aerisarn/gzdoom-uwp/releases/download/1.0.7/zdoom_1.0.7.0_x64.msixbundle",
+      "console": [
+        "series"
+      ],
+      "priority": 1,
+      "gameMode": true
+    },
+    {
+      "slug": "raze",
+      "name": "Raze",
+      "kind": "pc-game",
+      "runs": "PC NATIVE: Duke Nukem 3D, Blood, Shadow Warrior, Redneck Rampage, Powerslave",
+      "url": "https://github.com/aerisarn/Raze-uwp/releases/download/1.0.22/raze_1.0.22.0_x64.msixbundle",
+      "console": [
+        "series"
+      ],
+      "priority": 1,
+      "gameMode": true
+    },
+    {
+      "slug": "scummvm",
+      "name": "ScummVM",
+      "kind": "pc-game",
+      "runs": "PC NATIVE: Monkey Island, Broken Sword, Day of the Tentacle, Full Throttle, Grim Fandango, Sam & Max",
+      "url": "https://github.com/marcelofrau/scummvm-uwp/releases/download/v2026.3.1.62/scummvm-uwp_2026.3.1.62_x64.zip",
+      "console": [
+        "one",
+        "series"
+      ],
+      "priority": 1,
+      "gameMode": true
+    },
+    {
+      "slug": "dosbox-pure",
+      "name": "DOSBox Pure",
+      "kind": "pc-game",
+      "runs": "PC NATIVE: the entire DOS catalogue \u2014 Doom, Quake, Warcraft, Command & Conquer, X-COM, Tyrian, Dune II",
+      "url": "https://github.com/marcelofrau/dosbox-pure-uwp/releases/download/v1.0.0.236/dosbox-uwp_1.0.0.236_x64.zip",
+      "console": [
+        "one",
+        "series"
+      ],
+      "priority": 1,
+      "gameMode": true
+    },
+    {
+      "slug": "openbor",
+      "name": "OpenBOR",
+      "kind": "pc-game",
+      "runs": "PC NATIVE: Beats of Rage engine \u2014 hundreds of free beat 'em ups",
+      "url": "https://github.com/EmulationRevival/emulationrevival-downloads/releases/download/openbor-1.0.1.0/openbor-UWP_1.0.1.0_x64.msixbundle",
+      "console": [
+        "series"
+      ],
+      "priority": 3,
+      "gameMode": true
+    },
+    {
+      "slug": "ikemen-go",
+      "name": "Ikemen GO",
+      "kind": "pc-game",
+      "runs": "PC NATIVE: M.U.G.E.N-compatible fighting game engine",
+      "url": "https://github.com/EmulationRevival/emulationrevival-downloads/releases/download/ikemen-go-1.0.6.0/Ikemen-GO-UWP-1.0.6.0.zip",
+      "console": [
+        "series"
+      ],
+      "priority": 3,
+      "gameMode": true
+    },
+    {
+      "slug": "supermodel",
+      "name": "Sega Model 3",
+      "kind": "emulator",
+      "runs": "Sega Model 3 arcade: Daytona USA 2, Virtua Fighter 3, Scud Race",
+      "url": "https://github.com/poopbird4k/Supermodel-uwp-gl/releases/download/v1.0.0.4/SegaModel3-powered-by-SuperModel-v1.0.0.1_NoGUI.appx",
+      "console": [
+        "series"
+      ],
+      "priority": 3,
+      "gameMode": true
+    },
+    {
+      "slug": "ruffle",
+      "name": "Ruffle",
+      "kind": "pc-game",
+      "runs": "PC NATIVE: Flash games (Newgrounds/Armor Games era)",
+      "url": "https://github.com/EmulationRevival/emulationrevival-downloads/releases/download/ruffle-1.2.32.0/Ruffle-UWP-1.2.32.0.zip",
+      "console": [
+        "series"
+      ],
+      "priority": 3,
+      "gameMode": true
+    }
+  ],
+  "dependencies": [
+    {
+      "slug": "vclibs",
+      "name": "Microsoft.VCLibs.x64.14.00",
+      "url": "https://github.com/TheElixZammuto/moonlight-xbox/releases/download/1.18.1/Microsoft.VCLibs.x64.14.00.appx",
+      "note": "C++ runtime \u2014 required by most packages"
+    },
+    {
+      "slug": "uixaml",
+      "name": "Microsoft.UI.Xaml.2.7",
+      "url": "https://github.com/TheElixZammuto/moonlight-xbox/releases/download/1.18.1/Microsoft.UI.Xaml.2.7.appx",
+      "note": "XAML runtime \u2014 required by packages with a modern UI"
+    }
+  ]
+}

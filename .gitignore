@@ -1,0 +1,16 @@
+# Working notes — ours, not for GitHub
+PEDIDOS.md
+IDEIAS.md
+CONTRATO.md
+DESIGN.md
+
+# Downloaded third-party packages (hundreds of MB)
+pacotes/
+
+# Build output
+uwp/**/bin/
+uwp/**/obj/
+uwp/**/*.pfx
+out/
+node_modules/
+.DS_Store

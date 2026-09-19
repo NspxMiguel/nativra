@@ -1,67 +1,60 @@
-# Onde o projeto está — 19/09/2026
+# Onde o projeto está — 19/09/2026 (noite)
 
-## Provado no console (Series X, 10.0.0.43, dev mode)
+## Provado no console (Series X, dev mode)
 
-1. **Login da Steam funciona nativo.** Ele escaneou o QR na TV, aprovou no
-   celular, e a tela virou "Signed in as miguelgamespro". Fluxo:
-   `IAuthenticationService/BeginAuthSessionViaQR` -> challenge
-   `https://s.team/q/1/<client_id>` -> `PollAuthSessionStatus` devolve
-   `refresh_token`/`access_token`/`account_name`. Protobuf escrito à mão em
-   `uwp/Kiosk/SteamAuth.cs`. Sem senha passando pelo console.
-2. **JIT funciona no dev mode** (`uwp/JitProbe`): aloca RW, escreve x64, vira
-   executável, chama, retorna 42. RWX direto falha (erro 87 = W^X imposto).
-   => camada de tradução é arquiteturalmente possível.
-3. **14 emuladores/source ports instalados e rodando** (RetroArch 218 cores,
-   Xenia, XBSX2, Dolphin, Flycast, PPSSPP, GZDoom, Raze, ScummVM, DOSBox Pure,
-   OpenBOR, Ikemen, Sega Model 3, Ruffle).
-4. **Modo jogo ligado**: `DefaultUWPContentTypeToGame=true` (GPU inteira, mais
-   RAM, enxerga HD). Pede reboot, já reiniciado.
-5. **Kiosk** (front-end) instalado, lista e abre apps por protocolo URI.
+1. **Login da Steam** por QR, nativo. Sessão guardada e devolvida depois de
+   reinstalar o app (`xbdev sync` reenvia `steam.json`).
+2. **Biblioteca completa**: 39 jogos próprios + 76 da biblioteca de família =
+   100. As **coleções dele** (Favorites 65, Ocultos 15, Software, z-garapa) vêm
+   da conta e aparecem na lateral. Busca no X, filtros no LB/RB, selo por jogo.
+3. **Download rodando no próprio console.** O cliente Steam inteiro foi portado
+   para C#: websocket do CM, logon com refresh token, chave do depot, PICS,
+   KeyValues, manifesto, chunks, AES, e os três contêineres (zip, VZ=LZMA,
+   VS=zstd). Medido baixando GTA V a 3% direto no Xbox.
+4. **Tela de detalhe do jogo** com arte, tempo de jogo, estado e instalação que
+   pergunta onde gravar (console ou pasta de desenvolvimento, com espaço livre).
+5. **Carregador de PE dentro do app.** Os quatro módulos do Seraph's Last Stand
+   (exe, UnityPlayer, GameAssembly, baselib) mapeiam, relocam e resolvem
+   **753 imports contra o Windows real do console**. Faltam 178.
+6. **Controle remoto do console**: `/ext/remoteinput` por websocket. Três bytes
+   por evento (`0x01`, keycode, down/up); botões de controle são keycodes 0xC3+.
+   `xbdev press a`, `xbdev press right*3`, `xbdev type texto`.
 
-## Descobertas que não podem ser perdidas
+## Medições que mudam o plano
 
-- Console renderiza em **960x540 lógicos (escala 2x)** — medida de layout é
-  metade do que parece em 1920.
-- App instalado por fora **não enumera outros pacotes** (`FindPackages` =
-  `0x80070005`). Por isso o Mac manda a lista (`xbdev sync` -> `apps.json` no
-  `LocalState`) e o app abre por **protocolo URI**. Só 5 registram protocolo:
-  retroarch, xeniacanary, dolphin, flycast, supermodel.
-- Caminho do Device Portal para subpasta **precisa começar com `/`**.
-- Instalação é **uma por vez** (409 = fila, esperar). `204` do estado = ocioso.
-- Atualizar pacote **exige mesmo certificado** (fixo em secrets) e o app
-  **fechado**; senão `0x80070005`. Pacote meio-instalado dá `0x80270300` e o
-  conserto é uninstall + install com o app parado.
-- `RequiresPointerMode.WhenRequested` tira o cursor (senão parece navegador).
+- **Não é Wine/Proton.** O Xbox já é Windows NT: 753 dos 931 imports do jogo
+  resolvem para a função real do sistema. O que falta não é traduzir Win32, é
+  preencher os módulos que o processo UWP não tem carregados:
+  `USER32` 114, `WINMM` 23, `HID` 14, `IMM32` 8, `OPENGL32` 6, `SETUPAPI` 5,
+  `VERSION` 3, `dbghelp` 2 — 178 no total. Essa lista é a fila de trabalho.
+- **Chamar código do jogo derruba o processo** se o entry point do módulo não
+  rodou antes; e violação de acesso nativa não é capturável em código
+  gerenciado. Por isso a sondagem grava o relatório antes de tentar, e só tenta
+  quando existe um arquivo marcador.
+- **O app NÃO alcança o Device Portal do próprio console** (isolamento de
+  loopback; testado com e sem `privateNetworkClientServer`). Então instalar
+  pacote de dentro do app não sai por aí — o caminho é reempacotar os
+  emuladores com protocolo próprio.
+- **A internet do console é livre**, e é por isso que o download funciona lá.
+- Atualizar pacote no lugar deixa o app em `0x80270300`. O ciclo confiável é
+  **uninstall + install com as dependências**.
+- O portal cria pasta em `/api/filesystem/apps/folder` com `newfoldername`, e
+  apaga arquivo com `DELETE /api/filesystem/apps/file`.
 
-## Fundido num app só (19/09)
+## Ferramentas
 
-O `Vapor` deixou de existir: a tela de QR e o cliente Steam moraram para dentro
-do `Kiosk`, que agora é **o** app do console. A home traz "Steam" no trilho ao
-lado dos emuladores; B volta, Y recarrega, X sai da conta.
+`bun src/xbdev.ts <status|apps|install|launch|shot|sync|press|type|win32|steam>`
+`steam <games|info|download|shelf>`. Console no chaveiro
+(`claude-autonomous:XBDEV`). Build: push -> GitHub Actions -> release ->
+`gh release download`.
 
-Arquivos: `uwp/Kiosk/SteamAuth.cs` (protobuf + QR + renovação de token),
-`SteamSession.cs` (guarda conta/tokens/steamid em `steam.json`, steamid lido do
-claim `sub` do JWT — dispensa chave de API), `SteamLibrary.cs`
-(`GetOwnedGames`), `SteamPage.xaml` (login e biblioteca).
-Pacote `Vapor` desinstalado do console; projeto fora da solução e do workflow.
+## Fila (pedidos dele, em PEDIDOS.md)
 
-## Ordem combinada
-
-interface usável -> login -> biblioteca -> download -> rodar jogo ->
-achievements -> Steam Cloud -> Epic/GOG.
-
-Feito até aqui: interface, login, biblioteca. **Próximo: download.**
-
-### O que o download exige (o bloco grande)
-
-Baixar depot não é HTTP simples: a chave de descriptografia do depot só sai
-pela conexão de cliente (CM, websocket `wss://cmN.steampowered.com/cmsocket/`),
-não pela Web API. Sequência: conectar no CM -> `Logon` com o `access_token` ->
-`GetDepotDecryptionKey` -> `GetManifestRequestCode` -> baixar manifesto do CDN
-(`IContentServerDirectoryService/GetServersForSteamPipe`) -> baixar os chunks
--> descriptografar (AES) e descomprimir (LZMA/zip). É o mesmo caminho do
-DepotDownloader.
-
-Ferramentas: `bun src/xbdev.ts <status|apps|install|launch|shot|sync|verify>`.
-Console no chaveiro (`claude-autonomous:XBDEV`). Build: push -> GitHub Actions
--> release -> `gh release download`.
+1. Rodar o jogo: preencher os 178 imports, começando por user32 sobre CoreWindow.
+2. Tudo abre pelo nosso app (reempacotar emuladores com protocolo).
+3. Instalar/atualizar emulador de dentro do app, estilo Cydia com fontes.
+4. Emulador como dado, não como pacote (a analogia do Minecraft).
+5. Jogo baixado no menu do Xbox, se ele quiser.
+6. Achievements, Steam Cloud, Epic/GOG, multiconta, setup inicial.
+7. Site estilo ProtonDB com selo por console.
+8. Minecraft Java.

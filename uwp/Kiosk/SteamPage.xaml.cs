@@ -28,9 +28,14 @@ namespace Kiosk
 
         /// <summary>Every game the account owns; Games is what the filters leave.</summary>
         private readonly List<OwnedGame> allGames = new List<OwnedGame>();
+        public ObservableCollection<Shelf> Shelves { get; } =
+            new ObservableCollection<Shelf>();
+
         private readonly HashSet<uint> tested = new HashSet<uint>();
+        private readonly HashSet<uint> hidden = new HashSet<uint>();
         private int filter;
         private string query = string.Empty;
+        private bool showHidden;
 
         private static readonly string[] FilterKeys =
         {
@@ -50,6 +55,7 @@ namespace Kiosk
             HintRefreshText.Text = Texts.Get("hint.refresh");
             HintSearchText.Text = Texts.Get("hint.search");
             HintFilterText.Text = Texts.Get("hint.filter");
+            HintOptionsText.Text = Texts.Get("hint.options");
 
             // The grid claims the shoulder buttons for its own paging, so the
             // page has to listen after it rather than before.
@@ -79,6 +85,7 @@ namespace Kiosk
             SearchHint.Visibility = Visibility.Collapsed;
             FilterHint.Visibility = Visibility.Collapsed;
             FilterChip.Visibility = Visibility.Collapsed;
+            OptionsHint.Visibility = Visibility.Collapsed;
             AccountText.Text = string.Empty;
             SignInTitle.Text = Texts.Get("signin.title");
             SignInHow.Text = Texts.Get("signin.how");
@@ -197,19 +204,33 @@ namespace Kiosk
             SearchHint.Visibility = Visibility.Visible;
             FilterHint.Visibility = Visibility.Visible;
             FilterChip.Visibility = Visibility.Visible;
+            OptionsHint.Visibility = Visibility.Visible;
             AccountText.Text = Texts.Get("signed.title", session.AccountName ?? "");
             StatusText.Text = Texts.Get("steam.loading");
 
             try
             {
                 await LoadTestedAsync();
+
+                // His own games plus what the family shares: the client shows
+                // both, so a list with only the owned ones reads as missing.
                 var games = await SteamLibrary.OwnedAsync(session);
+                var seen = new HashSet<uint>();
                 allGames.Clear();
                 foreach (var game in games)
                 {
                     game.Tested = tested.Contains(game.AppId);
+                    seen.Add(game.AppId);
                     allGames.Add(game);
                 }
+                foreach (var game in await SteamLibrary.FamilyAsync(session))
+                {
+                    if (!seen.Add(game.AppId)) continue;
+                    game.Tested = tested.Contains(game.AppId);
+                    allGames.Add(game);
+                }
+
+                await BuildShelvesAsync();
                 ApplyFilter();
             }
             catch (Exception error)
@@ -243,12 +264,74 @@ namespace Kiosk
             }
         }
 
+        /// <summary>
+        /// The sidebar: everything, then his own collections in his own order,
+        /// then the family. Counts come from what the account actually has.
+        /// </summary>
+        private async Task BuildShelvesAsync()
+        {
+            var owned = new HashSet<uint>(allGames.Select(g => g.AppId));
+            hidden.Clear();
+            Shelves.Clear();
+
+            Shelves.Add(new Shelf
+            {
+                Id = "all",
+                Name = Texts.Get("steam.shelf.all"),
+                IsAll = true,
+            });
+
+            foreach (var shelf in await SteamShelves.LoadAsync())
+            {
+                if (shelf.IsHidden)
+                {
+                    foreach (var id in shelf.Ids) hidden.Add(id);
+                }
+                shelf.Count = shelf.Ids.Count(id => owned.Contains(id));
+                if (shelf.Count == 0 && !shelf.IsHidden) continue;
+                Shelves.Add(shelf);
+            }
+
+            var shared = allGames.Count(g => g.Shared);
+            if (shared > 0)
+            {
+                Shelves.Add(new Shelf
+                {
+                    Id = "family",
+                    Name = Texts.Get("steam.shelf.family"),
+                    IsFamily = true,
+                    Count = shared,
+                });
+            }
+
+            Shelves[0].Count = allGames.Count(g => !hidden.Contains(g.AppId));
+            ShelfList.SelectedIndex = 0;
+        }
+
+        private Shelf Current =>
+            ShelfList.SelectedItem as Shelf ?? (Shelves.Count > 0 ? Shelves[0] : null);
+
+        private void OnShelfChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ApplyFilter();
+        }
+
         private void ApplyFilter()
         {
             FilterText.Text = Texts.Get(FilterKeys[filter]);
+            var shelf = Current;
 
             var shown = allGames.Where(game =>
             {
+                if (shelf != null)
+                {
+                    if (shelf.IsFamily && !game.Shared) return false;
+                    else if (shelf.IsAll)
+                    {
+                        if (!showHidden && hidden.Contains(game.AppId)) return false;
+                    }
+                    else if (!shelf.IsFamily && !shelf.Ids.Contains(game.AppId)) return false;
+                }
                 if (query.Length > 0 &&
                     game.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0)
                 {
@@ -266,6 +349,7 @@ namespace Kiosk
             Games.Clear();
             foreach (var game in shown) Games.Add(game);
 
+            HeaderText.Text = Current?.Name ?? Texts.Get("steam.header");
             StatusText.Text = allGames.Count == 0
                 ? Texts.Get("steam.empty")
                 : Texts.Get("steam.showing", Games.Count, allGames.Count);
@@ -286,8 +370,7 @@ namespace Kiosk
         private void OnGameSelected(object sender, SelectionChangedEventArgs e)
         {
             if (!(GameGrid.SelectedItem is OwnedGame game)) return;
-            HeaderText.Text = game.Name;
-            StatusText.Text = game.Played;
+            StatusText.Text = game.Name + "  ·  " + game.Played;
         }
 
         /// <summary>
@@ -335,6 +418,25 @@ namespace Kiosk
 
                 case Windows.System.VirtualKey.GamepadRightShoulder:
                     filter = (filter + 1) % FilterKeys.Length;
+                    ApplyFilter();
+                    e.Handled = true;
+                    break;
+
+                case Windows.System.VirtualKey.GamepadMenu:
+                    // Two switches, cycled: titles off, then the hidden ones on.
+                    if (OwnedGame.ShowTitles)
+                    {
+                        OwnedGame.ShowTitles = false;
+                    }
+                    else if (!showHidden)
+                    {
+                        showHidden = true;
+                        OwnedGame.ShowTitles = true;
+                    }
+                    else
+                    {
+                        showHidden = false;
+                    }
                     ApplyFilter();
                     e.Handled = true;
                     break;

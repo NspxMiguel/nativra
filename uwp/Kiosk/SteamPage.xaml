@@ -75,7 +75,7 @@
                 <Border Grid.Row="0" CornerRadius="8,8,0,0" Margin="2,2,2,0">
                     <Image Source="{x:Bind Art}" Stretch="UniformToFill" />
                 </Border>
-                <Grid Grid.Row="1" Margin="6,4,6,5">
+                <Grid Grid.Row="1" Margin="6,4,6,5" Visibility="{x:Bind TitleShown}">
                     <TextBlock Text="{x:Bind Name}" FontSize="11" Margin="0,0,14,0"
                                MaxLines="1" TextTrimming="CharacterEllipsis"
                                Foreground="{StaticResource TextPrimary}" />
@@ -136,9 +136,37 @@
             </StackPanel>
         </Grid>
 
-        <!-- Library -->
+        <!-- Library: his collections down the side, the games beside them -->
         <Grid x:Name="LibraryPanel" Grid.Row="1" Visibility="Collapsed">
-            <GridView x:Name="GameGrid"
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ListView x:Name="ShelfList" Grid.Column="0" Width="176"
+                      ItemsSource="{x:Bind Shelves}"
+                      SelectionMode="Single"
+                      SelectionChanged="OnShelfChanged"
+                      Padding="20,0,8,0"
+                      ScrollViewer.HorizontalScrollMode="Disabled">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="10,5,10,5" />
+                        <Setter Property="Margin" Value="0,1,0,1" />
+                        <Setter Property="MinHeight" Value="0" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="local:Shelf">
+                        <TextBlock Text="{x:Bind Label}" FontSize="12"
+                                   TextTrimming="CharacterEllipsis" MaxLines="1"
+                                   Foreground="{StaticResource TextPrimary}" />
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <GridView x:Name="GameGrid" Grid.Column="1"
                       ItemsSource="{x:Bind Games}"
                       ItemTemplate="{StaticResource GameTemplate}"
                       ItemContainerStyle="{StaticResource GameCardStyle}"
@@ -146,7 +174,7 @@
                       ItemClick="OnGameInvoked"
                       SelectionMode="Single"
                       SelectionChanged="OnGameSelected"
-                      Padding="28,6,28,6"
+                      Padding="6,6,28,6"
                       ScrollViewer.HorizontalScrollMode="Disabled"
                       ScrollViewer.VerticalScrollBarVisibility="Hidden" />
         </Grid>
@@ -177,6 +205,15 @@
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <TextBlock x:Name="HintSearchText" FontSize="12" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondary}" />
+                </StackPanel>
+                <StackPanel x:Name="OptionsHint" Orientation="Horizontal" Spacing="8"
+                            Visibility="Collapsed">
+                    <Border Width="32" Height="20" CornerRadius="999" Background="#33FFFFFF">
+                        <TextBlock Text="MENU" FontSize="8" FontWeight="Bold" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock x:Name="HintOptionsText" FontSize="12" VerticalAlignment="Center"
                                Foreground="{StaticResource TextSecondary}" />
                 </StackPanel>
                 <StackPanel x:Name="FilterHint" Orientation="Horizontal" Spacing="8"

@@ -7,6 +7,7 @@ import { statfs } from "node:fs/promises";
 import { t } from "../i18n";
 import { human } from "../util";
 import { connect, contentServers, downloadDepot, plan } from "./download";
+import { collections, familyApps } from "./collections";
 
 export type Session = {
   account: string;
@@ -60,6 +61,30 @@ export async function runSteam(root: string, args: string[]): Promise<void> {
   }
 
   const [subcommand, ...rest] = args;
+
+  // The collections and the family library are what make the console's list
+  // look like the one in his Steam client.
+  if (subcommand === "shelf") {
+    const cm = await connect(session.steamid, session.refresh);
+    try {
+      const shelves = await collections(cm);
+      const family = await familyApps(session.access, session.steamid);
+      const payload = {
+        generated: new Date().toISOString(),
+        collections: shelves,
+        family: family.map((app) => ({ appid: app.appid, name: app.name })),
+      };
+      const target = rest[0] ?? join(root, "pacotes", "shelf.json");
+      await Bun.write(target, JSON.stringify(payload));
+      for (const shelf of shelves) {
+        console.log(`${shelf.name}: ${shelf.added.length}`);
+      }
+      console.log(`familia: ${family.length}`);
+      return;
+    } finally {
+      cm.close();
+    }
+  }
 
   if (!subcommand || subcommand === "games") {
     const games = await ownedGames(session);

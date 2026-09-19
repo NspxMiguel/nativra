@@ -56,7 +56,6 @@ jobs:
           /p:AppxPackageSigningEnabled=true
           /p:PackageCertificateKeyFile=Kiosk_TemporaryKey.pfx
           /p:PackageCertificatePassword=kiosk
-          /p:UseDotNetNativeToolchain=false
           /p:AppxPackageDir=${{ github.workspace }}\out\
           /verbosity:minimal
 
@@ -70,14 +69,28 @@ jobs:
             Write-Host "no out/ directory produced"
           }
 
+      - name: Pack
+        shell: pwsh
+        run: |
+          Copy-Item uwp/Kiosk.cer out/ -ErrorAction SilentlyContinue
+          Compress-Archive -Path out/* -DestinationPath kiosk-uwp.zip -Force
+          Get-Item kiosk-uwp.zip | Select-Object Name, Length | Format-Table -AutoSize
+
       - name: Upload package
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: kiosk-uwp
-          path: |
-            out/**/*.msixbundle
-            out/**/*.appxbundle
-            out/**/*.msix
-            out/**/*.appx
-            uwp/Kiosk.cer
-          if-no-files-found: error
+          path: kiosk-uwp.zip
+
+      - name: Publish release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="kiosk-build-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" kiosk-uwp.zip \
+            --title "Kiosk build ${GITHUB_RUN_NUMBER}" \
+            --notes "UWP package for Xbox Dev Mode. Install with: bun src/xbdev.ts install <files>" \
+            --repo "$GITHUB_REPOSITORY"

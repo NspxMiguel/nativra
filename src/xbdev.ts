@@ -119,9 +119,14 @@ async function download(entry: CatalogEntry): Promise<string[]> {
     console.log(t("get.cached", { name: entry.name }));
   } else {
     console.log(t("get.downloading", { name: entry.name }));
-    const res = await fetch(entry.url, { redirect: "follow" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    await Bun.write(target, res);
+    // curl rather than fetch: resumes a partial file, retries on a dropped
+    // connection, and streams straight to disk instead of buffering hundreds
+    // of megabytes in memory.
+    const result =
+      await $`curl -fL --retry 3 --retry-delay 2 -C - -o ${target} ${entry.url}`.nothrow();
+    if (result.exitCode !== 0) {
+      throw new Error(`curl exit ${result.exitCode}`);
+    }
     console.log(
       t("get.done", { name: entry.name, size: human(Bun.file(target).size) }),
     );

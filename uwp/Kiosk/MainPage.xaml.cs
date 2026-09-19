@@ -111,6 +111,13 @@ namespace Kiosk
                 Accent = new SolidColorBrush(Accents[0]),
             });
 
+            // Games pulled from Steam sit beside the emulators: he asked for one
+            // home screen, not two places to look.
+            foreach (var game in await ReadGamesAsync())
+            {
+                Tiles.Add(game);
+            }
+
             var apps = await ReadListAsync();
             var index = 1;
             foreach (var app in apps ?? new List<Tile>())
@@ -208,6 +215,44 @@ namespace Kiosk
             }
         }
 
+        /// <summary>Reads games.json: what has been downloaded from Steam.</summary>
+        private static async Task<List<Tile>> ReadGamesAsync()
+        {
+            var list = new List<Tile>();
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder
+                    .TryGetItemAsync("games.json") as StorageFile;
+                if (file == null) return list;
+
+                var text = await FileIO.ReadTextAsync(file);
+                if (!JsonObject.TryParse(text, out var root)) return list;
+
+                foreach (var value in root.GetNamedArray("games"))
+                {
+                    var item = value.GetObject();
+                    var title = item.GetNamedString("name", string.Empty);
+                    if (string.IsNullOrWhiteSpace(title)) continue;
+                    var appId = (uint)item.GetNamedNumber("appid", 0);
+                    list.Add(new Tile
+                    {
+                        Title = title,
+                        Subtitle = Texts.Get("tile.game.sub"),
+                        Route = "game:" + appId,
+                        Initial = title.Substring(0, 1).ToUpperInvariant(),
+                        Icon = Artwork(
+                            "https://cdn.cloudflare.steamstatic.com/steam/apps/"
+                            + appId + "/library_600x900.jpg"),
+                    });
+                }
+            }
+            catch
+            {
+                // No list means nothing downloaded yet.
+            }
+            return list;
+        }
+
         /// <summary>A JSON string field, or null when it is absent or null.</summary>
         private static string Text(JsonObject item, string key)
         {
@@ -256,6 +301,11 @@ namespace Kiosk
             if (tile.Route == "steam")
             {
                 Frame.Navigate(typeof(SteamPage));
+                return;
+            }
+            if (tile.Route != null && tile.Route.StartsWith("game:", StringComparison.Ordinal))
+            {
+                StatusText.Text = Texts.Get("status.gamenotyet", tile.Title);
                 return;
             }
             StatusText.Text = Texts.Get("status.opening", tile.Title);

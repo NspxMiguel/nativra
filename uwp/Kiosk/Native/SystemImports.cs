@@ -49,6 +49,9 @@ namespace Kiosk.Native
 
         public void Add(PeImage image) => loaded[image.Name] = image;
 
+        public PeImage Find(string name) =>
+            loaded.TryGetValue(name, out var image) ? image : null;
+
         private IntPtr Module(string name)
         {
             if (modules.TryGetValue(name, out var handle)) return handle;

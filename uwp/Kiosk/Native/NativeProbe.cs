@@ -66,7 +66,8 @@ namespace Kiosk.Native
                         imports.Add(image);
                         lines.Add(
                             $"{file.Name}: mapped at 0x{image.BaseAddress.ToInt64():X} " +
-                            $"exports={image.ExportCount} unresolved={image.Unresolved.Count}");
+                            $"exports={image.ExportCount} unresolved={image.Unresolved.Count} " +
+                            $"unwind={image.ExceptionsRegistered} tls={image.TlsCallbacksRun}");
                     }
                     catch (Exception error)
                     {

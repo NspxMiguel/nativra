@@ -1,7 +1,7 @@
-at=2026-09-19 13:00:34
+at=2026-09-19 13:05:40
 baselib.dll: mapped at 0x180000000 exports=112 unresolved=0
-UnityPlayer.dll: mapped at 0x1E020800000 exports=1 unresolved=0
-GameAssembly.dll: mapped at 0x1E027200000 exports=391 unresolved=0
+UnityPlayer.dll: mapped at 0x16CF1800000 exports=1 unresolved=0
+GameAssembly.dll: mapped at 0x16CF8200000 exports=391 unresolved=0
 resolved.system=688 resolved.images=13
 modules.missing=USER32.dll,VERSION.dll,SHLWAPI.dll,SETUPAPI.dll,OPENGL32.dll,WINMM.dll,IMM32.dll,HID.DLL,dwmapi.dll,dbghelp.dll
 functions.missing=178 stubbed=178
@@ -183,4 +183,4 @@ functions.missing=178 stubbed=178
   USER32.dll!MessageBoxA
   dbghelp.dll!SymInitialize
   dbghelp.dll!SymFromAddr
-call=attempting
+entry.baselib.dll=attempting

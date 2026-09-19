@@ -31,7 +31,26 @@ namespace Kiosk.Native
                 }
 
                 var imports = new SystemImports();
-                foreach (var file in await folder.GetFilesAsync())
+
+                // A module that imports another has to be loaded after it, or
+                // its imports resolve against nothing. Unity's order is fixed.
+                var order = new List<string> { "baselib.dll", "unityplayer.dll", "gameassembly.dll" };
+                var files = new List<StorageFile>(await folder.GetFilesAsync());
+                files.Sort((a, b) =>
+                {
+                    int Rank(StorageFile f)
+                    {
+                        var index = order.IndexOf(f.Name.ToLowerInvariant());
+                        if (index >= 0) return index;
+                        return f.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                            ? order.Count
+                            : order.Count + 1;
+                    }
+                    var byRank = Rank(a).CompareTo(Rank(b));
+                    return byRank != 0 ? byRank : string.CompareOrdinal(a.Name, b.Name);
+                });
+
+                foreach (var file in files)
                 {
                     if (!file.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) &&
                         !file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))

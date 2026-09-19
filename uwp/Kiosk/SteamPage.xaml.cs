@@ -50,6 +50,10 @@ namespace Kiosk
             HintRefreshText.Text = Texts.Get("hint.refresh");
             HintSearchText.Text = Texts.Get("hint.search");
             HintFilterText.Text = Texts.Get("hint.filter");
+
+            // The grid claims the shoulder buttons for its own paging, so the
+            // page has to listen after it rather than before.
+            AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnKeyDown), true);
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)

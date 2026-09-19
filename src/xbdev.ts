@@ -687,6 +687,14 @@ async function cmdSyncKiosk(): Promise<void> {
   );
   await portal.pushFile(kiosk.PackageFullName, catalogFile, "LocalState");
 
+  // Reinstalling wipes LocalState and with it the Steam sign-in. When a copy
+  // of the session was taken, put it back rather than making him scan again.
+  const sessionFile = join(ROOT, "steam.json");
+  if (await Bun.file(sessionFile).exists()) {
+    await portal.pushFile(kiosk.PackageFullName, sessionFile, "LocalState");
+    console.log("sessao da Steam devolvida ao console");
+  }
+
   // Which games have been seen running on a console. Empty until one has.
   const testedFile = join(PACKAGE_DIR, "tested.json");
   if (!(await Bun.file(testedFile).exists())) {
@@ -694,9 +702,17 @@ async function cmdSyncKiosk(): Promise<void> {
   }
   await portal.pushFile(kiosk.PackageFullName, testedFile, "LocalState");
 
+  // The portal refuses to overwrite a file that is already there, so only the
+  // missing ones go up; a changed icon is handled by deleting it first.
+  const present = new Set(
+    (await portal.listFiles(kiosk.PackageFullName, "LocalState"))
+      .map((item) => String(item.Id ?? item.Name ?? "")),
+  );
+
   let pushedIcons = 0;
   for (const item of entries) {
     if (!item.icon) continue;
+    if (present.has(item.icon as string)) continue;
     const local = join(iconDir, `${item.slug}.png`);
     const staged = join(iconDir, item.icon as string);
     await Bun.write(staged, Bun.file(local));

@@ -254,28 +254,50 @@ async function unlzma(data: Uint8Array): Promise<Uint8Array> {
 export const hex = (bytes: Uint8Array): string =>
   Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
+/**
+ * Caches fail in ways a single request cannot survive: one answers 404 for a
+ * chunk another has, and some present a certificate for a different name. So
+ * every fetch walks the server list instead of trusting one.
+ */
+async function fetchFromAny(
+  servers: ContentServer[],
+  path: string,
+  attempts = 6,
+): Promise<Uint8Array> {
+  let lastError: unknown = null;
+  for (let i = 0; i < Math.min(attempts, Math.max(1, servers.length)); i++) {
+    const server = servers[(rotation++ + i) % servers.length];
+    try {
+      const response = await fetch(`https://${server.host}${path}`);
+      if (!response.ok) {
+        lastError = new SteamError(`HTTP ${response.status} from ${server.host}`);
+        continue;
+      }
+      return new Uint8Array(await response.arrayBuffer());
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new SteamError(`no content server served ${path}`);
+}
+
+let rotation = 0;
+
 export async function fetchManifest(
-  server: ContentServer,
+  servers: ContentServer[],
   depotId: number,
   manifestId: string,
   code: bigint,
 ): Promise<Uint8Array> {
-  const url =
-    `https://${server.vhost}/depot/${depotId}/manifest/${manifestId}/5/${code}`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new SteamError(`manifest HTTP ${response.status}`);
-  }
-  return new Uint8Array(await response.arrayBuffer());
+  return fetchFromAny(servers, `/depot/${depotId}/manifest/${manifestId}/5/${code}`);
 }
 
 export async function fetchChunk(
-  server: ContentServer,
+  servers: ContentServer[],
   depotId: number,
   sha: Uint8Array,
 ): Promise<Uint8Array> {
-  const url = `https://${server.vhost}/depot/${depotId}/chunk/${hex(sha)}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new SteamError(`chunk HTTP ${response.status}`);
-  return new Uint8Array(await response.arrayBuffer());
+  return fetchFromAny(servers, `/depot/${depotId}/chunk/${hex(sha)}`);
 }

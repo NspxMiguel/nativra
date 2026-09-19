@@ -43,6 +43,12 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate void TlsCallback(IntPtr instance, uint reason, IntPtr reserved);
 
+        [DllImport("api-ms-win-core-processthreads-l1-1-0.dll", SetLastError = true)]
+        private static extern uint TlsAlloc();
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate IntPtr TebDelegate();
+
         private IntPtr baseAddress;
         private uint imageSize;
 
@@ -70,7 +76,7 @@ namespace Kiosk.Native
             image.Protect(file);
             image.ReadExports();
             image.RegisterExceptions();
-            image.RunTlsCallbacks();
+            image.SetUpTls();
             return image;
         }
 
@@ -349,22 +355,69 @@ namespace Kiosk.Native
         public int TlsCallbacksRun { get; private set; }
 
         /// <summary>
-        /// A module's thread-local data is set up by callbacks the real loader
-        /// runs before the entry point. Skipping them leaves the module reading
-        /// slots nobody filled.
+        /// Thread-local storage, which the real loader sets up and which a
+        /// module compiled with __declspec(thread) cannot live without.
+        ///
+        /// Three things have to happen: the module is given a slot number, a
+        /// copy of its template is made for this thread, and the thread's own
+        /// table of blocks is grown to hold it. That table hangs off the thread
+        /// environment block, and reaching it needs one instruction the
+        /// language cannot write — so it is assembled at runtime, which this
+        /// console allows.
         /// </summary>
-        private void RunTlsCallbacks()
+        private void SetUpTls()
         {
             try
             {
                 var rva = DirectoryRva(9);
                 if (rva == 0) return;
 
-                // IMAGE_TLS_DIRECTORY64: the callback array pointer is at 24.
                 var directory = MarshalRead(rva, 40);
-                var callbacks = (long)BitConverter.ToUInt64(directory, 24);
-                if (callbacks == 0) return;
+                var start = BitConverter.ToInt64(directory, 0);
+                var end = BitConverter.ToInt64(directory, 8);
+                var indexAddress = BitConverter.ToInt64(directory, 16);
+                var callbacks = BitConverter.ToInt64(directory, 24);
+                var zeroFill = BitConverter.ToUInt32(directory, 32);
 
+                var templateSize = (int)(end - start);
+                var total = templateSize + (int)zeroFill;
+                if (total <= 0 || indexAddress == 0) return;
+
+                var block = Marshal.AllocHGlobal(Math.Max(total, 8));
+                for (var i = 0; i < total; i++) Marshal.WriteByte(block, i, 0);
+                if (templateSize > 0)
+                {
+                    var template = new byte[templateSize];
+                    Marshal.Copy((IntPtr)start, template, 0, templateSize);
+                    Marshal.Copy(template, 0, block, templateSize);
+                }
+
+                var slot = (int)TlsAlloc();
+                if (slot < 0) return;
+                Marshal.WriteInt32((IntPtr)indexAddress, slot);
+
+                var teb = CurrentTeb();
+                if (teb == IntPtr.Zero) return;
+
+                // The table of blocks lives at 0x58 in the thread environment
+                // block. It is grown rather than written into, because its
+                // length is the loader's business and not ours to assume.
+                var slotsPointer = teb + 0x58;
+                var existing = Marshal.ReadIntPtr(slotsPointer);
+                var grown = Marshal.AllocHGlobal((slot + 16) * 8);
+                for (var i = 0; i < slot + 16; i++) Marshal.WriteIntPtr(grown, i * 8, IntPtr.Zero);
+                if (existing != IntPtr.Zero)
+                {
+                    for (var i = 0; i < slot; i++)
+                    {
+                        Marshal.WriteIntPtr(grown, i * 8, Marshal.ReadIntPtr(existing, i * 8));
+                    }
+                }
+                Marshal.WriteIntPtr(grown, slot * 8, block);
+                Marshal.WriteIntPtr(slotsPointer, grown);
+                TlsSlot = slot;
+
+                if (callbacks == 0) return;
                 for (var i = 0; i < 64; i++)
                 {
                     var entry = Marshal.ReadIntPtr((IntPtr)(callbacks + i * 8));
@@ -376,8 +429,35 @@ namespace Kiosk.Native
             }
             catch
             {
-                // Same reasoning as the function table.
+                // Same reasoning as the function table: worth knowing, not dying for.
             }
+        }
+
+        public int TlsSlot { get; private set; } = -1;
+
+        private static IntPtr tebReader;
+
+        /// <summary>
+        /// mov rax, gs:[0x30] ; ret — the thread environment block's own
+        /// address, which no managed call exposes.
+        /// </summary>
+        private static IntPtr CurrentTeb()
+        {
+            if (tebReader == IntPtr.Zero)
+            {
+                var code = new byte[]
+                {
+                    0x65, 0x48, 0x8B, 0x04, 0x25, 0x30, 0x00, 0x00, 0x00, // mov rax, gs:[0x30]
+                    0xC3,                                                 // ret
+                };
+                var page = VirtualAllocFromApp(
+                    IntPtr.Zero, (UIntPtr)64, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+                if (page == IntPtr.Zero) return IntPtr.Zero;
+                Marshal.Copy(code, 0, page, code.Length);
+                VirtualProtectFromApp(page, (UIntPtr)64, PAGE_EXECUTE_READ, out _);
+                tebReader = page;
+            }
+            return Marshal.GetDelegateForFunctionPointer<TebDelegate>(tebReader)();
         }
 
         public IntPtr Export(string name) =>

@@ -1,2 +1,6 @@
-at=2026-09-19 13:11:21
-state=no win32 folder
+at=2026-09-19 13:17:37
+baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0
+resolved.system=140 resolved.images=0
+modules.missing=
+functions.missing=0 stubbed=0
+entry.baselib.dll=attempting

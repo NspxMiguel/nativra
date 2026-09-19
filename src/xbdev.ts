@@ -14,6 +14,7 @@ import {
 } from "./util";
 import { readdir, mkdir } from "node:fs/promises";
 import { extractIcon, cleanScratch } from "./icons";
+import { runSteam } from "./steam/cli";
 import { join, dirname } from "node:path";
 
 const ROOT = dirname(import.meta.dir);
@@ -721,6 +722,7 @@ function usage(): void {
     ["restart --sim", t("cmd.restart")],
     ["uninstall <app>", t("cmd.uninstall")],
     ["sync", t("cmd.sync")],
+    ["steam <games|info|download>", t("cmd.steam")],
   ];
   console.log(`${t("cli.usage")}: xbdev <comando>`);
   console.log();
@@ -765,6 +767,7 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   remover: cmdUninstall,
   sync: cmdSyncKiosk,
   sincronizar: cmdSyncKiosk,
+  steam: (args: string[]) => runSteam(ROOT, args),
 };
 
 const handler = command ? handlers[command] : undefined;

@@ -378,14 +378,43 @@ namespace Kiosk
             StatusText.Text = game.Name + "  ·  " + game.Played;
         }
 
+        private bool downloading;
+
         /// <summary>
-        /// Installing a PC game is the next block of work; until the runtime
-        /// exists, saying so plainly beats a button that does nothing.
+        /// Pressing a game downloads it, on the console, from his own account.
+        /// Running it is the block after this one.
         /// </summary>
-        private void OnGameInvoked(object sender, ItemClickEventArgs e)
+        private async void OnGameInvoked(object sender, ItemClickEventArgs e)
         {
             if (!(e.ClickedItem is OwnedGame game)) return;
-            StatusText.Text = Texts.Get("steam.notyet", game.Name);
+            if (downloading)
+            {
+                StatusText.Text = Texts.Get("steam.busy");
+                return;
+            }
+
+            downloading = true;
+            StatusText.Text = Texts.Get("steam.starting", game.Name);
+            try
+            {
+                var where = Settings.DownloadRoot;
+                await Steam.SteamDownload.RunAsync(session, game.AppId, where, progress =>
+                {
+                    var _ = Dispatcher.RunAsync(
+                        Windows.UI.Core.CoreDispatcherPriority.Low,
+                        () => StatusText.Text = Texts.Get(
+                            "steam.downloading", game.Name, progress.Percent, progress.File));
+                });
+                StatusText.Text = Texts.Get("steam.downloaded", game.Name);
+            }
+            catch (Exception error)
+            {
+                StatusText.Text = Texts.Get("steam.downloadfailed", game.Name, error.Message);
+            }
+            finally
+            {
+                downloading = false;
+            }
         }
 
         // ------------------------------------------------------------- input

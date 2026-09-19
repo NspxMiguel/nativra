@@ -64,6 +64,10 @@
     <Compile Include="SteamSession.cs" />
     <Compile Include="SteamLibrary.cs" />
     <Compile Include="SteamShelves.cs" />
+    <Compile Include="Steam\Proto.cs" />
+    <Compile Include="Steam\SteamCm.cs" />
+    <Compile Include="Steam\SteamVdf.cs" />
+    <Compile Include="Steam\SteamDepot.cs" />
     <Compile Include="Native\PeImage.cs" />
     <Compile Include="Native\SystemImports.cs" />
     <Compile Include="Native\NativeProbe.cs" />
@@ -115,6 +119,9 @@
     </PackageReference>
     <PackageReference Include="ZXing.Net">
       <Version>0.16.9</Version>
+    </PackageReference>
+    <PackageReference Include="ZstdSharp.Port">
+      <Version>0.8.6</Version>
     </PackageReference>
   </ItemGroup>
 

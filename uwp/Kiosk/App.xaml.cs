@@ -10,6 +10,9 @@ namespace Kiosk
         public App()
         {
             InitializeComponent();
+            // On a console there is no mouse: leaving pointer mode on draws a
+            // cursor over everything and makes the app read as a browser window.
+            RequiresPointerMode = ApplicationRequiresPointerMode.WhenRequested;
         }
 
         protected override void OnLaunched(LaunchActivatedEventArgs e)

@@ -59,6 +59,7 @@
     <Compile Include="SteamPage.xaml.cs">
       <DependentUpon>SteamPage.xaml</DependentUpon>
     </Compile>
+    <Compile Include="ConsolePortal.cs" />
     <Compile Include="SteamAuth.cs" />
     <Compile Include="SteamSession.cs" />
     <Compile Include="SteamLibrary.cs" />

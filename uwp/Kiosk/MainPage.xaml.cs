@@ -11,6 +11,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Media.Imaging;
 
 namespace Kiosk
 {
@@ -29,9 +30,18 @@ namespace Kiosk
         /// <summary>A screen inside this app rather than another package.</summary>
         public string Route { get; set; }
 
+        /// <summary>Identity for launching through the console's own portal.</summary>
+        public string PackageFullName { get; set; }
+        public string AppId { get; set; }
+
+        public ImageSource Icon { get; set; }
+        public Visibility IconShown =>
+            Icon == null ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility LetterShown =>
+            Icon == null ? Visibility.Visible : Visibility.Collapsed;
+
         public SolidColorBrush Accent { get; set; }
-        public double Dimmed =>
-            string.IsNullOrEmpty(Protocol) && string.IsNullOrEmpty(Route) ? 0.45 : 1.0;
+        public double Dimmed => 1.0;
     }
 
     public sealed partial class MainPage : Page
@@ -51,6 +61,8 @@ namespace Kiosk
         };
 
         private DispatcherTimer clock;
+        private ConsolePortal portal;
+        private bool portalReady;
 
         public MainPage()
         {
@@ -100,17 +112,16 @@ namespace Kiosk
 
             var apps = await ReadListAsync();
             var index = 1;
-            foreach (var app in apps ?? new List<Tuple<string, string, string>>())
+            foreach (var app in apps ?? new List<Tile>())
             {
-                Tiles.Add(new Tile
-                {
-                    Title = app.Item1,
-                    Subtitle = app.Item2,
-                    Protocol = app.Item3,
-                    Initial = app.Item1.Substring(0, 1).ToUpperInvariant(),
-                    Accent = new SolidColorBrush(Accents[index++ % Accents.Length]),
-                });
+                app.Accent = new SolidColorBrush(Accents[index++ % Accents.Length]);
+                Tiles.Add(app);
             }
+
+            // Asking the console's own portal is what reaches the apps that
+            // register no protocol; without it they can only open from Dev Home.
+            portal = await ConsolePortal.LoadAsync();
+            portalReady = portal != null && await portal.ProbeAsync() != null;
 
             CountText.Text = Texts.Get("status.count", Tiles.Count);
             StatusText.Text = string.Empty;
@@ -124,7 +135,7 @@ namespace Kiosk
         }
 
         /// <summary>Reads apps.json, which xbdev sync drops into LocalState.</summary>
-        private static async Task<List<Tuple<string, string, string>>> ReadListAsync()
+        private static async Task<List<Tile>> ReadListAsync()
         {
             try
             {
@@ -135,22 +146,46 @@ namespace Kiosk
                 var text = await FileIO.ReadTextAsync(file);
                 if (!JsonObject.TryParse(text, out var root)) return null;
 
-                var list = new List<Tuple<string, string, string>>();
+                var list = new List<Tile>();
                 foreach (var value in root.GetNamedArray("apps"))
                 {
                     var item = value.GetObject();
                     var title = item.GetNamedString("title", string.Empty);
                     if (string.IsNullOrWhiteSpace(title)) continue;
-                    var subtitle = item.GetNamedString("subtitle", string.Empty);
-                    string protocol = null;
-                    if (item.ContainsKey("protocol") &&
-                        item["protocol"].ValueType == JsonValueType.String)
+                    list.Add(new Tile
                     {
-                        protocol = item.GetNamedString("protocol");
-                    }
-                    list.Add(Tuple.Create(title, subtitle, protocol));
+                        Title = title,
+                        Subtitle = item.GetNamedString("subtitle", string.Empty),
+                        Protocol = Text(item, "protocol"),
+                        PackageFullName = Text(item, "packageFullName"),
+                        AppId = Text(item, "appId"),
+                        Icon = Artwork(Text(item, "icon")),
+                        Initial = title.Substring(0, 1).ToUpperInvariant(),
+                    });
                 }
                 return list;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>A JSON string field, or null when it is absent or null.</summary>
+        private static string Text(JsonObject item, string key)
+        {
+            if (!item.ContainsKey(key)) return null;
+            return item[key].ValueType == JsonValueType.String
+                ? item.GetNamedString(key)
+                : null;
+        }
+
+        private static ImageSource Artwork(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            try
+            {
+                return new BitmapImage(new Uri("ms-appdata:///local/" + name));
             }
             catch
             {
@@ -163,10 +198,9 @@ namespace Kiosk
             if (!(AppRail.SelectedItem is Tile tile)) return;
             NameText.Text = tile.Title;
             SubText.Text = tile.Subtitle;
-            StatusText.Text =
-                string.IsNullOrEmpty(tile.Protocol) && string.IsNullOrEmpty(tile.Route)
-                    ? Texts.Get("status.noprotocol")
-                    : string.Empty;
+            var reachable = portalReady || !string.IsNullOrEmpty(tile.Protocol)
+                || !string.IsNullOrEmpty(tile.Route);
+            StatusText.Text = reachable ? string.Empty : Texts.Get("status.noprotocol");
         }
 
         private async void OnTileInvoked(object sender, ItemClickEventArgs e)
@@ -187,13 +221,19 @@ namespace Kiosk
                 Frame.Navigate(typeof(SteamPage));
                 return;
             }
+            StatusText.Text = Texts.Get("status.opening", tile.Title);
+
+            if (portalReady && !string.IsNullOrEmpty(tile.PackageFullName))
+            {
+                if (await portal.LaunchAsync(tile.PackageFullName, tile.AppId)) return;
+            }
+
             if (string.IsNullOrEmpty(tile.Protocol))
             {
                 StatusText.Text = Texts.Get("status.noprotocol");
                 return;
             }
 
-            StatusText.Text = Texts.Get("status.opening", tile.Title);
             try
             {
                 var opened = await Launcher.LaunchUriAsync(new Uri(tile.Protocol + ":"));

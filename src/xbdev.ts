@@ -13,6 +13,7 @@ import {
   parseIdentity,
 } from "./util";
 import { readdir, mkdir } from "node:fs/promises";
+import { extractIcon, cleanScratch } from "./icons";
 import { join, dirname } from "node:path";
 
 const ROOT = dirname(import.meta.dir);
@@ -604,25 +605,35 @@ function shorten(text: string, limit = 58): string {
 
 async function cmdSyncKiosk(): Promise<void> {
   const portal = await portalOrExit();
+  const config = (await loadConfig())!;
   const catalog = await loadCatalog();
   const installed = await portal.packages();
 
-  const entries = catalog.packages
-    .filter((entry) => entry.slug !== "kiosk")
-    .map((entry) => {
-      const match = installed.find((pkg) => {
-        const name = pkg.Name.toLowerCase();
-        const slug = entry.slug.replace(/-.*$/, "").toLowerCase();
-        return name.includes(slug) || name.includes(entry.name.toLowerCase());
-      });
-      return {
-        title: match?.Name ?? entry.name,
-        subtitle: shorten(entry.runs?.replace(/^PC NATIVE:\s*/, "") ?? ""),
-        protocol: entry.protocol ?? null,
-        installed: Boolean(match),
-      };
-    })
-    .filter((item) => item.installed);
+  const iconDir = join(PACKAGE_DIR, "icons");
+  const scratch = join(PACKAGE_DIR, ".icon-scratch");
+
+  const entries: Array<Record<string, unknown>> = [];
+  for (const entry of catalog.packages) {
+    if (entry.slug === "kiosk") continue;
+    const match = installed.find((pkg) => {
+      const name = pkg.Name.toLowerCase();
+      const slug = entry.slug.replace(/-.*$/, "").toLowerCase();
+      return name.includes(slug) || name.includes(entry.name.toLowerCase());
+    });
+    if (!match) continue;
+
+    // The package identity is what lets the app launch through the console's
+    // own Device Portal, which reaches the apps that register no protocol.
+    entries.push({
+      slug: entry.slug,
+      title: match.Name,
+      subtitle: shorten(entry.runs?.replace(/^PC NATIVE:\s*/, "") ?? ""),
+      protocol: entry.protocol ?? null,
+      packageFullName: match.PackageFullName,
+      appId: match.PackageRelativeId,
+      icon: (await iconFor(entry.slug, iconDir, scratch)) ? `icon-${entry.slug}.png` : null,
+    });
+  }
 
   const payload = { generated: new Date().toISOString(), apps: entries };
   const file = join(PACKAGE_DIR, "apps.json");
@@ -636,10 +647,55 @@ async function cmdSyncKiosk(): Promise<void> {
   // ApplicationData.Current.LocalFolder is the LocalState subfolder; the root
   // of LocalAppData is a different place the app cannot read.
   await portal.pushFile(kiosk.PackageFullName, file, "LocalState");
-  const launchable = entries.filter((item) => item.protocol).length;
-  console.log(
-    t("sync.done", { total: entries.length, launchable }),
+
+  // The console's own portal credentials, so the app can ask it to launch
+  // anything. They never leave the console they already belong to.
+  const portalFile = join(PACKAGE_DIR, "portal.json");
+  await Bun.write(
+    portalFile,
+    JSON.stringify({
+      host: config.host,
+      port: config.port ?? 11443,
+      user: config.user ?? "",
+      pass: config.pass ?? "",
+    }),
   );
+  await portal.pushFile(kiosk.PackageFullName, portalFile, "LocalState");
+
+  let pushedIcons = 0;
+  for (const item of entries) {
+    if (!item.icon) continue;
+    const local = join(iconDir, `${item.slug}.png`);
+    const staged = join(iconDir, item.icon as string);
+    await Bun.write(staged, Bun.file(local));
+    await portal.pushFile(kiosk.PackageFullName, staged, "LocalState");
+    pushedIcons++;
+  }
+
+  await cleanScratch(scratch);
+  const launchable = entries.filter((item) => item.protocol).length;
+  console.log(t("sync.done", { total: entries.length, launchable }));
+  console.log(`${pushedIcons} icones enviados`);
+}
+
+/** Answers whether an icon for this slug now exists on disk. */
+async function iconFor(slug: string, outDir: string, scratch: string): Promise<boolean> {
+  const existing = Bun.file(join(outDir, `${slug}.png`));
+  if (await existing.exists()) return true;
+
+  const dir = join(PACKAGE_DIR, slug);
+  let files: string[] = [];
+  try {
+    files = await readdir(dir);
+  } catch {
+    return false;
+  }
+  const pkg = files.find((f) => /\.(appx|msix)(bundle)?$/i.test(f));
+  if (!pkg) return false;
+
+  const result = await extractIcon(slug, join(dir, pkg), outDir, scratch);
+  if (result.reason) console.log(`  ${slug}: ${result.reason}`);
+  return Boolean(result.file);
 }
 
 function usage(): void {

@@ -51,3 +51,39 @@ export function isForThisConsole(path: string): boolean {
   if (/\.(arm64|arm|x86)\./.test(lower)) return false;
   return true;
 }
+
+/**
+ * What a package declares about itself, read out of its manifest. The console
+ * refuses a package whose architecture does not match, and that failure names
+ * nothing useful, so it is worth checking before upload.
+ */
+export type PackageIdentity = {
+  file: string;
+  name: string;
+  version: string;
+  architectures: string[];
+  ok: boolean;
+  problem?: string;
+};
+
+export function parseIdentity(file: string, manifest: string): PackageIdentity {
+  const name = manifest.match(/<Identity[^>]*\sName="([^"]+)"/)?.[1] ?? "";
+  const version = manifest.match(/<Identity[^>]*\sVersion="([^"]+)"/)?.[1] ?? "";
+  const architectures = [
+    ...manifest.matchAll(/ProcessorArchitecture="([^"]+)"/g),
+  ].map((match) => match[1].toLowerCase());
+
+  const usable = architectures.filter((arch) => arch === "x64" || arch === "neutral");
+  return {
+    file,
+    name,
+    version,
+    architectures: [...new Set(architectures)],
+    ok: Boolean(name) && (architectures.length === 0 || usable.length > 0),
+    problem: !name
+      ? "no Identity in manifest"
+      : architectures.length > 0 && usable.length === 0
+        ? `no x64 build (${[...new Set(architectures)].join(", ")})`
+        : undefined,
+  };
+}

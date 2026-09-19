@@ -1,5 +1,12 @@
 import { test, expect } from "bun:test";
-import { human, isPackageFile, installOrder, isForThisConsole, PACKAGE_EXTENSIONS } from "./util";
+import {
+  human,
+  isPackageFile,
+  installOrder,
+  isForThisConsole,
+  parseIdentity,
+  PACKAGE_EXTENSIONS,
+} from "./util";
 import { t } from "./i18n";
 import catalog from "../catalog.json";
 
@@ -81,4 +88,34 @@ test("packages for other architectures are left behind", () => {
   expect(isForThisConsole("out/Dependencies/x86/Microsoft.NET.Native.Runtime.2.2.appx")).toBe(false);
   expect(isForThisConsole("out/Kiosk_1.0.0.0_x64.msixbundle")).toBe(true);
   expect(isForThisConsole("pacotes/retroarch/RetroArch-SeriesConsoles-AllCores.appx")).toBe(true);
+});
+
+test("a manifest tells us the package identity and whether the console takes it", () => {
+  const x64 = parseIdentity(
+    "gzdoom.msixbundle",
+    '<Identity Name="d19ff9e2" Version="1.0.7.0" ProcessorArchitecture="x64" />',
+  );
+  expect(x64.ok).toBe(true);
+  expect(x64.name).toBe("d19ff9e2");
+  expect(x64.version).toBe("1.0.7.0");
+
+  // A bundle lists one architecture per contained package.
+  const bundle = parseIdentity(
+    "raze.msixbundle",
+    '<Identity Name="raze" Version="1.0.22.0" /><Package ProcessorArchitecture="x64" /><Package ProcessorArchitecture="arm64" />',
+  );
+  expect(bundle.ok).toBe(true);
+  expect(bundle.architectures).toContain("arm64");
+
+  // ARM-only would install on nothing this console runs.
+  const armOnly = parseIdentity(
+    "wrong.appx",
+    '<Identity Name="wrong" Version="1.0.0.0" ProcessorArchitecture="arm64" />',
+  );
+  expect(armOnly.ok).toBe(false);
+  expect(armOnly.problem).toContain("no x64");
+
+  // A truncated or wrong file has no Identity at all.
+  const junk = parseIdentity("junk.appx", "<html>404</html>");
+  expect(junk.ok).toBe(false);
 });

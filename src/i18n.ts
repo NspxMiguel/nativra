@@ -23,6 +23,10 @@ const pt: Dict = {
   "cmd.pull": "traz um arquivo da pasta de um app",
   "cmd.ls": "lista a pasta de um app no console",
   "cmd.setupRetroarch": "configura o RetroArch apontando para o HD",
+  "cmd.verify": "confere os pacotes baixados antes de instalar",
+  "verify.missing": "nao baixado",
+  "verify.unreadable": "pacote ilegivel (download truncado?)",
+  "verify.summary": "{checked} pacotes conferidos, {bad} com problema",
   "find.scanning": "procurando o console em {net} ...",
   "find.none":
     "nenhum console respondeu. Ligue o Xbox, entre no Dev Mode e ligue o Device Portal.",
@@ -78,6 +82,10 @@ const en: Dict = {
   "cmd.pull": "fetch a file from an app's folder",
   "cmd.ls": "list an app's folder on the console",
   "cmd.setupRetroarch": "configure RetroArch to use the hard drive",
+  "cmd.verify": "check the downloaded packages before installing",
+  "verify.missing": "not downloaded",
+  "verify.unreadable": "unreadable package (truncated download?)",
+  "verify.summary": "{checked} packages checked, {bad} with problems",
   "find.scanning": "scanning {net} for the console ...",
   "find.none":
     "no console answered. Turn the Xbox on, enter Dev Mode and enable Device Portal.",

@@ -153,7 +153,16 @@ export class DevicePortal {
     const form = new FormData();
     for (const path of files) {
       const name = path.split("/").pop()!;
-      form.append(name, Bun.file(path), name);
+      const file = Bun.file(path);
+      // A missing file would otherwise upload as an empty part, and the console
+      // fails later with an error that names nothing useful.
+      if (!(await file.exists())) {
+        throw new PortalError(`missing file: ${path}`);
+      }
+      if (file.size === 0) {
+        throw new PortalError(`empty file: ${path}`);
+      }
+      form.append(name, file, name);
     }
 
     const res = await this.request(

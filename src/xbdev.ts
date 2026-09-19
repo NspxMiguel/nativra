@@ -5,7 +5,13 @@
 import { DevicePortal, probe, PortalError, type InstalledPackage } from "./portal";
 import { t } from "./i18n";
 import { $ } from "bun";
-import { human, isPackageFile, installOrder, isForThisConsole } from "./util";
+import {
+  human,
+  isPackageFile,
+  installOrder,
+  isForThisConsole,
+  parseIdentity,
+} from "./util";
 import { readdir, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
 
@@ -36,6 +42,17 @@ type StoredConfig = { host: string; port: number; user?: string; pass?: string }
 // ---------------------------------------------------------------- config
 
 async function loadConfig(): Promise<StoredConfig | null> {
+  // An explicit address in the environment wins over the keychain: it is how a
+  // second console, or a test harness, is pointed at without disturbing the
+  // stored one.
+  if (process.env.XBDEV_HOST) {
+    return {
+      host: process.env.XBDEV_HOST,
+      port: Number(process.env.XBDEV_PORT ?? 11443),
+      user: process.env.XBDEV_USER,
+      pass: process.env.XBDEV_PASS,
+    };
+  }
   try {
     const raw =
       await $`security find-generic-password -s ${KEYCHAIN_SERVICE} -w`.quiet().text();
@@ -267,7 +284,14 @@ async function installFiles(
 async function cmdInstall(args: string[]): Promise<void> {
   const portal = await portalOrExit();
   const files = args.sort(installOrder);
-  await installFiles(portal, files[0]?.split("/").pop() ?? "package", files);
+  const installed = await installFiles(
+    portal,
+    files[0]?.split("/").pop() ?? "package",
+    files,
+  );
+  // A failed install has to be visible to whatever called this, not just
+  // printed — scripts chain on the exit code.
+  if (!installed) process.exit(1);
 }
 
 async function cmdGameMode(): Promise<void> {
@@ -456,6 +480,78 @@ async function cmdSetupRetroarch(): Promise<void> {
   console.log("retroarch.cfg sent — directories now point at E:\\");
 }
 
+
+/**
+ * Read every downloaded package's manifest and report what the console would
+ * make of it. Catches a truncated download or a wrong-architecture build here
+ * rather than halfway through installing the kit.
+ */
+async function cmdVerify(): Promise<void> {
+  const catalog = await loadCatalog();
+  let bad = 0;
+  let checked = 0;
+
+  for (const entry of [...catalog.dependencies, ...catalog.packages]) {
+    const dir = join(PACKAGE_DIR, entry.slug);
+    if (!(await Bun.file(join(dir)).exists()) && !(await pathExists(dir))) {
+      console.log(`${"-".padEnd(2)} ${entry.name.padEnd(22)} ${t("verify.missing")}`);
+      continue;
+    }
+    let files: string[] = [];
+    try {
+      files = (await findPackageFiles(dir)).filter((file) => !file.endsWith(".cer"));
+    } catch {
+      files = [];
+    }
+    if (files.length === 0) {
+      console.log(`x  ${entry.name.padEnd(22)} ${t("verify.missing")}`);
+      bad++;
+      continue;
+    }
+
+    for (const file of files) {
+      checked++;
+      const manifest = await readManifest(file);
+      if (!manifest) {
+        console.log(`x  ${entry.name.padEnd(22)} ${t("verify.unreadable")}`);
+        bad++;
+        continue;
+      }
+      const identity = parseIdentity(file, manifest);
+      if (identity.ok) {
+        console.log(
+          `ok ${entry.name.padEnd(22)} ${identity.name} ${identity.version} ` +
+            `[${identity.architectures.join(",") || "neutral"}]`,
+        );
+      } else {
+        console.log(`x  ${entry.name.padEnd(22)} ${identity.problem}`);
+        bad++;
+      }
+    }
+  }
+
+  console.log();
+  console.log(t("verify.summary", { checked, bad }));
+  if (bad > 0) process.exit(1);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  return (await $`test -d ${path}`.nothrow().quiet()).exitCode === 0;
+}
+
+/** Bundles nest a package inside; both are zips, so unzip reaches either. */
+async function readManifest(file: string): Promise<string | null> {
+  const direct = await $`unzip -p ${file} AppxManifest.xml`.nothrow().quiet();
+  if (direct.exitCode === 0 && direct.stdout.length > 0) return direct.stdout.toString();
+
+  const bundle = await $`unzip -p ${file} AppxMetadata/AppxBundleManifest.xml`
+    .nothrow()
+    .quiet();
+  if (bundle.exitCode === 0 && bundle.stdout.length > 0) return bundle.stdout.toString();
+
+  return null;
+}
+
 function usage(): void {
   const commands: Array<[string, string]> = [
     ["find", t("cmd.find")],
@@ -475,6 +571,7 @@ function usage(): void {
     ["pull <app> <file> [dir]", t("cmd.pull")],
     ["ls <app> [dir]", t("cmd.ls")],
     ["setup-retroarch", t("cmd.setupRetroarch")],
+    ["verify", t("cmd.verify")],
   ];
   console.log(`${t("cli.usage")}: xbdev <comando>`);
   console.log();
@@ -511,6 +608,8 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   pull: cmdPull,
   ls: cmdLs,
   "setup-retroarch": cmdSetupRetroarch,
+  verify: cmdVerify,
+  conferir: cmdVerify,
 };
 
 const handler = command ? handlers[command] : undefined;

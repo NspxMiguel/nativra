@@ -102,17 +102,18 @@ namespace Kiosk
             var skippedMicrosoft = 0;
             var skippedSelf = 0;
             var skippedNoEntries = 0;
+            var perUserCount = 0;
+            var machineCount = -1;
             string machineError = null;
 
             try
             {
                 var manager = new PackageManager();
                 var packages = manager.FindPackagesForUser(string.Empty).ToList();
-                var perUserCount = packages.Count;
+                perUserCount = packages.Count;
 
                 // Try the machine-wide query too and keep whichever sees more:
                 // on this console the per-user call returns only a handful.
-                var machineCount = -1;
                 try
                 {
                     var all = manager.FindPackages().ToList();

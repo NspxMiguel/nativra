@@ -46,6 +46,10 @@ namespace Kiosk.Native
 
         public int FromSystem { get; private set; }
         public int FromImages { get; private set; }
+        public int FromStubs { get; private set; }
+
+        /// <summary>Stands in for what the console does not provide.</summary>
+        public Win32Shim Shim { get; } = new Win32Shim();
 
         public void Add(PeImage image) => loaded[image.Name] = image;
 
@@ -107,8 +111,14 @@ namespace Kiosk.Native
                 }
             }
 
-            MissingFunctions.Add(module + "!" + function);
-            return IntPtr.Zero;
+            var name = module + "!" + function;
+            MissingFunctions.Add(name);
+
+            // A stub keeps the import table complete, so the image can run and
+            // say which of these it actually needs.
+            var stub = Shim.StubFor(name);
+            if (stub != IntPtr.Zero) FromStubs++;
+            return stub;
         }
     }
 }

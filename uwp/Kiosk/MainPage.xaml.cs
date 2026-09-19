@@ -122,6 +122,7 @@ namespace Kiosk
             // register no protocol; without it they can only open from Dev Home.
             portal = await ConsolePortal.LoadAsync();
             portalReady = portal != null && await portal.ProbeAsync() != null;
+            await RecordProbeAsync();
 
             CountText.Text = Texts.Get("status.count", Tiles.Count);
             StatusText.Text = string.Empty;
@@ -131,6 +132,40 @@ namespace Kiosk
                 AppRail.UpdateLayout();
                 AppRail.SelectedIndex = 0;
                 (AppRail.ContainerFromIndex(0) as Control)?.Focus(FocusState.Programmatic);
+            }
+        }
+
+        /// <summary>
+        /// Whether this app can reach the Device Portal decides whether it can
+        /// launch and install packages by itself, so the answer is written down
+        /// rather than left on screen: xbdev pull reads it back.
+        /// </summary>
+        private async Task RecordProbeAsync()
+        {
+            var lines = new List<string>
+            {
+                "at=" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                "portal.json=" + (portal != null),
+                "reachable=" + portalReady,
+            };
+            if (portal != null)
+            {
+                lines.Add("name=" + (await portal.ProbeAsync() ?? "-"));
+                lines.Add("lastError=" + (portal.LastError ?? "-"));
+                if (portalReady)
+                {
+                    lines.Add("packages=" + (await portal.PackagesAsync()).Count);
+                }
+            }
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                    "portal-probe.txt", CreationCollisionOption.ReplaceExisting);
+                await FileIO.WriteLinesAsync(file, lines);
+            }
+            catch
+            {
+                // The probe is diagnostics; failing to write it changes nothing.
             }
         }
 

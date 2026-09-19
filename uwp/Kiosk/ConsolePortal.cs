@@ -24,6 +24,9 @@ namespace Kiosk
         private HttpClient http;
         private string csrf;
 
+        /// <summary>Why the last attempt failed, which is the whole diagnosis.</summary>
+        public string LastError { get; private set; }
+
         private ConsolePortal(string host, int port, string user, string pass)
         {
             baseUrl = $"https://{host}:{port}";
@@ -80,14 +83,19 @@ namespace Kiosk
             {
                 var response = await Client().GetAsync(new Uri(baseUrl + "/api/os/machinename"));
                 CaptureCsrf(response);
-                if (!response.IsSuccessStatusCode) return null;
+                if (!response.IsSuccessStatusCode)
+                {
+                    LastError = "HTTP " + (int)response.StatusCode;
+                    return null;
+                }
                 var text = await response.Content.ReadAsStringAsync();
                 return JsonObject.TryParse(text, out var root)
                     ? root.GetNamedString("ComputerName", "?")
                     : "?";
             }
-            catch
+            catch (Exception error)
             {
+                LastError = error.GetType().Name + ": " + error.Message;
                 return null;
             }
         }

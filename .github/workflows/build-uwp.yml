@@ -23,27 +23,30 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Create signing certificate
+      - name: Restore signing certificate
         shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.KIOSK_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.KIOSK_PFX_PASSWORD }}
         run: |
-          # Sideloaded packages only need a self-signed certificate, and the
-          # subject must match the Publisher in Package.appxmanifest exactly.
-          $cert = New-SelfSignedCertificate `
-            -Type Custom `
-            -Subject "CN=NSPX" `
-            -KeyUsage DigitalSignature `
-            -FriendlyName "NSPX Kiosk" `
-            -CertStoreLocation "Cert:\CurrentUser\My" `
-            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
-          $password = ConvertTo-SecureString -String "kiosk" -Force -AsPlainText
-          Export-PfxCertificate `
-            -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" `
+          # One certificate for every build. Signing each release with a fresh
+          # one looks fine until you try to update an installed package: the
+          # console refuses it with a bare access-denied, because the identity
+          # no longer matches what it already has.
+          if (-not $env:PFX_BASE64) {
+            Write-Error "KIOSK_PFX_BASE64 is not set — see README"
+            exit 1
+          }
+          [IO.File]::WriteAllBytes(
+            "uwp/Kiosk/Kiosk_TemporaryKey.pfx",
+            [Convert]::FromBase64String($env:PFX_BASE64))
+          $password = ConvertTo-SecureString -String $env:PFX_PASSWORD -Force -AsPlainText
+          $imported = Import-PfxCertificate `
             -FilePath "uwp/Kiosk/Kiosk_TemporaryKey.pfx" `
-            -Password $password | Out-Null
-          Export-Certificate `
-            -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" `
-            -FilePath "uwp/Kiosk.cer" | Out-Null
-          Write-Host "certificate thumbprint: $($cert.Thumbprint)"
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -Password $password
+          Export-Certificate -Cert $imported -FilePath "uwp/Kiosk.cer" | Out-Null
+          Write-Host "signing as $($imported.Subject), thumbprint $($imported.Thumbprint)"
 
       - name: Restore
         run: msbuild uwp\Kiosk.sln /t:Restore /p:Configuration=Release /p:Platform=x64
@@ -58,7 +61,7 @@ jobs:
           /p:UapAppxPackageBuildMode=SideloadOnly
           /p:AppxPackageSigningEnabled=true
           /p:PackageCertificateKeyFile=Kiosk_TemporaryKey.pfx
-          /p:PackageCertificatePassword=kiosk
+          /p:PackageCertificatePassword=${{ secrets.KIOSK_PFX_PASSWORD }}
           /p:AppxPackageDir=${{ github.workspace }}\out\
           /verbosity:minimal
 

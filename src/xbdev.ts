@@ -571,6 +571,22 @@ async function cmdRestart(args: string[]): Promise<void> {
   console.log(t("restart.sent"));
 }
 
+/**
+ * Removing a package matters for our own builds: a package signed by a
+ * different certificate cannot update one already installed, and the console
+ * reports that as a bare access-denied.
+ */
+async function cmdUninstall(args: string[]): Promise<void> {
+  const portal = await portalOrExit();
+  const pkg = await findPackage(portal, args[0] ?? "");
+  if (!pkg) {
+    console.error(`? ${args[0]}`);
+    process.exit(1);
+  }
+  await portal.uninstall(pkg);
+  console.log(t("uninstall.done", { name: pkg.Name }));
+}
+
 function usage(): void {
   const commands: Array<[string, string]> = [
     ["find", t("cmd.find")],
@@ -592,6 +608,7 @@ function usage(): void {
     ["setup-retroarch", t("cmd.setupRetroarch")],
     ["verify", t("cmd.verify")],
     ["restart --sim", t("cmd.restart")],
+    ["uninstall <app>", t("cmd.uninstall")],
   ];
   console.log(`${t("cli.usage")}: xbdev <comando>`);
   console.log();
@@ -632,6 +649,8 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   conferir: cmdVerify,
   restart: cmdRestart,
   reiniciar: cmdRestart,
+  uninstall: cmdUninstall,
+  remover: cmdUninstall,
 };
 
 const handler = command ? handlers[command] : undefined;

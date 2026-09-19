@@ -76,7 +76,8 @@ namespace Kiosk.Native
 
                 lines.Add($"resolved.system={imports.FromSystem} resolved.images={imports.FromImages}");
                 lines.Add("modules.missing=" + string.Join(",", imports.MissingModules));
-                lines.Add($"functions.missing={imports.MissingFunctions.Count}");
+                lines.Add($"functions.missing={imports.MissingFunctions.Count} stubbed={imports.FromStubs}");
+                imports.Shim.Seal();
                 // The list itself is the work queue for the shim.
                 var take = Math.Min(imports.MissingFunctions.Count, 400);
                 for (var i = 0; i < take; i++) lines.Add("  " + imports.MissingFunctions[i]);
@@ -90,6 +91,8 @@ namespace Kiosk.Native
                     lines.Add("call=attempting");
                     await WriteAsync(lines);
                     lines[lines.Count - 1] = "call=" + CallSomething(imports);
+                    lines.Add("stubs.called=" + imports.Shim.Called.Count);
+                    foreach (var name in imports.Shim.Called) lines.Add("  called " + name);
                 }
             }
             catch (Exception error)

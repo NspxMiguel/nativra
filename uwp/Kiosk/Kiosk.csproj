@@ -63,6 +63,7 @@
     <Compile Include="SteamAuth.cs" />
     <Compile Include="SteamSession.cs" />
     <Compile Include="SteamLibrary.cs" />
+    <Compile Include="SteamShelves.cs" />
     <Compile Include="Texts.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

@@ -695,6 +695,13 @@ async function cmdSyncKiosk(): Promise<void> {
     console.log("sessao da Steam devolvida ao console");
   }
 
+  // His own Steam collections and the family library, so the console's list
+  // matches the one in his client. Written by: xbdev steam shelf
+  const shelfFile = join(PACKAGE_DIR, "shelf.json");
+  if (await Bun.file(shelfFile).exists()) {
+    await portal.pushFile(kiosk.PackageFullName, shelfFile, "LocalState");
+  }
+
   // Which games have been seen running on a console. Empty until one has.
   const testedFile = join(PACKAGE_DIR, "tested.json");
   if (!(await Bun.file(testedFile).exists())) {

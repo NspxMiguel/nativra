@@ -702,6 +702,23 @@ async function cmdSyncKiosk(): Promise<void> {
     await portal.pushFile(kiosk.PackageFullName, shelfFile, "LocalState");
   }
 
+  // Games already pulled down from Steam, so they show on the home screen
+  // beside the emulators.
+  const gamesDir = join(ROOT, "jogos");
+  const downloaded: Array<{ appid: number; name: string }> = [];
+  try {
+    for (const entry of await readdir(gamesDir)) {
+      const appid = Number(entry);
+      if (!Number.isInteger(appid) || appid <= 0) continue;
+      downloaded.push({ appid, name: entry });
+    }
+  } catch {
+    // Nothing downloaded yet is the normal case.
+  }
+  const gamesFile = join(PACKAGE_DIR, "games.json");
+  await Bun.write(gamesFile, JSON.stringify({ games: downloaded }));
+  await portal.pushFile(kiosk.PackageFullName, gamesFile, "LocalState");
+
   // Which games have been seen running on a console. Empty until one has.
   const testedFile = join(PACKAGE_DIR, "tested.json");
   if (!(await Bun.file(testedFile).exists())) {

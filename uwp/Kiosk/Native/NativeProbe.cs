@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Storage;
 
@@ -74,6 +75,7 @@ namespace Kiosk.Native
                 }
 
                 lines.Add($"resolved.system={imports.FromSystem} resolved.images={imports.FromImages}");
+                lines.Add("call=" + CallSomething(imports));
                 lines.Add("modules.missing=" + string.Join(",", imports.MissingModules));
                 lines.Add($"functions.missing={imports.MissingFunctions.Count}");
                 // The list itself is the work queue for the shim.
@@ -85,6 +87,39 @@ namespace Kiosk.Native
                 lines.Add("probe failed: " + error.GetType().Name + ": " + error.Message);
             }
             await WriteAsync(lines);
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate ulong TicksDelegate();
+
+        /// <summary>
+        /// Calls a function out of the game's own binary. Nothing about this
+        /// app produced that code — proving it runs is the difference between
+        /// a file sitting in memory and a program executing on the console.
+        /// </summary>
+        private static string CallSomething(SystemImports imports)
+        {
+            try
+            {
+                var image = imports.Find("baselib.dll");
+                if (image == null) return "baselib not loaded";
+
+                const string Symbol =
+                    "?Baselib_Timer_GetHighPrecisionTimerTicks@il2cpp_baselib@@YA_KXZ";
+                var address = image.Export(Symbol);
+                if (address == IntPtr.Zero) return "symbol not exported";
+
+                var ticks = Marshal.GetDelegateForFunctionPointer<TicksDelegate>(address);
+                var first = ticks();
+                var second = ticks();
+                return second > first
+                    ? $"OK ticks {first} then {second}"
+                    : $"ran but did not advance ({first}, {second})";
+            }
+            catch (Exception error)
+            {
+                return error.GetType().Name + ": " + error.Message;
+            }
         }
 
         private static async Task WriteAsync(List<string> lines)

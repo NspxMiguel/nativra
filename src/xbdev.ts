@@ -704,14 +704,9 @@ async function cmdSyncKiosk(): Promise<void> {
 
   // Games already pulled down from Steam, so they show on the home screen
   // beside the emulators.
-  const gamesDir = join(ROOT, "jogos");
-  const downloaded: Array<{ appid: number; name: string }> = [];
+  let downloaded: Array<{ appid: number; name: string }> = [];
   try {
-    for (const entry of await readdir(gamesDir)) {
-      const appid = Number(entry);
-      if (!Number.isInteger(appid) || appid <= 0) continue;
-      downloaded.push({ appid, name: entry });
-    }
+    downloaded = (await Bun.file(join(PACKAGE_DIR, "downloaded.json")).json()) as typeof downloaded;
   } catch {
     // Nothing downloaded yet is the normal case.
   }

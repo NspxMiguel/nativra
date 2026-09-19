@@ -161,6 +161,19 @@ export async function runSteam(root: string, args: string[]): Promise<void> {
         });
         written += Number(item.manifest.totalBytes);
       }
+      // A record of what exists, wherever it was put: the console's home
+      // screen reads this to list what has been downloaded.
+      const indexFile = join(root, "pacotes", "downloaded.json");
+      let index: Array<{ appid: number; name: string; dir: string }> = [];
+      try {
+        index = (await Bun.file(indexFile).json()) as typeof index;
+      } catch {
+        // First download: the file does not exist yet.
+      }
+      index = index.filter((item) => item.appid !== appId);
+      index.push({ appid: appId, name, dir: target });
+      await Bun.write(indexFile, JSON.stringify(index, null, 2));
+
       console.log(t("steam.done", { name, dir: target }));
       return;
     }

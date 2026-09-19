@@ -309,6 +309,26 @@ export class DevicePortal {
     return data.Items ?? [];
   }
 
+  /** The portal creates one folder at a time, named apart from the path. */
+  async makeFolder(
+    packageFullName: string,
+    parent: string,
+    name: string,
+    knownFolderId = "LocalAppData",
+  ): Promise<void> {
+    const query = new URLSearchParams({
+      knownfolderid: knownFolderId,
+      packagefullname: packageFullName,
+      path: rootedPath(parent),
+      newfoldername: name,
+    });
+    const res = await this.request("POST", `/api/filesystem/apps/folder?${query}`);
+    // An existing folder answers 4xx, which is not a problem for the caller.
+    if (!res.ok && res.status !== 400 && res.status !== 403) {
+      throw new PortalError(`could not create ${name}`, res.status, await res.text());
+    }
+  }
+
   async pushFile(
     packageFullName: string,
     localPath: string,

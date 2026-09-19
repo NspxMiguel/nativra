@@ -23,6 +23,11 @@ namespace Kiosk.Native
             CharSet = CharSet.Ansi, BestFitMapping = false)]
         private static extern IntPtr GetProcAddress(IntPtr module, string name);
 
+        /// <summary>Winsock is imported by number, not by name.</summary>
+        [DllImport("api-ms-win-core-libraryloader-l1-2-0.dll", EntryPoint = "GetProcAddress",
+            SetLastError = true)]
+        private static extern IntPtr GetProcAddressByOrdinal(IntPtr module, IntPtr ordinal);
+
         [DllImport("api-ms-win-core-libraryloader-l2-1-0.dll", SetLastError = true,
             CharSet = CharSet.Unicode)]
         private static extern IntPtr LoadPackagedLibrary(string name, uint reserved);
@@ -80,9 +85,18 @@ namespace Kiosk.Native
             }
 
             var handle = Module(module);
-            if (handle != IntPtr.Zero && !function.StartsWith("#", StringComparison.Ordinal))
+            if (handle != IntPtr.Zero)
             {
-                var address = GetProcAddress(handle, function);
+                IntPtr address;
+                if (function.StartsWith("#", StringComparison.Ordinal) &&
+                    int.TryParse(function.Substring(1), out var ordinal))
+                {
+                    address = GetProcAddressByOrdinal(handle, (IntPtr)ordinal);
+                }
+                else
+                {
+                    address = GetProcAddress(handle, function);
+                }
                 if (address != IntPtr.Zero)
                 {
                     FromSystem++;

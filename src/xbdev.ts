@@ -838,6 +838,7 @@ async function cmdWin32(args: string[]): Promise<void> {
     console.error("Kiosk is not installed");
     process.exit(1);
   }
+  await portal.makeFolder(kiosk.PackageFullName, "LocalState", "win32");
   for (const file of args) {
     await portal.pushFile(kiosk.PackageFullName, file, "LocalState/win32");
     console.log(`-> ${file.split("/").pop()}`);

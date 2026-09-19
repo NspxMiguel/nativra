@@ -102,24 +102,26 @@ namespace Kiosk
             var skippedMicrosoft = 0;
             var skippedSelf = 0;
             var skippedNoEntries = 0;
+            string machineError = null;
 
             try
             {
                 var manager = new PackageManager();
                 var packages = manager.FindPackagesForUser(string.Empty).ToList();
-                // Some builds only return the caller's own package from the
-                // per-user query; the machine-wide one is the fallback.
-                if (packages.Count <= 1)
+                var perUserCount = packages.Count;
+
+                // Try the machine-wide query too and keep whichever sees more:
+                // on this console the per-user call returns only a handful.
+                var machineCount = -1;
+                try
                 {
-                    try
-                    {
-                        var all = manager.FindPackages().ToList();
-                        if (all.Count > packages.Count) packages = all;
-                    }
-                    catch
-                    {
-                        // No privilege for the machine-wide query — keep what we have.
-                    }
+                    var all = manager.FindPackages().ToList();
+                    machineCount = all.Count;
+                    if (all.Count > packages.Count) packages = all;
+                }
+                catch (Exception queryError)
+                {
+                    machineError = queryError.HResult.ToString("X8");
                 }
 
                 foreach (var package in packages)
@@ -174,7 +176,8 @@ namespace Kiosk
 
             CountText.Text = Texts.Get("status.count", Tiles.Count);
             StatusText.Text =
-                $"{seen} pkgs · fw {skippedFramework} · sys {skippedSystem} · ms {skippedMicrosoft} · self {skippedSelf} · noapp {skippedNoEntries}";
+                $"user {perUserCount} · machine {machineCount}{(machineError == null ? "" : " err " + machineError)} · " +
+                $"fw {skippedFramework} · sys {skippedSystem} · ms {skippedMicrosoft} · self {skippedSelf} · noapp {skippedNoEntries}";
 
             if (Tiles.Count == 0)
             {

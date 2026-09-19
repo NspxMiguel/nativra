@@ -107,6 +107,7 @@ namespace Kiosk
                 Subtitle = Texts.Get("tile.steam.sub"),
                 Route = "steam",
                 Initial = "S",
+                Icon = new BitmapImage(new Uri("ms-appx:///Assets/Steam.png")),
                 Accent = new SolidColorBrush(Accents[0]),
             });
 

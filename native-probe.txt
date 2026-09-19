@@ -1,0 +1,22 @@
+at=2026-09-19 12:14:35
+baselib.dll: mapped at 0x180000000 exports=112 unresolved=17
+resolved.system=123 resolved.images=0
+modules.missing=
+functions.missing=17
+  WS2_32.dll!#1
+  WS2_32.dll!#111
+  WS2_32.dll!#22
+  WS2_32.dll!#21
+  WS2_32.dll!#20
+  WS2_32.dll!#19
+  WS2_32.dll!#18
+  WS2_32.dll!#17
+  WS2_32.dll!#16
+  WS2_32.dll!#13
+  WS2_32.dll!#7
+  WS2_32.dll!#6
+  WS2_32.dll!#10
+  WS2_32.dll!#4
+  WS2_32.dll!#3
+  WS2_32.dll!#2
+  WS2_32.dll!#151

@@ -15,6 +15,7 @@ import {
 import { readdir, mkdir } from "node:fs/promises";
 import { extractIcon, cleanScratch } from "./icons";
 import { runSteam } from "./steam/cli";
+import { ConsoleRemote, BUTTONS } from "./remote";
 import { join, dirname } from "node:path";
 
 const ROOT = dirname(import.meta.dir);
@@ -746,6 +747,7 @@ function usage(): void {
     ["uninstall <app>", t("cmd.uninstall")],
     ["sync", t("cmd.sync")],
     ["steam <games|info|download>", t("cmd.steam")],
+    ["press <botao...>", t("cmd.press")],
   ];
   console.log(`${t("cli.usage")}: xbdev <comando>`);
   console.log();
@@ -791,7 +793,35 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   sync: cmdSyncKiosk,
   sincronizar: cmdSyncKiosk,
   steam: (args: string[]) => runSteam(ROOT, args),
+  press: cmdPress,
 };
+
+/** Drives the console with the controller channel of the Device Portal. */
+async function cmdPress(args: string[]): Promise<void> {
+  const config = await loadConfig();
+  if (!config) {
+    console.error(t("need.connect"));
+    process.exit(2);
+  }
+  if (args.length === 0) {
+    console.log(Object.keys(BUTTONS).join(" "));
+    return;
+  }
+  const remote = new ConsoleRemote({ host: config.host, port: config.port ?? 11443, user: config.user, pass: config.pass });
+  await remote.open();
+  try {
+    for (const arg of args) {
+      const [button, repeat] = arg.split("*");
+      const times = Number(repeat ?? 1);
+      for (let i = 0; i < Math.max(1, times); i++) {
+        await remote.press(button);
+      }
+      console.log(`${button}${times > 1 ? " x" + times : ""}`);
+    }
+  } finally {
+    remote.close();
+  }
+}
 
 const handler = command ? handlers[command] : undefined;
 if (!handler) {

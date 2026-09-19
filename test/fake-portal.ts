@@ -51,9 +51,14 @@ export function startFakePortal(options: FakePortalOptions) {
     ],
     settings: [
       { Name: "TVResolution", Value: "1080p", Type: "Select", Category: "Video" },
-      // The real console exposes this under a name that has moved between OS
-      // versions; the CLI matches on intent, so the stub uses one variant.
-      { Name: "DefaultAppMode", Value: "App", Type: "Select", Category: "Apps" },
+      // Measured on a Series X running OS 10.0.26100 — this is the switch that
+      // gives a sideloaded app the full GPU, more RAM and sight of the drive.
+      {
+        Name: "DefaultUWPContentTypeToGame",
+        Value: "false",
+        Type: "Bool",
+        Category: "Preferences",
+      },
     ],
     launched: [],
     terminated: [],

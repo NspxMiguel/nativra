@@ -165,19 +165,29 @@ export class DevicePortal {
       form.append(name, file, name);
     }
 
-    const res = await this.request(
-      "POST",
-      `/api/app/packagemanager/package?package=${encodeURIComponent(mainName)}`,
-      { body: form },
-    );
+    // The console runs one deployment at a time and answers 409 while another
+    // is in flight. That is a queue signal, not a failure: wait it out.
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const res = await this.request(
+        "POST",
+        `/api/app/packagemanager/package?package=${encodeURIComponent(mainName)}`,
+        { body: form },
+      );
 
-    if (res.status !== 200 && res.status !== 202) {
+      if (res.status === 200 || res.status === 202) return;
+
+      if (res.status === 409) {
+        await Bun.sleep(5000);
+        continue;
+      }
+
       throw new PortalError(
         `install of ${mainName} refused`,
         res.status,
         await res.text(),
       );
     }
+    throw new PortalError(`console stayed busy while installing ${mainName}`, 409);
   }
 
   async installState(): Promise<{ done: boolean; message: string; code: number }> {
@@ -203,13 +213,29 @@ export class DevicePortal {
     };
   }
 
-  async waitForInstall(timeoutMs = 10 * 60 * 1000, onTick?: (msg: string) => void) {
+  async waitForInstall(timeoutMs = 15 * 60 * 1000, onTick?: (msg: string) => void) {
     const started = Date.now();
+    let idleReadings = 0;
+    let sawProgress = false;
+
     while (Date.now() - started < timeoutMs) {
       await Bun.sleep(2000);
       const state = await this.installState();
       if (onTick && state.message) onTick(state.message);
-      if (state.done) return;
+
+      if (state.done) {
+        idleReadings++;
+        // Right after the upload the console can report idle before it has
+        // picked the job up. Require two idle readings in a row, and if we
+        // never saw progress, give it a few extra seconds to start.
+        if (idleReadings >= 2 && (sawProgress || Date.now() - started > 8000)) {
+          return;
+        }
+        continue;
+      }
+
+      idleReadings = 0;
+      sawProgress = true;
       if (state.code !== 0 && state.code !== 3805991009) {
         throw new PortalError(state.message || "install failed", state.code);
       }

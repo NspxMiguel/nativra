@@ -300,13 +300,18 @@ async function cmdGameMode(): Promise<void> {
   const settings = await portal.settings();
   // The console exposes this under a name that has moved between OS versions;
   // match on intent rather than on one hardcoded string.
+  // Measured on a Series X running OS 10.0.26100: the switch is called
+  // DefaultUWPContentTypeToGame. Earlier builds used other names, so match on
+  // intent — a setting about games that is about apps/UWP/content type.
   const candidate = settings.find((setting) => {
     const name = (setting.Name ?? "").toLowerCase();
+    if (name === "defaultappmode") return true; // older console builds
+    if (!name.includes("game")) return false;
     return (
-      name.includes("gamemode") ||
-      (name.includes("game") && name.includes("app")) ||
-      name.includes("treatuwpasgame") ||
-      name.includes("defaultappmode")
+      name.includes("uwp") ||
+      name.includes("app") ||
+      name.includes("contenttype") ||
+      name.includes("gamemode")
     );
   });
   if (!candidate) {

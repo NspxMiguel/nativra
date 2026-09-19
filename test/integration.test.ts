@@ -87,7 +87,7 @@ test("install uploads the package and waits for the console to finish", async ()
   expect(state.uploads[0].files).toContain("Demo_1.0.0.0_x64.msixbundle");
   expect(state.uploads[0].endpoint).toBe("Demo_1.0.0.0_x64.msixbundle");
   expect(state.packages.length).toBe(before + 1);
-});
+}, 30000);
 
 test("every write call carried the CSRF token the portal demands", () => {
   expect(state.csrfIssued).toBeGreaterThan(0);
@@ -112,8 +112,8 @@ test("launching something that is not installed fails loudly", async () => {
 test("gamemode finds the resource setting and switches it", async () => {
   const result = await run(["gamemode"]);
   expect(result.code).toBe(0);
-  const setting = state.settings.find((s) => s.Name === "DefaultAppMode");
-  expect(setting?.Value).toBe("Game");
+  const setting = state.settings.find((s) => s.Name === "DefaultUWPContentTypeToGame");
+  expect(setting?.Value).toBe("true");
   expect(result.out).toContain("game mode on");
 });
 
@@ -186,7 +186,7 @@ test("a package and its dependencies upload together, bundle first", async () =>
   expect(upload.files[0]).toBe("Game_2.0.0.0_x64.msixbundle");
   expect(upload.files).toContain("Microsoft.VCLibs.x64.14.00.appx");
   expect(upload.files[upload.files.length - 1]).toBe("Game.cer");
-});
+}, 30000);
 
 test("a console that answers nothing is reported as offline, not as a crash", async () => {
   const proc = Bun.spawn(["bun", CLI, "status"], {

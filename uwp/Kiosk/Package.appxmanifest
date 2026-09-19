@@ -41,5 +41,7 @@
     <!-- Required to enumerate and launch the other sideloaded apps. Restricted,
          which sideloading allows and the Store would not. -->
     <rescap:Capability Name="packageQuery" />
+    <!-- Steam sign-in and the library both talk to api.steampowered.com. -->
+    <Capability Name="internetClient" />
   </Capabilities>
 </Package>

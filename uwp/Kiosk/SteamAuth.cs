@@ -5,7 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Vapor
+namespace Kiosk
 {
     /// <summary>
     /// Steam's QR sign-in, spoken directly. This is the same public
@@ -51,6 +51,13 @@ namespace Vapor
         {
             WriteTag(s, field, 0);
             WriteVarint(s, value);
+        }
+
+        /// <summary>A steamid travels as fixed64, not as a varint.</summary>
+        public static void WriteFixed64(Stream s, int field, ulong value)
+        {
+            WriteTag(s, field, 1);
+            s.Write(BitConverter.GetBytes(value), 0, 8);
         }
 
         public static void WriteString(Stream s, int field, string value)
@@ -225,6 +232,22 @@ namespace Vapor
                     HadRemoteInteraction =
                         fields.TryGetValue(5, out var hr) && hr is ulong h && h != 0,
                 };
+            }
+        }
+
+        /// <summary>
+        /// The access token from sign-in lasts about a day; the refresh token
+        /// lasts months and mints a new one. This is what keeps the console
+        /// signed in without asking for the phone again.
+        /// </summary>
+        public static async Task<string> RenewAccessTokenAsync(string refreshToken, ulong steamId)
+        {
+            using (var ms = new MemoryStream())
+            {
+                Proto.WriteString(ms, 1, refreshToken);
+                Proto.WriteFixed64(ms, 2, steamId);
+                var fields = await CallAsync("GenerateAccessTokenForApp", ms.ToArray());
+                return fields.TryGetValue(1, out var at) ? Proto.AsString(at) : null;
             }
         }
     }

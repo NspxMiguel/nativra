@@ -60,6 +60,11 @@ namespace Kiosk.Native
                     }
 
                     var bytes = (await FileIO.ReadBufferAsync(file)).ToArray();
+                    // Written before the attempt: mapping an image runs the
+                    // module's own code, and that can take the process with it.
+                    lines.Add(file.Name + ": loading");
+                    await WriteAsync(lines);
+                    lines.RemoveAt(lines.Count - 1);
                     try
                     {
                         var image = PeImage.Load(file.Name, bytes, imports.Resolve);
@@ -73,6 +78,7 @@ namespace Kiosk.Native
                     {
                         lines.Add($"{file.Name}: FAILED {error.GetType().Name}: {error.Message}");
                     }
+                    await WriteAsync(lines);
                 }
 
                 lines.Add($"resolved.system={imports.FromSystem} resolved.images={imports.FromImages}");

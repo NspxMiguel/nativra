@@ -274,19 +274,25 @@ namespace Kiosk
             hidden.Clear();
             Shelves.Clear();
 
+            // The count has to be set before the shelf is added: the template
+            // binds once, so a number filled in afterwards never reaches it.
+            var loaded = await SteamShelves.LoadAsync();
+            foreach (var shelf in loaded)
+            {
+                if (!shelf.IsHidden) continue;
+                foreach (var id in shelf.Ids) hidden.Add(id);
+            }
+
             Shelves.Add(new Shelf
             {
                 Id = "all",
                 Name = Texts.Get("steam.shelf.all"),
                 IsAll = true,
+                Count = allGames.Count(g => !hidden.Contains(g.AppId)),
             });
 
-            foreach (var shelf in await SteamShelves.LoadAsync())
+            foreach (var shelf in loaded)
             {
-                if (shelf.IsHidden)
-                {
-                    foreach (var id in shelf.Ids) hidden.Add(id);
-                }
                 shelf.Count = shelf.Ids.Count(id => owned.Contains(id));
                 if (shelf.Count == 0 && !shelf.IsHidden) continue;
                 Shelves.Add(shelf);
@@ -304,7 +310,6 @@ namespace Kiosk
                 });
             }
 
-            Shelves[0].Count = allGames.Count(g => !hidden.Contains(g.AppId));
             ShelfList.SelectedIndex = 0;
         }
 

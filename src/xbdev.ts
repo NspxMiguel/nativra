@@ -824,7 +824,25 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   sincronizar: cmdSyncKiosk,
   steam: (args: string[]) => runSteam(ROOT, args),
   press: cmdPress,
+  win32: cmdWin32,
 };
+
+/**
+ * Puts Windows binaries where the app's loader looks for them. This is how a
+ * real game's own modules get measured against the translation layer.
+ */
+async function cmdWin32(args: string[]): Promise<void> {
+  const portal = await portalOrExit();
+  const kiosk = await findPackage(portal, "kiosk");
+  if (!kiosk) {
+    console.error("Kiosk is not installed");
+    process.exit(1);
+  }
+  for (const file of args) {
+    await portal.pushFile(kiosk.PackageFullName, file, "LocalState/win32");
+    console.log(`-> ${file.split("/").pop()}`);
+  }
+}
 
 /** Drives the console with the controller channel of the Device Portal. */
 async function cmdPress(args: string[]): Promise<void> {

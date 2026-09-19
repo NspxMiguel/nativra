@@ -124,6 +124,7 @@ namespace Kiosk
             portal = await ConsolePortal.LoadAsync();
             portalReady = portal != null && await portal.ProbeAsync() != null;
             await RecordProbeAsync();
+            await Native.NativeProbe.RunAsync();
 
             CountText.Text = Texts.Get("status.count", Tiles.Count);
             StatusText.Text = string.Empty;

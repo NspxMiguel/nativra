@@ -34,6 +34,15 @@ namespace Kiosk.Native
         [DllImport("api-ms-win-core-memory-l1-1-0.dll", SetLastError = true)]
         private static extern bool VirtualFree(IntPtr address, UIntPtr size, uint freeType);
 
+        // Without these two a mapped image crashes the moment its own runtime
+        // starts: x64 code cannot unwind without its function table, and a
+        // module with thread-local data reads rubbish until its callbacks run.
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool RtlAddFunctionTable(IntPtr table, uint count, ulong baseAddress);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void TlsCallback(IntPtr instance, uint reason, IntPtr reserved);
+
         private IntPtr baseAddress;
         private uint imageSize;
 
@@ -60,6 +69,8 @@ namespace Kiosk.Native
             image.BindImports(file, resolver);
             image.Protect(file);
             image.ReadExports();
+            image.RegisterExceptions();
+            image.RunTlsCallbacks();
             return image;
         }
 
@@ -308,6 +319,64 @@ namespace Kiosk.Native
                 var ordinal = U16(MarshalRead(ordinals + i * 2, 2), 0);
                 var address = (int)U32(MarshalRead(functions + ordinal * 4, 4), 0);
                 exports[ReadCString(nameRva)] = baseAddress + address;
+            }
+        }
+
+        /// <summary>
+        /// x64 unwinding is table-driven: code that throws, or a runtime that
+        /// uses structured exceptions internally, needs its .pdata registered
+        /// or the first exception takes the process down.
+        /// </summary>
+        private void RegisterExceptions()
+        {
+            try
+            {
+                var rva = DirectoryRva(3);
+                var size = DirectorySize(3);
+                if (rva == 0 || size == 0) return;
+                // Each RUNTIME_FUNCTION is three DWORDs.
+                RtlAddFunctionTable(
+                    baseAddress + rva, (uint)(size / 12), (ulong)baseAddress.ToInt64());
+                ExceptionsRegistered = true;
+            }
+            catch
+            {
+                // Not being able to register is worth knowing, not worth dying for.
+            }
+        }
+
+        public bool ExceptionsRegistered { get; private set; }
+        public int TlsCallbacksRun { get; private set; }
+
+        /// <summary>
+        /// A module's thread-local data is set up by callbacks the real loader
+        /// runs before the entry point. Skipping them leaves the module reading
+        /// slots nobody filled.
+        /// </summary>
+        private void RunTlsCallbacks()
+        {
+            try
+            {
+                var rva = DirectoryRva(9);
+                if (rva == 0) return;
+
+                // IMAGE_TLS_DIRECTORY64: the callback array pointer is at 24.
+                var directory = MarshalRead(rva, 40);
+                var callbacks = (long)BitConverter.ToUInt64(directory, 24);
+                if (callbacks == 0) return;
+
+                for (var i = 0; i < 64; i++)
+                {
+                    var entry = Marshal.ReadIntPtr((IntPtr)(callbacks + i * 8));
+                    if (entry == IntPtr.Zero) break;
+                    var callback = Marshal.GetDelegateForFunctionPointer<TlsCallback>(entry);
+                    callback(baseAddress, 1, IntPtr.Zero);
+                    TlsCallbacksRun++;
+                }
+            }
+            catch
+            {
+                // Same reasoning as the function table.
             }
         }
 

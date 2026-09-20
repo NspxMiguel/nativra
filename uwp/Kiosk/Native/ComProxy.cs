@@ -34,7 +34,12 @@ namespace Kiosk.Native
             IntPtr address, UIntPtr size, uint newProtect, out uint oldProtect);
 
         private const int ThunkSize = 32;
-        private const int Capacity = 256;
+        // Two factories at thirty-two entries each, a device at forty-three,
+        // a display device, and an adapter for every one of those — the old
+        // ceiling of 256 was within reach of an ordinary startup, and going
+        // over it does not fail loudly: it hands back the console's own
+        // function to be called with our stand-in as its object.
+        private const int Capacity = 2048;
 
         private IntPtr page;
         private int used;
@@ -88,7 +93,7 @@ namespace Kiosk.Native
                 };
                 seenPointer = Marshal.GetFunctionPointerForDelegate(seen);
             }
-            if (page == IntPtr.Zero || used >= Capacity) return target;
+            if (!HavePage() || used >= Capacity) return Forward(original, target);
 
             var code = new List<byte>();
             code.AddRange(new byte[] { 0x48, 0x83, 0xEC, 0x48 });        // sub rsp, 0x48
@@ -116,15 +121,25 @@ namespace Kiosk.Native
             return at;
         }
 
+        /// <summary>
+        /// Makes the page the thunks live on, once. Both kinds of thunk need
+        /// it, and a thunk that cannot be built has to say so rather than
+        /// quietly hand back the function it was meant to wrap: that function
+        /// would then be called with the stand-in in place of the object it
+        /// belongs to, which is a crash with no explanation attached.
+        /// </summary>
+        private bool HavePage()
+        {
+            if (page != IntPtr.Zero) return true;
+            page = VirtualAllocFromApp(
+                IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
+                MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+            return page != IntPtr.Zero;
+        }
+
         private IntPtr Forward(IntPtr original, IntPtr target)
         {
-            if (page == IntPtr.Zero)
-            {
-                page = VirtualAllocFromApp(
-                    IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
-                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-                if (page == IntPtr.Zero) return target;
-            }
+            if (!HavePage()) return target;
             if (used >= Capacity) return target;
 
             var code = new List<byte> { 0x48, 0xB9 };

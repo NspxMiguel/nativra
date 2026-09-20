@@ -520,6 +520,23 @@ namespace Kiosk.Native
         /// <summary>Called after each step so a crash leaves the last one on disk.</summary>
         public static Action<string> Step;
 
+        /// <summary>
+        /// Points the process at a mapped image. A program's startup code asks
+        /// the system which image it is — and gets the host application, whose
+        /// headers say nothing about it. The answer lives at 0x10 inside the
+        /// process block, which hangs off the thread block at 0x60.
+        /// </summary>
+        public static IntPtr SetProcessImageBase(IntPtr newBase)
+        {
+            var teb = CurrentTeb();
+            if (teb == IntPtr.Zero) return IntPtr.Zero;
+            var peb = Marshal.ReadIntPtr(teb + 0x60);
+            if (peb == IntPtr.Zero) return IntPtr.Zero;
+            var previous = Marshal.ReadIntPtr(peb + 0x10);
+            Marshal.WriteIntPtr(peb + 0x10, newBase);
+            return previous;
+        }
+
         public int TlsSlot { get; private set; } = -1;
 
         private static IntPtr tebReader;

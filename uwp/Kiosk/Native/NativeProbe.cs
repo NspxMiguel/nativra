@@ -266,7 +266,10 @@ namespace Kiosk.Native
                             "\"" + folder.Path + "\\game.exe\""
                             + " -logFile \"" + local.Path + "\\unity.log\""
                             + " -screen-fullscreen 1 -screen-width 1920 -screen-height 1080"
-                            + " -nolog-abort");
+                            // Naming the renderer removes a decision the engine
+                            // would otherwise make by probing, and probing is
+                            // where a console differs from a desktop.
+                            + " -force-d3d11");
                         var previousBase = PeImage.SetProcessImageBase(
                             exe?.BaseAddress ?? engine.BaseAddress);
                         lines[lines.Count - 1] += $" base 0x{previousBase.ToInt64():X}"

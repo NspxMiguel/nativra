@@ -484,10 +484,44 @@ namespace Kiosk.Native
                 }
             };
 
+            // Passed straight through, but written down. A device that fails
+            // to be created is the sort of thing an engine retries quietly
+            // forever, and from outside that looks identical to hanging.
+            deviceOnly = (adapter, driverType, software, flags, levels, levelCount,
+                sdk, resultDevice, resultLevel, resultContext) =>
+            {
+                var real = imports.SystemAddress("d3d11.dll", "D3D11CreateDevice");
+                if (real == IntPtr.Zero)
+                {
+                    Note("d3d11 has no device entry point");
+                    return E_FAIL;
+                }
+                try
+                {
+                    var make = Marshal.GetDelegateForFunctionPointer<DeviceDelegate>(real);
+                    var code = make(adapter, driverType, software, flags, levels,
+                        levelCount, sdk, resultDevice, resultLevel, resultContext);
+                    var level = resultLevel != IntPtr.Zero
+                        ? Marshal.ReadInt32(resultLevel)
+                        : 0;
+                    Note("D3D11CreateDevice(type " + driverType + ", flags 0x"
+                        + flags.ToString("X") + "): 0x" + code.ToString("X8")
+                        + " level 0x" + level.ToString("X"));
+                    return code;
+                }
+                catch (Exception error)
+                {
+                    Note("D3D11CreateDevice: " + error.GetType().Name);
+                    return E_FAIL;
+                }
+            };
+
             foreach (var module in new[] { "d3d11.dll", "D3D11.dll" })
             {
                 system.Overrides[module + "!D3D11CreateDeviceAndSwapChain"] =
                     Marshal.GetFunctionPointerForDelegate(deviceAndChain);
+                system.Overrides[module + "!D3D11CreateDevice"] =
+                    Marshal.GetFunctionPointerForDelegate(deviceOnly);
             }
 
             foreach (var module in new[] { "dxgi.dll", "DXGI.dll" })
@@ -517,6 +551,7 @@ namespace Kiosk.Native
             IntPtr resultDevice, IntPtr resultLevel, IntPtr resultContext);
 
         private static DeviceAndChainDelegate deviceAndChain;
+        private static DeviceDelegate deviceOnly;
 
         /// <summary>
         /// The factory that made a device, reached through the device itself.

@@ -66,6 +66,9 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int ItemDelegate(IntPtr self, uint index, IntPtr result);
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int PropertyDelegate(IntPtr self, IntPtr key, IntPtr value);
+
         // Held so the collector cannot take what native code is holding.
         private static CompletedDelegate completed;
         private static EndpointDelegate endpoint;
@@ -73,6 +76,12 @@ namespace Kiosk.Native
         private static OneOutDelegate identity;
         private static OneOutDelegate condition;
         private static StoreDelegate store;
+        private static OneOutDelegate propertyCount;
+        private static ItemDelegate propertyAt;
+        private static PropertyDelegate propertyValue;
+        private static PropertyDelegate propertySet;
+        private static OneOutDelegate commit;
+        private static IntPtr properties;
         private static TwoInDelegate listener;
         private static EnumerateDelegate enumerate;
         private static OneOutDelegate count;
@@ -82,6 +91,69 @@ namespace Kiosk.Native
         private static readonly ComProxy Proxy = new ComProxy();
         private static IntPtr enumerator;
         private static IntPtr device;
+
+
+        private const string StoreInterface = "886d8eeb-8cf2-4446-8d02-cdba1dbdcf99";
+
+        // The properties a game reads off an endpoint before it will use it.
+        private static readonly Guid FriendlyNameGroup =
+            new Guid("a45c254e-df1c-4efd-8020-67d146a850e0");
+        private static readonly Guid DeviceFormatGroup =
+            new Guid("f19f064d-082c-4e27-bc73-6882a1bb8e4c");
+        private static readonly Guid OemFormatGroup =
+            new Guid("e4870e26-3cc5-4cd2-ba46-ca0a9a70ed04");
+        private static readonly Guid EndpointGroup =
+            new Guid("1da5d803-d492-4edd-8c23-e0c0ffee7f0e");
+
+        /// <summary>
+        /// The format the console mixes at, written as Windows writes it.
+        ///
+        /// Stereo, 48 kHz, floating point — which is what a console's audio
+        /// engine actually runs, so a game that builds its pipeline from this
+        /// builds the right one and never resamples.
+        /// </summary>
+        private static IntPtr MixFormat(out int size)
+        {
+            size = 40;                                   // WAVEFORMATEXTENSIBLE
+            var at = Marshal.AllocHGlobal(size);
+            Marshal.WriteInt16(at, 0, unchecked((short)0xFFFE));  // extensible
+            Marshal.WriteInt16(at, 2, 2);                // channels
+            Marshal.WriteInt32(at, 4, 48000);            // samples per second
+            Marshal.WriteInt32(at, 8, 48000 * 8);        // average bytes per second
+            Marshal.WriteInt16(at, 12, 8);               // block align
+            Marshal.WriteInt16(at, 14, 32);              // bits per sample
+            Marshal.WriteInt16(at, 16, 22);              // extra bytes
+            Marshal.WriteInt16(at, 18, 32);              // valid bits
+            Marshal.WriteInt32(at, 20, 3);               // front left and right
+            Marshal.StructureToPtr(
+                new Guid("00000003-0000-0010-8000-00aa00389b71"), at + 24, false);
+            return at;
+        }
+
+        private static bool Is(IntPtr key, Guid group, int id)
+        {
+            if (key == IntPtr.Zero) return false;
+            try
+            {
+                return Marshal.PtrToStructure<Guid>(key) == group
+                    && Marshal.ReadInt32(key, 16) == id;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void Empty(IntPtr value)
+        {
+            if (value == IntPtr.Zero) return;
+            Marshal.WriteInt16(value, 0, 0);             // VT_EMPTY
+            Marshal.WriteInt16(value, 2, 0);
+            Marshal.WriteInt16(value, 4, 0);
+            Marshal.WriteInt16(value, 6, 0);
+            Marshal.WriteInt64(value, 8, 0);
+            Marshal.WriteInt64(value, 16, 0);
+        }
 
         /// <summary>What the bridge did, in order, for the report.</summary>
         public static readonly System.Collections.Generic.List<string> Notes =
@@ -223,10 +295,91 @@ namespace Kiosk.Native
                 return S_OK;
             };
 
+            propertyCount = (self, result) =>
+            {
+                if (result != IntPtr.Zero) Marshal.WriteInt32(result, 2);
+                return S_OK;
+            };
+
+            propertyAt = (self, index, result) =>
+            {
+                if (result == IntPtr.Zero) return E_FAIL;
+                if (index == 0)
+                {
+                    Marshal.StructureToPtr(DeviceFormatGroup, result, false);
+                    Marshal.WriteInt32(result, 16, 0);
+                    return S_OK;
+                }
+                if (index == 1)
+                {
+                    Marshal.StructureToPtr(FriendlyNameGroup, result, false);
+                    Marshal.WriteInt32(result, 16, 14);
+                    return S_OK;
+                }
+                return E_FAIL;
+            };
+
+            propertyValue = (self, key, value) =>
+            {
+                if (value == IntPtr.Zero) return E_FAIL;
+                Empty(value);
+
+                if (Is(key, DeviceFormatGroup, 0) || Is(key, OemFormatGroup, 3))
+                {
+                    var blob = MixFormat(out var size);
+                    Marshal.WriteInt16(value, 0, 65);    // VT_BLOB
+                    Marshal.WriteInt32(value, 8, size);
+                    Marshal.WriteIntPtr(value, 16, blob);
+                    Note("mix format handed over");
+                    return S_OK;
+                }
+
+                if (Is(key, FriendlyNameGroup, 14))
+                {
+                    const string name = "Xbox";
+                    var text = Marshal.AllocHGlobal((name.Length + 1) * 2);
+                    for (var i = 0; i < name.Length; i++)
+                    {
+                        Marshal.WriteInt16(text, i * 2, name[i]);
+                    }
+                    Marshal.WriteInt16(text, name.Length * 2, 0);
+                    Marshal.WriteInt16(value, 0, 31);    // VT_LPWSTR
+                    Marshal.WriteIntPtr(value, 8, text);
+                    return S_OK;
+                }
+
+                if (Is(key, EndpointGroup, 0))
+                {
+                    Marshal.WriteInt16(value, 0, 19);    // VT_UI4
+                    Marshal.WriteInt32(value, 8, 1);     // speakers
+                    return S_OK;
+                }
+
+                // Nothing under that name, said properly: an empty value and
+                // a success, which is what a store answers for a key it lacks.
+                return S_OK;
+            };
+
+            propertySet = (self, key, value) => S_OK;
+            commit = (self, result) => S_OK;
+
+            properties = Proxy.Create(
+                new[]
+                {
+                    Marshal.GetFunctionPointerForDelegate(propertyCount),
+                    Marshal.GetFunctionPointerForDelegate(propertyAt),
+                    Marshal.GetFunctionPointerForDelegate(propertyValue),
+                    Marshal.GetFunctionPointerForDelegate(propertySet),
+                    Marshal.GetFunctionPointerForDelegate(commit),
+                },
+                new[] { StoreInterface });
+
             store = (self, access, result) =>
             {
-                if (result != IntPtr.Zero) Marshal.WriteIntPtr(result, IntPtr.Zero);
-                return E_NOTIMPL;
+                if (result == IntPtr.Zero) return E_FAIL;
+                Note("property store asked for");
+                Marshal.WriteIntPtr(result, properties);
+                return S_OK;
             };
 
             device = Proxy.Create(

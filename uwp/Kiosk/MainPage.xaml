@@ -23,7 +23,7 @@
                     Click="OnTileClicked"
                     GotFocus="OnTileFocused"
                     Tag="{x:Bind}"
-                    Margin="0,0,28,0"
+                    Margin="0,0,28,0" Padding="6"
                     VerticalAlignment="Bottom">
                 <StackPanel>
                     <Grid Width="{x:Bind TileWidth}" Height="{x:Bind TileHeight}"
@@ -40,7 +40,8 @@
                                    Visibility="{x:Bind IconShown}">
                             <Rectangle.Fill>
                                 <ImageBrush ImageSource="{x:Bind Icon}"
-                                            Stretch="UniformToFill" />
+                                            Stretch="UniformToFill"
+                                            AlignmentX="Center" AlignmentY="Center" />
                             </Rectangle.Fill>
                         </Rectangle>
 

@@ -172,17 +172,9 @@ namespace Kiosk
             await Settings.LoadAsync();
             Tiles.Clear();
 
-            // Steam is part of this app, not a package on the console, so it is
-            // always on the rail — signed in or not.
-            Tiles.Add(new Tile
-            {
-                Title = Texts.Get("tile.steam"),
-                Subtitle = Texts.Get("tile.steam.sub"),
-                Route = "steam",
-                Initial = "S",
-                Icon = new BitmapImage(new Uri("ms-appx:///Assets/Steam.png")),
-                Accent = new SolidColorBrush(Accents[0]),
-            });
+            // The store is not a game. It has its own place in the menu,
+            // and putting it on the shelf as well made the first thing on a
+            // screen of games be the one thing there that is not one.
 
             // Games pulled from Steam sit beside the emulators: he asked for one
             // home screen, not two places to look.

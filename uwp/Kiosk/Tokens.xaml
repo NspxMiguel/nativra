@@ -255,7 +255,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5"
+                    <Grid x:Name="Root" RenderTransformOrigin="0.5,1"
                           Background="Transparent">
                         <Grid.RenderTransform>
                             <ScaleTransform x:Name="Grow" ScaleX="1" ScaleY="1" />
@@ -267,10 +267,10 @@
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Grow"
-                                            Storyboard.TargetProperty="ScaleX" To="1.055"
+                                            Storyboard.TargetProperty="ScaleX" To="1.035"
                                             Duration="0:0:0.13" EasingFunction="{StaticResource Settle}" />
                                         <DoubleAnimation Storyboard.TargetName="Grow"
-                                            Storyboard.TargetProperty="ScaleY" To="1.055"
+                                            Storyboard.TargetProperty="ScaleY" To="1.035"
                                             Duration="0:0:0.13" EasingFunction="{StaticResource Settle}" />
                                     </Storyboard>
                                 </VisualState>
@@ -280,10 +280,10 @@
                                 <VisualState x:Name="Focused">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Grow"
-                                            Storyboard.TargetProperty="ScaleX" To="1.055"
+                                            Storyboard.TargetProperty="ScaleX" To="1.035"
                                             Duration="0:0:0.13" EasingFunction="{StaticResource Settle}" />
                                         <DoubleAnimation Storyboard.TargetName="Grow"
-                                            Storyboard.TargetProperty="ScaleY" To="1.055"
+                                            Storyboard.TargetProperty="ScaleY" To="1.035"
                                             Duration="0:0:0.13" EasingFunction="{StaticResource Settle}" />
                                     </Storyboard>
                                 </VisualState>

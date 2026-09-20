@@ -455,23 +455,50 @@ namespace Kiosk
         private void OnDockClicked(object sender, RoutedEventArgs e)
         {
             var where = (sender as FrameworkElement)?.Tag as string;
+            Light(where);
+
+            // The shop is the store's own screen: signing in, the library that
+            // comes back, and installing from it. It already exists, so the
+            // dock opens it rather than growing a second one beside it.
+            if (where == "shop")
+            {
+                Light("library");
+                Frame.Navigate(typeof(SteamPage));
+                return;
+            }
+
+            // The rest are named, reachable, and honest about not being built,
+            // which is better than an icon that swallows the press.
+            var built = where == "library";
+            LibraryScreen.Visibility = built ? Visibility.Visible : Visibility.Collapsed;
+            StatusText.Text = built ? string.Empty : Texts.Get("status.notyet", where);
+        }
+
+        /// <summary>
+        /// Lights one dock icon and puts the rest out.
+        ///
+        /// The colour goes on the button rather than on the glyph inside it:
+        /// the circle and the icon have to change together, and when they did
+        /// not, a focused icon was grey on near-white — the least readable
+        /// thing on the screen, which is the opposite of what focus is for.
+        /// </summary>
+        private void Light(string where)
+        {
+            var lit = (Brush)Application.Current.Resources["Accent"];
+            var dim = (Brush)Application.Current.Resources["Surface2"];
+            var onLit = (Brush)Application.Current.Resources["OnAccent"];
+            var onDim = (Brush)Application.Current.Resources["TextTertiary"];
+
             foreach (var icon in new[]
                      {
                          DockLibrary, DockShop, DockEmulators,
                          DockFriends, DockMods, DockDownloads,
                      })
             {
-                icon.Background = (icon.Tag as string) == where
-                    ? (Brush)Application.Current.Resources["Accent"]
-                    : (Brush)Application.Current.Resources["Surface2"];
+                var active = (icon.Tag as string) == where;
+                icon.Background = active ? lit : dim;
+                icon.Foreground = active ? onLit : onDim;
             }
-
-            // Only the library exists as a screen so far. The rest are named,
-            // reachable and deliberately honest about not being built yet,
-            // which is better than an icon that swallows the press.
-            var built = where == "library";
-            LibraryScreen.Visibility = built ? Visibility.Visible : Visibility.Collapsed;
-            StatusText.Text = built ? string.Empty : Texts.Get("status.notyet", where);
         }
 
         /// <summary>

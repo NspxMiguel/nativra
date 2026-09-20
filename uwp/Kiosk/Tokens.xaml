@@ -173,7 +173,9 @@
                             <TranslateTransform x:Name="Lift" />
                         </Grid.RenderTransform>
                         <Ellipse x:Name="Fill" Fill="{TemplateBinding Background}" />
-                        <ContentPresenter HorizontalAlignment="Center"
+                        <ContentPresenter x:Name="Glyph"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          HorizontalAlignment="Center"
                                           VerticalAlignment="Center" />
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
@@ -189,6 +191,11 @@
                                             <DiscreteObjectKeyFrame KeyTime="0"
                                                 Value="{StaticResource Accent}" />
                                         </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Glyph"
+                                            Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0"
+                                                Value="{StaticResource OnAccent}" />
+                                        </ObjectAnimationUsingKeyFrames>
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
@@ -199,6 +206,11 @@
                                             Storyboard.TargetProperty="Fill">
                                             <DiscreteObjectKeyFrame KeyTime="0"
                                                 Value="{StaticResource Accent}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Glyph"
+                                            Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0"
+                                                Value="{StaticResource OnAccent}" />
                                         </ObjectAnimationUsingKeyFrames>
                                     </Storyboard>
                                 </VisualState>
@@ -215,6 +227,11 @@
                                             Storyboard.TargetProperty="Fill">
                                             <DiscreteObjectKeyFrame KeyTime="0"
                                                 Value="{StaticResource Accent}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Glyph"
+                                            Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0"
+                                                Value="{StaticResource OnAccent}" />
                                         </ObjectAnimationUsingKeyFrames>
                                     </Storyboard>
                                 </VisualState>

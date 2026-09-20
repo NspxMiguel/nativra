@@ -302,66 +302,59 @@
                                 HorizontalAlignment="Center" VerticalAlignment="Center">
 
                         <Button x:Name="DockLibrary" Style="{StaticResource DockIconStyle}"
-                                Background="{StaticResource Accent}" Tag="library"
+                                Background="{StaticResource Accent}"
+                                Foreground="{StaticResource OnAccent}"
+                                Tag="library"
                                 Click="OnDockClicked"
                                 PointerEntered="OnDockHover" GotFocus="OnDockHover"
                                 PointerExited="OnDockLeave" LostFocus="OnDockLeave">
-                            <Grid Width="22" Height="22">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition /><RowDefinition />
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition /><ColumnDefinition />
-                                </Grid.ColumnDefinitions>
-                                <Rectangle Grid.Row="0" Grid.Column="0" Margin="0,0,3,3"
-                                           Fill="{StaticResource OnAccent}" RadiusX="2" RadiusY="2" />
-                                <Rectangle Grid.Row="0" Grid.Column="1" Margin="3,0,0,3"
-                                           Fill="{StaticResource OnAccent}" RadiusX="2" RadiusY="2" />
-                                <Rectangle Grid.Row="1" Grid.Column="0" Margin="0,3,3,0"
-                                           Fill="{StaticResource OnAccent}" RadiusX="2" RadiusY="2" />
-                                <Rectangle Grid.Row="1" Grid.Column="1" Margin="3,3,0,0"
-                                           Fill="{StaticResource OnAccent}" RadiusX="2" RadiusY="2" />
-                            </Grid>
+                            <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" />
                         </Button>
 
                         <Button x:Name="DockShop" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
                                 Tag="shop" Click="OnDockClicked"
                                 PointerEntered="OnDockHover" GotFocus="OnDockHover"
                                 PointerExited="OnDockLeave" LostFocus="OnDockLeave">
                             <TextBlock Text="&#xE7BF;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                                       FontSize="22" />
                         </Button>
 
                         <Button x:Name="DockEmulators" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
                                 Tag="emulators" Click="OnDockClicked"
                                 PointerEntered="OnDockHover" GotFocus="OnDockHover"
                                 PointerExited="OnDockLeave" LostFocus="OnDockLeave">
                             <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                                       FontSize="22" />
                         </Button>
 
                         <Button x:Name="DockFriends" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
                                 Tag="friends" Click="OnDockClicked"
                                 PointerEntered="OnDockHover" GotFocus="OnDockHover"
                                 PointerExited="OnDockLeave" LostFocus="OnDockLeave">
                             <TextBlock Text="&#xE716;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                                       FontSize="22" />
                         </Button>
 
                         <Button x:Name="DockMods" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
                                 Tag="mods" Click="OnDockClicked"
                                 PointerEntered="OnDockHover" GotFocus="OnDockHover"
                                 PointerExited="OnDockLeave" LostFocus="OnDockLeave">
                             <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                                       FontSize="22" />
                         </Button>
 
                         <Button x:Name="DockDownloads" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
                                 Tag="downloads" Click="OnDockClicked"
                                 PointerEntered="OnDockHover" GotFocus="OnDockHover"
                                 PointerExited="OnDockLeave" LostFocus="OnDockLeave">
                             <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                                       FontSize="22" />
                         </Button>
                     </StackPanel>
 

@@ -90,11 +90,16 @@ namespace Kiosk.Native
                 // The dangerous half of the loader only runs when asked.
                 // The marker's contents say how far to go, so one build can
                 // answer several questions.
-                PeImage.TlsLevel = 0;
+                // Full setup is the default now. The markers were a way to ask
+                // one build several questions while each step was still able to
+                // take the process down; every one of those steps is measured,
+                // so asking has become guessing at a race with the download
+                // that writes them.
+                PeImage.TlsLevel = 6;
                 if (await folder.TryGetItemAsync("tls.txt") is StorageFile marker)
                 {
                     int.TryParse((await FileIO.ReadTextAsync(marker)).Trim(), out var level);
-                    PeImage.TlsLevel = level;
+                    if (level > 0) PeImage.TlsLevel = level;
                 }
                 lines.Add("tls.level=" + PeImage.TlsLevel);
 
@@ -106,9 +111,13 @@ namespace Kiosk.Native
                     WriteAsync(snapshot).GetAwaiter().GetResult();
                 };
 
+                // Tracing costs a managed call on every function the engine
+                // uses, which is millions a second — worth it while the answer
+                // is still "where did it stop", and turned off by dropping a
+                // file once the answer is "how fast does it run".
                 var imports = new SystemImports
                 {
-                    Trace = await folder.TryGetItemAsync("trace.txt") != null,
+                    Trace = await folder.TryGetItemAsync("notrace.txt") == null,
                 };
 
                 // Where the game thinks it lives, which is how it finds its data.
@@ -190,7 +199,6 @@ namespace Kiosk.Native
                 // process down, and an access violation is not something a
                 // managed catch can hold. So the report is on disk first, and
                 // the attempt only happens when a marker file asks for it.
-                if (await folder.TryGetItemAsync("call.txt") != null)
                 {
                     // Each step is written down before it is taken: if the
                     // process dies inside one, the file still says which.

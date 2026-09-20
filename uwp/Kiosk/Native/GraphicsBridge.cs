@@ -985,6 +985,14 @@ namespace Kiosk.Native
             deviceOnly = (adapter, driverType, software, flags, levels, levelCount,
                 sdk, resultDevice, resultLevel, resultContext) =>
             {
+                if (NoChain)
+                {
+                    // Under the same switch: the graphics device is the other
+                    // thing a game makes that the display system knows about.
+                    Note("D3D11CreateDevice: refused on purpose");
+                    return E_FAIL;
+                }
+
                 var real = imports.SystemAddress("d3d11.dll", "D3D11CreateDevice");
                 if (real == IntPtr.Zero)
                 {

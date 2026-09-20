@@ -461,14 +461,50 @@
 
                 <!-- The controllers in the room, and what the app is doing. At the
                      foot of the screen, outside the strip that changes size. -->
-                <Grid VerticalAlignment="Bottom" Margin="56,0,56,40" IsHitTestVisible="False">
-                    <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Left">
+                <Grid Grid.Row="0" Grid.RowSpan="3"
+                      VerticalAlignment="Bottom" Margin="56,0,56,40"
+                      IsHitTestVisible="False">
+                    <StackPanel Orientation="Horizontal" Spacing="12"
+                                HorizontalAlignment="Left" VerticalAlignment="Center">
                         <Image Source="ms-appx:///Assets/controller-white.png"
-                               Width="48" Opacity="0.75" />
+                               Width="48" Opacity="0.75" VerticalAlignment="Center" />
+
+                        <!-- How many, when there is more than one to tell
+                             apart. With a single pad the number says nothing,
+                             so the charge goes there instead. -->
                         <TextBlock x:Name="CountText"
                                    FontSize="{StaticResource LabelSize}" FontWeight="Bold"
                                    Foreground="{StaticResource TextTertiary}"
                                    VerticalAlignment="Center" />
+
+                        <!-- The charge, drawn rather than written: a cell with
+                             a terminal reads at three metres, a percentage on
+                             its own does not. -->
+                        <Grid x:Name="BatteryBox" Visibility="Collapsed"
+                              VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Grid VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="2">
+                                        <Border Width="62" Height="28" CornerRadius="5"
+                                                BorderBrush="{StaticResource TextSecondary}"
+                                                BorderThickness="2" Padding="3">
+                                            <Border x:Name="BatteryFill" Width="0" Height="16"
+                                                    HorizontalAlignment="Left"
+                                                    CornerRadius="2"
+                                                    Background="{StaticResource Accent}" />
+                                        </Border>
+                                        <Border Width="5" Height="13" CornerRadius="0,2,2,0"
+                                                VerticalAlignment="Center"
+                                                Background="{StaticResource TextSecondary}" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock x:Name="BatteryText"
+                                           FontSize="{StaticResource BodySize}"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource TextSecondary}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                     <TextBlock x:Name="StatusText" HorizontalAlignment="Right"
                                VerticalAlignment="Center"

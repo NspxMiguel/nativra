@@ -100,7 +100,10 @@ namespace Kiosk.Native
                     WriteAsync(snapshot).GetAwaiter().GetResult();
                 };
 
-                var imports = new SystemImports();
+                var imports = new SystemImports
+                {
+                    Trace = await folder.TryGetItemAsync("trace.txt") != null,
+                };
 
                 // Where the game thinks it lives, which is how it finds its data.
                 var exeName = "game.exe";

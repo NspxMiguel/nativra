@@ -54,7 +54,23 @@ namespace Kiosk.Native
             try
             {
                 var local = ApplicationData.Current.LocalFolder;
-                var folder = await local.TryGetItemAsync(Folder) as StorageFolder;
+
+                // A game downloaded on the console is the real target; the
+                // scratch folder is only for binaries pushed by hand.
+                StorageFolder folder = null;
+                var games = await local.TryGetItemAsync("games") as StorageFolder;
+                if (games != null)
+                {
+                    foreach (var candidate in await games.GetFoldersAsync())
+                    {
+                        if (await candidate.TryGetItemAsync("UnityPlayer.dll") != null)
+                        {
+                            folder = candidate;
+                            break;
+                        }
+                    }
+                }
+                folder = folder ?? await local.TryGetItemAsync(Folder) as StorageFolder;
                 if (folder == null)
                 {
                     lines.Add("state=no win32 folder");
@@ -82,6 +98,20 @@ namespace Kiosk.Native
                 };
 
                 var imports = new SystemImports();
+
+                // Where the game thinks it lives, which is how it finds its data.
+                var exeName = "game.exe";
+                foreach (var file in await folder.GetFilesAsync())
+                {
+                    if (file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                        !file.Name.StartsWith("Unity", StringComparison.OrdinalIgnoreCase))
+                    {
+                        exeName = file.Name;
+                        break;
+                    }
+                }
+                ModuleFileName.Install(imports, folder.Path + "\\" + exeName);
+                lines.Add("as=" + folder.Path + "\\" + exeName);
 
                 // A module that imports another has to be loaded after it, or
                 // its imports resolve against nothing. Unity's order is fixed.
@@ -173,16 +203,23 @@ namespace Kiosk.Native
                     // The game's own entry point. It does not return — it opens
                     // a window and loops — so it runs on a thread of its own and
                     // what it asked for is read a few seconds later.
+                    // The game's own executable is a few lines that call into
+                    // the engine. Calling the engine straight avoids the part
+                    // of a program's startup that assumes it owns the process.
+                    var engine = imports.Find("UnityPlayer.dll");
+                    var entry = engine?.Export("UnityMain") ?? IntPtr.Zero;
                     var exe = imports.FindExecutable();
-                    if (exe != null && exe.EntryPoint != IntPtr.Zero)
+
+                    if (entry != IntPtr.Zero)
                     {
-                        lines.Add("exe=" + exe.Name + " starting");
+                        lines.Add("exe=UnityMain starting");
                         await WriteAsync(lines);
 
                         // The program has to believe it is the process, or its
                         // startup reads the host application's headers instead
                         // of its own and dies before it asks for anything.
-                        var previousBase = PeImage.SetProcessImageBase(exe.BaseAddress);
+                        var previousBase = PeImage.SetProcessImageBase(
+                            exe?.BaseAddress ?? engine.BaseAddress);
                         lines[lines.Count - 1] += $" base 0x{previousBase.ToInt64():X}"
                             + $" -> 0x{exe.BaseAddress.ToInt64():X}";
                         await WriteAsync(lines);
@@ -191,9 +228,9 @@ namespace Kiosk.Native
                         {
                             try
                             {
-                                var main = Marshal.GetDelegateForFunctionPointer<MainDelegate>(
-                                    exe.EntryPoint);
-                                main();
+                                var main = Marshal.GetDelegateForFunctionPointer<UnityMainDelegate>(
+                                    entry);
+                                main(engine.BaseAddress, IntPtr.Zero, IntPtr.Zero, 1);
                             }
                             catch
                             {
@@ -247,6 +284,10 @@ namespace Kiosk.Native
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int MainDelegate();
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int UnityMainDelegate(
+            IntPtr instance, IntPtr previous, IntPtr commandLine, int show);
 
         /// <summary>Runs a module's entry point, which is where it sets itself up.</summary>
         private static string StartModule(PeImage image)

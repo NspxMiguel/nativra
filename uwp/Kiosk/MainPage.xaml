@@ -198,5 +198,14 @@
              element. It stays out of the way until something is running. -->
         <SwapChainPanel x:Name="GameSurface" IsHitTestVisible="False"
                         HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+        <!-- Where the frames land when nothing else will take them. This
+             console's composition panel does not offer the interface that
+             accepts a swap chain, and it will not hand over its own window
+             either — so the frames are copied back and shown as a picture,
+             which is the one route that asks the platform for nothing. -->
+        <Image x:Name="GameImage" Stretch="Fill" Visibility="Collapsed"
+               IsHitTestVisible="False"
+               HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>
 </Page>

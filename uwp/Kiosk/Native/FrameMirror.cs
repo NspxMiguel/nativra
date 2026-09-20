@@ -1,0 +1,269 @@
+using System;
+using System.Runtime.InteropServices;
+using Windows.UI.Xaml.Media.Imaging;
+
+namespace Kiosk.Native
+{
+    /// <summary>
+    /// Shows the game's frames by copying them, when nothing will show them
+    /// directly.
+    ///
+    /// A finished frame lives on the graphics card. Every supported way of
+    /// putting it on screen from inside a packaged application goes through a
+    /// COM interface this runtime will not ask for, and this console's own
+    /// window is already spoken for. What is left is the blunt way: read the
+    /// frame back into ordinary memory and hand it to the interface framework
+    /// as a picture, which is plain managed code and cannot be refused.
+    ///
+    /// It costs a read back from the card and two copies of a screen every
+    /// frame. On a machine built to move far more than that, it is worth
+    /// doing badly rather than not at all — and it is a fallback, not the
+    /// plan.
+    /// </summary>
+    public static class FrameMirror
+    {
+        // ID3D11Device
+        private const int CreateTexture2DSlot = 5;
+        private const int GetImmediateContextSlot = 39;
+
+        // ID3D11DeviceContext
+        private const int MapSlot = 14;
+        private const int UnmapSlot = 15;
+        private const int CopyResourceSlot = 47;
+
+        // IDXGISwapChain
+        private const int GetBufferSlot = 9;
+
+        private const int S_OK = 0;
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int CreateTextureDelegate(
+            IntPtr self, IntPtr desc, IntPtr initial, IntPtr texture);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void ContextDelegate(IntPtr self, IntPtr context);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int BufferDelegate(
+            IntPtr self, uint index, IntPtr riid, IntPtr surface);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void CopyDelegate(IntPtr self, IntPtr to, IntPtr from);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int MapDelegate(
+            IntPtr self, IntPtr resource, uint sub, uint how, uint flags, IntPtr mapped);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void UnmapDelegate(IntPtr self, IntPtr resource, uint sub);
+
+        private static IntPtr context;
+        private static IntPtr staging;
+        private static IntPtr chain;
+        private static int width;
+        private static int height;
+
+        private static WriteableBitmap picture;
+        private static byte[] scratch;
+        private static Windows.UI.Core.CoreDispatcher ui;
+        private static Windows.UI.Xaml.Controls.Image target;
+
+        /// <summary>Frames copied to the screen, which is the proof it works.</summary>
+        public static long Copied;
+
+        public static bool Running { get; private set; }
+
+        public static string Note = "not started";
+
+        /// <summary>
+        /// Prepares the copy. Everything here is one-off: the staging texture
+        /// the card can be read into, the picture the framework can show, and
+        /// the buffer between them.
+        /// </summary>
+        public static bool Start(
+            IntPtr device, IntPtr swapChain, int pixelsWide, int pixelsHigh, int format,
+            Windows.UI.Xaml.Controls.Image image, Windows.UI.Core.CoreDispatcher dispatcher)
+        {
+            try
+            {
+                if (device == IntPtr.Zero || swapChain == IntPtr.Zero || image == null)
+                {
+                    Note = "nothing to mirror";
+                    return false;
+                }
+
+                chain = swapChain;
+                width = pixelsWide;
+                height = pixelsHigh;
+                ui = dispatcher;
+                target = image;
+
+                var desc = Marshal.AllocHGlobal(44);
+                try
+                {
+                    Marshal.WriteInt32(desc, 0, width);
+                    Marshal.WriteInt32(desc, 4, height);
+                    Marshal.WriteInt32(desc, 8, 1);        // MipLevels
+                    Marshal.WriteInt32(desc, 12, 1);       // ArraySize
+                    Marshal.WriteInt32(desc, 16, format);
+                    Marshal.WriteInt32(desc, 20, 1);       // SampleDesc.Count
+                    Marshal.WriteInt32(desc, 24, 0);       // SampleDesc.Quality
+                    Marshal.WriteInt32(desc, 28, 3);       // D3D11_USAGE_STAGING
+                    Marshal.WriteInt32(desc, 32, 0);       // BindFlags
+                    Marshal.WriteInt32(desc, 36, 0x20000); // CPU read
+                    Marshal.WriteInt32(desc, 40, 0);       // MiscFlags
+
+                    var slot = Marshal.AllocHGlobal(IntPtr.Size);
+                    try
+                    {
+                        Marshal.WriteIntPtr(slot, IntPtr.Zero);
+                        var make = Marshal.GetDelegateForFunctionPointer<CreateTextureDelegate>(
+                            ComProxy.Method(device, CreateTexture2DSlot));
+                        var code = make(device, desc, IntPtr.Zero, slot);
+                        if (code != S_OK)
+                        {
+                            Note = "no staging texture: 0x" + code.ToString("X8");
+                            return false;
+                        }
+                        staging = Marshal.ReadIntPtr(slot);
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(slot);
+                    }
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(desc);
+                }
+
+                var holder = Marshal.AllocHGlobal(IntPtr.Size);
+                try
+                {
+                    Marshal.WriteIntPtr(holder, IntPtr.Zero);
+                    var ask = Marshal.GetDelegateForFunctionPointer<ContextDelegate>(
+                        ComProxy.Method(device, GetImmediateContextSlot));
+                    ask(device, holder);
+                    context = Marshal.ReadIntPtr(holder);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(holder);
+                }
+
+                if (context == IntPtr.Zero)
+                {
+                    Note = "no device context";
+                    return false;
+                }
+
+                scratch = new byte[width * height * 4];
+
+                var ready = new System.Threading.ManualResetEventSlim(false);
+                var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High, () =>
+                {
+                    try
+                    {
+                        picture = new WriteableBitmap(width, height);
+                        target.Source = picture;
+                        target.Visibility = Windows.UI.Xaml.Visibility.Visible;
+                    }
+                    catch (Exception error)
+                    {
+                        Note = "picture: " + error.GetType().Name;
+                    }
+                    finally
+                    {
+                        ready.Set();
+                    }
+                });
+                ready.Wait(3000);
+
+                Running = picture != null;
+                Note = Running ? "mirroring" : Note;
+                return Running;
+            }
+            catch (Exception error)
+            {
+                Note = error.GetType().Name + ": " + error.Message;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Copies one finished frame. Called before the frame is handed to the
+        /// screen, because a flip-model chain rotates its buffers on the way
+        /// out and what was just drawn is no longer where it was.
+        /// </summary>
+        public static void Take()
+        {
+            if (!Running) return;
+            var back = IntPtr.Zero;
+            var riid = IntPtr.Zero;
+            var slot = IntPtr.Zero;
+            var mapped = IntPtr.Zero;
+            try
+            {
+                riid = Marshal.AllocHGlobal(16);
+                Marshal.StructureToPtr(
+                    new Guid("6f15aaf2-d208-4e89-9ab4-489535d34f9c"), riid, false);
+                slot = Marshal.AllocHGlobal(IntPtr.Size);
+                Marshal.WriteIntPtr(slot, IntPtr.Zero);
+
+                var get = Marshal.GetDelegateForFunctionPointer<BufferDelegate>(
+                    ComProxy.Method(chain, GetBufferSlot));
+                if (get(chain, 0, riid, slot) != S_OK) return;
+                back = Marshal.ReadIntPtr(slot);
+
+                var copy = Marshal.GetDelegateForFunctionPointer<CopyDelegate>(
+                    ComProxy.Method(context, CopyResourceSlot));
+                copy(context, staging, back);
+
+                mapped = Marshal.AllocHGlobal(16);
+                var map = Marshal.GetDelegateForFunctionPointer<MapDelegate>(
+                    ComProxy.Method(context, MapSlot));
+                if (map(context, staging, 0, 1, 0, mapped) != S_OK) return;
+
+                var from = Marshal.ReadIntPtr(mapped, 0);
+                var pitch = Marshal.ReadInt32(mapped, 8);
+                for (var row = 0; row < height; row++)
+                {
+                    Marshal.Copy(from + row * pitch, scratch, row * width * 4, width * 4);
+                }
+
+                var unmap = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(
+                    ComProxy.Method(context, UnmapSlot));
+                unmap(context, staging, 0);
+
+                Copied++;
+                var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                {
+                    try
+                    {
+                        using (var into = picture.PixelBuffer.AsStream())
+                        {
+                            into.Write(scratch, 0, scratch.Length);
+                        }
+                        picture.Invalidate();
+                    }
+                    catch
+                    {
+                        // A dropped frame is a dropped frame.
+                    }
+                });
+            }
+            catch (Exception error)
+            {
+                Note = "take: " + error.GetType().Name;
+                Running = false;
+            }
+            finally
+            {
+                if (back != IntPtr.Zero) Marshal.Release(back);
+                if (riid != IntPtr.Zero) Marshal.FreeHGlobal(riid);
+                if (slot != IntPtr.Zero) Marshal.FreeHGlobal(slot);
+                if (mapped != IntPtr.Zero) Marshal.FreeHGlobal(mapped);
+            }
+        }
+    }
+}

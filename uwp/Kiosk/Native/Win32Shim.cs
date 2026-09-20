@@ -187,7 +187,7 @@ namespace Kiosk.Native
             code.AddRange(new byte[] { 0x48, 0xB8 });            // mov rax, imm64
             code.AddRange(BitConverter.GetBytes(recorderPointer.ToInt64()));
             code.AddRange(new byte[] { 0xFF, 0xE0 });            // jmp rax
-            Marshal.Copy(code.ToArray(), 0, at, code.Count);
+            Write(at, code.ToArray());
 
             used++;
             return at;
@@ -236,7 +236,7 @@ namespace Kiosk.Native
             code.AddRange(new byte[] { 0xFF, 0xE0 });                         // jmp rax
 
             var at = page + used * ThunkSize;
-            Marshal.Copy(code.ToArray(), 0, at, code.Count);
+            Write(at, code.ToArray());
             used++;
             return at;
         }
@@ -277,12 +277,30 @@ namespace Kiosk.Native
             code.AddRange(new byte[] { 0xC3 });                         // ret
 
             var at = page + used * ThunkSize;
-            Marshal.Copy(code.ToArray(), 0, at, code.Count);
+            Write(at, code.ToArray());
             used++;
             return at;
         }
 
-        /// <summary>Call once every stub exists: a page cannot be written and run.</summary>
+        /// <summary>
+        /// Puts a stub in the page. A page cannot be written and executed at
+        /// the same time, and stubs keep being made after the first seal —
+        /// a game that looks a function up while running asks for one — so
+        /// each write opens the page and closes it again.
+        /// </summary>
+        private void Write(IntPtr at, byte[] code)
+        {
+            lock (names)
+            {
+                VirtualProtectFromApp(
+                    page, (UIntPtr)(ThunkSize * Capacity), PAGE_READWRITE, out _);
+                Marshal.Copy(code, 0, at, code.Length);
+                VirtualProtectFromApp(
+                    page, (UIntPtr)(ThunkSize * Capacity), PAGE_EXECUTE_READ, out _);
+            }
+        }
+
+        /// <summary>Marks the end of setup; each write seals the page itself.</summary>
         public void Seal()
         {
             if (page == IntPtr.Zero) return;

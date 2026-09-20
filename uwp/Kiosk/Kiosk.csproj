@@ -80,6 +80,9 @@
     <Compile Include="Native\ImageLookup.cs" />
     <Compile Include="Native\ProcessStubs.cs" />
     <Compile Include="Native\WindowStubs.cs" />
+    <Compile Include="Native\ComProxy.cs" />
+    <Compile Include="Native\LoaderStubs.cs" />
+    <Compile Include="Native\GraphicsBridge.cs" />
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Texts.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

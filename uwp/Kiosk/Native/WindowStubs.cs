@@ -46,6 +46,27 @@ namespace Kiosk.Native
                 { "SetActiveWindow", FakeWindow },
                 { "GetDesktopWindow", FakeWindow },
                 { "SetForegroundWindow", 1 },
+
+                // Touch and pen. A television has neither, and the engine does
+                // not mind that — what it minds is being told no without being
+                // told why, which is what a constant stub returning false
+                // does: the failure it prints reads "the operation completed
+                // successfully", because nothing set an error to print.
+                //
+                // Registering for touch on a window that will never receive it
+                // costs nothing and succeeds honestly: the window really is
+                // now registered, and no touch will ever arrive.
+                { "RegisterTouchWindow", 1 },
+                { "UnregisterTouchWindow", 1 },
+                { "IsTouchWindow", 0 },
+                { "CloseTouchInputHandle", 1 },
+                { "EnableMouseInPointer", 1 },
+                { "RegisterPointerDeviceNotifications", 1 },
+                { "SetGestureConfig", 1 },
+                { "GetGestureConfig", 1 },
+                { "CloseGestureInfoHandle", 1 },
+                { "RegisterTouchHitTestingWindow", 1 },
+                { "SkipPointerFrameMessages", 1 },
                 { "ShowWindow", 1 },
                 { "UpdateWindow", 1 },
                 { "SetWindowPos", 1 },

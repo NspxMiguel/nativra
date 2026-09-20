@@ -29,6 +29,21 @@ for _ in $(seq 1 40); do
   [ -n "$RUN" ] && break
   sleep 5
 done
+# A push that changes nothing starts no workflow, and a push can simply be
+# beaten to the question. Either way the answer is to ask for the build
+# rather than to give up on the turn — waiting for a run that will never
+# exist is how a cycle burns a quarter of an hour doing nothing.
+if [ -z "$RUN" ]; then
+  echo "   no build for this commit yet; asking for one"
+  gh workflow run build-uwp >/dev/null 2>&1 || true
+  for _ in $(seq 1 24); do
+    sleep 5
+    RUN="$(gh run list --workflow build-uwp --limit 5 \
+          --json databaseId,headSha,status,conclusion \
+          -q ".[] | select(.headSha==\"$SHA\") | \"\(.databaseId) \(.status) \(.conclusion)\"" | head -1)"
+    [ -n "$RUN" ] && break
+  done
+fi
 [ -z "$RUN" ] && { echo "no run for $SHA"; exit 1; }
 ID="${RUN%% *}"
 gh run watch "$ID" --exit-status >/dev/null 2>&1 || { echo "BUILD FAILED $ID"; gh run view "$ID" --log-failed 2>&1 | tail -30; exit 1; }

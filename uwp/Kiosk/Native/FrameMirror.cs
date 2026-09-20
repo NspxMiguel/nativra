@@ -84,6 +84,9 @@ namespace Kiosk.Native
         private static Windows.UI.Core.CoreDispatcher ui;
         private static Windows.UI.Xaml.Controls.Image target;
 
+        /// <summary>Shown alongside the game's own picture, never under it.</summary>
+        public static Windows.UI.Xaml.UIElement Credit;
+
         /// <summary>Frames copied to the screen, which is the proof it works.</summary>
         public static long Copied;
 
@@ -223,6 +226,15 @@ namespace Kiosk.Native
                         picture = new WriteableBitmap(width, height);
                         target.Source = picture;
                         target.Visibility = Windows.UI.Xaml.Visibility.Visible;
+
+                        // Whose work this is, shown over the game as well as
+                        // over the menu. It is the whole point of a screenshot
+                        // of a PC game running on a console: anyone who sees
+                        // it should be able to read who did it.
+                        if (Credit != null)
+                        {
+                            Credit.Visibility = Windows.UI.Xaml.Visibility.Visible;
+                        }
                     }
                     catch (Exception error)
                     {

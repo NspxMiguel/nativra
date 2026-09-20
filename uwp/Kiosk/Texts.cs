@@ -12,7 +12,7 @@ namespace Kiosk
     {
         private static readonly Dictionary<string, string> Pt = new Dictionary<string, string>
         {
-            { "app.eyebrow", "EM MODO DE DESENVOLVIMENTO" },
+            { "app.eyebrow", "EM DESENVOLVIMENTO  \u00B7  POR NSPXMIGUEL" },
             { "tile.allgames", "Todos os jogos \u00B7 {0}" },
             { "status.notyet", "{0} ainda n\u00E3o foi constru\u00EDdo" },
             { "dock.library", "Biblioteca" },
@@ -95,7 +95,7 @@ namespace Kiosk
 
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
-            { "app.eyebrow", "IN DEVELOPER MODE" },
+            { "app.eyebrow", "IN DEVELOPMENT  \u00B7  BY NSPXMIGUEL" },
             { "tile.allgames", "All games \u00B7 {0}" },
             { "status.notyet", "{0} is not built yet" },
             { "dock.library", "Library" },

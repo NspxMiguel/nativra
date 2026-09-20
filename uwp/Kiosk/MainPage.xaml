@@ -159,8 +159,8 @@
                          never the thing being read. -->
                     <TextBlock x:Name="MachineText"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="{StaticResource DevNoticeSize}" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextDevNotice}"
+                               FontSize="{StaticResource BodySize}" FontWeight="Bold"
+                               Foreground="{StaticResource TextTertiary}"
                                CharacterSpacing="140" />
 
                     <StackPanel Orientation="Horizontal" Spacing="16"
@@ -455,5 +455,19 @@
         <Image x:Name="GameImage" Stretch="Fill" Visibility="Collapsed"
                IsHitTestVisible="False"
                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+        <!-- The credit, over the game as well as over the menu. It sits after
+             the game's own image in the tree so the frames cannot cover it. -->
+        <Border x:Name="GameCredit" Visibility="Collapsed"
+                HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,26,0,0" Padding="26,10,26,10"
+                CornerRadius="{StaticResource RadiusPill}"
+                Background="#99000000"
+                IsHitTestVisible="False">
+            <TextBlock x:Name="GameCreditText"
+                       FontSize="{StaticResource LabelSize}" FontWeight="Bold"
+                       Foreground="{StaticResource TextSecondary}"
+                       CharacterSpacing="140" />
+        </Border>
     </Grid>
 </Page>

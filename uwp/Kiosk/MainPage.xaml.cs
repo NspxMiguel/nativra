@@ -148,9 +148,8 @@ namespace Kiosk
             // on the screen. Useful to know; never the thing being read.
             try
             {
-                MachineText.Text =
-                    Texts.Get("app.eyebrow") + "  \u00B7  " +
-                    new EasClientDeviceInformation().FriendlyName.ToUpperInvariant();
+                MachineText.Text = Texts.Get("app.eyebrow");
+                GameCreditText.Text = MachineText.Text;
             }
             catch
             {
@@ -255,6 +254,7 @@ namespace Kiosk
             // shown on. A screen that never appears because of an unrelated
             // failure is the worst kind to look for.
             Native.GraphicsBridge.Mirror = GameImage;
+            Native.FrameMirror.Credit = GameCredit;
             Native.GraphicsBridge.OnUi = Dispatcher;
             Native.ThreadRank.RaiseThisThread();
 

@@ -167,6 +167,21 @@ namespace Kiosk.Native
                 var started = "\"" + folder.Path + "\\" + exeName + "\""
                     + " -logFile " + local.Path + "\\unity.log"
                     + " -force-d3d11"
+                    // One thread does the drawing instead of two.
+                    //
+                    // The engine's own log says threaded=1: the main thread
+                    // hands work to a render thread and waits at every sync
+                    // point. That render thread is exactly the one this bridge
+                    // cannot see into — it goes into the console's own
+                    // graphics library, which nothing here traces — and the
+                    // picture that keeps coming back is a main thread waiting
+                    // for it and thirty-odd workers waiting for them both.
+                    //
+                    // Without a render thread there is no handshake to
+                    // deadlock and nowhere for the work to hide: whatever the
+                    // engine does to the device, it does on a thread this
+                    // bridge watches, and every call shows up in the trace.
+                    + " -force-gfx-direct"
                     + " -screen-fullscreen 1 -screen-width 1920 -screen-height 1080"
                     // The engine sizes its worker pool to the machine and this
                     // machine has sixteen threads, so it takes thirty-four and

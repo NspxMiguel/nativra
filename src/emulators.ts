@@ -83,9 +83,20 @@ export type DownloadSource =
       apiUrl: string;
       /** Picks the one asset out of the release that is the build this entry wants. */
       match: (assetName: string) => boolean;
+      /**
+       * Name of a plain-text `sha256sum`-format asset published in the same
+       * release (one "<digest> *<filename>" line per file), when the
+       * project ships one. Resolved dynamically per release rather than a
+       * digest frozen in this file, since — like the download URL itself —
+       * a hardcoded hash goes stale the moment a new version ships. MAME is
+       * the one entry in this shelf whose releases include this.
+       */
+      sha256AssetName?: string;
     };
 
-async function resolveDownloadUrl(source: DownloadSource): Promise<{ url: string; fileName: string }> {
+async function resolveDownloadUrl(
+  source: DownloadSource,
+): Promise<{ url: string; fileName: string; sha256?: string }> {
   if (source.kind === "static") {
     return { url: source.url, fileName: source.url.split("/").pop()! };
   }
@@ -103,7 +114,18 @@ async function resolveDownloadUrl(source: DownloadSource): Promise<{ url: string
     const names = (release.assets ?? []).map((a) => a.name).join(", ");
     throw new Error(`no asset matched in ${source.apiUrl} (had: ${names})`);
   }
-  return { url: asset.browser_download_url, fileName: asset.name };
+
+  let sha256: string | undefined;
+  if (source.sha256AssetName) {
+    const checksumsAsset = release.assets.find((candidate) => candidate.name === source.sha256AssetName);
+    if (checksumsAsset) {
+      const checksums = await fetch(checksumsAsset.browser_download_url).then((r) => r.text());
+      const line = checksums.split("\n").find((l) => l.includes(asset.name));
+      sha256 = line?.trim().split(/\s+/)[0];
+    }
+  }
+
+  return { url: asset.browser_download_url, fileName: asset.name, sha256 };
 }
 
 // ------------------------------------------------------------------ archive
@@ -587,6 +609,9 @@ export const emulators: EmulatorEntry[] = [
       kind: "release-api",
       apiUrl: githubLatest("mamedev/mame"),
       match: (name) => /^mame\d+b_x64\.exe$/.test(name),
+      // Confirmed present in the release: a plain SHA256SUMS text file,
+      // one "<digest> *<filename>" line per asset.
+      sha256AssetName: "SHA256SUMS",
     },
     // MAME's official Windows release is a self-extracting 7-Zip archive.
     // `7z x` opens it directly — verified by locating the embedded 7z
@@ -746,10 +771,13 @@ export async function install(entry: EmulatorEntry, root: string): Promise<strin
   }
 
   const dir = stagingDir(root, entry.id);
-  const { url, fileName } = await resolveDownloadUrl(entry.source);
+  const { url, fileName, sha256 } = await resolveDownloadUrl(entry.source);
   const archivePath = join(dir, "download", fileName);
   await downloadFile(url, archivePath, entry.name);
-  await verify(entry, archivePath);
+  // A digest resolved from the release itself (MAME's SHA256SUMS) wins over
+  // a hardcoded one, since it is per-version instead of tied to whatever
+  // release happened to be current when this file was last edited.
+  await verify(sha256 ? { ...entry, sha256 } : entry, archivePath);
 
   const unpackDir = join(dir, "app");
   const exePath = await extract(entry, archivePath, unpackDir);

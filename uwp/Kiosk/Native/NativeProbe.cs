@@ -164,7 +164,7 @@ namespace Kiosk.Native
                 // The switches only reach the game if the game can read them,
                 // and it reads them from here rather than from its entry point.
                 var started = "\"" + folder.Path + "\\" + exeName + "\""
-                    + " -logFile \"" + local.Path + "\\unity.log\""
+                    + " -logFile " + local.Path + "\\unity.log"
                     + " -force-d3d11"
                     + " -screen-fullscreen 1 -screen-width 1920 -screen-height 1080"
                     // The engine sizes its worker pool to the machine and this
@@ -176,6 +176,7 @@ namespace Kiosk.Native
                 ModuleFileName.SetCommandLine(imports, started);
                 ImageLookup.Install(
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));
+                FileWatch.Install(imports);
                 ProcessStubs.Install(imports);
                 WindowStubs.Install(imports);
                 GraphicsBridge.Install(imports);
@@ -419,6 +420,10 @@ namespace Kiosk.Native
                                         }
                                     }
                                     beat.AddRange(imports.Shim.Threads());
+                                    lock (FileWatch.Seen)
+                                    {
+                                        foreach (var f in FileWatch.Seen) beat.Add("file " + f);
+                                    }
                                     lock (GraphicsBridge.Notes)
                                     {
                                         foreach (var note in GraphicsBridge.Notes)
@@ -496,6 +501,7 @@ namespace Kiosk.Native
                                 "exe.alive=" + runner.IsAlive,
                                 "exe.stubs=" + imports.Shim.Called.Count,
                                 "exe.thunks.full=" + imports.Shim.Overflowed,
+                                "exe.files.failed=" + FileWatch.Failures,
                                 // Two numbers decide everything: a total that
                                 // climbs means the engine is running, and a
                                 // total that stands still means it is blocked.

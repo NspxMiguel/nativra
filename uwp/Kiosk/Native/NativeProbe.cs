@@ -119,6 +119,7 @@ namespace Kiosk.Native
                 ModuleFileName.Install(imports, folder.Path + "\\" + exeName);
                 ImageLookup.Install(
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));
+                ProcessStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 
                 // A module that imports another has to be loaded after it, or

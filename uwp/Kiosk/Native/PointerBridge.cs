@@ -45,6 +45,47 @@ namespace Kiosk.Native
 
         public static long Moves;
 
+        /// <summary>How many key presses the stick has produced.</summary>
+        public static long Keys;
+
+        private const int WM_KEYDOWN = 0x0100;
+        private const int WM_KEYUP = 0x0101;
+
+        // Which keys a console can produce, and what produces them. A game
+        // written for a keyboard has no idea a keyboard is missing: the stick
+        // and the buttons send exactly the messages the keys would have.
+        private const int VK_BACK = 0x08;
+        private const int VK_RETURN = 0x0D;
+        private const int VK_ESCAPE = 0x1B;
+        private const int VK_SPACE = 0x20;
+        private const int VK_LEFT = 0x25;
+        private const int VK_UP = 0x26;
+        private const int VK_RIGHT = 0x27;
+        private const int VK_DOWN = 0x28;
+
+        private static readonly int[] Emulated =
+        {
+            0x57, 0x41, 0x53, 0x44,          // W A S D
+            VK_UP, VK_LEFT, VK_DOWN, VK_RIGHT,
+            VK_SPACE, VK_RETURN, VK_ESCAPE, VK_BACK,
+        };
+
+        private static readonly bool[] held = new bool[256];
+
+        /// <summary>Whether a key is down, for a game that polls instead of reading.</summary>
+        public static bool Down(int key) => key >= 0 && key < 256 && held[key];
+
+        private static void Key(int code, bool down)
+        {
+            if (held[code] == down) return;
+            held[code] = down;
+            if (down) Keys++;
+            // lParam carries the repeat count and the scan code; a game that
+            // reads only the key itself is the common case, and the rest being
+            // zero is what a synthesised key looks like anywhere.
+            Post(down ? WM_KEYDOWN : WM_KEYUP, code, 1);
+        }
+
         private sealed class Waiting
         {
             public int Message;
@@ -138,14 +179,6 @@ namespace Kiosk.Native
 
                 var dx = Lean(reading.RightThumbstickX);
                 var dy = Lean(reading.RightThumbstickY);
-                if (dx == 0.0 && dy == 0.0)
-                {
-                    // The left stick moves the pointer too, for games whose
-                    // menus are the only thing that needs one.
-                    dx = Lean(reading.LeftThumbstickX);
-                    dy = Lean(reading.LeftThumbstickY);
-                }
-
                 if (dx != 0.0 || dy != 0.0)
                 {
                     var wasX = X;
@@ -160,6 +193,21 @@ namespace Kiosk.Native
                         Post(WM_MOUSEMOVE, Left ? 1 : 0, Packed());
                     }
                 }
+
+                // The left stick is the keyboard's arrows and WASD at once:
+                // a game reads one or the other and never both, and guessing
+                // wrong costs the player the game.
+                var lx = Lean(reading.LeftThumbstickX);
+                var ly = Lean(reading.LeftThumbstickY);
+                Key(0x57, ly > 0.4);  Key(VK_UP, ly > 0.4);
+                Key(0x53, ly < -0.4); Key(VK_DOWN, ly < -0.4);
+                Key(0x41, lx < -0.4); Key(VK_LEFT, lx < -0.4);
+                Key(0x44, lx > 0.4);  Key(VK_RIGHT, lx > 0.4);
+
+                Key(VK_SPACE, (reading.Buttons & GamepadButtons.Y) != 0);
+                Key(VK_RETURN, (reading.Buttons & GamepadButtons.Menu) != 0);
+                Key(VK_ESCAPE, (reading.Buttons & GamepadButtons.View) != 0);
+                Key(VK_BACK, (reading.Buttons & GamepadButtons.B) != 0);
 
                 var a = (reading.Buttons & GamepadButtons.A) != 0;
                 if (a != Left)

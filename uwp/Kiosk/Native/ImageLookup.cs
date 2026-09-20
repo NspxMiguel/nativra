@@ -23,6 +23,32 @@ namespace Kiosk.Native
         private static PcToFileHeaderDelegate system;
         private static readonly List<PeImage> images = new List<PeImage>();
 
+
+        /// <summary>
+        /// Which image an address belongs to, as a name and an offset.
+        ///
+        /// A bare address in a report is only good for comparing to itself.
+        /// The same address written as a module and an offset can be looked up
+        /// in a disassembler, which is the difference between knowing that a
+        /// program is stuck and knowing where.
+        /// </summary>
+        public static string Describe(long address)
+        {
+            var at = (IntPtr)address;
+            lock (images)
+            {
+                foreach (var image in images)
+                {
+                    var start = image.BaseAddress.ToInt64();
+                    if (address >= start && address < start + image.ImageSize)
+                    {
+                        return image.Name + "+0x" + (address - start).ToString("X");
+                    }
+                }
+            }
+            return "0x" + address.ToString("X");
+        }
+
         public static void Track(PeImage image)
         {
             lock (images) images.Add(image);

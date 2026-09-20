@@ -335,6 +335,7 @@ namespace Kiosk.Native
                                         "pad=" + PadBridge.Reads,
                                         "frames=" + GraphicsBridge.Frames
                                             + " at " + rate.ToString("0.0") + " a second",
+                                        "keys=" + PointerBridge.Keys,
                                         "pointer=" + PointerBridge.Moves
                                             + " at " + PointerBridge.X + "," + PointerBridge.Y,
                                         "stubs=" + imports.Shim.Called.Count,
@@ -412,7 +413,10 @@ namespace Kiosk.Native
                         // It dies in under a frame, so the first look is
                         // immediate and the rest are close behind.
                         var seen = 0L;
-                        for (var tick = 0; tick < 200; tick++)
+                        // Long enough for a game to load a scene and show a
+                        // splash, not just to start. A first frame that arrives
+                        // after the watch ended looks exactly like no frame.
+                        for (var tick = 0; tick < 500; tick++)
                         {
                             await Task.Delay(tick == 0 ? 2 : (tick < 40 ? 50 : 500));
                             var now = imports.Shim.Total;

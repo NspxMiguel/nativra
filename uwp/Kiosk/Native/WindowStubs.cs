@@ -279,7 +279,7 @@ namespace Kiosk.Native
             {
                 if (key == 1 && PointerBridge.Left) return unchecked((int)0xFFFF8001);
                 if (key == 2 && PointerBridge.Right) return unchecked((int)0xFFFF8001);
-                return 0;
+                return PointerBridge.Down(key) ? unchecked((int)0xFFFF8001) : 0;
             };
 
             // MONITORINFO: size, the monitor rectangle, the working area, flags.

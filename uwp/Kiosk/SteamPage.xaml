@@ -150,11 +150,8 @@
                       Padding="20,0,8,0"
                       ScrollViewer.HorizontalScrollMode="Disabled">
                 <ListView.ItemContainerStyle>
-                    <Style TargetType="ListViewItem">
-                        <Setter Property="Padding" Value="10,5,10,5" />
+                    <Style TargetType="ListViewItem" BasedOn="{StaticResource RowStyle}">
                         <Setter Property="Margin" Value="0,1,0,1" />
-                        <Setter Property="MinHeight" Value="0" />
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                     </Style>
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>

@@ -61,6 +61,12 @@ namespace Kiosk.Native
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "Sleep", "SleepEx", "WaitForSingleObjectEx", "WaitForMultipleObjects",
+                // Not waits: spins. A thread that calls one of these hundreds
+                // of thousands of times in a second is not working, it is
+                // turning — and which piece of the engine is turning is the
+                // only thing that names the deadlock. Both are what a lock
+                // checks when it asks whether this thread already holds it.
+                "GetCurrentThreadId", "TlsGetValue",
             };
 
         /// <summary>Stands in for what the console does not provide.</summary>

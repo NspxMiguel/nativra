@@ -93,14 +93,20 @@
 
                     <TextBlock x:Name="SheetWhereLabel" FontSize="10"
                                Foreground="{StaticResource TextTertiary}" />
-                    <ListView x:Name="PlaceList" SelectionMode="Single" MaxHeight="120">
+                    <ListView x:Name="PlaceList" SelectionMode="Single" MaxHeight="120"
+                              ItemContainerStyle="{StaticResource RowStyle}">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="local:InstallPlace">
                                 <Grid>
-                                    <TextBlock Text="{x:Bind Name}" FontSize="13"
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{x:Bind Name}" FontSize="13"
+                                               TextTrimming="CharacterEllipsis" MaxLines="1"
                                                Foreground="{StaticResource TextPrimary}" />
-                                    <TextBlock Text="{x:Bind Free}" FontSize="12"
-                                               HorizontalAlignment="Right"
+                                    <TextBlock Grid.Column="1" Text="{x:Bind Free}" FontSize="12"
+                                               Margin="12,0,0,0"
                                                Foreground="{StaticResource TextSecondary}" />
                                 </Grid>
                             </DataTemplate>

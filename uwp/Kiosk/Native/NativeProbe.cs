@@ -133,6 +133,7 @@ namespace Kiosk.Native
                 };
                 AudioBridge.Enabled = await local.TryGetItemAsync("noaudio.txt") == null;
                 GraphicsBridge.Smaller = await local.TryGetItemAsync("small.txt") != null;
+                GraphicsBridge.NoChain = await local.TryGetItemAsync("nochain.txt") != null;
                 lines.Add("audio.bridge=" + AudioBridge.Enabled);
                 lines.Add("smaller=" + GraphicsBridge.Smaller);
 

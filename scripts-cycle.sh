@@ -74,6 +74,10 @@ fi
 if [ "${PLAY:-on}" = "off" ]; then
   bun src/xbdev.ts push kiosk .markers/noplay.txt LocalState
 fi
+# CHAIN=off refuses the game a swap chain, to see who owns the screen.
+if [ "${CHAIN:-on}" = "off" ]; then
+  bun src/xbdev.ts push kiosk .markers/nochain.txt LocalState
+fi
 # PEB=off leaves the process-wide image base alone.
 if [ "${PEB:-on}" = "off" ]; then
   bun src/xbdev.ts push kiosk .markers/nopeb.txt LocalState

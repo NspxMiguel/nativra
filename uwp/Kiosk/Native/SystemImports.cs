@@ -73,15 +73,25 @@ namespace Kiosk.Native
                 // turning — and which piece of the engine is turning is the
                 // only thing that names the deadlock. Both are what a lock
                 // checks when it asks whether this thread already holds it.
-                "GetCurrentThreadId", "TlsGetValue",
-                // Not spins either: the last call a blocked thread made. A
-                // thread sitting idle for half a second has gone into
-                // something that is not traced at all — the console's own
-                // graphics library, or one of this bridge's own answers — and
-                // the only clue left is which part of the engine it was in
-                // when it went.
-                "QueryPerformanceCounter", "ReadFile", "EnterCriticalSection",
-                "LoadLibraryW", "LoadLibraryA", "LoadLibraryExW", "LoadLibraryExA",
+                // What is NOT here, and must not come back: GetCurrentThreadId,
+                // TlsGetValue, QueryPerformanceCounter and EnterCriticalSection.
+                //
+                // Watching a function means taking a lock on every call to it,
+                // to write down who called. That is affordable for a wait and
+                // ruinous for these: they are what a lock itself calls while
+                // deciding whether this thread already holds it, hundreds of
+                // thousands of times a second, from every thread at once. A
+                // lock inside a lock, on the hottest path a program has, while
+                // its libraries are still starting.
+                //
+                // They were put here to name the spin, and they did — it is in
+                // baselib. Leaving them cost far more than it gave: the entry
+                // point of the engine's own library stopped returning, and it
+                // stopped returning more often the faster the machine ran.
+                // The last call a blocked thread made, which is the only clue
+                // left when a thread goes into something nothing here traces.
+                "ReadFile", "LoadLibraryW", "LoadLibraryA",
+                "LoadLibraryExW", "LoadLibraryExA",
             };
 
         /// <summary>Stands in for what the console does not provide.</summary>

@@ -34,11 +34,16 @@ gh release download "$TAG" -D .cycle -p 'kiosk-uwp.zip' >/dev/null
 echo "== $TAG"
 
 bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
-FILES=$(find .cycle -name '*.msixbundle' -o -name '*.appxbundle' -o -name '*.appx' -o -name '*.msix' | tr '\n' ' ')
-bun src/xbdev.ts install $FILES
+# Only the Kiosk tree: the solution also builds the JIT probe, and installing
+# that instead is how the last attempt ended up with no app on the console.
+FILES=$(find .cycle/Kiosk_*_Test -type f \
+  \( -name '*.msixbundle' -o -name '*.appxbundle' -o -name '*.msix' \) \
+  ! -path '*/arm64/*' ! -path '*/x86/*' | tr '\n' ' ')
+DEPS=$(find .cycle/Kiosk_*_Test/Dependencies/x64 -type f -name '*.appx' | tr '\n' ' ')
+bun src/xbdev.ts install $FILES $DEPS
 bun src/xbdev.ts sync >/dev/null 2>&1 || true
 bun src/xbdev.ts markers || true
 bun src/xbdev.ts launch kiosk >/dev/null
 echo "== running ${WAIT}s"
 sleep "$WAIT"
-bun src/xbdev.ts pull kiosk native-probe.txt || true
+bun src/xbdev.ts pull kiosk native-probe.txt LocalState || true

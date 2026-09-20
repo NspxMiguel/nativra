@@ -78,6 +78,8 @@ namespace Kiosk.Native
                     }
                 }
                 folder = folder ?? await local.TryGetItemAsync(Folder) as StorageFolder;
+                lines.AddRange(ShareNotes);
+                lines.Add("local=" + local.Path);
                 if (folder == null)
                 {
                     lines.Add("state=no win32 folder");
@@ -318,22 +320,47 @@ namespace Kiosk.Native
         }
 
 
+        /// <summary>What each candidate developer path answered, for the report.</summary>
+        public static readonly List<string> ShareNotes = new List<string>();
+
         /// <summary>
         /// The console's developer share. It is the one place this app can
-        /// write that an uninstall does not take with it.
+        /// write that an uninstall does not take with it — and an uninstall is
+        /// every build, so finding it is worth more than one download.
+        ///
+        /// Which letter it lives behind is not documented anywhere that agrees
+        /// with this console, so every plausible one is tried and the answer
+        /// each gave is written down.
         /// </summary>
         private static async Task<StorageFolder> DevelopmentFiles()
         {
-            try
+            var roots = new[]
             {
-                var root = await StorageFolder.GetFolderFromPathAsync(@"D:\DevelopmentFiles");
-                return await root.CreateFolderAsync(
-                    "games", CreationCollisionOption.OpenIfExists);
-            }
-            catch
+                @"D:\DevelopmentFiles",
+                @"D:\DevelopmentFiles\LooseApps",
+                @"U:\DevelopmentFiles",
+                @"T:\DevelopmentFiles",
+                @"E:\DevelopmentFiles",
+                @"S:\DevelopmentFiles",
+            };
+
+            foreach (var path in roots)
             {
-                return null;
+                try
+                {
+                    var root = await StorageFolder.GetFolderFromPathAsync(path);
+                    var games = await root.CreateFolderAsync(
+                        "games", CreationCollisionOption.OpenIfExists);
+                    var count = (await games.GetFoldersAsync()).Count;
+                    ShareNotes.Add("share " + path + " = ok, " + count + " folder(s)");
+                    return games;
+                }
+                catch (Exception error)
+                {
+                    ShareNotes.Add("share " + path + " = " + error.GetType().Name);
+                }
             }
+            return null;
         }
 
         /// <summary>A folder under this one that holds a Unity game.</summary>

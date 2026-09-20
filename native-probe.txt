@@ -1,11 +1,11 @@
-at=2026-09-19 19:00:57
+at=2026-09-19 19:09:51
 tls.level=6
 as=Q:\Users\UserMgr1\AppData\Local\Packages\NSPX.Kiosk_8r28b9prq7p9c\LocalState\games\1919460\Seraph's Last Stand.exe
-baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=43 [dir ok size=8+0 teb=0xD49ED70000 table=0x2C042852400 readable=314368 protect=0x4 slot=43 of 39296 index written block ready wrote in place]
-UnityPlayer.dll: mapped at 0x2C068800000 exports=1 unresolved=0 unwind=True tls=2 slot=44 [dir ok size=321+0 teb=0xD49ED70000 table=0x2C042852400 readable=314368 protect=0x4 slot=44 of 39296 index written block ready wrote in place]
-GameAssembly.dll: mapped at 0x2C065000000 exports=391 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0xD49ED70000 table=0x2C042852400 readable=314368 protect=0x4 slot=45 of 39296 index written block ready wrote in place]
+baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=43 [dir ok size=8+0 teb=0xE9FC372000 table=0x29AC2974970 readable=71312 protect=0x4 slot=43 of 8914 index written block ready wrote in place]
+UnityPlayer.dll: mapped at 0x29AE5100000 exports=1 unresolved=0 unwind=True tls=2 slot=44 [dir ok size=321+0 teb=0xE9FC372000 table=0x29AC2974970 readable=71312 protect=0x4 slot=44 of 8914 index written block ready wrote in place]
+GameAssembly.dll: mapped at 0x29AE6D80000 exports=391 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0xE9FC372000 table=0x29AC2974970 readable=71312 protect=0x4 slot=45 of 8914 index written block ready wrote in place]
 Seraph's Last Stand.exe: mapped at 0x140000000 exports=2 unresolved=0 unwind=True tls=0 slot=-1 [no tls directory]
-UnityCrashHandler64.exe: mapped at 0x2C063E70000 exports=0 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=305+0 teb=0xD49ED70000 table=0x2C042852400 readable=314368 protect=0x4 slot=46 of 39296 index written block ready wrote in place]
+UnityCrashHandler64.exe: mapped at 0x29AE95E0000 exports=0 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=305+0 teb=0xE9FC372000 table=0x29AC2974970 readable=71312 protect=0x4 slot=46 of 8914 index written block ready wrote in place]
 resolved.system=914 resolved.images=14
 modules.missing=USER32.dll,VERSION.dll,SHLWAPI.dll,SETUPAPI.dll,OPENGL32.dll,WINMM.dll,IMM32.dll,HID.DLL,dwmapi.dll,dbghelp.dll,PSAPI.DLL
 functions.missing=201 stubbed=201
@@ -318,5 +318,142 @@ stubs.called=104
   called KERNEL32.dll!HeapSize
   called KERNEL32.dll!HeapReAlloc
   called KERNEL32.dll!InitializeSRWLock
-ticks=OK 62989085114793->62989085115038
-exe=UnityMain starting base 0x7FF7AA430000 -> 0x140000000
+ticks=OK 63920273758934->63920273759144
+exe=UnityMain starting base 0x7FF693E90000 -> 0x140000000
+exe.alive=True
+exe.stubs=111
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!QueryPerformanceCounter
+  recent KERNEL32.dll!QueryPerformanceCounter
+  recent KERNEL32.dll!VirtualAlloc
+  recent KERNEL32.dll!VirtualProtect
+  recent KERNEL32.dll!InitializeCriticalSectionAndSpinCount
+  recent KERNEL32.dll!GetCurrentProcessId
+  recent KERNEL32.dll!CreateEventW
+  recent KERNEL32.dll!CreateEventW
+  recent KERNEL32.dll!CreateEventW
+  recent KERNEL32.dll!CreatePipe
+  recent KERNEL32.dll!SetHandleInformation
+  recent KERNEL32.dll!GetModuleHandleW
+  recent KERNEL32.dll!GetLastError
+  recent KERNEL32.dll!GetCurrentProcessId
+  recent KERNEL32.dll!GetCommandLineW
+  recent KERNEL32.dll!GetCommandLineW
+  recent KERNEL32.dll!GetCommandLineW
+  recent KERNEL32.dll!InitializeProcThreadAttributeList
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!InitializeProcThreadAttributeList
+  recent KERNEL32.dll!UpdateProcThreadAttribute
+  recent KERNEL32.dll!CreateProcessW
+  called KERNEL32.dll!GetSystemTimeAsFileTime
+  called KERNEL32.dll!GetCurrentThreadId
+  called KERNEL32.dll!GetCurrentProcessId
+  called KERNEL32.dll!QueryPerformanceCounter
+  called KERNEL32.dll!LoadLibraryExW
+  called KERNEL32.dll!GetProcAddress
+  called KERNEL32.dll!GetProcessHeap
+  called KERNEL32.dll!GetLastError
+  called KERNEL32.dll!HeapAlloc
+  called KERNEL32.dll!EnterCriticalSection
+  called KERNEL32.dll!LeaveCriticalSection
+  called KERNEL32.dll!SetLastError
+  called KERNEL32.dll!GetStartupInfoW
+  called KERNEL32.dll!GetStdHandle
+  called KERNEL32.dll!GetCommandLineA
+  called KERNEL32.dll!GetCommandLineW
+  called KERNEL32.dll!GetACP
+  called KERNEL32.dll!IsValidCodePage
+  called KERNEL32.dll!InitializeSListHead
+  called KERNEL32.dll!GetModuleHandleW
+  called KERNEL32.dll!InitializeCriticalSectionAndSpinCount
+  called KERNEL32.dll!WideCharToMultiByte
+  called KERNEL32.dll!GetEnvironmentStringsW
+  called KERNEL32.dll!FreeEnvironmentStringsW
+  called KERNEL32.dll!HeapFree
+  called KERNEL32.dll!EncodePointer
+  called KERNEL32.dll!GetCurrentThread
+  called KERNEL32.dll!GetThreadTimes
+  called KERNEL32.dll!QueryPerformanceFrequency
+  called KERNEL32.dll!GetSystemTimeAsFileTime
+  called KERNEL32.dll!GetCurrentThreadId
+  called KERNEL32.dll!GetCurrentProcessId
+  called KERNEL32.dll!QueryPerformanceCounter
+  called KERNEL32.dll!LoadLibraryExW
+  called KERNEL32.dll!GetProcAddress
+  called KERNEL32.dll!GetProcessHeap
+  called KERNEL32.dll!GetLastError
+  called KERNEL32.dll!HeapAlloc
+  called KERNEL32.dll!EnterCriticalSection
+  called KERNEL32.dll!LeaveCriticalSection
+  called KERNEL32.dll!SetLastError
+  called KERNEL32.dll!GetStartupInfoW
+  called KERNEL32.dll!GetStdHandle
+  called KERNEL32.dll!GetCommandLineA
+  called KERNEL32.dll!GetCommandLineW
+  called KERNEL32.dll!GetACP
+  called KERNEL32.dll!IsValidCodePage
+  called KERNEL32.dll!InitializeSListHead
+  called KERNEL32.dll!GetModuleHandleW
+  called KERNEL32.dll!InitializeCriticalSectionAndSpinCount
+  called KERNEL32.dll!QueryPerformanceFrequency
+  called KERNEL32.dll!WideCharToMultiByte
+  called KERNEL32.dll!GetEnvironmentStringsW
+  called KERNEL32.dll!FreeEnvironmentStringsW
+  called KERNEL32.dll!HeapFree
+  called KERNEL32.dll!EncodePointer
+  called KERNEL32.dll!GetCurrentThread
+  called KERNEL32.dll!GetThreadTimes
+  called KERNEL32.dll!HeapSize
+  called KERNEL32.dll!HeapReAlloc
+  called KERNEL32.dll!TlsAlloc
+  called KERNEL32.dll!CreateSemaphoreExW
+  called KERNEL32.dll!GetNativeSystemInfo
+  called KERNEL32.dll!VirtualAlloc
+  called KERNEL32.dll!VirtualFree
+  called KERNEL32.dll!GetLocalTime
+  called KERNEL32.dll!SystemTimeToFileTime
+  called KERNEL32.dll!GetSystemTimeAsFileTime
+  called KERNEL32.dll!GetCurrentThreadId
+  called KERNEL32.dll!GetCurrentProcessId
+  called KERNEL32.dll!QueryPerformanceCounter
+  called KERNEL32.dll!LoadLibraryExW
+  called KERNEL32.dll!GetProcAddress
+  called KERNEL32.dll!GetProcessHeap
+  called KERNEL32.dll!GetLastError
+  called KERNEL32.dll!HeapAlloc
+  called KERNEL32.dll!EnterCriticalSection
+  called KERNEL32.dll!LeaveCriticalSection
+  called KERNEL32.dll!SetLastError
+  called KERNEL32.dll!GetStartupInfoW
+  called KERNEL32.dll!GetStdHandle
+  called KERNEL32.dll!GetCommandLineA
+  called KERNEL32.dll!GetCommandLineW
+  called KERNEL32.dll!GetACP
+  called KERNEL32.dll!IsValidCodePage
+  called KERNEL32.dll!GetCPInfo
+  called KERNEL32.dll!MultiByteToWideChar
+  called KERNEL32.dll!GetStringTypeW
+  called KERNEL32.dll!WideCharToMultiByte
+  called KERNEL32.dll!InitializeSListHead
+  called KERNEL32.dll!InitializeCriticalSectionAndSpinCount
+  called KERNEL32.dll!GetModuleHandleW
+  called KERNEL32.dll!GetEnvironmentStringsW
+  called KERNEL32.dll!FreeEnvironmentStringsW
+  called KERNEL32.dll!HeapFree
+  called KERNEL32.dll!InitializeCriticalSectionEx
+  called KERNEL32.dll!CreateSemaphoreExW
+  called KERNEL32.dll!TlsAlloc
+  called KERNEL32.dll!CreateMutexW
+  called KERNEL32.dll!CreateSemaphoreW
+  called KERNEL32.dll!CreateEventW
+  called KERNEL32.dll!HeapSize
+  called KERNEL32.dll!HeapReAlloc
+  called KERNEL32.dll!InitializeSRWLock
+  called KERNEL32.dll!VirtualProtect
+  called KERNEL32.dll!CreateEventW
+  called KERNEL32.dll!CreatePipe
+  called KERNEL32.dll!SetHandleInformation
+  called KERNEL32.dll!InitializeProcThreadAttributeList
+  called KERNEL32.dll!UpdateProcThreadAttribute
+  called KERNEL32.dll!CreateProcessW

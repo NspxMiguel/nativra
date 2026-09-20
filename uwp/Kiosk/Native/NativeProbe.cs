@@ -147,6 +147,7 @@ namespace Kiosk.Native
                 TimerStubs.Install(imports);
                 ComStubs.Install(imports);
                 PlainAnswers.Install(imports);
+                DisplayStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 
                 // A module that imports another has to be loaded after it, or
@@ -308,6 +309,7 @@ namespace Kiosk.Native
                                         "calls=" + imports.Shim.Total,
                                         "pumped=" + WindowStubs.Pumped,
                                         "pad=" + PadBridge.Reads,
+                                        "frames=" + GraphicsBridge.Frames,
                                         "pointer=" + PointerBridge.Moves
                                             + " at " + PointerBridge.X + "," + PointerBridge.Y,
                                         "stubs=" + imports.Shim.Called.Count,

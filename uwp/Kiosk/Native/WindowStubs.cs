@@ -131,6 +131,13 @@ namespace Kiosk.Native
                 { "MsgWaitForMultipleObjects", 0 },
                 { "MsgWaitForMultipleObjectsEx", 0 },
                 { "WaitMessage", 1 },
+                { "QueryDisplayConfig", 0 },
+                { "DisplayConfigGetDeviceInfo", 50 },   // ERROR_NOT_SUPPORTED
+                { "GetRawInputDeviceInfoW", 0 },
+                { "GetRawInputDeviceInfoA", 0 },
+                { "GetRawInputBuffer", 0 },
+                { "GetKeyboardLayoutList", 0 },
+                { "GetDisplayConfigBufferSizes", 50 },
             };
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -151,6 +158,12 @@ namespace Kiosk.Native
         private delegate int PointDelegate(IntPtr point);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int SizesDelegate(uint flags, IntPtr paths, IntPtr modes);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint RawListDelegate(IntPtr list, IntPtr count, uint size);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int MonitorInfoDelegate(IntPtr monitor, IntPtr info);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -169,6 +182,8 @@ namespace Kiosk.Native
         private static GetMessageDelegate getMessage;
         private static PointDelegate cursorPos;
         private static MetricDelegate keyState;
+        private static SizesDelegate displaySizes;
+        private static RawListDelegate rawList;
         private static MonitorInfoDelegate monitorInfo;
         private static EnumMonitorsDelegate enumMonitors;
 
@@ -302,8 +317,30 @@ namespace Kiosk.Native
                 return 1;
             };
 
+            // Both of these are asked "how many are there", and both were
+            // answering "none, and it went fine" without ever writing the
+            // number down. The caller then reads whatever was in its own
+            // variable and asks for that many — which is how a program that
+            // was doing fine walks off the end of something.
+            displaySizes = (flags, paths, modes) =>
+            {
+                if (paths != IntPtr.Zero) Marshal.WriteInt32(paths, 0);
+                if (modes != IntPtr.Zero) Marshal.WriteInt32(modes, 0);
+                return 0; // ERROR_SUCCESS
+            };
+
+            rawList = (list, count, size) =>
+            {
+                if (count != IntPtr.Zero) Marshal.WriteInt32(count, 0);
+                return 0;
+            };
+
             var ours = new Dictionary<string, IntPtr>
             {
+                { "GetDisplayConfigBufferSizes",
+                    Marshal.GetFunctionPointerForDelegate(displaySizes) },
+                { "GetRawInputDeviceList",
+                    Marshal.GetFunctionPointerForDelegate(rawList) },
                 { "GetClientRect", Marshal.GetFunctionPointerForDelegate(rect) },
                 { "GetWindowRect", Marshal.GetFunctionPointerForDelegate(rect) },
                 { "GetSystemMetrics", Marshal.GetFunctionPointerForDelegate(metric) },

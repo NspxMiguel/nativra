@@ -84,9 +84,11 @@ namespace Kiosk.Native
             Marshal.WriteInt64(target, 16, next.Word);
             Marshal.WriteInt64(target, 24, next.Long);
             Marshal.WriteInt32(target, 32, Environment.TickCount);
-            Marshal.WriteInt32(target, 36, 0);
-            Marshal.WriteInt32(target, 40, X);
-            Marshal.WriteInt32(target, 44, Y);
+            // MSG.pt sits right after the timestamp: x then y, and then a word
+            // the system keeps to itself.
+            Marshal.WriteInt32(target, 36, X);
+            Marshal.WriteInt32(target, 40, Y);
+            Marshal.WriteInt32(target, 44, 0);
             return true;
         }
 

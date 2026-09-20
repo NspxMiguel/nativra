@@ -425,6 +425,14 @@ namespace Kiosk.Native
                         // function it reached is the whole answer.
                         // It dies in under a frame, so the first look is
                         // immediate and the rest are close behind.
+                        // Given back as soon as the engine has read it. The
+                        // process-wide image base is how everything else in
+                        // this application answers "who am I" — the framework
+                        // that draws the screen included — and leaving it
+                        // pointing at the game is what took the screen away
+                        // about ten seconds in, measured.
+                        var handedBack = false;
+
                         var seen = 0L;
                         // Long enough for a game to load a scene and show a
                         // splash, not just to start. A first frame that arrives
@@ -432,6 +440,13 @@ namespace Kiosk.Native
                         for (var tick = 0; tick < 500; tick++)
                         {
                             await Task.Delay(tick == 0 ? 2 : (tick < 40 ? 50 : 500));
+                            if (!handedBack && tick > 12 && previousBase != IntPtr.Zero)
+                            {
+                                PeImage.SetProcessImageBase(previousBase);
+                                handedBack = true;
+                                lines.Add("base.returned");
+                            }
+
                             var now = imports.Shim.Total;
                             var snapshot = new List<string>(lines)
                             {
@@ -495,7 +510,7 @@ namespace Kiosk.Native
                         }
                         lines.Add("pad.reads=" + PadBridge.Reads);
                         lines.Add("pumped=" + WindowStubs.Pumped);
-                        if (previousBase != IntPtr.Zero)
+                        if (!handedBack && previousBase != IntPtr.Zero)
                         {
                             PeImage.SetProcessImageBase(previousBase);
                         }

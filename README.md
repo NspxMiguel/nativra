@@ -35,10 +35,25 @@ has no windows.
 
 ## What does not work yet
 
-Rendering. The engine runs; the picture does not reach the screen. That is the
-swap chain, the audio path, and the parts of the window system a game touches
-on its way to a first frame. See [docs/ISSUES.md](docs/ISSUES.md) — the work is
-partitioned, and a lot of it needs no console.
+The picture. Everything up to it does: the engine starts, finishes its own
+initialisation, pumps its message loop, asks Direct3D for a device and gets one
+at feature level 11_0, and creates its swap chain through this bridge. The app
+can also build a device, a swap chain and a frame entirely by itself and put it
+on the console's screen, which proves the path exists.
+
+What fails is the last step — handing the game's finished swap chain to the
+surface it should appear on. A packaged application reaches that surface through
+a COM interface the native compiler will not generate a stub for, and the
+console refuses to hand its own window to an application built out of XAML.
+Both routes are written; neither has landed yet.
+
+Sound has a bridge — the device a packaged app is not allowed to create is
+built by hand, with the console's real audio engine behind it — and it is
+switched off until the picture works, because a half-working audio path stops
+an engine mid-start.
+
+See [docs/ISSUES.md](docs/ISSUES.md) — the rest of the work is partitioned, and
+a lot of it needs no console.
 
 ## Using it
 

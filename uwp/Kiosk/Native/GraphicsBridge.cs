@@ -20,23 +20,6 @@ namespace Kiosk.Native
     /// answer came from somewhere else — which is the whole point: no game
     /// should have to be modified to run here.
     /// </summary>
-    /// <summary>
-    /// The panel's own interface, declared so the runtime does the asking.
-    ///
-    /// Asking for it by hand — taking the object's IUnknown and querying by
-    /// identifier — is refused on this runtime: what comes back from
-    /// GetIUnknownForObject is a managed wrapper that does not carry the
-    /// panel's native interfaces. Declared like this, the cast itself is the
-    /// query, and it goes to the right object.
-    /// </summary>
-    [ComImport]
-    [Guid("63aad0b8-7c24-40ff-85a8-640d944cc325")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface ISwapChainPanelNative
-    {
-        void SetSwapChain(IntPtr swapChain);
-    }
-
     public static class GraphicsBridge
     {
         // Slots in IDXGIFactory2, counting from IUnknown.
@@ -225,6 +208,23 @@ namespace Kiosk.Native
         /// one undifferentiated error. Rather than guess which one this console
         /// wants, the bridge tries them in order and keeps the one that works.
         /// </summary>
+        /// <summary>
+        /// The shapes a chain made for the console's own window accepts, which
+        /// are not the same as the ones a composed chain accepts. A window is
+        /// a real display surface and wants its pixels unscaled; a composed
+        /// one is a texture and wants them stretched to fit. Passing one the
+        /// other's description is refused with the same single error, which is
+        /// how this cost a night.
+        /// </summary>
+        private static readonly int[][] WindowShapes =
+        {
+            //  scaling, swap effect, alpha
+            new[] { 1, 4, 1 },   // none, flip discard, ignore
+            new[] { 1, 3, 1 },   // none, flip sequential, ignore
+            new[] { 0, 4, 1 },   // stretch, flip discard, ignore
+            new[] { 0, 3, 1 },   // stretch, flip sequential, ignore
+        };
+
         private static readonly int[][] Shapes =
         {
             //  scaling, swap effect, alpha
@@ -235,7 +235,8 @@ namespace Kiosk.Native
         };
 
         private static IntPtr ConsoleDescription(
-            int width, int height, int format, int flags, int shape = 0)
+            int width, int height, int format, int flags, int shape = 0,
+            bool forWindow = false)
         {
             // Zero means "the size of the window" when there is a window. A
             // composed surface has no window to measure, so the screen is the
@@ -257,7 +258,8 @@ namespace Kiosk.Native
             Marshal.WriteInt32(desc, 20, 0);        // SampleDesc.Quality
             Marshal.WriteInt32(desc, 24, 0x20);     // DXGI_USAGE_RENDER_TARGET_OUTPUT
             Marshal.WriteInt32(desc, 28, 2);        // BufferCount
-            var chosen = Shapes[shape % Shapes.Length];
+            var table = forWindow ? WindowShapes : Shapes;
+            var chosen = table[shape % table.Length];
             Marshal.WriteInt32(desc, 32, chosen[0]);   // scaling
             Marshal.WriteInt32(desc, 36, chosen[1]);   // swap effect
             Marshal.WriteInt32(desc, 40, chosen[2]);   // alpha mode
@@ -311,8 +313,17 @@ namespace Kiosk.Native
                     var direct = Marshal.GetDelegateForFunctionPointer<
                         CreateForCoreWindowDelegate>(
                         ComProxy.Method(original, CreateForCoreWindowSlot));
-                    code = direct(original, device, ConsoleWindow, desc, IntPtr.Zero, result);
-                    Note(from + " core window: 0x" + code.ToString("X8"));
+                    for (var shape = 0; code != S_OK && shape < WindowShapes.Length; shape++)
+                    {
+                        var wanted = ConsoleDescription(
+                            Marshal.ReadInt32(desc, 0), Marshal.ReadInt32(desc, 4),
+                            Marshal.ReadInt32(desc, 8), 0, shape, true);
+                        code = direct(
+                            original, device, ConsoleWindow, wanted, IntPtr.Zero, result);
+                        Note(from + " core window, shape " + shape + ": 0x"
+                            + code.ToString("X8"));
+                        Marshal.FreeHGlobal(wanted);
+                    }
                 }
 
                 // Otherwise a surface the framework composes, which is the
@@ -397,8 +408,29 @@ namespace Kiosk.Native
                     standingChain = stand;
                     Marshal.WriteIntPtr(result, stand);
                     // A chain made for the console's window is already on the
-                    // screen; only a composed one needs somewhere to land.
-                    if (composed) Show(chain);
+                    // screen; only a composed one needs somewhere to land —
+                    // and if it cannot land, the window is taken instead.
+                    if (composed && !Show(chain) && ConsoleWindow != IntPtr.Zero)
+                    {
+                        ReleaseInterface();
+                        var again = ConsoleDescription(
+                            Marshal.ReadInt32(desc, 0), Marshal.ReadInt32(desc, 4),
+                            Marshal.ReadInt32(desc, 8), 0);
+                        var direct = Marshal.GetDelegateForFunctionPointer<
+                            CreateForCoreWindowDelegate>(
+                            ComProxy.Method(original, CreateForCoreWindowSlot));
+                        var second = Marshal.AllocHGlobal(IntPtr.Size);
+                        Marshal.WriteIntPtr(second, IntPtr.Zero);
+                        var retry = direct(
+                            original, device, ConsoleWindow, again, IntPtr.Zero, second);
+                        Note("core window, second try: 0x" + retry.ToString("X8"));
+                        if (retry == S_OK)
+                        {
+                            Marshal.WriteIntPtr(result, Marshal.ReadIntPtr(second));
+                        }
+                        Marshal.FreeHGlobal(second);
+                        Marshal.FreeHGlobal(again);
+                    }
                 }
                 return code;
             }
@@ -422,15 +454,18 @@ namespace Kiosk.Native
         /// interface is what accepts a swap chain; C# has no declaration for
         /// it, so it is asked for by identifier and called by slot.
         /// </summary>
-        private static void Show(IntPtr chain)
+        private static bool Show(IntPtr chain)
         {
             var panel = Surface;
             var ui = OnUi;
             if (panel == null || ui == null || chain == IntPtr.Zero)
             {
                 Note("no surface to compose into");
-                return;
+                return false;
             }
+
+            var settled = new System.Threading.ManualResetEventSlim(false);
+            var attached = false;
 
             var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High, () =>
             {
@@ -448,6 +483,12 @@ namespace Kiosk.Native
                     {
                         "63aad0b8-7c24-40ff-85a8-640d944cc325", // ISwapChainPanelNative
                         "ec7d9b13-79ff-4f1e-b8f1-e0e8e6dd93dc", // ISwapChainPanelNative2
+                        // Not to use — to tell two failures apart. If even
+                        // this is refused then the pointer is a managed
+                        // wrapper and the question was asked of the wrong
+                        // thing; if it answers, the pointer is the panel and
+                        // this platform simply does not offer the interface.
+                        "af86e2e0-b12d-4c6a-9c5a-d7aa65101e90", // IInspectable
                     };
 
                     foreach (var name in names)
@@ -463,11 +504,18 @@ namespace Kiosk.Native
                             var code = ask(unknown, riid, slot);
                             Note("panel " + name.Substring(0, 8) + ": 0x" + code.ToString("X8"));
                             if (code != S_OK) continue;
+                            if (name.StartsWith("af86", StringComparison.Ordinal))
+                            {
+                                Marshal.Release(Marshal.ReadIntPtr(slot));
+                                continue;
+                            }
 
                             var native = Marshal.ReadIntPtr(slot);
                             var set = Marshal.GetDelegateForFunctionPointer<
                                 SetSwapChainDelegate>(ComProxy.Method(native, 3));
-                            Note("composed onto the panel: 0x" + set(native, chain).ToString("X8"));
+                            var hr = set(native, chain);
+                            Note("composed onto the panel: 0x" + hr.ToString("X8"));
+                            attached = hr == S_OK;
                             Marshal.Release(native);
                             return;
                         }
@@ -485,8 +533,14 @@ namespace Kiosk.Native
                 finally
                 {
                     if (unknown != IntPtr.Zero) Marshal.Release(unknown);
+                    settled.Set();
                 }
             });
+
+            // Waited on, because what happens next depends on the answer and
+            // the answer arrives on another thread.
+            settled.Wait(3000);
+            return attached;
         }
 
 
@@ -609,6 +663,64 @@ namespace Kiosk.Native
             {
                 return error.GetType().Name + ": " + error.Message;
             }
+        }
+
+
+        /// <summary>
+        /// Gives up the app's own screen so the game can have the window.
+        ///
+        /// A window can be drawn into by one thing at a time, and while the
+        /// interface framework holds this one, the console refuses to make a
+        /// swap chain for it — which is the whole reason the frames were going
+        /// through a surface instead. Letting go is not a trick: it is what a
+        /// console game does, which is own the screen.
+        /// </summary>
+        private static Windows.UI.Xaml.UIElement handedOver;
+
+        /// <summary>Gives the app its screen back once the game is finished.</summary>
+        public static void RestoreInterface()
+        {
+            var ui = OnUi;
+            if (ui == null || handedOver == null) return;
+            var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                try
+                {
+                    Windows.UI.Xaml.Window.Current.Content = handedOver;
+                    handedOver = null;
+                }
+                catch
+                {
+                    // Coming back to nothing is bad; crashing over it is worse.
+                }
+            });
+        }
+
+        private static void ReleaseInterface()
+        {
+            var ui = OnUi;
+            if (ui == null) return;
+            var settled = new System.Threading.ManualResetEventSlim(false);
+            var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High, () =>
+            {
+                try
+                {
+                    // Kept, so the app can have its screen back when the game
+                    // is done with it rather than coming back to nothing.
+                    handedOver = Windows.UI.Xaml.Window.Current.Content;
+                    Windows.UI.Xaml.Window.Current.Content = null;
+                    Note("let go of the app's own screen");
+                }
+                catch (Exception error)
+                {
+                    Note("let go: " + error.GetType().Name);
+                }
+                finally
+                {
+                    settled.Set();
+                }
+            });
+            settled.Wait(3000);
         }
 
         public static void Install(SystemImports system)

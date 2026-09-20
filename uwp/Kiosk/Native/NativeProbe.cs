@@ -472,6 +472,7 @@ namespace Kiosk.Native
                         }
                         beating = false;
                         GameRunning = false;
+                        GraphicsBridge.RestoreInterface();
                         lines.Add("exe.finished");
 
                         // The engine's whole account of its startup, not just

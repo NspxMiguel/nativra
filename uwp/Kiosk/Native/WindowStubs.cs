@@ -165,6 +165,18 @@ namespace Kiosk.Native
         private delegate int TwoOutDelegate(IntPtr first, IntPtr second);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint MessageWaitDelegate(
+            uint count, IntPtr handles, int all, uint milliseconds, uint wake);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint MessageWaitExDelegate(
+            uint count, IntPtr handles, uint milliseconds, uint wake, uint flags);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint WaitForMultipleObjectsEx(
+            uint count, IntPtr handles, int all, uint milliseconds, int alertable);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int RectDelegate(IntPtr window, IntPtr rect);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -202,6 +214,8 @@ namespace Kiosk.Native
         // still holds their addresses.
         private static RectDelegate rect;
         private static MetricDelegate metric;
+        private static MessageWaitDelegate messageWait;
+        private static MessageWaitExDelegate messageWaitEx;
         private static TwoOutDelegate pointerDevices;
         private static TwoOutDelegate twoOut;
         private static PeekDelegate peek;
@@ -273,6 +287,37 @@ namespace Kiosk.Native
                 if (second != IntPtr.Zero) Marshal.WriteInt32(second, 0);
                 return 1;
             };
+
+            // Waiting for a message, or for a handle, whichever comes first.
+            //
+            // This one does not report a fact, it decides what the caller does
+            // next: which object woke it, or that a message is waiting, or
+            // that the time ran out. A constant cannot answer that — it either
+            // sends the caller back to a handle that never signalled or tells
+            // it to pump a queue that has nothing in it, for ever.
+            //
+            // So the handles are really waited on, briefly, and when none of
+            // them signals the answer is "a message arrived". That is true
+            // enough to be useful: the message pump here always has something
+            // to hand back, even if it is nothing, and a loop that keeps
+            // turning is a loop that can still be got out of.
+            messageWait = (count, handles, all, milliseconds, wake) =>
+            {
+                var slice = milliseconds == 0xFFFFFFFF || milliseconds > 8 ? 8 : milliseconds;
+                if (count > 0 && handles != IntPtr.Zero)
+                {
+                    var woke = WaitForMultipleObjectsEx(count, handles, all, slice, 0);
+                    if (woke < count) return woke;
+                }
+                else if (slice > 0)
+                {
+                    System.Threading.Thread.Sleep((int)slice);
+                }
+                return count;   // WAIT_OBJECT_0 + count: go and read the queue
+            };
+
+            messageWaitEx = (count, handles, milliseconds, wake, flags) =>
+                messageWait(count, handles, 0, milliseconds, wake);
 
             metric = index =>
             {
@@ -410,6 +455,10 @@ namespace Kiosk.Native
                 { "GetClientRect", Marshal.GetFunctionPointerForDelegate(rect) },
                 { "GetWindowRect", Marshal.GetFunctionPointerForDelegate(rect) },
                 { "GetSystemMetrics", Marshal.GetFunctionPointerForDelegate(metric) },
+                { "MsgWaitForMultipleObjects",
+                    Marshal.GetFunctionPointerForDelegate(messageWait) },
+                { "MsgWaitForMultipleObjectsEx",
+                    Marshal.GetFunctionPointerForDelegate(messageWaitEx) },
                 { "GetPointerDevices", Marshal.GetFunctionPointerForDelegate(pointerDevices) },
                 { "GetPointerDeviceRects", Marshal.GetFunctionPointerForDelegate(twoOut) },
                 { "GetPointerDevice", Marshal.GetFunctionPointerForDelegate(twoOut) },

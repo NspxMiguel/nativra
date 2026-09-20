@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.UI.Xaml.Media.Imaging;
 
 namespace Kiosk.Native
@@ -64,7 +65,12 @@ namespace Kiosk.Native
         private static int height;
 
         private static WriteableBitmap picture;
-        private static byte[] scratch;
+        // Two buffers, used in turn: the game fills one while the interface
+        // thread is still reading the other. One buffer means a frame half
+        // overwritten while it is being shown, which looks like tearing.
+        private static byte[][] scratch;
+        private static int filling;
+        private static int busy;
         private static Windows.UI.Core.CoreDispatcher ui;
         private static Windows.UI.Xaml.Controls.Image target;
 
@@ -157,7 +163,11 @@ namespace Kiosk.Native
                     return false;
                 }
 
-                scratch = new byte[width * height * 4];
+                scratch = new[]
+                {
+                    new byte[width * height * 4],
+                    new byte[width * height * 4],
+                };
 
                 var ready = new System.Threading.ManualResetEventSlim(false);
                 var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High, () =>
@@ -226,29 +236,45 @@ namespace Kiosk.Native
 
                 var from = Marshal.ReadIntPtr(mapped, 0);
                 var pitch = Marshal.ReadInt32(mapped, 8);
+                var into = scratch[filling];
                 for (var row = 0; row < height; row++)
                 {
-                    Marshal.Copy(from + row * pitch, scratch, row * width * 4, width * 4);
+                    Marshal.Copy(from + row * pitch, into, row * width * 4, width * 4);
                 }
+                filling = 1 - filling;
 
                 var unmap = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(
                     ComProxy.Method(context, UnmapSlot));
                 unmap(context, staging, 0);
 
                 Copied++;
-                var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+
+                // One update in flight at a time. A queue that grows is a
+                // queue that is already behind, and every frame in it is stale.
+                if (System.Threading.Interlocked.Exchange(ref busy, 1) == 1) return;
+                var showing = into;
+                var __ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                 {
                     try
                     {
-                        using (var into = picture.PixelBuffer.AsStream())
+                        // Named in full rather than as an extension: which
+                        // namespace carries it differs between runtimes, and a
+                        // missing using here is a build that fails for a
+                        // reason that has nothing to do with the problem.
+                        using (var stream = WindowsRuntimeBufferExtensions.AsStream(
+                            picture.PixelBuffer))
                         {
-                            into.Write(scratch, 0, scratch.Length);
+                            stream.Write(showing, 0, showing.Length);
                         }
                         picture.Invalidate();
                     }
                     catch
                     {
                         // A dropped frame is a dropped frame.
+                    }
+                    finally
+                    {
+                        System.Threading.Interlocked.Exchange(ref busy, 0);
                     }
                 });
             }

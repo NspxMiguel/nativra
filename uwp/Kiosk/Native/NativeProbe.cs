@@ -374,6 +374,7 @@ namespace Kiosk.Native
                                         "pumped=" + WindowStubs.Pumped,
                                         "pad=" + PadBridge.Reads,
                                         "calmed=" + LoaderStubs.Calmed,
+                                        "exit=" + ProcessStubs.Attempted,
                                         "buffers=" + GraphicsBridge.Buffers,
                                         "mirrored=" + FrameMirror.Copied + " shown=" + FrameMirror.Shown,
                                         "frames=" + GraphicsBridge.Frames

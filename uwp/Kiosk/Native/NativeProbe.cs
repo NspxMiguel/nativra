@@ -17,7 +17,31 @@ namespace Kiosk.Native
         private const string Folder = "win32";
         private const string ReportName = "native-probe.txt";
 
-        public static async Task RunAsync()
+        /// <summary>
+        /// Everything here runs on a thread of its own. Setting up thread-local
+        /// storage rewrites state that belongs to the thread doing it, and the
+        /// interface thread is the last one that should be experimented on.
+        /// </summary>
+        public static Task RunAsync()
+        {
+            var done = new TaskCompletionSource<bool>();
+            var thread = new System.Threading.Thread(async () =>
+            {
+                try
+                {
+                    await WorkAsync();
+                }
+                finally
+                {
+                    done.TrySetResult(true);
+                }
+            }, 8 * 1024 * 1024);
+            thread.IsBackground = true;
+            thread.Start();
+            return done.Task;
+        }
+
+        private static async Task WorkAsync()
         {
             var lines = new List<string> { "at=" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") };
             try
@@ -33,6 +57,7 @@ namespace Kiosk.Native
 
                 // The dangerous half of the loader only runs when asked.
                 PeImage.EnableTls = await folder.TryGetItemAsync("tls.txt") != null;
+                PeImage.AllowTableGrowth = await folder.TryGetItemAsync("tlsgrow.txt") != null;
 
                 var imports = new SystemImports();
 
@@ -75,7 +100,8 @@ namespace Kiosk.Native
                         lines.Add(
                             $"{file.Name}: mapped at 0x{image.BaseAddress.ToInt64():X} " +
                             $"exports={image.ExportCount} unresolved={image.Unresolved.Count} " +
-                            $"unwind={image.ExceptionsRegistered} tls={image.TlsCallbacksRun} slot={image.TlsSlot}");
+                            $"unwind={image.ExceptionsRegistered} tls={image.TlsCallbacksRun} " +
+                            $"slot={image.TlsSlot} [{PeImage.TlsNote}]");
                     }
                     catch (Exception error)
                     {

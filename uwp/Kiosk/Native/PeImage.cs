@@ -59,6 +59,16 @@ namespace Kiosk.Native
         /// </summary>
         public static bool EnableTls;
 
+        /// <summary>
+        /// Whether the thread's table of blocks may be replaced with a longer
+        /// one. Writing into a table that is already long enough touches one
+        /// pointer; replacing it moves everything the runtime is using.
+        /// </summary>
+        public static bool AllowTableGrowth;
+
+        /// <summary>What the last attempt did, so a crash leaves a trail.</summary>
+        public static string TlsNote = "";
+
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr TebDelegate();
 
@@ -427,10 +437,17 @@ namespace Kiosk.Native
                     if (size == UIntPtr.Zero || (ulong)size > 1 << 20) return;
                     existingSlots = (int)((ulong)size / 8);
                 }
+                TlsNote = $"slot={slot} table={existingSlots}";
                 if (existingSlots > slot)
                 {
                     // Already long enough: one pointer, and nothing is moved.
                     Marshal.WriteIntPtr(existing, slot * 8, block);
+                    TlsNote += " wrote in place";
+                }
+                else if (!AllowTableGrowth)
+                {
+                    TlsNote += " table too short, left alone";
+                    return;
                 }
                 else
                 {
@@ -445,6 +462,7 @@ namespace Kiosk.Native
                     }
                     Marshal.WriteIntPtr(grown, slot * 8, block);
                     Marshal.WriteIntPtr(slotsPointer, grown);
+                    TlsNote += " grew the table";
                 }
                 TlsSlot = slot;
 

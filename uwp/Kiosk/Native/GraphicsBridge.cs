@@ -1213,6 +1213,18 @@ namespace Kiosk.Native
             displayParent = (self, riid, result) =>
             {
                 if (result == IntPtr.Zero) return E_FAIL;
+
+                // Asked for the factory rather than the adapter, answer with
+                // ours directly. Walking up used to assume the answer was
+                // always an adapter and wrapped it as one — so a caller that
+                // asked a display device for the factory got the console's
+                // own, dressed as something it is not.
+                if (IsFactoryId(riid) && standingFactory != IntPtr.Zero)
+                {
+                    Marshal.WriteIntPtr(result, standingFactory);
+                    Note("a screen device was asked who made it");
+                    return S_OK;
+                }
                 try
                 {
                     var original = ComProxy.Original(self);

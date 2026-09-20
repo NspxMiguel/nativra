@@ -59,9 +59,22 @@ namespace Kiosk.Native
 
         private static SystemImports imports;
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void SayDelegate(IntPtr text);
+
+        private static SayDelegate says;
+        private static SayDelegate saysWide;
+
+        /// <summary>What the engine said on its way up.</summary>
+        public static readonly List<string> Said = new List<string>();
+
         /// <summary>Which library each handle we handed out came from.</summary>
         private static readonly Dictionary<long, string> named =
             new Dictionary<long, string>();
+
+        /// <summary>Stand-ins already written, so a loop does not write a thousand.</summary>
+        private static readonly Dictionary<string, IntPtr> made =
+            new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Every library a game asked for by name, for the report.</summary>
         public static readonly List<string> Asked = new List<string>();
@@ -164,16 +177,49 @@ namespace Kiosk.Native
 
                 var real = GetProcAddress(module, wanted);
                 if (real != IntPtr.Zero) return real;
+                if (from == null) return IntPtr.Zero;
 
                 // Missing here means missing in the import table too, and the
-                // same stand-in is the right answer: it records what was wanted.
-                return from == null
-                    ? IntPtr.Zero
-                    : imports.Resolve(from, wanted);
+                // same stand-in is the right answer: it records what was
+                // wanted. Cached, because a game that looks a function up in a
+                // loop would otherwise get a new stand-in every time and use
+                // up the page they are written into.
+                var key = from + "!" + wanted;
+                lock (made)
+                {
+                    if (made.TryGetValue(key, out var already)) return already;
+                    var fresh = imports.Resolve(from, wanted);
+                    made[key] = fresh;
+                    return fresh;
+                }
+            };
+
+            // The engine narrates what it is doing to a debugger that is not
+            // attached, and that narration is the most useful text there is:
+            // it is the engine's own account of its startup, in its own words.
+            says = text =>
+            {
+                var line = Marshal.PtrToStringAnsi(text);
+                if (line == null) return;
+                lock (Said)
+                {
+                    if (Said.Count < 300) Said.Add(line.TrimEnd());
+                }
+            };
+            saysWide = text =>
+            {
+                var line = Marshal.PtrToStringUni(text);
+                if (line == null) return;
+                lock (Said)
+                {
+                    if (Said.Count < 300) Said.Add(line.TrimEnd());
+                }
             };
 
             var answers = new Dictionary<string, IntPtr>
             {
+                { "OutputDebugStringA", Marshal.GetFunctionPointerForDelegate(says) },
+                { "OutputDebugStringW", Marshal.GetFunctionPointerForDelegate(saysWide) },
                 { "LoadLibraryW", Marshal.GetFunctionPointerForDelegate(loadW) },
                 { "LoadLibraryA", Marshal.GetFunctionPointerForDelegate(loadA) },
                 { "LoadLibraryExW", Marshal.GetFunctionPointerForDelegate(loadExW) },

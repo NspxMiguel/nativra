@@ -57,6 +57,16 @@ namespace Kiosk.Native
                         {
                             if (!Wanted.Contains(name) && Wanted.Count < 40) Wanted.Add(name);
                         }
+
+                        // One class this app can honestly provide: the audio
+                        // endpoint enumerator, standing in front of the
+                        // console's real audio engine.
+                        var made = AudioBridge.ClassFor(name);
+                        if (made != IntPtr.Zero && result != IntPtr.Zero)
+                        {
+                            Marshal.WriteIntPtr(result, made);
+                            return S_OK;
+                        }
                     }
                     // Whatever was in the caller's variable is not an object.
                     if (result != IntPtr.Zero) Marshal.WriteIntPtr(result, IntPtr.Zero);

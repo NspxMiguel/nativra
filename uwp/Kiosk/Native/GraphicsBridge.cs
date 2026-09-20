@@ -399,6 +399,37 @@ namespace Kiosk.Native
             }
         }
 
+
+        /// <summary>The same object, asked for by its newest interface.</summary>
+        private static IntPtr AsFactory2(IntPtr original)
+        {
+            var riid = IntPtr.Zero;
+            var slot = IntPtr.Zero;
+            try
+            {
+                riid = Marshal.AllocHGlobal(16);
+                Marshal.StructureToPtr(
+                    new Guid("50c83a1c-e072-4c48-87b0-3630fa36a6d0"), riid, false);
+                slot = Marshal.AllocHGlobal(IntPtr.Size);
+                Marshal.WriteIntPtr(slot, IntPtr.Zero);
+
+                var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
+                    ComProxy.Method(original, QueryInterfaceSlot));
+                return ask(original, riid, slot) == S_OK
+                    ? Marshal.ReadIntPtr(slot)
+                    : IntPtr.Zero;
+            }
+            catch
+            {
+                return IntPtr.Zero;
+            }
+            finally
+            {
+                if (riid != IntPtr.Zero) Marshal.FreeHGlobal(riid);
+                if (slot != IntPtr.Zero) Marshal.FreeHGlobal(slot);
+            }
+        }
+
         /// <summary>Builds the real factory, then the stand-in over it.</summary>
         private static int Make(string name, IntPtr riid, IntPtr result, uint flags)
         {
@@ -435,7 +466,29 @@ namespace Kiosk.Native
                 }
 
                 var original = Marshal.ReadIntPtr(result);
-                var stand = Proxy.Wrap(original, FactoryMethods, new Dictionary<int, IntPtr>
+
+                // Which interface came back decides how long its table is, and
+                // reading past the end of a table reads whatever happens to be
+                // next in memory. The newest interface is asked for explicitly:
+                // its table starts with every older one, so handing it back in
+                // place of what was asked for is exact, and the entries the
+                // bridge needs are inside it.
+                var newest = AsFactory2(original);
+                if (newest == IntPtr.Zero)
+                {
+                    // Without the newer interface there is no call on this
+                    // object that can make a swap chain the console accepts,
+                    // and a stand-in that cannot help is only a place to
+                    // crash. The real factory goes back untouched.
+                    Note(name + ": no modern factory interface, left alone");
+                    return S_OK;
+                }
+                original = newest;
+
+                var stand = Proxy.Wrap(
+                    original,
+                    FactoryMethods,
+                    new Dictionary<int, IntPtr>
                 {
                     { QueryInterfaceSlot, Marshal.GetFunctionPointerForDelegate(queryInterface) },
                     { CreateSwapChainSlot, Marshal.GetFunctionPointerForDelegate(createSwapChain) },

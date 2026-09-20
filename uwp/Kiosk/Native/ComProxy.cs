@@ -109,6 +109,94 @@ namespace Kiosk.Native
             return proxy;
         }
 
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int AskDelegate(IntPtr self, IntPtr riid, IntPtr result);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint CountDelegate(IntPtr self);
+
+        private static AskDelegate ask;
+        private static CountDelegate up;
+        private static CountDelegate down;
+
+        /// <summary>
+        /// Builds a COM object out of nothing but managed methods.
+        ///
+        /// The three IUnknown entries are the same for every object made this
+        /// way and are filled in here: asked for any interface, an object
+        /// hands back itself, which is true for the small single-interface
+        /// objects this is for. The caller supplies the rest, in order.
+        ///
+        /// This is how a library that can only be reached by asking the system
+        /// for a class — an audio device enumerator, say — gets reached on a
+        /// system that has no such class to give.
+        /// </summary>
+        /// <summary>Which interfaces each made object admits to being.</summary>
+        private static readonly Dictionary<long, HashSet<string>> admits =
+            new Dictionary<long, HashSet<string>>();
+
+        public IntPtr Create(IntPtr[] methods, string[] interfaces = null)
+        {
+            if (ask == null)
+            {
+                ask = (self, riid, result) =>
+                {
+                    if (result == IntPtr.Zero) return unchecked((int)0x80004003);
+
+                    // Claiming to be every interface asked for is how a made
+                    // object gets called through a table it does not have.
+                    // What it is, it says; what it is not, it refuses.
+                    HashSet<string> known;
+                    lock (admits) admits.TryGetValue(self.ToInt64(), out known);
+                    if (known != null && riid != IntPtr.Zero)
+                    {
+                        string wanted;
+                        try
+                        {
+                            wanted = Marshal.PtrToStructure<Guid>(riid).ToString();
+                        }
+                        catch
+                        {
+                            return unchecked((int)0x80004002);
+                        }
+                        if (!known.Contains(wanted)) return unchecked((int)0x80004002);
+                    }
+
+                    Marshal.WriteIntPtr(result, self);
+                    return 0;
+                };
+                up = self => 2;
+                down = self => 1;
+            }
+
+            var total = 3 + methods.Length;
+            var table = Marshal.AllocHGlobal(IntPtr.Size * total);
+            Marshal.WriteIntPtr(table, 0, Marshal.GetFunctionPointerForDelegate(ask));
+            Marshal.WriteIntPtr(table, IntPtr.Size, Marshal.GetFunctionPointerForDelegate(up));
+            Marshal.WriteIntPtr(
+                table, IntPtr.Size * 2, Marshal.GetFunctionPointerForDelegate(down));
+            for (var i = 0; i < methods.Length; i++)
+            {
+                Marshal.WriteIntPtr(table, IntPtr.Size * (3 + i), methods[i]);
+            }
+
+            var made = Marshal.AllocHGlobal(IntPtr.Size * 2);
+            Marshal.WriteIntPtr(made, 0, table);
+            Marshal.WriteIntPtr(made, IntPtr.Size, IntPtr.Zero);
+
+            if (interfaces != null)
+            {
+                var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "00000000-0000-0000-c000-000000000046",
+                };
+                foreach (var id in interfaces) known.Add(id);
+                lock (admits) admits[made.ToInt64()] = known;
+            }
+            return made;
+        }
+
         /// <summary>The object a proxy stands in for, from inside an override.</summary>
         public static IntPtr Original(IntPtr proxy) =>
             proxy == IntPtr.Zero ? IntPtr.Zero : Marshal.ReadIntPtr(proxy, IntPtr.Size);

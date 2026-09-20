@@ -624,16 +624,18 @@ async function cmdSyncKiosk(): Promise<void> {
     });
     if (!match) continue;
 
+    const facts = await factsFor(entry.slug, iconDir, scratch);
+
     // The package identity is what lets the app launch through the console's
     // own Device Portal, which reaches the apps that register no protocol.
     entries.push({
       slug: entry.slug,
       title: match.Name,
       subtitle: shorten(entry.runs?.replace(/^PC NATIVE:\s*/, "") ?? ""),
-      protocol: entry.protocol ?? null,
+      protocol: facts.protocol ?? entry.protocol ?? null,
       packageFullName: match.PackageFullName,
       appId: match.PackageRelativeId,
-      icon: (await iconFor(entry.slug, iconDir, scratch)) ? `icon-${entry.slug}.png` : null,
+      icon: facts.icon ? `icon-${entry.slug}.png` : null,
     });
   }
 
@@ -745,24 +747,45 @@ async function cmdSyncKiosk(): Promise<void> {
   console.log(`${pushedIcons} icones enviados`);
 }
 
-/** Answers whether an icon for this slug now exists on disk. */
-async function iconFor(slug: string, outDir: string, scratch: string): Promise<boolean> {
-  const existing = Bun.file(join(outDir, `${slug}.png`));
-  if (await existing.exists()) return true;
+/**
+ * Reads what a package carries: its logo, and the scheme it registers. The
+ * scheme is what lets the app open it, and reading it here stops the
+ * catalogue's hand-written copy from drifting.
+ */
+const packageFacts = new Map<string, { icon: boolean; protocol: string | null }>();
+
+async function factsFor(
+  slug: string,
+  outDir: string,
+  scratch: string,
+): Promise<{ icon: boolean; protocol: string | null }> {
+  const cached = packageFacts.get(slug);
+  if (cached) return cached;
 
   const dir = join(PACKAGE_DIR, slug);
   let files: string[] = [];
   try {
     files = await readdir(dir);
   } catch {
-    return false;
+    const miss = { icon: false, protocol: null };
+    packageFacts.set(slug, miss);
+    return miss;
   }
   const pkg = files.find((f) => /\.(appx|msix)(bundle)?$/i.test(f));
-  if (!pkg) return false;
+  if (!pkg) {
+    const miss = { icon: false, protocol: null };
+    packageFacts.set(slug, miss);
+    return miss;
+  }
 
   const result = await extractIcon(slug, join(dir, pkg), outDir, scratch);
   if (result.reason) console.log(`  ${slug}: ${result.reason}`);
-  return Boolean(result.file);
+  const facts = {
+    icon: Boolean(result.file) || (await Bun.file(join(outDir, `${slug}.png`)).exists()),
+    protocol: result.protocol ?? null,
+  };
+  packageFacts.set(slug, facts);
+  return facts;
 }
 
 function usage(): void {

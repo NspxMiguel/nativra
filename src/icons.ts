@@ -64,7 +64,30 @@ function pickLogo(names: string[], stem: string): string | null {
   return wanted[0];
 }
 
-export type IconResult = { slug: string; file?: string; reason?: string };
+export type IconResult = {
+  slug: string;
+  file?: string;
+  reason?: string;
+  /** The URI scheme the package registers, which is how it can be launched. */
+  protocol?: string | null;
+};
+
+/**
+ * Every scheme the manifest registers. Kept out of the catalogue on purpose:
+ * a hand-maintained list drifts, and the package itself is the truth.
+ */
+function protocolOf(manifest: string): string | null {
+  const block = manifest.replace(/>/g, ">\n");
+  const lines = block.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (!/windows\.protocol/i.test(lines[i])) continue;
+    for (let j = i; j < Math.min(i + 5, lines.length); j++) {
+      const match = lines[j].match(/Name="([a-zA-Z0-9.+-]+)"/);
+      if (match) return match[1];
+    }
+  }
+  return null;
+}
 
 /**
  * Writes <outDir>/<slug>.png and answers what happened, because a package
@@ -96,6 +119,8 @@ export async function extractIcon(
   if (!manifestBytes) return { slug, reason: "unreadable manifest" };
   const manifest = new TextDecoder().decode(manifestBytes);
 
+  const protocol = protocolOf(manifest);
+
   for (const stem of logoStems(manifest)) {
     const entry = pickLogo(names, stem);
     if (!entry) continue;
@@ -104,9 +129,9 @@ export async function extractIcon(
     await mkdir(outDir, { recursive: true });
     const file = join(outDir, `${slug}.png`);
     await Bun.write(file, png);
-    return { slug, file };
+    return { slug, file, protocol };
   }
-  return { slug, reason: "package carries no logo" };
+  return { slug, reason: "package carries no logo", protocol };
 }
 
 export async function cleanScratch(scratch: string): Promise<void> {

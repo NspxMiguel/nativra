@@ -46,7 +46,7 @@ namespace Kiosk.Native
         {
             for (var i = 0; i < room / 2; i++)
             {
-                Marshal.WriteInt16(at, offset + i * 2, i < text.Length ? text[i] : (short)0);
+                Marshal.WriteInt16(at, offset + i * 2, (short)(i < text.Length ? text[i] : '\0'));
             }
         }
 
@@ -54,7 +54,7 @@ namespace Kiosk.Native
         {
             for (var i = 0; i < room; i++)
             {
-                Marshal.WriteByte(at, offset + i, i < text.Length ? (byte)text[i] : (byte)0);
+                Marshal.WriteByte(at, offset + i, (byte)(i < text.Length ? text[i] : '\0'));
             }
         }
 

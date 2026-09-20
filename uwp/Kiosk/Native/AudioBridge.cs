@@ -31,6 +31,7 @@ namespace Kiosk.Native
         private const string EnumeratorClass = "bcde0395-e52f-467c-8e3d-c4579291692e";
         private const string EnumeratorInterface = "a95664d2-9614-4f35-a746-de8db63617e6";
         private const string DeviceInterface = "d666063f-1587-4e43-81f1-b948e807363f";
+        private const string CollectionInterface = "0bd7a1be-7a1a-44db-8397-cc5392387b5e";
 
         [DllImport("Mmdevapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern int ActivateAudioInterfaceAsync(
@@ -58,6 +59,13 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int StoreDelegate(IntPtr self, uint access, IntPtr result);
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int EnumerateDelegate(
+            IntPtr self, int flow, uint stateMask, IntPtr result);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ItemDelegate(IntPtr self, uint index, IntPtr result);
+
         // Held so the collector cannot take what native code is holding.
         private static CompletedDelegate completed;
         private static EndpointDelegate endpoint;
@@ -65,8 +73,11 @@ namespace Kiosk.Native
         private static OneOutDelegate identity;
         private static OneOutDelegate condition;
         private static StoreDelegate store;
-        private static TwoInDelegate collection;
         private static TwoInDelegate listener;
+        private static EnumerateDelegate enumerate;
+        private static OneOutDelegate count;
+        private static ItemDelegate item;
+        private static TwoInDelegate missing;
 
         private static readonly ComProxy Proxy = new ComProxy();
         private static IntPtr enumerator;
@@ -169,6 +180,7 @@ namespace Kiosk.Native
                 try
                 {
                     var wanted = Marshal.PtrToStructure<Guid>(riid);
+                    Note("activate " + wanted);
                     var client = RealClient(wanted);
                     if (client == IntPtr.Zero) return E_FAIL;
                     Marshal.WriteIntPtr(result, client);
@@ -230,21 +242,59 @@ namespace Kiosk.Native
             endpoint = (self, flow, role, result) =>
             {
                 if (result == IntPtr.Zero) return E_FAIL;
+                Note("default endpoint asked for");
                 Marshal.WriteIntPtr(result, device);
                 return S_OK;
             };
 
-            // Enumerating every endpoint and subscribing to changes are things
-            // a game does to offer a device list. One device, no changes.
-            collection = (self, first, second) => E_NOTIMPL;
+            // A list with one device on it. Refusing to enumerate is what sent
+            // the last attempt round in circles: a caller that cannot count
+            // the speakers assumes it asked too early and asks again.
+            count = (self, result) =>
+            {
+                if (result != IntPtr.Zero) Marshal.WriteInt32(result, 1);
+                Note("device count asked for");
+                return S_OK;
+            };
+            item = (self, index, result) =>
+            {
+                if (result == IntPtr.Zero) return E_FAIL;
+                if (index != 0) return E_FAIL;
+                Marshal.WriteIntPtr(result, device);
+                return S_OK;
+            };
+
+            var devices = Proxy.Create(
+                new[]
+                {
+                    Marshal.GetFunctionPointerForDelegate(count),
+                    Marshal.GetFunctionPointerForDelegate(item),
+                },
+                new[] { CollectionInterface });
+
+            enumerate = (self, flow, stateMask, result) =>
+            {
+                if (result == IntPtr.Zero) return E_FAIL;
+                Note("endpoints enumerated");
+                Marshal.WriteIntPtr(result, devices);
+                return S_OK;
+            };
+
+            // Asking for a named device: the only one there is answers.
+            missing = (self, first, second) =>
+            {
+                if (second == IntPtr.Zero) return E_FAIL;
+                Marshal.WriteIntPtr(second, device);
+                return S_OK;
+            };
             listener = (self, first, second) => S_OK;
 
             enumerator = Proxy.Create(
                 new[]
                 {
-                    Marshal.GetFunctionPointerForDelegate(collection),   // EnumAudioEndpoints
+                    Marshal.GetFunctionPointerForDelegate(enumerate),    // EnumAudioEndpoints
                     Marshal.GetFunctionPointerForDelegate(endpoint),     // GetDefaultAudioEndpoint
-                    Marshal.GetFunctionPointerForDelegate(collection),   // GetDevice
+                    Marshal.GetFunctionPointerForDelegate(missing),      // GetDevice
                     Marshal.GetFunctionPointerForDelegate(listener),     // Register
                     Marshal.GetFunctionPointerForDelegate(listener),     // Unregister
                 },

@@ -278,7 +278,24 @@ namespace Kiosk.Native
                         // is what reached the disk — so the last call each
                         // thread made is written continuously, small and fast,
                         // rather than waited for.
+                        // The pointer has to keep moving whether or not the
+                        // game is asking, or a stick held still between two
+                        // reads looks like a stick let go.
                         var beating = true;
+                        var pointer = new System.Threading.Thread(() =>
+                        {
+                            var last = Environment.TickCount;
+                            while (beating)
+                            {
+                                var now = Environment.TickCount;
+                                PointerBridge.Step(Math.Max(0, now - last) / 1000.0);
+                                last = now;
+                                System.Threading.Thread.Sleep(8);
+                            }
+                        });
+                        pointer.IsBackground = true;
+                        pointer.Start();
+
                         var pulse = new System.Threading.Thread(() =>
                         {
                             while (beating)
@@ -291,6 +308,8 @@ namespace Kiosk.Native
                                         "calls=" + imports.Shim.Total,
                                         "pumped=" + WindowStubs.Pumped,
                                         "pad=" + PadBridge.Reads,
+                                        "pointer=" + PointerBridge.Moves
+                                            + " at " + PointerBridge.X + "," + PointerBridge.Y,
                                         "stubs=" + imports.Shim.Called.Count,
                                     };
                                     beat.AddRange(FaultWatch.Faults());
@@ -405,6 +424,24 @@ namespace Kiosk.Native
                         }
                         beating = false;
                         lines.Add("exe.finished");
+
+                        // The engine's whole account of its startup, not just
+                        // the tail the heartbeat had room for.
+                        lock (LoaderStubs.Said)
+                        {
+                            lines.Add("said.lines=" + LoaderStubs.Said.Count);
+                            foreach (var line in LoaderStubs.Said) lines.Add("  said " + line);
+                        }
+                        lock (GraphicsBridge.Notes)
+                        {
+                            foreach (var note in GraphicsBridge.Notes) lines.Add("  dxgi " + note);
+                        }
+                        lock (AudioBridge.Notes)
+                        {
+                            foreach (var note in AudioBridge.Notes) lines.Add("  audio " + note);
+                        }
+                        lines.Add("pad.reads=" + PadBridge.Reads);
+                        lines.Add("pumped=" + WindowStubs.Pumped);
                         if (previousBase != IntPtr.Zero)
                         {
                             PeImage.SetProcessImageBase(previousBase);

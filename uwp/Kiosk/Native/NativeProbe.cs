@@ -256,9 +256,11 @@ namespace Kiosk.Native
                         // Written over and over while it runs: the program can
                         // take the process down at any point, and the last
                         // function it reached is the whole answer.
-                        for (var tick = 0; tick < 40; tick++)
+                        // It dies in under a frame, so the first look is
+                        // immediate and the rest are close behind.
+                        for (var tick = 0; tick < 120; tick++)
                         {
-                            await Task.Delay(tick == 0 ? 30 : 150);
+                            await Task.Delay(tick == 0 ? 2 : 50);
                             var snapshot = new List<string>(lines)
                             {
                                 "exe.alive=" + runner.IsAlive,

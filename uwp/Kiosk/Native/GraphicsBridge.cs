@@ -176,6 +176,26 @@ namespace Kiosk.Native
         /// off while looking for something that stops the whole process.
         /// </summary>
         public static bool NoMirror;
+
+        /// <summary>
+        /// Frames per second the game is allowed to hand over. An application
+        /// shares this console's graphics with the system that draws around it,
+        /// and a game that was written to take a whole machine does not know to
+        /// leave anything. Zero lets it run as fast as it can.
+        /// </summary>
+        public static int Ceiling;
+
+        private static int lastFrameAt;
+
+        /// <summary>Holds the render thread back to the ceiling, if there is one.</summary>
+        private static void Pace()
+        {
+            if (Ceiling <= 0) return;
+            var gap = 1000 / Ceiling;
+            var since = Environment.TickCount - lastFrameAt;
+            if (since < gap) System.Threading.Thread.Sleep(gap - since);
+            lastFrameAt = Environment.TickCount;
+        }
         private static SetFullscreenDelegate setFullscreen;
 
         /// <summary>
@@ -411,7 +431,9 @@ namespace Kiosk.Native
                         // rotates its buffers on the way, and what was just
                         // drawn is no longer where it was.
                         if (Mirroring) FrameMirror.Take();
-                        return presentThrough(ComProxy.Original(self), interval, flags);
+                        var answer = presentThrough(ComProxy.Original(self), interval, flags);
+                        Pace();
+                        return answer;
                     };
 
                     // A flip-model chain is often presented through the newer

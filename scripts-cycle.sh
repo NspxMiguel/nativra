@@ -121,9 +121,14 @@ bun src/xbdev.ts shot /tmp/xbox-cycle.png >/dev/null 2>&1 || true
 # The engine ignores -logFile and writes where it always writes: its own
 # folder under the container. That log says in one line what days of call
 # tracing only hinted at, so it is fetched every turn.
+# The folder is named after the game, and this game's name has an apostrophe
+# in it. Held in a variable rather than written inline: nested inside a command
+# substitution that quote opened a string nobody closed, and the whole script
+# stopped parsing.
+GAME_NAME=${GAME:-}
+if [ -z "$GAME_NAME" ]; then GAME_NAME=$(printf 'Seraph%ss Last Stand' "'"); fi
 for MAKER in OddGiant "LEGO" .; do
-  if bun src/xbdev.ts pull kiosk Player.log \
-       "AC/$MAKER/$(printf '%s' "${GAME:-Seraph's Last Stand}")" >/dev/null 2>&1; then
+  if bun src/xbdev.ts pull kiosk Player.log "AC/$MAKER/$GAME_NAME" >/dev/null 2>&1; then
     echo "== the game's own log =="
     tail -40 Player.log
     break

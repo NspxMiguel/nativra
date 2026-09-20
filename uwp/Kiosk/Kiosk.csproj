@@ -79,6 +79,7 @@
     <Compile Include="Native\ModuleFileName.cs" />
     <Compile Include="Native\ImageLookup.cs" />
     <Compile Include="Native\ProcessStubs.cs" />
+    <Compile Include="Native\WindowStubs.cs" />
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Texts.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

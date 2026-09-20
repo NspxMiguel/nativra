@@ -119,6 +119,14 @@ namespace Kiosk.Native
         public Dictionary<string, IntPtr> Overrides { get; } =
             new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// What a missing function should answer instead of zero. Zero means
+        /// failure for most of a window system, and a caller told its window
+        /// was never created stops there.
+        /// </summary>
+        public Dictionary<string, long> Answers { get; } =
+            new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+
         public IntPtr Resolve(string module, string function)
         {
             if (Overrides.TryGetValue(module + "!" + function, out var ours))
@@ -162,7 +170,9 @@ namespace Kiosk.Native
 
             // A stub keeps the import table complete, so the image can run and
             // say which of these it actually needs.
-            var stub = Shim.StubFor(name);
+            var stub = Answers.TryGetValue(name, out var answer)
+                ? Shim.StubReturning(name, answer)
+                : Shim.StubFor(name);
             if (stub != IntPtr.Zero) FromStubs++;
             return stub;
         }

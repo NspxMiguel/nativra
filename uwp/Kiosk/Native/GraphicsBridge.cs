@@ -1781,7 +1781,12 @@ namespace Kiosk.Native
                     { CreateForHwndSlot, Marshal.GetFunctionPointerForDelegate(createForHwnd) },
                     { EnumAdaptersSlot, Marshal.GetFunctionPointerForDelegate(enumAdapters) },
                     { EnumAdapters1Slot, Marshal.GetFunctionPointerForDelegate(enumAdapters1) },
-                });
+                },
+                    // Every other entry is recorded on its way through. A swap
+                    // chain appeared that this bridge never made, and every
+                    // guess about which call produced it has been wrong; the
+                    // table itself can simply be asked.
+                    "factory");
                 standingFactory = stand;
                 Marshal.WriteIntPtr(result, stand);
                 Note(name + ": standing in for 0x" + original.ToInt64().ToString("X")

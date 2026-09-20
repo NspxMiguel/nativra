@@ -168,6 +168,14 @@ namespace Kiosk.Native
         /// the one thing a game creates that the display system knows about.
         /// </summary>
         public static bool NoChain;
+
+        /// <summary>
+        /// Leave the frames where they are. The copy runs on the engine's own
+        /// render thread, which makes it the largest source of managed calls
+        /// coming out of native code — and that is worth being able to switch
+        /// off while looking for something that stops the whole process.
+        /// </summary>
+        public static bool NoMirror;
         private static SetFullscreenDelegate setFullscreen;
 
         /// <summary>
@@ -455,7 +463,7 @@ namespace Kiosk.Native
                         // Both direct routes were measured refused on this
                         // console, every shape, with and without the app
                         // holding its own screen. So the frames are copied.
-                        var going = FrameMirror.Start(
+                        var going = NoMirror ? false : FrameMirror.Start(
                             device, chain,
                             Marshal.ReadInt32(desc, 0), Marshal.ReadInt32(desc, 4),
                             87, Mirror, OnUi);

@@ -1,12 +1,12 @@
-at=2026-09-19 19:09:51
+at=2026-09-19 19:19:11
 tls.level=6
 as=Q:\Users\UserMgr1\AppData\Local\Packages\NSPX.Kiosk_8r28b9prq7p9c\LocalState\games\1919460\Seraph's Last Stand.exe
-baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=43 [dir ok size=8+0 teb=0xE9FC372000 table=0x29AC2974970 readable=71312 protect=0x4 slot=43 of 8914 index written block ready wrote in place]
-UnityPlayer.dll: mapped at 0x29AE5100000 exports=1 unresolved=0 unwind=True tls=2 slot=44 [dir ok size=321+0 teb=0xE9FC372000 table=0x29AC2974970 readable=71312 protect=0x4 slot=44 of 8914 index written block ready wrote in place]
-GameAssembly.dll: mapped at 0x29AE6D80000 exports=391 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0xE9FC372000 table=0x29AC2974970 readable=71312 protect=0x4 slot=45 of 8914 index written block ready wrote in place]
+baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=43 [dir ok size=8+0 teb=0xD613376000 table=0x290549DF0B0 readable=294736 protect=0x4 slot=43 of 36842 index written block ready wrote in place]
+UnityPlayer.dll: mapped at 0x29078300000 exports=1 unresolved=0 unwind=True tls=2 slot=44 [dir ok size=321+0 teb=0xD613376000 table=0x290549DF0B0 readable=294736 protect=0x4 slot=44 of 36842 index written block ready wrote in place]
+GameAssembly.dll: mapped at 0x29079F80000 exports=391 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0xD613376000 table=0x290549DF0B0 readable=294736 protect=0x4 slot=45 of 36842 index written block ready wrote in place]
 Seraph's Last Stand.exe: mapped at 0x140000000 exports=2 unresolved=0 unwind=True tls=0 slot=-1 [no tls directory]
-UnityCrashHandler64.exe: mapped at 0x29AE95E0000 exports=0 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=305+0 teb=0xE9FC372000 table=0x29AC2974970 readable=71312 protect=0x4 slot=46 of 8914 index written block ready wrote in place]
-resolved.system=914 resolved.images=14
+UnityCrashHandler64.exe: mapped at 0x2907C7E0000 exports=0 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=305+0 teb=0xD613376000 table=0x290549DF0B0 readable=294736 protect=0x4 slot=46 of 36842 index written block ready wrote in place]
+resolved.system=911 resolved.images=14
 modules.missing=USER32.dll,VERSION.dll,SHLWAPI.dll,SETUPAPI.dll,OPENGL32.dll,WINMM.dll,IMM32.dll,HID.DLL,dwmapi.dll,dbghelp.dll,PSAPI.DLL
 functions.missing=201 stubbed=201
   USER32.dll!GetRawInputDeviceList
@@ -318,34 +318,34 @@ stubs.called=104
   called KERNEL32.dll!HeapSize
   called KERNEL32.dll!HeapReAlloc
   called KERNEL32.dll!InitializeSRWLock
-ticks=OK 63920273758934->63920273759144
-exe=UnityMain starting base 0x7FF693E90000 -> 0x140000000
+ticks=OK 64899012423028->64899012423255
+exe=UnityMain starting base 0x7FF74FC80000 -> 0x140000000
 exe.alive=True
-exe.stubs=111
-  recent KERNEL32.dll!LeaveCriticalSection
-  recent KERNEL32.dll!QueryPerformanceCounter
-  recent KERNEL32.dll!QueryPerformanceCounter
-  recent KERNEL32.dll!VirtualAlloc
-  recent KERNEL32.dll!VirtualProtect
-  recent KERNEL32.dll!InitializeCriticalSectionAndSpinCount
-  recent KERNEL32.dll!GetCurrentProcessId
-  recent KERNEL32.dll!CreateEventW
-  recent KERNEL32.dll!CreateEventW
-  recent KERNEL32.dll!CreateEventW
-  recent KERNEL32.dll!CreatePipe
-  recent KERNEL32.dll!SetHandleInformation
-  recent KERNEL32.dll!GetModuleHandleW
-  recent KERNEL32.dll!GetLastError
-  recent KERNEL32.dll!GetCurrentProcessId
-  recent KERNEL32.dll!GetCommandLineW
-  recent KERNEL32.dll!GetCommandLineW
-  recent KERNEL32.dll!GetCommandLineW
-  recent KERNEL32.dll!InitializeProcThreadAttributeList
+exe.stubs=124
   recent KERNEL32.dll!EnterCriticalSection
   recent KERNEL32.dll!LeaveCriticalSection
-  recent KERNEL32.dll!InitializeProcThreadAttributeList
-  recent KERNEL32.dll!UpdateProcThreadAttribute
-  recent KERNEL32.dll!CreateProcessW
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!GetNativeSystemInfo
+  recent KERNEL32.dll!VirtualAlloc
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!TlsSetValue
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!GetCurrentThreadId
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
+  recent KERNEL32.dll!EnterCriticalSection
+  recent KERNEL32.dll!LeaveCriticalSection
   called KERNEL32.dll!GetSystemTimeAsFileTime
   called KERNEL32.dll!GetCurrentThreadId
   called KERNEL32.dll!GetCurrentProcessId
@@ -456,4 +456,17 @@ exe.stubs=111
   called KERNEL32.dll!SetHandleInformation
   called KERNEL32.dll!InitializeProcThreadAttributeList
   called KERNEL32.dll!UpdateProcThreadAttribute
-  called KERNEL32.dll!CreateProcessW
+  called KERNEL32.dll!DeleteProcThreadAttributeList
+  called KERNEL32.dll!SetUnhandledExceptionFilter
+  called KERNEL32.dll!SetErrorMode
+  called KERNEL32.dll!WaitForSingleObject
+  called SHELL32.dll!CommandLineToArgvW
+  called KERNEL32.dll!LocalFree
+  called bcrypt.dll!BCryptGenRandom
+  called KERNEL32.dll!GetLogicalProcessorInformationEx
+  called KERNEL32.dll!CreateThread
+  called KERNEL32.dll!WaitForSingleObjectEx
+  called KERNEL32.dll!TlsSetValue
+  called KERNEL32.dll!RaiseException
+  called KERNEL32.dll!RtlUnwindEx
+  called KERNEL32.dll!ReleaseSemaphore

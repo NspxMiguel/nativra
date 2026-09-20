@@ -48,45 +48,55 @@
 (`claude-autonomous:XBDEV`). Build: push -> GitHub Actions -> release ->
 `gh release download`.
 
-## Onde o carregador parou, exatamente
+## O motor do jogo RODA no console
 
-O `baselib.dll` do Seraph's Last Stand mapeia, reloca, registra a tabela de
-exceções e resolve **os 140 imports contra o Windows real** — zero stubs. E
-ainda assim o processo morre dentro do `DllMain` dele.
+Estado medido em 19/09, madrugada. O Seraph's Last Stand, baixado pelo próprio
+Xbox da conta dele, tem os quatro módulos carregados pelo nosso carregador e o
+**motor do Unity inicializa e roda**, multithread, dentro do nosso app.
 
-A causa é **TLS estático**: o módulo tem diretório TLS (rva 319360) e foi
-compilado com `__declspec(thread)`. O carregador de verdade dá um índice ao
-módulo, copia o template para a thread e põe o bloco na tabela que fica em
-`TEB+0x58`. Sem isso, o módulo lê um slot de outro dono.
+O que o traço mostra o motor fazendo, em ordem: CRT e code pages, linha de
+comando por `CommandLineToArgvW`, semente aleatória por `BCryptGenRandom`,
+topologia de CPU por `GetLogicalProcessorInformationEx`, `CreateThread` para o
+sistema de jobs, `TlsSetValue`, e **`RaiseException` + `RtlUnwindEx`** — ou
+seja, exceções C++ sendo lançadas e desenroladas dentro de uma imagem que o
+sistema operacional nem sabe que existe. 124 funções distintas alcançadas, e o
+processo continua vivo.
 
-Implementei os três passos (índice por `TlsAlloc`, cópia do template, e a
-tabela medida com `HeapSize` em vez de chutada). **Continua derrubando o
-processo.** A suspeita forte é que reescrever `TEB+0x58` na thread de UI
-corrompe o TLS do próprio runtime .NET Native que hospeda o app.
+### As cinco peças que destravaram isso, todas medidas
 
-Caminhos a tentar, em ordem:
-1. Fazer tudo numa **thread dedicada**, criada por nós, e nunca na de UI.
-2. Não trocar o ponteiro da tabela: só escrever num índice que já cabe, e se
-   não couber, desistir em vez de crescer.
-3. Hospedar o jogo em **outro processo** (um segundo pacote UWP só para isso),
-   para que um erro não leve o front-end junto.
+1. **`codeGeneration` no manifesto.** Era a causa de TODOS os crashes: sem ela
+   uma página escrita nunca vira executável, e a primeira chamada a código
+   gerado derruba o processo. O JitProbe tinha; o Kiosk não.
+2. **TLS estático.** Índice por `TlsAlloc`, cópia do template, e o bloco escrito
+   na tabela do TEB (0x58). O tamanho da tabela se **mede** com `VirtualQuery` —
+   `HeapSize` falha porque a tabela não é do heap do processo.
+3. **`RtlPcToFileHeader`.** A máquina de exceção pergunta a todo momento qual
+   imagem é dona de um endereço, e o sistema só conhece o que ele mesmo
+   carregou. Nossas imagens respondem por si.
+4. **`CreateProcessW`.** O Unity sobe o crash handler como processo filho antes
+   de tudo. Um app container não pode, e a chamada matava o processo. Falhar com
+   acesso negado é verdade e o motor segue sem ele.
+5. **Chamar `UnityMain` da DLL** em vez do entry point do `.exe`: a inicialização
+   de um executável assume que ele é o processo.
 
-A trava está atrás de um arquivo marcador (`LocalState/win32/tls.txt`): sem
-ele, o app nunca executa essa parte. Foi assim que o console voltou a ficar
-saudável.
+### Ferramenta que tornou isso possível
 
-## Depois do TLS ainda faltam
+Um traço de chamadas estilo `+relay` do Wine: cada import resolvido recebe um
+thunk gerado em runtime que empilha os quatro registradores de argumento,
+registra o nome, restaura e salta para a função real. Um anel guarda as últimas
+chamadas com repetição — sem isso, a função onde o jogo morre fica escondida.
 
-- **178 funções** que o processo não tem carregadas (user32 114, winmm 23,
-  HID 14, imm32 8, opengl32 6, setupapi 5, version 3, dbghelp 2). Cada import
-  sem resposta já recebe um stub gerado em runtime que grava o próprio nome,
-  então rodar o jogo diz **quais** desses ele realmente chama.
-- **Gráficos**: o jogo cria swapchain a partir de HWND, e o Xbox só tem
-  CoreWindow. Isso é interceptar `dxgi`/`d3d11` e devolver
-  `CreateSwapChainForCoreWindow`.
+## O que falta para ver a janela
 
-Nada disso é por jogo — é a mesma camada para todos, que é o que ele pediu
-("tipo o proton, entrou jogo e GG").
+- **user32 sobre CoreWindow** (114 funções): `RegisterClass`, `CreateWindowEx`,
+  `GetMessage`/`PeekMessage`/`DispatchMessage`, `DefWindowProc`, `GetClientRect`,
+  raw input. O Xbox não tem HWND; tem CoreWindow.
+- **Ponte de gráficos**: o jogo cria swapchain a partir de HWND; o console usa
+  `CreateSwapChainForCoreWindow`. É interceptar `dxgi`/`d3d11`.
+- **winmm 23, HID 14, imm32 8** para som e controle.
+
+Cada import sem resposta já tem um stub que grava o próprio nome, então a
+ordem de implementação é ditada pelo jogo, não por palpite.
 
 ## Fila (pedidos dele, em PEDIDOS.md)
 

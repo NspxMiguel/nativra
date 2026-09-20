@@ -61,6 +61,11 @@ bun src/xbdev.ts push kiosk .markers/autodownload.txt LocalState
 if [ "${TRACE:-on}" = "off" ]; then
   bun src/xbdev.ts push kiosk .markers/notrace.txt LocalState
 fi
+# AUDIO=off refuses the audio class outright, which is how the picture gets
+# looked at without the sound getting in the way of it.
+if [ "${AUDIO:-on}" = "off" ]; then
+  bun src/xbdev.ts push kiosk .markers/noaudio.txt LocalState
+fi
 bun src/xbdev.ts launch kiosk >/dev/null
 
 echo "== downloading and running"

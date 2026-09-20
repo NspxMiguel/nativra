@@ -25,11 +25,18 @@ namespace Kiosk.Native
         public static Task RunAsync()
         {
             var done = new TaskCompletionSource<bool>();
-            var thread = new System.Threading.Thread(async () =>
+            var thread = new System.Threading.Thread(() =>
             {
                 try
                 {
-                    await WorkAsync();
+                    // Waited on here rather than awaited: an async lambda would
+                    // return at the first await and leave this thread empty,
+                    // which is the opposite of the point.
+                    WorkAsync().GetAwaiter().GetResult();
+                }
+                catch
+                {
+                    // The report on disk is the record; nothing to raise to.
                 }
                 finally
                 {
@@ -56,8 +63,23 @@ namespace Kiosk.Native
                 }
 
                 // The dangerous half of the loader only runs when asked.
-                PeImage.EnableTls = await folder.TryGetItemAsync("tls.txt") != null;
-                PeImage.AllowTableGrowth = await folder.TryGetItemAsync("tlsgrow.txt") != null;
+                // The marker's contents say how far to go, so one build can
+                // answer several questions.
+                PeImage.TlsLevel = 0;
+                if (await folder.TryGetItemAsync("tls.txt") is StorageFile marker)
+                {
+                    int.TryParse((await FileIO.ReadTextAsync(marker)).Trim(), out var level);
+                    PeImage.TlsLevel = level;
+                }
+                lines.Add("tls.level=" + PeImage.TlsLevel);
+
+                // Each step of the setup lands on disk as it happens.
+                var trail = new List<string>(lines);
+                PeImage.Step = note =>
+                {
+                    var snapshot = new List<string>(trail) { "tls.step=" + note };
+                    WriteAsync(snapshot).GetAwaiter().GetResult();
+                };
 
                 var imports = new SystemImports();
 

@@ -38,6 +38,11 @@ namespace Kiosk
 
         /// <summary>The game on Steam, when it came from there.</summary>
         public uint SteamAppId { get; set; }
+
+        /// <summary>Whether he has asked for this on the shelf.</summary>
+        public bool OnShelf { get; set; }
+        public string ShelfAction =>
+            OnShelf ? Texts.Get("emu.remove") : Texts.Get("emu.add");
         public Visibility IconShown =>
             Icon == null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility LetterShown =>
@@ -101,6 +106,17 @@ namespace Kiosk
     public sealed partial class MainPage : Page
     {
         public ObservableCollection<Tile> Tiles { get; } = new ObservableCollection<Tile>();
+
+        /// <summary>
+        /// The emulators themselves, which are not games.
+        ///
+        /// They used to sit on the shelf beside Baldur's Gate, and that is the
+        /// wrong shape: an emulator is a thing you set up once, not a thing
+        /// you play. They live on their own screen now, and a game running
+        /// under one reaches the shelf only when he puts it there.
+        /// </summary>
+        public ObservableCollection<Tile> Emulators { get; } =
+            new ObservableCollection<Tile>();
 
         // One colour per tile is identity here, not decoration: without the
         // package query there is no app artwork to show.
@@ -175,12 +191,18 @@ namespace Kiosk
                 Tiles.Add(game);
             }
 
+            // Installed packages are emulators and tools, not games. They go
+            // to their own screen; the shelf keeps what is actually played.
+            Emulators.Clear();
             var apps = await ReadListAsync();
             var index = 1;
+            var onShelf = await ReadShortcutsAsync();
             foreach (var app in apps ?? new List<Tile>())
             {
                 app.Accent = new SolidColorBrush(Accents[index++ % Accents.Length]);
-                Tiles.Add(app);
+                app.OnShelf = onShelf.Contains(app.Title);
+                Emulators.Add(app);
+                if (app.OnShelf) Tiles.Add(app);
             }
 
             // The shelf reads as a shelf, not as a list: the first tile is
@@ -471,8 +493,12 @@ namespace Kiosk
 
             // The rest are named, reachable, and honest about not being built,
             // which is better than an icon that swallows the press.
-            var built = where == "library";
-            LibraryScreen.Visibility = built ? Visibility.Visible : Visibility.Collapsed;
+            LibraryScreen.Visibility =
+                where == "library" ? Visibility.Visible : Visibility.Collapsed;
+            EmulatorScreen.Visibility =
+                where == "emulators" ? Visibility.Visible : Visibility.Collapsed;
+
+            var built = where == "library" || where == "emulators";
             StatusText.Text = built ? string.Empty : Texts.Get("status.notyet", where);
         }
 
@@ -501,6 +527,77 @@ namespace Kiosk
             var next = icons[((at + by) % icons.Length + icons.Length) % icons.Length];
             next.Focus(FocusState.Programmatic);
             OnDockClicked(next, null);
+        }
+
+        /// <summary>
+        /// Which emulators he asked to see on the shelf. Kept beside the app's
+        /// own data so it survives an update, and read as a plain list of
+        /// names because that is what it is.
+        /// </summary>
+        private static async Task<HashSet<string>> ReadShortcutsAsync()
+        {
+            var chosen = new HashSet<string>();
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder
+                    .TryGetItemAsync("shortcuts.json") as StorageFile;
+                if (file == null) return chosen;
+                var text = await FileIO.ReadTextAsync(file);
+                if (!JsonObject.TryParse(text, out var root)) return chosen;
+                foreach (var value in root.GetNamedArray("shelf"))
+                {
+                    chosen.Add(value.GetString());
+                }
+            }
+            catch
+            {
+                // Nothing chosen yet is the ordinary case, not a failure.
+            }
+            return chosen;
+        }
+
+        private static async Task WriteShortcutsAsync(IEnumerable<string> chosen)
+        {
+            var shelf = new JsonArray();
+            foreach (var name in chosen) shelf.Add(JsonValue.CreateStringValue(name));
+            var root = new JsonObject { { "shelf", shelf } };
+            var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                "shortcuts.json", CreationCollisionOption.ReplaceExisting);
+            await FileIO.WriteTextAsync(file, root.Stringify());
+        }
+
+        /// <summary>
+        /// Puts an emulator on the shelf, or takes it off. His choice, either
+        /// way: the shelf is his, and nothing arrives on it uninvited.
+        /// </summary>
+        private async void OnShelfToggled(object sender, RoutedEventArgs e)
+        {
+            var tile = (sender as FrameworkElement)?.Tag as Tile;
+            if (tile == null) return;
+
+            tile.OnShelf = !tile.OnShelf;
+            if (tile.OnShelf)
+            {
+                Tiles.Insert(Math.Max(0, Tiles.Count - 1), tile);
+            }
+            else
+            {
+                Tiles.Remove(tile);
+            }
+
+            var chosen = new List<string>();
+            foreach (var one in Emulators)
+            {
+                if (one.OnShelf) chosen.Add(one.Title);
+            }
+            await WriteShortcutsAsync(chosen);
+
+            // The list is rebuilt rather than nudged: the cards read their
+            // label from the tile, and a collection that was changed in place
+            // does not tell them to look again.
+            var all = new List<Tile>(Emulators);
+            Emulators.Clear();
+            foreach (var one in all) Emulators.Add(one);
         }
 
         private void Light(string where)

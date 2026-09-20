@@ -28,14 +28,20 @@
                     <Grid Width="{x:Bind TileWidth}" Height="{x:Bind TileHeight}"
                           Opacity="{x:Bind Dimmed}">
 
-                        <!-- Box art, or the gradient standing in for it. -->
-                        <Border CornerRadius="{StaticResource RadiusButton}"
-                                Background="{x:Bind Art}"
-                                Visibility="{x:Bind ArtShown}" />
-                        <Border CornerRadius="{StaticResource RadiusButton}"
-                                Visibility="{x:Bind IconShown}">
-                            <Image Source="{x:Bind Icon}" Stretch="UniformToFill" />
-                        </Border>
+                        <!-- Box art, or the gradient standing in for it.
+                             Drawn as a filled rectangle rather than a bordered
+                             image: a border does not clip what it holds, so an
+                             icon wider than the tile spills past the corner. -->
+                        <Rectangle RadiusX="12" RadiusY="12"
+                                   Fill="{x:Bind Art}"
+                                   Visibility="{x:Bind ArtShown}" />
+                        <Rectangle RadiusX="12" RadiusY="12"
+                                   Visibility="{x:Bind IconShown}">
+                            <Rectangle.Fill>
+                                <ImageBrush ImageSource="{x:Bind Icon}"
+                                            Stretch="UniformToFill" />
+                            </Rectangle.Fill>
+                        </Rectangle>
 
                         <!-- The tile that opens everything. -->
                         <Border CornerRadius="{StaticResource RadiusButton}"
@@ -193,12 +199,14 @@
                                        VerticalAlignment="Center"
                                        Visibility="Collapsed" />
                             <HyperlinkButton x:Name="SignInLink"
-                                             Content="Sign in to Steam &#x2192;"
-                                             FontSize="{StaticResource LabelSize}"
-                                             FontWeight="Bold"
-                                             Foreground="{StaticResource Accent}"
                                              Padding="0"
-                                             Click="OnSignInClicked" />
+                                             Click="OnSignInClicked">
+                                <TextBlock Text="Sign in to Steam &#x2192;"
+                                           FontSize="{StaticResource LabelSize}"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource Accent}"
+                                           TextDecorations="None" />
+                            </HyperlinkButton>
                         </StackPanel>
 
                         <ListView x:Name="AppRail" Grid.Row="1"

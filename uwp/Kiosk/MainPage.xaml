@@ -210,7 +210,7 @@
                             </HyperlinkButton>
                         </StackPanel>
 
-                        <ScrollViewer Grid.Row="1"
+                        <ScrollViewer Grid.Row="1" IsTabStop="False"
                                       HorizontalScrollMode="Enabled"
                                       HorizontalScrollBarVisibility="Auto"
                                       VerticalScrollMode="Disabled"

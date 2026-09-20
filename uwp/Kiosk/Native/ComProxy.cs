@@ -47,7 +47,33 @@ namespace Kiosk.Native
         /// <summary>Kept so the collector cannot take what native code holds.</summary>
         private readonly List<object> alive = new List<object>();
 
-        public void Keep(object thing) => alive.Add(thing);
+        // Everything mutable in here is shared by every thread that touches a
+        // graphics object, and they arrive together: a game initialising its
+        // renderer does so from its loader thread, its main thread and its
+        // render thread within the same few milliseconds. A table written by
+        // two of them at once is a hang with no stack to look at, which is
+        // what this cost to find.
+        private readonly object gate = new object();
+
+        public void Keep(object thing)
+        {
+            lock (gate) alive.Add(thing);
+        }
+
+        /// <summary>
+        /// Takes the next slot on the code page, for one caller at a time.
+        /// </summary>
+        private bool Room(out IntPtr at)
+        {
+            lock (gate)
+            {
+                at = IntPtr.Zero;
+                if (!HavePage() || used >= Capacity) return false;
+                at = page + used * ThunkSize;
+                used++;
+                return true;
+            }
+        }
 
         /// <summary>The object each proxy stands in for, by proxy address.</summary>
         public readonly Dictionary<IntPtr, IntPtr> Behind =
@@ -93,7 +119,8 @@ namespace Kiosk.Native
                 };
                 seenPointer = Marshal.GetFunctionPointerForDelegate(seen);
             }
-            if (!HavePage() || used >= Capacity) return Forward(original, target);
+            IntPtr at;
+            if (!Room(out at)) return Forward(original, target);
 
             var code = new List<byte>();
             code.AddRange(new byte[] { 0x48, 0x83, 0xEC, 0x48 });        // sub rsp, 0x48
@@ -115,9 +142,7 @@ namespace Kiosk.Native
             code.AddRange(BitConverter.GetBytes(target.ToInt64()));
             code.AddRange(new byte[] { 0xFF, 0xE0 });                    // jmp rax
 
-            var at = page + used * ThunkSize;
             Marshal.Copy(code.ToArray(), 0, at, code.Count);
-            used++;
             return at;
         }
 
@@ -139,8 +164,8 @@ namespace Kiosk.Native
 
         private IntPtr Forward(IntPtr original, IntPtr target)
         {
-            if (!HavePage()) return target;
-            if (used >= Capacity) return target;
+            IntPtr at;
+            if (!Room(out at)) return target;
 
             var code = new List<byte> { 0x48, 0xB9 };
             code.AddRange(BitConverter.GetBytes(original.ToInt64()));
@@ -148,9 +173,7 @@ namespace Kiosk.Native
             code.AddRange(BitConverter.GetBytes(target.ToInt64()));
             code.AddRange(new byte[] { 0xFF, 0xE0 });
 
-            var at = page + used * ThunkSize;
             Marshal.Copy(code.ToArray(), 0, at, code.Count);
-            used++;
             return at;
         }
 
@@ -191,7 +214,7 @@ namespace Kiosk.Native
             var proxy = Marshal.AllocHGlobal(IntPtr.Size * 2);
             Marshal.WriteIntPtr(proxy, 0, table);
             Marshal.WriteIntPtr(proxy, IntPtr.Size, original);
-            Behind[proxy] = original;
+            lock (gate) Behind[proxy] = original;
             return proxy;
         }
 

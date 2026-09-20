@@ -160,7 +160,7 @@ namespace Kiosk.Native
                 var handle = Marshal.AllocHGlobal(64);
                 for (var i = 0; i < 64; i++) Marshal.WriteByte(handle, i, 0);
                 Invented[name] = handle;
-                named[handle.ToInt64()] = name;
+                lock (named) named[handle.ToInt64()] = name;
                 Remember("invented " + name);
                 return handle;
             }
@@ -177,7 +177,7 @@ namespace Kiosk.Native
             var mine = imports.Find(name);
             if (mine != null)
             {
-                named[mine.BaseAddress.ToInt64()] = name;
+                lock (named) named[mine.BaseAddress.ToInt64()] = name;
                 return mine.BaseAddress;
             }
 
@@ -195,7 +195,7 @@ namespace Kiosk.Native
             }
             if (handle != IntPtr.Zero)
             {
-                named[handle.ToInt64()] = name;
+                lock (named) named[handle.ToInt64()] = name;
                 return handle;
             }
 
@@ -233,7 +233,8 @@ namespace Kiosk.Native
                 var wanted = Marshal.PtrToStringAnsi(name);
                 if (string.IsNullOrEmpty(wanted)) return IntPtr.Zero;
 
-                named.TryGetValue(module.ToInt64(), out var from);
+                string from;
+                lock (named) named.TryGetValue(module.ToInt64(), out from);
                 if (from != null)
                 {
                     Remember(from + "!" + wanted);

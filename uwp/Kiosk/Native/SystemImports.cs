@@ -44,7 +44,10 @@ namespace Kiosk.Native
 
         public List<string> MissingFunctions { get; } = new List<string>();
 
-        public int FromSystem { get; private set; }
+        // Counted from every thread that resolves an import, so the increment
+        // has to be one indivisible step rather than read-add-write.
+        private int fromSystem;
+        public int FromSystem => fromSystem;
         public int FromImages { get; private set; }
         public int FromStubs { get; private set; }
         public int FromOverrides { get; private set; }
@@ -128,7 +131,7 @@ namespace Kiosk.Native
                 }
             }
             modules[name] = handle;
-            if (handle == IntPtr.Zero) MissingModules.Add(name);
+            if (handle == IntPtr.Zero) lock (MissingModules) MissingModules.Add(name);
             return handle;
         }
 
@@ -181,7 +184,7 @@ namespace Kiosk.Native
                 }
                 if (address != IntPtr.Zero)
                 {
-                    FromSystem++;
+                    System.Threading.Interlocked.Increment(ref fromSystem);
                     if (!Trace) return address;
                     // The handful a stuck program spends its life in are worth
                     // the extra instruction that says who called them.
@@ -192,7 +195,7 @@ namespace Kiosk.Native
             }
 
             var name = module + "!" + function;
-            MissingFunctions.Add(name);
+            lock (MissingFunctions) MissingFunctions.Add(name);
 
             // A stub keeps the import table complete, so the image can run and
             // say which of these it actually needs.

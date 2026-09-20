@@ -39,14 +39,27 @@ gh release download "$TAG" -D .cycle -p 'kiosk-uwp.zip' >/dev/null
 ( cd .cycle && unzip -qo kiosk-uwp.zip )
 echo "== $TAG"
 
-bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
 # Only the Kiosk tree: the solution also builds the JIT probe, and installing
 # that instead is how the last attempt ended up with no app on the console.
 FILES=$(find .cycle/Kiosk_*_Test -type f \
   \( -name '*.msixbundle' -o -name '*.appxbundle' -o -name '*.msix' \) \
   ! -path '*/arm64/*' ! -path '*/x86/*' | tr '\n' ' ')
 DEPS=$(find .cycle/Kiosk_*_Test/Dependencies/x64 -type f -name '*.appx' | tr '\n' ' ')
-bun src/xbdev.ts install $FILES $DEPS
+
+# Installing over the app in place keeps its storage, and its storage is where
+# the downloaded game lives. Uninstalling first threw the game away every turn
+# and the console spent most of each turn fetching it again from Steam — which
+# is most of the time a turn takes. FRESH=on forces the old behaviour when the
+# state itself is what is suspect.
+bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
+if [ "${FRESH:-off}" = "on" ]; then
+  bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
+fi
+if ! bun src/xbdev.ts install $FILES $DEPS; then
+  echo "   install over the top refused; replacing the package"
+  bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
+  bun src/xbdev.ts install $FILES $DEPS
+fi
 # A freshly installed package has no local storage until it has run once, and
 # every push into it fails until then — silently, if the output is thrown away.
 bun src/xbdev.ts launch kiosk >/dev/null

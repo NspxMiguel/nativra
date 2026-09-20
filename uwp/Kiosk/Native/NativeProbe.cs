@@ -476,13 +476,32 @@ namespace Kiosk.Native
             }
         }
 
+        /// <summary>
+        /// Writes the report somewhere else and swaps it in.
+        ///
+        /// Replacing the file in place empties it first, and the process this
+        /// measures can die inside that window — which costs the whole run,
+        /// because what is left on disk is nothing at all. A swap is never
+        /// caught halfway: either the old report is there or the new one is.
+        /// </summary>
         private static async Task WriteAsync(List<string> lines)
         {
             try
             {
-                var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
-                    ReportName, CreationCollisionOption.ReplaceExisting);
-                await FileIO.WriteLinesAsync(file, lines);
+                var local = ApplicationData.Current.LocalFolder;
+                var draft = await local.CreateFileAsync(
+                    ReportName + ".new", CreationCollisionOption.ReplaceExisting);
+                await FileIO.WriteLinesAsync(draft, lines);
+
+                var existing = await local.TryGetItemAsync(ReportName) as StorageFile;
+                if (existing == null)
+                {
+                    await draft.RenameAsync(ReportName, NameCollisionOption.ReplaceExisting);
+                }
+                else
+                {
+                    await draft.MoveAndReplaceAsync(existing);
+                }
             }
             catch
             {

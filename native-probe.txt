@@ -1,9 +1,0 @@
-at=2026-09-19 20:33:59
-share D:\DevelopmentFiles = UnauthorizedAccessException
-share D:\DevelopmentFiles\LooseApps = UnauthorizedAccessException
-share U:\DevelopmentFiles = UnauthorizedAccessException
-share T:\DevelopmentFiles = UnauthorizedAccessException
-share E:\DevelopmentFiles = UnauthorizedAccessException
-share S:\DevelopmentFiles = UnauthorizedAccessException
-local=Q:\Users\UserMgr1\AppData\Local\Packages\NSPX.Kiosk_8r28b9prq7p9c\LocalState
-state=no win32 folder

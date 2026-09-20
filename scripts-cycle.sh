@@ -41,12 +41,18 @@ FILES=$(find .cycle/Kiosk_*_Test -type f \
   ! -path '*/arm64/*' ! -path '*/x86/*' | tr '\n' ' ')
 DEPS=$(find .cycle/Kiosk_*_Test/Dependencies/x64 -type f -name '*.appx' | tr '\n' ' ')
 bun src/xbdev.ts install $FILES $DEPS
+# A freshly installed package has no local storage until it has run once, and
+# every push into it fails until then — silently, if the output is thrown away.
+bun src/xbdev.ts launch kiosk >/dev/null
+sleep 12
+bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
+
 bun src/xbdev.ts sync >/dev/null 2>&1 || true
 
 # The app cannot read the developer share (UnauthorizedAccessException on every
 # drive letter, measured), and its own storage goes with the uninstall. So the
 # game is fetched again each turn, by the console, from his own Steam account.
-bun src/xbdev.ts push kiosk .markers/autodownload.txt LocalState >/dev/null
+bun src/xbdev.ts push kiosk .markers/autodownload.txt LocalState
 bun src/xbdev.ts launch kiosk >/dev/null
 
 echo "== downloading and running"

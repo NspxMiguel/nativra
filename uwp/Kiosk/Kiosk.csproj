@@ -77,6 +77,7 @@
     <Compile Include="Native\SystemImports.cs" />
     <Compile Include="Native\Win32Shim.cs" />
     <Compile Include="Native\ModuleFileName.cs" />
+    <Compile Include="Native\ImageLookup.cs" />
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Texts.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

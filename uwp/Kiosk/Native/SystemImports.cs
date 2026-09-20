@@ -36,8 +36,9 @@ namespace Kiosk.Native
             new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Binaries this loader mapped itself, which resolve each other.</summary>
-        private readonly Dictionary<string, PeImage> loaded =
-            new Dictionary<string, PeImage>(StringComparer.OrdinalIgnoreCase);
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, PeImage> loaded =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, PeImage>(
+                StringComparer.OrdinalIgnoreCase);
 
         public HashSet<string> MissingModules { get; } =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -48,9 +49,12 @@ namespace Kiosk.Native
         // has to be one indivisible step rather than read-add-write.
         private int fromSystem;
         public int FromSystem => fromSystem;
-        public int FromImages { get; private set; }
-        public int FromStubs { get; private set; }
-        public int FromOverrides { get; private set; }
+        private int fromImages;
+        public int FromImages => fromImages;
+        private int fromStubs;
+        public int FromStubs => fromStubs;
+        private int fromOverrides;
+        public int FromOverrides => fromOverrides;
 
         /// <summary>
         /// Record every call, not just the ones nobody could answer. A program
@@ -140,8 +144,8 @@ namespace Kiosk.Native
         /// which file it is and where its data sits; the honest answer here is
         /// the host application, which is not what it needs to hear.
         /// </summary>
-        public Dictionary<string, IntPtr> Overrides { get; } =
-            new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
+        public System.Collections.Concurrent.ConcurrentDictionary<string, IntPtr> Overrides { get; } =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// What a missing function should answer instead of zero. Zero means
@@ -155,7 +159,7 @@ namespace Kiosk.Native
         {
             if (Overrides.TryGetValue(module + "!" + function, out var ours))
             {
-                FromOverrides++;
+                System.Threading.Interlocked.Increment(ref fromOverrides);
                 return ours;
             }
 
@@ -164,7 +168,7 @@ namespace Kiosk.Native
                 var own = image.Export(function);
                 if (own != IntPtr.Zero)
                 {
-                    FromImages++;
+                    System.Threading.Interlocked.Increment(ref fromImages);
                     return own;
                 }
             }
@@ -202,7 +206,7 @@ namespace Kiosk.Native
             var stub = Answers.TryGetValue(name, out var answer)
                 ? Shim.StubReturning(name, answer)
                 : Shim.StubFor(name);
-            if (stub != IntPtr.Zero) FromStubs++;
+            if (stub != IntPtr.Zero) System.Threading.Interlocked.Increment(ref fromStubs);
             return stub;
         }
     }

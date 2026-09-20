@@ -870,7 +870,11 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
  * walked rather than handed over.
  */
 async function cmdPushGame(args: string[]): Promise<void> {
-  const [source, appId] = args;
+  // The developer folder survives reinstalling the app, which the app's own
+  // storage does not — and a reinstall is every build.
+  const dev = args.includes("--dev");
+  const rest = args.filter((a) => a !== "--dev");
+  const [source, appId] = rest;
   if (!source || !appId) {
     console.error("uso: xbdev push-game <pasta> <appid>");
     process.exit(2);
@@ -882,8 +886,10 @@ async function cmdPushGame(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  await portal.makeFolder(kiosk.PackageFullName, "LocalState", "games");
-  await portal.makeFolder(kiosk.PackageFullName, "LocalState/games", appId);
+  const known = dev ? "DevelopmentFiles" : "LocalAppData";
+  const base = dev ? "" : "LocalState";
+  await portal.makeFolder(kiosk.PackageFullName, base || "/", "games", known);
+  await portal.makeFolder(kiosk.PackageFullName, `${base}/games`, appId, known);
 
   let sent = 0;
   let bytes = 0;
@@ -892,19 +898,19 @@ async function cmdPushGame(args: string[]): Promise<void> {
     for (const entry of entries) {
       const localPath = join(localDir, entry.name);
       if (entry.isDirectory()) {
-        await portal.makeFolder(kiosk.PackageFullName, remoteDir, entry.name);
+        await portal.makeFolder(kiosk.PackageFullName, remoteDir, entry.name, known);
         await walk(localPath, `${remoteDir}/${entry.name}`);
         continue;
       }
       const file = Bun.file(localPath);
-      await portal.pushFile(kiosk.PackageFullName, localPath, remoteDir);
+      await portal.pushFile(kiosk.PackageFullName, localPath, remoteDir, known);
       sent++;
       bytes += file.size;
       if (sent % 20 === 0) console.log(`${sent} arquivos, ${human(bytes)}`);
     }
   };
 
-  await walk(source, `LocalState/games/${appId}`);
+  await walk(source, `${base}/games/${appId}`);
   console.log(`pronto: ${sent} arquivos, ${human(bytes)}`);
 }
 

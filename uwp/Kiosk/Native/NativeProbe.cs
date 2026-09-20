@@ -279,6 +279,16 @@ namespace Kiosk.Native
                     var entry = engine?.Export("UnityMain") ?? IntPtr.Zero;
                     var exe = imports.FindExecutable();
 
+                    // A marker that stops just short of playing: everything is
+                    // mapped and every module's own startup has run, but the
+                    // engine is never started. If the screen survives this and
+                    // not the next step, the cause is inside the game.
+                    if (await local.TryGetItemAsync("noplay.txt") != null)
+                    {
+                        lines.Add("exe=not started, by request");
+                        entry = IntPtr.Zero;
+                    }
+
                     if (entry != IntPtr.Zero)
                     {
                         lines.Add("exe=UnityMain starting");

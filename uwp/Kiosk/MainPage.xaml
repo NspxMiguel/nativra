@@ -112,22 +112,23 @@
 
         <Viewbox Stretch="Uniform" StretchDirection="Both">
             <Grid Width="1920" Height="1080">
-
-                <!-- The glow: an ellipse 1400 by 900, centred at seven tenths
-                     across and fifteen hundredths down, which is where the
-                     handoff puts it. Drawn under everything and hit-testing
-                     nothing. -->
-                <Rectangle Width="1400" Height="900"
-                           HorizontalAlignment="Left" VerticalAlignment="Top"
-                           Margin="644,-288,0,0"
-                           Fill="{StaticResource ScreenGlow}"
-                           IsHitTestVisible="False" />
-
                 <Grid.RowDefinitions>
                     <RowDefinition Height="76" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="150" />
                 </Grid.RowDefinitions>
+
+                <!-- The glow: an ellipse 1400 by 900, centred at seven tenths
+                     across and fifteen hundredths down, which is where the
+                     handoff puts it. It spans every row because it belongs to
+                     the screen rather than to any one band of it, and it hit
+                     tests nothing. -->
+                <Rectangle Grid.Row="0" Grid.RowSpan="3"
+                           Width="1400" Height="900"
+                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                           Margin="644,-288,0,0"
+                           Fill="{StaticResource ScreenGlow}"
+                           IsHitTestVisible="False" />
 
                 <!-- ================================================ status bar -->
 

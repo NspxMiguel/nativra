@@ -363,6 +363,39 @@ namespace Kiosk.Native
                 // there is — the frames go straight to the screen, with no
                 // surface to attach and nothing to keep in step — and if this
                 // host allows it, everything downstream gets simpler.
+                // A chain the display system knows nothing about.
+                //
+                // Holding a real one costs this application the screen about a
+                // second later, measured with every other cause ruled out. The
+                // game is given one that owns no display: it draws into a
+                // texture, and handing the frame over copies it to the screen.
+                if (!NoMirror && Mirror != null && OnUi != null)
+                {
+                    var wide = Marshal.ReadInt32(desc, 0);
+                    var high = Marshal.ReadInt32(desc, 4);
+                    var shape = Marshal.ReadInt32(desc, 8);
+                    Marshal.FreeHGlobal(desc);
+
+                    var invented = FakeSwapChain.Build(Proxy, device, wide, high, shape);
+                    Note("made up a chain: " + FakeSwapChain.Note);
+                    if (invented == IntPtr.Zero) return E_FAIL;
+
+                    Mirroring = FrameMirror.Start(
+                        device, IntPtr.Zero, wide, high, shape, Mirror, OnUi,
+                        FakeSwapChain.BackBuffer);
+                    Note("mirror: " + FrameMirror.Note);
+                    FakeSwapChain.OnPresent = () =>
+                    {
+                        if (Frames == 0) FirstFrameAt = Environment.TickCount;
+                        Frames++;
+                        FrameMirror.Take();
+                        Pace();
+                    };
+
+                    Marshal.WriteIntPtr(result, invented);
+                    return S_OK;
+                }
+
                 var composed = false;
                 var code = E_FAIL;
                 if (NoChain)

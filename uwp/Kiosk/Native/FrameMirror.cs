@@ -65,6 +65,7 @@ namespace Kiosk.Native
         private static IntPtr context;
         private static IntPtr staging;
         private static IntPtr back;
+        private static IntPtr given;
         private static IntPtr chain;
         private static int width;
         private static int height;
@@ -97,7 +98,8 @@ namespace Kiosk.Native
         /// </summary>
         public static bool Start(
             IntPtr device, IntPtr swapChain, int pixelsWide, int pixelsHigh, int format,
-            Windows.UI.Xaml.Controls.Image image, Windows.UI.Core.CoreDispatcher dispatcher)
+            Windows.UI.Xaml.Controls.Image image, Windows.UI.Core.CoreDispatcher dispatcher,
+            IntPtr texture = default(IntPtr))
         {
             try
             {
@@ -108,6 +110,7 @@ namespace Kiosk.Native
                 }
 
                 chain = swapChain;
+                given = texture;
                 width = pixelsWide;
                 height = pixelsHigh;
                 ui = dispatcher;
@@ -172,6 +175,14 @@ namespace Kiosk.Native
                     return false;
                 }
 
+                // A texture handed straight over needs no asking: it is the
+                // back buffer, because this application made it.
+                if (given != IntPtr.Zero)
+                {
+                    back = given;
+                }
+                else
+                {
                 // Taken once. With the flip model the runtime rotates its own
                 // buffers and buffer zero stays valid, so asking for it sixty
                 // times a second is sixty interface calls that answer the same.
@@ -195,6 +206,7 @@ namespace Kiosk.Native
                 {
                     Marshal.FreeHGlobal(handle);
                     Marshal.FreeHGlobal(id);
+                }
                 }
 
                 scratch = new[]

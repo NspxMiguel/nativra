@@ -151,23 +151,21 @@ namespace Kiosk
             // Taken here because it cannot be taken anywhere else: a CoreWindow
             // belongs to the thread that owns it, and the game runs on another.
             // It is the surface a PC game's frames will end up on.
+            // Each of these stands on its own. They used to share one try,
+            // and a failure in the first — asking the framework for the
+            // console's window, which not every host allows — silently skipped
+            // the two after it, including the surface the game's frames are
+            // shown on. A screen that never appears because of an unrelated
+            // failure is the worst kind to look for.
+            Native.GraphicsBridge.Mirror = GameImage;
+            Native.GraphicsBridge.OnUi = Dispatcher;
+            Native.ThreadRank.RaiseThisThread();
+
             try
             {
                 Native.GraphicsBridge.ConsoleWindow =
                     System.Runtime.InteropServices.Marshal.GetIUnknownForObject(
                         Windows.UI.Core.CoreWindow.GetForCurrentThread());
-                Native.GraphicsBridge.Mirror = GameImage;
-
-                // The thread that draws this screen asks to go first.
-                //
-                // A game sizes its worker pool to the machine and takes it, and
-                // this thread is left with a handful of turns a minute —
-                // measured. Lowering the game's threads was not enough on its
-                // own, so the screen's thread also asks for a step up. The two
-                // together are the whole difference between an application that
-                // is running and an application that is visible.
-                Native.ThreadRank.RaiseThisThread();
-                Native.GraphicsBridge.OnUi = Dispatcher;
             }
             catch
             {

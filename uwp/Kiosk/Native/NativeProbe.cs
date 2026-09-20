@@ -136,6 +136,7 @@ namespace Kiosk.Native
                 GraphicsBridge.NoChain = await local.TryGetItemAsync("nochain.txt") != null;
                 GraphicsBridge.NoDeviceStandIn =
                     await local.TryGetItemAsync("nodevice.txt") != null;
+                GraphicsBridge.NameTheCard = await local.TryGetItemAsync("gpu.txt") != null;
                 GraphicsBridge.NoMirror = await local.TryGetItemAsync("nomirror.txt") != null;
                 // Sixty by default. The frame is shown by this application
                 // rather than handed to the display, so nothing paces the game
@@ -177,6 +178,7 @@ namespace Kiosk.Native
                 ImageLookup.Install(
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));
                 FileWatch.Install(imports);
+                SuspendWatch.Install(imports);
                 ProcessStubs.Install(imports);
                 WindowStubs.Install(imports);
                 GraphicsBridge.Install(imports);
@@ -356,6 +358,7 @@ namespace Kiosk.Native
                         });
                         pointer.IsBackground = true;
                         pointer.Start();
+                        SuspendWatch.ThisThreadIsOurs();
                         PointerBridge.Announce();
                         GameRunning = true;
 
@@ -502,6 +505,8 @@ namespace Kiosk.Native
                                 "exe.stubs=" + imports.Shim.Called.Count,
                                 "exe.thunks.full=" + imports.Shim.Overflowed,
                                 "exe.files.failed=" + FileWatch.Failures,
+                                "exe.suspended=" + string.Join(
+                                    "; ", SuspendWatch.Held()),
                                 // Two numbers decide everything: a total that
                                 // climbs means the engine is running, and a
                                 // total that stands still means it is blocked.

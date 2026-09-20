@@ -52,7 +52,11 @@ DEPS=$(find .cycle/Kiosk_*_Test/Dependencies/x64 -type f -name '*.appx' | tr '\n
 # is most of the time a turn takes. FRESH=on forces the old behaviour when the
 # state itself is what is suspect.
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
-if [ "${FRESH:-off}" = "on" ]; then
+# Measured, and it cost the app: installing over the top reports success and
+# leaves nothing registered — the console lists no package afterwards and the
+# launch fails. So replacing is the default again, and the faster path has to
+# earn its way back with evidence rather than hope. KEEP=on tries it.
+if [ "${KEEP:-off}" != "on" ]; then
   bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
 fi
 if ! bun src/xbdev.ts install $FILES $DEPS; then

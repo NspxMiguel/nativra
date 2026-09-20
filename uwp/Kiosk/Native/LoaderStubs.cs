@@ -87,8 +87,8 @@ namespace Kiosk.Native
         public static readonly List<string> Said = new List<string>();
 
         /// <summary>Which library each handle we handed out came from.</summary>
-        private static readonly Dictionary<long, string> named =
-            new Dictionary<long, string>();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, string> named =
+            new System.Collections.Concurrent.ConcurrentDictionary<long, string>();
 
         /// <summary>Stand-ins already written, so a loop does not write a thousand.</summary>
         private static readonly Dictionary<string, IntPtr> made =
@@ -116,8 +116,10 @@ namespace Kiosk.Native
         // Libraries the console does not have and the bridge does. Kept so the
         // same name always answers with the same handle, the way a real loader
         // behaves.
-        private static readonly Dictionary<string, IntPtr> Invented =
-            new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
+        private static readonly
+            System.Collections.Concurrent.ConcurrentDictionary<string, IntPtr> Invented =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, IntPtr>(
+                StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Hands back a handle for a library the bridge can answer for.
@@ -136,7 +138,6 @@ namespace Kiosk.Native
         /// </summary>
         private static IntPtr Invent(string name)
         {
-            lock (Invented)
             {
                 if (Invented.TryGetValue(name, out var already)) return already;
 
@@ -160,7 +161,7 @@ namespace Kiosk.Native
                 var handle = Marshal.AllocHGlobal(64);
                 for (var i = 0; i < 64; i++) Marshal.WriteByte(handle, i, 0);
                 Invented[name] = handle;
-                lock (named) named[handle.ToInt64()] = name;
+                named[handle.ToInt64()] = name;
                 Remember("invented " + name);
                 return handle;
             }
@@ -177,7 +178,7 @@ namespace Kiosk.Native
             var mine = imports.Find(name);
             if (mine != null)
             {
-                lock (named) named[mine.BaseAddress.ToInt64()] = name;
+                named[mine.BaseAddress.ToInt64()] = name;
                 return mine.BaseAddress;
             }
 
@@ -195,7 +196,7 @@ namespace Kiosk.Native
             }
             if (handle != IntPtr.Zero)
             {
-                lock (named) named[handle.ToInt64()] = name;
+                named[handle.ToInt64()] = name;
                 return handle;
             }
 
@@ -234,7 +235,7 @@ namespace Kiosk.Native
                 if (string.IsNullOrEmpty(wanted)) return IntPtr.Zero;
 
                 string from;
-                lock (named) named.TryGetValue(module.ToInt64(), out from);
+                named.TryGetValue(module.ToInt64(), out from);
                 if (from != null)
                 {
                     Remember(from + "!" + wanted);

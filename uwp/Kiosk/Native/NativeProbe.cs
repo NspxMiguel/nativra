@@ -195,14 +195,28 @@ namespace Kiosk.Native
                         runner.IsBackground = true;
                         runner.Start();
 
-                        await Task.Delay(6000);
-                        lines[lines.Count - 1] = "exe=" + exe.Name
-                            + (runner.IsAlive ? " still running" : " returned");
-                        lines.Add("exe.stubs=" + imports.Shim.Called.Count);
-                        foreach (var called in imports.Shim.Called)
+                        // Written over and over while it runs: the program can
+                        // take the process down at any point, and the last
+                        // function it reached is the whole answer.
+                        for (var tick = 0; tick < 40; tick++)
                         {
-                            lines.Add("  called " + called);
+                            await Task.Delay(300);
+                            var snapshot = new List<string>(lines)
+                            {
+                                "exe.alive=" + runner.IsAlive,
+                                "exe.stubs=" + imports.Shim.Called.Count,
+                            };
+                            lock (imports.Shim.Called)
+                            {
+                                foreach (var called in imports.Shim.Called)
+                                {
+                                    snapshot.Add("  called " + called);
+                                }
+                            }
+                            await WriteAsync(snapshot);
+                            if (!runner.IsAlive) break;
                         }
+                        lines.Add("exe.finished");
                     }
                 }
             }

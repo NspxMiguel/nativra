@@ -59,29 +59,9 @@ namespace Kiosk.Native
                 // scratch folder is only for binaries pushed by hand.
                 StorageFolder folder = null;
 
-                // The developer folder first: it survives reinstalling the app,
-                // and a game is too large to send again every build.
-                try
-                {
-                    var shared = await StorageFolder.GetFolderFromPathAsync(
-                        @"D:\DevelopmentFiles\games");
-                    foreach (var candidate in await shared.GetFoldersAsync())
-                    {
-                        if (await candidate.TryGetItemAsync("UnityPlayer.dll") != null)
-                        {
-                            folder = candidate;
-                            break;
-                        }
-                    }
-                }
-                catch
-                {
-                    // Not reachable from here on every console.
-                }
-
-                var games = folder == null
-                    ? await local.TryGetItemAsync("games") as StorageFolder
-                    : null;
+                // The app can only read its own storage: a sideloaded package
+                // has no way into the developer share, measured on this console.
+                var games = await local.TryGetItemAsync("games") as StorageFolder;
                 if (games != null && folder == null)
                 {
                     foreach (var candidate in await games.GetFoldersAsync())

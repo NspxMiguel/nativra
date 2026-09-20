@@ -49,6 +49,13 @@ namespace Kiosk.Native
         public int FromStubs { get; private set; }
         public int FromOverrides { get; private set; }
 
+        /// <summary>
+        /// Record every call, not just the ones nobody could answer. A program
+        /// that dies without reaching a single missing function is dying inside
+        /// one it did reach, and only a trace says which.
+        /// </summary>
+        public bool Trace;
+
         /// <summary>Stands in for what the console does not provide.</summary>
         public Win32Shim Shim { get; } = new Win32Shim();
 
@@ -135,7 +142,7 @@ namespace Kiosk.Native
                 if (address != IntPtr.Zero)
                 {
                     FromSystem++;
-                    return address;
+                    return Trace ? Shim.TraceFor(module + "!" + function, address) : address;
                 }
             }
 

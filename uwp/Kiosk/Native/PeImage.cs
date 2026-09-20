@@ -57,15 +57,22 @@ namespace Kiosk.Native
         /// inside the thread environment block, and getting that wrong takes
         /// the process down — so it happens only when a measurement asks.
         /// </summary>
-        public static bool EnableTls;
+        /// <summary>
+        /// How far the thread-local setup is allowed to go. Each step is one
+        /// instruction that can take the process down, so they are taken one
+        /// at a time and written down before they are taken:
+        /// 1 read the thread block, 2 read its table, 3 measure the table,
+        /// 4 write the module's index, 5 write the block into the table.
+        /// </summary>
+        public static int TlsLevel;
+
+        public static bool EnableTls => TlsLevel > 0;
 
         /// <summary>
         /// Whether the thread's table of blocks may be replaced with a longer
         /// one. Writing into a table that is already long enough touches one
         /// pointer; replacing it moves everything the runtime is using.
         /// </summary>
-        public static bool AllowTableGrowth;
-
         /// <summary>What the last attempt did, so a crash leaves a trail.</summary>
         public static string TlsNote = "";
 
@@ -394,7 +401,7 @@ namespace Kiosk.Native
             {
                 if (!EnableTls) return;
                 var rva = DirectoryRva(9);
-                if (rva == 0) return;
+                if (rva == 0) { TlsNote = "no tls directory"; return; }
 
                 var directory = MarshalRead(rva, 40);
                 var start = BitConverter.ToInt64(directory, 0);
@@ -402,11 +409,43 @@ namespace Kiosk.Native
                 var indexAddress = BitConverter.ToInt64(directory, 16);
                 var callbacks = BitConverter.ToInt64(directory, 24);
                 var zeroFill = BitConverter.ToUInt32(directory, 32);
+                TlsNote = $"dir ok size={end - start}+{zeroFill}";
+                Step?.Invoke(TlsNote);
+                if (TlsLevel < 1) return;
+
+                var teb = CurrentTeb();
+                TlsNote += $" teb=0x{teb.ToInt64():X}";
+                Step?.Invoke(TlsNote);
+                if (teb == IntPtr.Zero || TlsLevel < 2) return;
+
+                var slotsPointer = teb + 0x58;
+                var existing = Marshal.ReadIntPtr(slotsPointer);
+                TlsNote += $" table=0x{existing.ToInt64():X}";
+                Step?.Invoke(TlsNote);
+                if (TlsLevel < 3) return;
+
+                var existingSlots = 0;
+                if (existing != IntPtr.Zero)
+                {
+                    var size = HeapSize(GetProcessHeap(), 0, existing);
+                    TlsNote += $" bytes={(ulong)size}";
+                    if ((ulong)size < (1UL << 20)) existingSlots = (int)((ulong)size / 8);
+                }
+                Step?.Invoke(TlsNote);
+                if (TlsLevel < 4) return;
+
+                var slot = (int)TlsAlloc();
+                TlsNote += $" slot={slot} of {existingSlots}";
+                Step?.Invoke(TlsNote);
+                if (slot < 0 || slot > 1000) return;
+
+                Marshal.WriteInt32((IntPtr)indexAddress, slot);
+                TlsNote += " index written";
+                Step?.Invoke(TlsNote);
+                if (TlsLevel < 5) return;
 
                 var templateSize = (int)(end - start);
                 var total = templateSize + (int)zeroFill;
-                if (total <= 0 || indexAddress == 0) return;
-
                 var block = Marshal.AllocHGlobal(Math.Max(total, 8));
                 for (var i = 0; i < total; i++) Marshal.WriteByte(block, i, 0);
                 if (templateSize > 0)
@@ -415,58 +454,23 @@ namespace Kiosk.Native
                     Marshal.Copy((IntPtr)start, template, 0, templateSize);
                     Marshal.Copy(template, 0, block, templateSize);
                 }
+                TlsNote += " block ready";
+                Step?.Invoke(TlsNote);
 
-                var slot = (int)TlsAlloc();
-                if (slot < 0 || slot > 1000) return;
-                Marshal.WriteInt32((IntPtr)indexAddress, slot);
-
-                var teb = CurrentTeb();
-                if (teb == IntPtr.Zero) return;
-
-                // The table of blocks lives at 0x58 in the thread environment
-                // block. Its length belongs to the real loader, so it is
-                // measured rather than assumed: the table is a heap block, and
-                // the heap knows how big it is. Guessing here reads past the
-                // end and takes the process down.
-                var slotsPointer = teb + 0x58;
-                var existing = Marshal.ReadIntPtr(slotsPointer);
-                var existingSlots = 0;
-                if (existing != IntPtr.Zero)
-                {
-                    var size = HeapSize(GetProcessHeap(), 0, existing);
-                    if (size == UIntPtr.Zero || (ulong)size > 1 << 20) return;
-                    existingSlots = (int)((ulong)size / 8);
-                }
-                TlsNote = $"slot={slot} table={existingSlots}";
                 if (existingSlots > slot)
                 {
-                    // Already long enough: one pointer, and nothing is moved.
                     Marshal.WriteIntPtr(existing, slot * 8, block);
                     TlsNote += " wrote in place";
                 }
-                else if (!AllowTableGrowth)
-                {
-                    TlsNote += " table too short, left alone";
-                    return;
-                }
                 else
                 {
-                    var grown = Marshal.AllocHGlobal((slot + 16) * 8);
-                    for (var i = 0; i < slot + 16; i++)
-                    {
-                        Marshal.WriteIntPtr(grown, i * 8, IntPtr.Zero);
-                    }
-                    for (var i = 0; i < existingSlots; i++)
-                    {
-                        Marshal.WriteIntPtr(grown, i * 8, Marshal.ReadIntPtr(existing, i * 8));
-                    }
-                    Marshal.WriteIntPtr(grown, slot * 8, block);
-                    Marshal.WriteIntPtr(slotsPointer, grown);
-                    TlsNote += " grew the table";
+                    TlsNote += " table too short";
+                    return;
                 }
                 TlsSlot = slot;
+                Step?.Invoke(TlsNote);
+                if (TlsLevel < 6 || callbacks == 0) return;
 
-                if (callbacks == 0) return;
                 for (var i = 0; i < 64; i++)
                 {
                     var entry = Marshal.ReadIntPtr((IntPtr)(callbacks + i * 8));
@@ -476,11 +480,14 @@ namespace Kiosk.Native
                     TlsCallbacksRun++;
                 }
             }
-            catch
+            catch (Exception error)
             {
-                // Same reasoning as the function table: worth knowing, not dying for.
+                TlsNote += " | " + error.GetType().Name + ": " + error.Message;
             }
         }
+
+        /// <summary>Called after each step so a crash leaves the last one on disk.</summary>
+        public static Action<string> Step;
 
         public int TlsSlot { get; private set; } = -1;
 

@@ -571,6 +571,16 @@ namespace Kiosk.Native
 
         public IntPtr BaseAddress => baseAddress;
 
+        public uint ImageSize => imageSize;
+
+        /// <summary>Whether an address falls inside this image.</summary>
+        public bool Contains(IntPtr address)
+        {
+            var value = (ulong)address.ToInt64();
+            var start = (ulong)baseAddress.ToInt64();
+            return value >= start && value < start + imageSize;
+        }
+
         public void Dispose()
         {
             if (baseAddress == IntPtr.Zero) return;

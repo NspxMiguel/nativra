@@ -59,7 +59,18 @@ namespace Kiosk.Native
         /// <summary>Stands in for what the console does not provide.</summary>
         public Win32Shim Shim { get; } = new Win32Shim();
 
-        public void Add(PeImage image) => loaded[image.Name] = image;
+        public void Add(PeImage image)
+        {
+            loaded[image.Name] = image;
+            ImageLookup.Track(image);
+        }
+
+        /// <summary>The system's own version of a function, for falling back to.</summary>
+        public IntPtr SystemAddress(string module, string function)
+        {
+            var handle = Module(module);
+            return handle == IntPtr.Zero ? IntPtr.Zero : GetProcAddress(handle, function);
+        }
 
         public PeImage Find(string name) =>
             loaded.TryGetValue(name, out var image) ? image : null;

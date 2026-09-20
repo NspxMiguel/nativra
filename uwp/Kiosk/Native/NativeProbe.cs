@@ -135,8 +135,13 @@ namespace Kiosk.Native
                 GraphicsBridge.Smaller = await local.TryGetItemAsync("small.txt") != null;
                 GraphicsBridge.NoChain = await local.TryGetItemAsync("nochain.txt") != null;
                 GraphicsBridge.NoMirror = await local.TryGetItemAsync("nomirror.txt") != null;
+                // Sixty by default. The frame is shown by this application
+                // rather than handed to the display, so nothing paces the game
+                // any more — and a game with nothing pacing it runs as fast as
+                // the hardware allows, which here means copying a screen a
+                // thousand times a second and drowning everything else.
                 GraphicsBridge.Ceiling =
-                    await local.TryGetItemAsync("slow.txt") != null ? 30 : 0;
+                    await local.TryGetItemAsync("slow.txt") != null ? 30 : 60;
                 lines.Add("audio.bridge=" + AudioBridge.Enabled);
                 lines.Add("smaller=" + GraphicsBridge.Smaller);
                 lines.Add("threads=" + ThreadRank.Note);

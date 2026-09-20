@@ -7,196 +7,377 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     KeyDown="OnKeyDown"
-    Background="{StaticResource Background}">
+    FontFamily="{StaticResource FontFamilyName}"
+    Background="{StaticResource Screen}">
+
+    <!-- The whole interface is drawn at 1920x1080 and scaled to whatever the
+         television is. Every size in here is a design pixel: one canvas, one
+         set of numbers, and no second layout to keep in step with the first. -->
 
     <Page.Resources>
-        <!-- A console home screen moves one thing: the focused icon. It grows
-             and takes a bright ring; everything else holds still. -->
-        <Style x:Key="RailItemStyle" TargetType="ListViewItem">
-            <Setter Property="Margin" Value="0,0,14,0" />
+
+        <!-- One tile on the shelf. The art is the content; the frame around it
+             does nothing but hold the corner radius. -->
+        <DataTemplate x:Key="TileTemplate" x:DataType="local:Tile">
+            <Button Style="{StaticResource TileStyle}"
+                    Click="OnTileClicked"
+                    Tag="{x:Bind}"
+                    Margin="0,0,28,0"
+                    VerticalAlignment="Bottom">
+                <StackPanel>
+                    <Grid Width="{x:Bind TileWidth}" Height="{x:Bind TileHeight}"
+                          Opacity="{x:Bind Dimmed}">
+
+                        <!-- Box art, or the gradient standing in for it. -->
+                        <Border CornerRadius="{StaticResource RadiusButton}"
+                                Background="{x:Bind Art}"
+                                Visibility="{x:Bind ArtShown}" />
+                        <Border CornerRadius="{StaticResource RadiusButton}"
+                                Visibility="{x:Bind IconShown}">
+                            <Image Source="{x:Bind Icon}" Stretch="UniformToFill" />
+                        </Border>
+
+                        <!-- The tile that opens everything. -->
+                        <Border CornerRadius="{StaticResource RadiusButton}"
+                                Background="#FF151A1C"
+                                Visibility="{x:Bind AllGamesShown}">
+                            <Grid Width="46" Height="46"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition />
+                                    <RowDefinition />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition />
+                                    <ColumnDefinition />
+                                </Grid.ColumnDefinitions>
+                                <Rectangle Grid.Row="0" Grid.Column="0" Margin="0,0,5,5"
+                                           Fill="{StaticResource TextMuted}" RadiusX="3" RadiusY="3" />
+                                <Rectangle Grid.Row="0" Grid.Column="1" Margin="5,0,0,5"
+                                           Fill="{StaticResource TextMuted}" RadiusX="3" RadiusY="3" />
+                                <Rectangle Grid.Row="1" Grid.Column="0" Margin="0,5,5,0"
+                                           Fill="{StaticResource TextMuted}" RadiusX="3" RadiusY="3" />
+                                <Rectangle Grid.Row="1" Grid.Column="1" Margin="5,5,0,0"
+                                           Fill="{StaticResource TextMuted}" RadiusX="3" RadiusY="3" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Owned but not on the console yet. -->
+                        <TextBlock Text="&#xE753;"
+                                   FontFamily="Segoe MDL2 Assets" FontSize="28"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Top"
+                                   Margin="0,14,14,0"
+                                   Visibility="{x:Bind CloudShown}" />
+
+                        <TextBlock Text="&#x2605;" FontSize="22"
+                                   Foreground="{StaticResource Favourite}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Top"
+                                   Margin="0,12,14,0"
+                                   Visibility="{x:Bind StarShown}" />
+                    </Grid>
+
+                    <TextBlock Text="{x:Bind Title}"
+                               Width="{x:Bind TileWidth}"
+                               Margin="0,16,0,0"
+                               FontSize="{StaticResource BodySize}" FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimary}"
+                               TextTrimming="CharacterEllipsis" MaxLines="1" />
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+
+        <!-- The shelf's containers carry no chrome of their own: the tile is
+             the whole of the visible item, focus included. -->
+        <Style x:Key="ShelfItemStyle" TargetType="ListViewItem">
             <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="UseSystemFocusVisuals" Value="False" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Bottom" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListViewItem">
-                        <Grid x:Name="Root" Width="104" Height="104">
-                            <Grid x:Name="Box" Width="76" Height="76"
-                                  RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="Ring"
-                                        CornerRadius="12"
-                                        Background="{StaticResource Tile}"
-                                        BorderBrush="{StaticResource Hairline}"
-                                        BorderThickness="2" />
-                                <Border CornerRadius="12" Margin="2">
-                                    <ContentPresenter />
-                                </Border>
-                            </Grid>
-
-                            <VisualStateManager.VisualStateGroups>
-                                <VisualStateGroup x:Name="CommonStates">
-                                    <VisualState x:Name="Normal" />
-                                    <VisualState x:Name="PointerOver" />
-                                    <VisualState x:Name="Pressed">
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="Scale"
-                                                Storyboard.TargetProperty="ScaleX" To="1.24" Duration="0:0:0.09" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale"
-                                                Storyboard.TargetProperty="ScaleY" To="1.24" Duration="0:0:0.09" />
-                                        </Storyboard>
-                                    </VisualState>
-                                </VisualStateGroup>
-                                <VisualStateGroup x:Name="FocusStates">
-                                    <VisualState x:Name="Unfocused" />
-                                    <VisualState x:Name="Focused">
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="Scale"
-                                                Storyboard.TargetProperty="ScaleX" To="1.30" Duration="0:0:0.16">
-                                                <DoubleAnimation.EasingFunction>
-                                                    <CubicEase EasingMode="EaseOut" />
-                                                </DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                            <DoubleAnimation Storyboard.TargetName="Scale"
-                                                Storyboard.TargetProperty="ScaleY" To="1.30" Duration="0:0:0.16">
-                                                <DoubleAnimation.EasingFunction>
-                                                    <CubicEase EasingMode="EaseOut" />
-                                                </DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Ring"
-                                                Storyboard.TargetProperty="BorderBrush">
-                                                <DiscreteObjectKeyFrame KeyTime="0" Value="White" />
-                                            </ObjectAnimationUsingKeyFrames>
-                                        </Storyboard>
-                                    </VisualState>
-                                </VisualStateGroup>
-                            </VisualStateManager.VisualStateGroups>
-                        </Grid>
+                        <ContentPresenter VerticalAlignment="Bottom" />
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <DataTemplate x:Key="RailTemplate" x:DataType="local:Tile">
-            <Grid>
-                <!-- The app's own logo when the package carries one; a coloured
-                     initial is the fallback, not the intent. -->
-                <Border CornerRadius="10" Background="{x:Bind Accent}"
-                        Visibility="{x:Bind LetterShown}">
-                    <TextBlock Text="{x:Bind Initial}" FontSize="26" FontWeight="Bold"
-                               Foreground="#FF06120C"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
-                <Border CornerRadius="10" Background="#FF14171C"
-                        Visibility="{x:Bind IconShown}">
-                    <Image Source="{x:Bind Icon}" Stretch="Uniform" Margin="6" />
-                </Border>
-            </Grid>
-        </DataTemplate>
     </Page.Resources>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <Grid Background="{StaticResource Screen}">
 
-        <!-- system bar -->
-        <Grid Grid.Row="0" Padding="28,14,28,0" Height="40">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
-                <Border Width="22" Height="22" CornerRadius="999">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="{StaticResource AccentColor}" Offset="0" />
-                            <GradientStop Color="#FF1E8F55" Offset="1" />
-                        </LinearGradientBrush>
-                    </Border.Background>
-                </Border>
-                <TextBlock x:Name="MachineText" FontSize="12"
-                           Foreground="{StaticResource TextSecondary}"
-                           VerticalAlignment="Center" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                        VerticalAlignment="Center" Spacing="14">
-                <TextBlock x:Name="CountText" FontSize="12"
-                           Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" />
-                <TextBlock x:Name="ClockText" FontSize="13" FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" />
-            </StackPanel>
-        </Grid>
+        <!-- The glow. One ellipse, high and right, so a very dark panel does
+             not read as a screen that is switched off. -->
+        <Rectangle Fill="{StaticResource ScreenGlow}" IsHitTestVisible="False" />
 
-        <!-- the rail, and the focused item's name above it -->
-        <Grid Grid.Row="1" VerticalAlignment="Center">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        <Viewbox Stretch="Uniform" StretchDirection="Both">
+            <Grid Width="1920" Height="1080">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="76" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="150" />
+                </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Padding="28,0,28,0" Margin="0,0,0,12">
-                <TextBlock x:Name="NameText" FontSize="24" FontWeight="Bold"
-                           TextTrimming="CharacterEllipsis" MaxLines="1"
-                           Foreground="{StaticResource TextPrimary}" />
-                <TextBlock x:Name="SubText" FontSize="13" Margin="0,4,0,0"
-                           TextTrimming="CharacterEllipsis" MaxLines="1"
-                           Foreground="{StaticResource TextSecondary}" />
-            </StackPanel>
+                <!-- ================================================ status bar -->
 
-            <ListView x:Name="AppRail" Grid.Row="1"
-                      ItemsSource="{x:Bind Tiles}"
-                      ItemTemplate="{StaticResource RailTemplate}"
-                      ItemContainerStyle="{StaticResource RailItemStyle}"
-                      IsItemClickEnabled="True"
-                      ItemClick="OnTileInvoked"
-                      SelectionChanged="OnSelectionChanged"
-                      SelectionMode="Single"
-                      Padding="28,0,28,0"
-                      ScrollViewer.HorizontalScrollMode="Enabled"
-                      ScrollViewer.HorizontalScrollBarVisibility="Hidden"
-                      ScrollViewer.VerticalScrollMode="Disabled"
-                      ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                <ListView.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <ItemsStackPanel Orientation="Horizontal" />
-                    </ItemsPanelTemplate>
-                </ListView.ItemsPanel>
-            </ListView>
-        </Grid>
+                <Grid Grid.Row="0" Padding="56,0,56,0">
+                    <Button x:Name="AvatarButton" Style="{StaticResource DockIconStyle}"
+                            Width="44" Height="44"
+                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Background="Transparent"
+                            Click="OnAvatarClicked">
+                        <Grid>
+                            <Ellipse Width="44" Height="44" Fill="{StaticResource AvatarFill}" />
+                            <TextBlock x:Name="AvatarText" Text="NS"
+                                       FontSize="18" FontWeight="ExtraBold"
+                                       Foreground="{StaticResource OnAccent}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
 
-        <!-- button hints: the most console thing on the screen -->
-        <Grid Grid.Row="2" Height="44" Padding="28,0,28,0"
-              BorderBrush="{StaticResource Hairline}" BorderThickness="0,1,0,0">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="20">
-                <StackPanel Orientation="Horizontal" Spacing="7">
-                    <Border Width="20" Height="20" CornerRadius="999" Background="{StaticResource Accent}">
-                        <TextBlock Text="A" FontSize="11" FontWeight="Bold" Foreground="#FF06120C"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
-                    <TextBlock x:Name="HintOpenText" FontSize="12" VerticalAlignment="Center"
-                               Foreground="{StaticResource TextSecondary}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="7">
-                    <Border Width="20" Height="20" CornerRadius="999" Background="#FFF2C94C">
-                        <TextBlock Text="Y" FontSize="11" FontWeight="Bold" Foreground="#FF1A1405"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
-                    <TextBlock x:Name="HintRefreshText" FontSize="12" VerticalAlignment="Center"
-                               Foreground="{StaticResource TextSecondary}" />
-                </StackPanel>
-            </StackPanel>
-            <TextBlock x:Name="StatusText" FontSize="12" HorizontalAlignment="Right"
-                       VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}" />
-        </Grid>
+                    <!-- Saying out loud what this console is running. It is the
+                         quietest text on the screen on purpose: useful to know,
+                         never the thing being read. -->
+                    <TextBlock x:Name="MachineText"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               FontSize="{StaticResource DevNoticeSize}" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextDevNotice}"
+                               CharacterSpacing="140" />
 
-        <!-- Where a PC game's frames land. This console's composition
-             panel does not offer the interface that accepts a swap chain, and
-             it will not hand over its own window either — measured, both of
-             them — so the frames are copied back and shown as a picture, which
-             is the one route that asks the platform for nothing. -->
+                    <StackPanel Orientation="Horizontal" Spacing="16"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock x:Name="WifiGlyph" Text="&#xE701;"
+                                   FontFamily="Segoe MDL2 Assets" FontSize="24"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock x:Name="ClockText"
+                                   FontSize="{StaticResource BodySize}" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- =================================================== content -->
+
+                <Grid Grid.Row="1">
+
+                    <!-- Library. Vertically centred, because the shelf is the
+                         only thing on it and a console screen should not make
+                         the eye travel to find its one subject. -->
+                    <Grid x:Name="LibraryScreen" VerticalAlignment="Center">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Sign-in and connection live here, top right, where
+                             they can be noticed without being in the way. -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="26"
+                                    HorizontalAlignment="Right"
+                                    Margin="0,0,56,34">
+                            <TextBlock x:Name="OfflineText" Text="Offline"
+                                       FontSize="{StaticResource LabelSize}" FontWeight="Bold"
+                                       Foreground="{StaticResource Warning}"
+                                       VerticalAlignment="Center"
+                                       Visibility="Collapsed" />
+                            <HyperlinkButton x:Name="SignInLink"
+                                             Content="Sign in to Steam &#x2192;"
+                                             FontSize="{StaticResource LabelSize}"
+                                             FontWeight="Bold"
+                                             Foreground="{StaticResource Accent}"
+                                             Padding="0"
+                                             Click="OnSignInClicked" />
+                        </StackPanel>
+
+                        <ListView x:Name="AppRail" Grid.Row="1"
+                                  ItemsSource="{x:Bind Tiles}"
+                                  ItemTemplate="{StaticResource TileTemplate}"
+                                  ItemContainerStyle="{StaticResource ShelfItemStyle}"
+                                  SelectionChanged="OnSelectionChanged"
+                                  SelectionMode="Single"
+                                  Padding="56,0,56,0"
+                                  ScrollViewer.HorizontalScrollMode="Enabled"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  ScrollViewer.VerticalScrollMode="Disabled"
+                                  ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                            <ListView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsStackPanel Orientation="Horizontal"
+                                                     VerticalAlignment="Bottom" />
+                                </ItemsPanelTemplate>
+                            </ListView.ItemsPanel>
+                        </ListView>
+                    </Grid>
+
+                    <!-- The library with nothing in it. Not an error: a start. -->
+                    <StackPanel x:Name="EmptyScreen"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="Collapsed">
+                        <TextBlock Text="Your library is empty"
+                                   FontSize="{StaticResource DisplaySize}" FontWeight="Black"
+                                   Foreground="{StaticResource TextPrimary}"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Text="Sign in to a store, or add games you already have."
+                                   Margin="0,20,0,0"
+                                   FontSize="{StaticResource BodySize}"
+                                   Foreground="{StaticResource TextTertiary}"
+                                   HorizontalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Spacing="20"
+                                    Margin="0,44,0,0" HorizontalAlignment="Center">
+                            <Button Content="Sign in to Steam"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="OnSignInClicked" />
+                            <Button Content="Add games" Style="{StaticResource ChipStyle}"
+                                    FontSize="{StaticResource CtaSize}"
+                                    Padding="46,22,46,22" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Error is always the whole content area, never a line
+                         tucked under something else: on a television, an
+                         inline warning is a warning nobody reads. -->
+                    <Grid x:Name="ErrorScreen" Background="{StaticResource Screen}"
+                          Visibility="Collapsed">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="72" Foreground="{StaticResource Danger}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="ErrorTitle" Text="Something went wrong"
+                                       Margin="0,28,0,0"
+                                       FontSize="40" FontWeight="ExtraBold"
+                                       Foreground="{StaticResource TextPrimary}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="ErrorBody" MaxWidth="640"
+                                       Margin="0,16,0,0"
+                                       FontSize="{StaticResource ItemNameSmallSize}"
+                                       Foreground="{StaticResource TextTertiary}"
+                                       TextAlignment="Center" TextWrapping="Wrap"
+                                       HorizontalAlignment="Center" />
+                            <Button Content="Try again" Margin="0,40,0,0"
+                                    HorizontalAlignment="Center"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="OnRetryClicked" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+
+                <!-- ====================================================== dock -->
+
+                <Grid Grid.Row="2" Background="{StaticResource Dock}"
+                      BorderBrush="{StaticResource DockEdge}" BorderThickness="0,1,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="22" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- The name of whatever has focus. Fixed height, so the
+                         icons never move when it appears or empties. -->
+                    <TextBlock x:Name="NameText" Grid.Row="0"
+                               Margin="0,18,0,0"
+                               FontSize="{StaticResource LabelSize}"
+                               Foreground="{StaticResource TextTertiary}"
+                               HorizontalAlignment="Center" />
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="30"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+
+                        <Button x:Name="DockLibrary" Style="{StaticResource DockIconStyle}"
+                                Background="{StaticResource Accent}" Tag="library"
+                                Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <Grid Width="22" Height="22">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition /><RowDefinition />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition /><ColumnDefinition />
+                                </Grid.ColumnDefinitions>
+                                <Rectangle Grid.Row="0" Grid.Column="0" Margin="0,0,3,3"
+                                           Fill="{StaticResource OnAccent}" RadiusX="2" RadiusY="2" />
+                                <Rectangle Grid.Row="0" Grid.Column="1" Margin="3,0,0,3"
+                                           Fill="{StaticResource OnAccent}" RadiusX="2" RadiusY="2" />
+                                <Rectangle Grid.Row="1" Grid.Column="0" Margin="0,3,3,0"
+                                           Fill="{StaticResource OnAccent}" RadiusX="2" RadiusY="2" />
+                                <Rectangle Grid.Row="1" Grid.Column="1" Margin="3,3,0,0"
+                                           Fill="{StaticResource OnAccent}" RadiusX="2" RadiusY="2" />
+                            </Grid>
+                        </Button>
+
+                        <Button x:Name="DockShop" Style="{StaticResource DockIconStyle}"
+                                Tag="shop" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE7BF;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                        </Button>
+
+                        <Button x:Name="DockEmulators" Style="{StaticResource DockIconStyle}"
+                                Tag="emulators" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                        </Button>
+
+                        <Button x:Name="DockFriends" Style="{StaticResource DockIconStyle}"
+                                Tag="friends" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE716;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                        </Button>
+
+                        <Button x:Name="DockMods" Style="{StaticResource DockIconStyle}"
+                                Tag="mods" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                        </Button>
+
+                        <Button x:Name="DockDownloads" Style="{StaticResource DockIconStyle}"
+                                Tag="downloads" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" Foreground="{StaticResource TextTertiary}" />
+                        </Button>
+                    </StackPanel>
+
+                    <!-- The controllers in the room, and a way into their
+                         screen. Bottom left, out of the path of the icons. -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                Margin="56,0,0,0">
+                        <Image Source="ms-appx:///Assets/controller-white.png"
+                               Width="48" Opacity="0.75" />
+                        <TextBlock x:Name="CountText"
+                                   FontSize="{StaticResource LabelSize}" FontWeight="Bold"
+                                   Foreground="{StaticResource TextTertiary}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <!-- What the app is doing, when it is doing something the
+                         person should be able to see. -->
+                    <TextBlock x:Name="StatusText" Grid.Row="1"
+                               HorizontalAlignment="Right" VerticalAlignment="Center"
+                               Margin="0,0,56,0"
+                               FontSize="{StaticResource LabelSize}"
+                               Foreground="{StaticResource TextMuted}" />
+                </Grid>
+            </Grid>
+        </Viewbox>
+
+        <!-- Where a PC game's frames land. This console's composition panel
+             does not offer the interface that accepts a swap chain, and it
+             will not hand over its own window either — measured, both — so the
+             frames are copied back and shown as a picture, which is the one
+             route that asks the platform for nothing. -->
         <Image x:Name="GameImage" Stretch="Fill" Visibility="Collapsed"
                IsHitTestVisible="False"
                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />

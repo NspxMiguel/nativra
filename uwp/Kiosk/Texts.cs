@@ -12,7 +12,15 @@ namespace Kiosk
     {
         private static readonly Dictionary<string, string> Pt = new Dictionary<string, string>
         {
-            { "app.eyebrow", "KIOSK" },
+            { "app.eyebrow", "EM MODO DE DESENVOLVIMENTO" },
+            { "tile.allgames", "Todos os jogos \u00B7 {0}" },
+            { "status.notyet", "{0} ainda n\u00E3o foi constru\u00EDdo" },
+            { "dock.library", "Biblioteca" },
+            { "dock.shop", "Loja" },
+            { "dock.emulators", "Emuladores" },
+            { "dock.friends", "Amigos" },
+            { "dock.mods", "Mods" },
+            { "dock.downloads", "Downloads" },
             { "app.title", "Tudo que está instalado neste console" },
             { "status.reading", "lendo o console..." },
             { "status.count", "{0} instalados" },
@@ -85,7 +93,15 @@ namespace Kiosk
 
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
-            { "app.eyebrow", "KIOSK" },
+            { "app.eyebrow", "IN DEVELOPER MODE" },
+            { "tile.allgames", "All games \u00B7 {0}" },
+            { "status.notyet", "{0} is not built yet" },
+            { "dock.library", "Library" },
+            { "dock.shop", "Shop" },
+            { "dock.emulators", "Emulators" },
+            { "dock.friends", "Friends" },
+            { "dock.mods", "Mods" },
+            { "dock.downloads", "Downloads" },
             { "app.title", "Everything installed on this console" },
             { "status.reading", "reading the console..." },
             { "status.count", "{0} installed" },

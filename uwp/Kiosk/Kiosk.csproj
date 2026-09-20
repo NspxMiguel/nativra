@@ -89,6 +89,7 @@
     <Compile Include="Native\PlainAnswers.cs" />
     <Compile Include="Native\AudioBridge.cs" />
     <Compile Include="Native\PointerBridge.cs" />
+    <Compile Include="Native\DisplayStubs.cs" />
     <Compile Include="Native\GraphicsBridge.cs" />
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Texts.cs" />

@@ -31,6 +31,7 @@ namespace Kiosk.Native
         private const int FactoryMethods = 25;
 
         // Slots in IDXGISwapChain1.
+        private const int PresentSlot = 8;
         private const int SetFullscreenSlot = 10;
         private const int GetFullscreenSlot = 11;
         private const int ResizeTargetSlot = 14;
@@ -99,6 +100,9 @@ namespace Kiosk.Native
         private delegate int SetFullscreenGetDelegate(IntPtr self, IntPtr target);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int PresentDelegate(IntPtr self, uint interval, uint flags);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int SetFullscreenDelegate(IntPtr self, int on, IntPtr target);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -113,7 +117,18 @@ namespace Kiosk.Native
         private static QueryInterfaceDelegate queryInterface;
         private static CreateSwapChainDelegate createSwapChain;
         private static CreateForHwndDelegate createForHwnd;
+        private static PresentDelegate present;
+        private static PresentDelegate presentThrough;
         private static SetFullscreenDelegate setFullscreen;
+
+        /// <summary>
+        /// Frames handed to the screen. It is the only honest measure of
+        /// whether a game is running: everything else says it is trying.
+        /// </summary>
+        public static long Frames;
+
+        /// <summary>When the first frame reached the screen.</summary>
+        public static int FirstFrameAt;
         private static GetFullscreenDelegate getFullscreen;
         private static ResizeTargetDelegate resizeTarget;
 
@@ -231,8 +246,21 @@ namespace Kiosk.Native
                 if (code == S_OK && result != IntPtr.Zero)
                 {
                     var chain = Marshal.ReadIntPtr(result);
+                    // Counting frames on the way past. A managed step per
+                    // frame is sixty a second, which is nothing, and it is the
+                    // difference between believing and knowing.
+                    presentThrough = Marshal.GetDelegateForFunctionPointer<PresentDelegate>(
+                        ComProxy.Method(chain, PresentSlot));
+                    present = (self, interval, flags) =>
+                    {
+                        if (Frames == 0) FirstFrameAt = Environment.TickCount;
+                        Frames++;
+                        return presentThrough(ComProxy.Original(self), interval, flags);
+                    };
+
                     var stand = Proxy.Wrap(chain, SwapChainMethods, new Dictionary<int, IntPtr>
                     {
+                        { PresentSlot, Marshal.GetFunctionPointerForDelegate(present) },
                         // Going fullscreen is a desktop idea. On a console the
                         // app already owns the screen, so the honest answer to
                         // "make me fullscreen" is that it is done.

@@ -187,12 +187,12 @@ namespace Kiosk
             var first = true;
             foreach (var tile in Tiles)
             {
-                tile.Hero = first;
+                // The shelf leads with the game played most recently. Steam is
+                // the way into the library rather than something in it, so it
+                // never takes the large tile even when it comes first.
+                tile.Hero = first && tile.Route != "steam";
                 first = false;
-                if (tile.Art == null && tile.Icon == null)
-                {
-                    tile.Art = Tile.ArtFor(tile.Title, Application.Current.Resources);
-                }
+                if (tile.Art == null) tile.Art = Tile.ArtFor(tile.Title, Application.Current.Resources);
             }
             Tiles.Add(new Tile
             {

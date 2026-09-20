@@ -110,12 +110,19 @@
 
     <Grid Background="{StaticResource Screen}">
 
-        <!-- The glow. One ellipse, high and right, so a very dark panel does
-             not read as a screen that is switched off. -->
-        <Rectangle Fill="{StaticResource ScreenGlow}" IsHitTestVisible="False" />
-
         <Viewbox Stretch="Uniform" StretchDirection="Both">
             <Grid Width="1920" Height="1080">
+
+                <!-- The glow: an ellipse 1400 by 900, centred at seven tenths
+                     across and fifteen hundredths down, which is where the
+                     handoff puts it. Drawn under everything and hit-testing
+                     nothing. -->
+                <Rectangle Width="1400" Height="900"
+                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                           Margin="644,-288,0,0"
+                           Fill="{StaticResource ScreenGlow}"
+                           IsHitTestVisible="False" />
+
                 <Grid.RowDefinitions>
                     <RowDefinition Height="76" />
                     <RowDefinition Height="*" />

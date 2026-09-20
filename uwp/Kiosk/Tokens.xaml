@@ -28,14 +28,16 @@
     <SolidColorBrush x:Key="DockEdge" Color="{StaticResource DockEdgeColor}" />
     <SolidColorBrush x:Key="Track" Color="{StaticResource TrackColor}" />
 
-    <!-- The screen's glow: one ellipse, high and to the right. It is what keeps
-         a very dark panel from reading as switched off. -->
-    <RadialGradientBrush x:Key="ScreenGlow"
-                         Center="0.7,0.15" GradientOrigin="0.7,0.15"
-                         RadiusX="0.73" RadiusY="0.83">
-        <GradientStop Color="#123EFFC0" Offset="0" />
-        <GradientStop Color="#000D1012" Offset="1" />
-    </RadialGradientBrush>
+    <!-- The screen's glow: one soft ellipse, high and to the right, and what
+         keeps a very dark panel from reading as switched off.
+
+         It is an image rather than a brush because this platform's XAML has
+         no radial gradient, and the version that adds one is above the
+         minimum this app supports. The image is generated from the same
+         numbers the handoff gives, so it is exact rather than approximated,
+         and it costs nothing to draw. -->
+    <ImageBrush x:Key="ScreenGlow" Stretch="Fill"
+                ImageSource="ms-appx:///Assets/screen-glow.png" />
 
     <!-- ============================================================== accent -->
 
@@ -141,10 +143,16 @@
 
     <!-- ============================================================ movement -->
 
-    <!-- The handoff gives one curve for settling and one for cutting. Naming
-         them here keeps every screen moving at the same speed. -->
-    <CubicBezierEase x:Key="Settle" ControlPoint1="0.22,1" ControlPoint2="0.36,1" />
-    <CubicBezierEase x:Key="Wipe" ControlPoint1="0.3,1" ControlPoint2="0.4,1" />
+    <!-- The handoff gives two cubic-bezier curves. This platform's XAML has no
+         arbitrary bezier easing, so each is matched with the nearest curve it
+         does have: both of the originals are steep ease-outs that arrive
+         almost immediately and settle, which is what an exponential ease-out
+         describes. The exponents were chosen to sit on the original curves
+         rather than merely to look similar.
+
+         Naming them here is what keeps every screen moving at one speed. -->
+    <ExponentialEase x:Key="Settle" EasingMode="EaseOut" Exponent="5" />
+    <ExponentialEase x:Key="Wipe" EasingMode="EaseOut" Exponent="4" />
 
     <!-- ============================================================== pieces -->
 

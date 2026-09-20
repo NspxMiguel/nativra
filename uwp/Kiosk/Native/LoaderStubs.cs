@@ -172,7 +172,7 @@ namespace Kiosk.Native
                     : imports.Resolve(from, wanted);
             };
 
-            var ours = new Dictionary<string, IntPtr>
+            var answers = new Dictionary<string, IntPtr>
             {
                 { "LoadLibraryW", Marshal.GetFunctionPointerForDelegate(loadW) },
                 { "LoadLibraryA", Marshal.GetFunctionPointerForDelegate(loadA) },
@@ -191,7 +191,7 @@ namespace Kiosk.Native
                 "api-ms-win-core-libraryloader-l1-1-0.dll",
             })
             {
-                foreach (var pair in ours)
+                foreach (var pair in answers)
                 {
                     system.Overrides[module + "!" + pair.Key] = pair.Value;
                 }

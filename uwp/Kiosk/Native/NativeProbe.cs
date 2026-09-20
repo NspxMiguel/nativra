@@ -139,6 +139,7 @@ namespace Kiosk.Native
                 WindowStubs.Install(imports);
                 GraphicsBridge.Install(imports);
                 LoaderStubs.Install(imports);
+                PadBridge.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 
                 // A module that imports another has to be loaded after it, or
@@ -276,6 +277,7 @@ namespace Kiosk.Native
                                         "at=" + DateTime.Now.ToString("HH:mm:ss.fff"),
                                         "calls=" + imports.Shim.Total,
                                         "pumped=" + WindowStubs.Pumped,
+                                        "pad=" + PadBridge.Reads,
                                         "stubs=" + imports.Shim.Called.Count,
                                     };
                                     beat.AddRange(imports.Shim.Threads());

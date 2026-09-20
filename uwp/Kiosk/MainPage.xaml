@@ -283,17 +283,12 @@
                         </Button>
                     </StackPanel>
 
-                    <!-- The controllers in the room, and a way into their
-                         screen. Bottom left, out of the path of the icons. -->
-
-                    <!-- What the app is doing, when it is doing something the
-                         person should be able to see. -->
-                
+                </Grid>
 
                 <!-- =================================================== content -->
 
                 <Grid Grid.Row="2" x:Name="Stage"
-                          RenderTransformOrigin="0.5,0.5">
+                      RenderTransformOrigin="0.5,0.5">
                         <Grid.RenderTransform>
                             <ScaleTransform x:Name="StageScale" ScaleX="1" ScaleY="1" />
                         </Grid.RenderTransform>
@@ -464,28 +459,26 @@
                     </Grid>
                 </Grid>
 
-                <!-- ====================================================== dock -->
-
+                <!-- The controllers in the room, and what the app is doing. At the
+                     foot of the screen, outside the strip that changes size. -->
+                <Grid VerticalAlignment="Bottom" Margin="56,0,56,40" IsHitTestVisible="False">
+                    <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Left">
+                        <Image Source="ms-appx:///Assets/controller-white.png"
+                               Width="48" Opacity="0.75" />
+                        <TextBlock x:Name="CountText"
+                                   FontSize="{StaticResource LabelSize}" FontWeight="Bold"
+                                   Foreground="{StaticResource TextTertiary}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock x:Name="StatusText" HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               FontSize="{StaticResource LabelSize}"
+                               Foreground="{StaticResource TextMuted}" />
                 </Grid>
             </Grid>
         </Viewbox>
 
-        <!-- The controllers in the room, and what the app is doing. At the
-             foot of the screen, outside the strip that changes size. -->
-        <Grid VerticalAlignment="Bottom" Margin="56,0,56,40" IsHitTestVisible="False">
-            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Left">
-                <Image Source="ms-appx:///Assets/controller-white.png"
-                       Width="48" Opacity="0.75" />
-                <TextBlock x:Name="CountText"
-                           FontSize="{StaticResource LabelSize}" FontWeight="Bold"
-                           Foreground="{StaticResource TextTertiary}"
-                           VerticalAlignment="Center" />
-            </StackPanel>
-            <TextBlock x:Name="StatusText" HorizontalAlignment="Right"
-                       VerticalAlignment="Center"
-                       FontSize="{StaticResource LabelSize}"
-                       Foreground="{StaticResource TextMuted}" />
-        </Grid>
+
 
         <!-- Where a PC game's frames land. This console's composition panel
              does not offer the interface that accepts a swap chain, and it

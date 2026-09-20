@@ -76,6 +76,10 @@ namespace Kiosk.Native
         private static byte[][] scratch;
         private static int filling;
         private static int busy;
+        private static int lastShown;
+
+        /// <summary>How many frames actually reached the screen.</summary>
+        public static long Shown;
         private static Windows.UI.Core.CoreDispatcher ui;
         private static Windows.UI.Xaml.Controls.Image target;
 
@@ -265,9 +269,15 @@ namespace Kiosk.Native
 
                 Copied++;
 
-                // One update in flight at a time. A queue that grows is a
-                // queue that is already behind, and every frame in it is stale.
+                // One update in flight at a time, and no more than thirty a
+                // second. The interface thread has its own frame to draw, and
+                // a thread given a screen-sized write sixty times a second
+                // never draws it — which is how an application ends up alive,
+                // busy, and absent from the screen.
+                var now = Environment.TickCount;
+                if (now - lastShown < 33) return;
                 if (System.Threading.Interlocked.Exchange(ref busy, 1) == 1) return;
+                lastShown = now;
                 var showing = into;
                 var __ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                 {
@@ -283,6 +293,7 @@ namespace Kiosk.Native
                             stream.Write(showing, 0, showing.Length);
                         }
                         picture.Invalidate();
+                        Shown++;
                     }
                     catch
                     {

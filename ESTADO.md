@@ -86,6 +86,23 @@ thunk gerado em runtime que empilha os quatro registradores de argumento,
 registra o nome, restaura e salta para a função real. Um anel guarda as últimas
 chamadas com repetição — sem isso, a função onde o jogo morre fica escondida.
 
+## Estado do motor agora (madrugada de 20/09)
+
+Com as respostas de janela instaladas (handle falso, atom falso, tela
+1920x1080, `GetClientRect` preenchido de verdade), o motor chega a **126
+funções** e **fica vivo**, mas não avança para criar janela: o anel das
+últimas chamadas mostra `EnterCriticalSection`/`LeaveCriticalSection` em laço.
+Ele está girando no sistema de jobs, esperando algo.
+
+Hipóteses na ordem em que eu testaria:
+1. Ele espera a thread principal bombear mensagens. `PeekMessageW` hoje devolve
+   0 sempre e `GetMessageW` devolve 1 sem preencher a MSG — isso pode travar o
+   laço. Preencher uma MSG zerada e devolver 0 em `GetMessageW` é mais honesto.
+2. Ele pode estar bloqueado lendo os dados do jogo: conferir se
+   `CreateFileW`/`ReadFile` aparecem no traço (não apareceram ainda).
+3. O `WaitForSingleObjectEx` pode estar esperando um evento que nunca vem
+   porque a thread que o sinalizaria morreu em silêncio.
+
 ## O que falta para ver a janela
 
 - **user32 sobre CoreWindow** (114 funções): `RegisterClass`, `CreateWindowEx`,

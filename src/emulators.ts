@@ -28,7 +28,7 @@
 // name on their own.
 
 import { $ } from "bun";
-import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, rename, stat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { human } from "./util";
 
@@ -233,8 +233,17 @@ export type EmulatorEntry = {
   /** A known-good digest, when the project publishes one for this exact asset. Verified at download time when present. */
   sha256?: string;
   archive: ArchiveKind;
-  /** File name of the executable to launch — searched for after unpacking, see findExecutable(). */
+  /** File name of the executable to launch, once installed. */
   executableName: string;
+  /**
+   * The executable's file name as the archive actually ships it, when that
+   * differs from executableName — this is what extract() searches for right
+   * after unpacking, before any rename. Only Mesen2 needs this: its
+   * portable-mode convention is renaming Mesen.exe to Mesen_P.exe, so the
+   * archive's own Mesen.exe has to be found under its real, as-shipped name
+   * first. Defaults to executableName when omitted.
+   */
+  archiveExecutableName?: string;
   /**
    * Marker files this emulator's own convention reads to keep everything —
    * config, saves, BIOS lookups — next to its own folder instead of
@@ -473,9 +482,11 @@ export const emulators: EmulatorEntry[] = [
     archive: "zip",
     // Mesen's own portable convention is unusual: renaming the exe to add a
     // "_P" suffix (Mesen_P.exe) makes it store settings.json in a "Mesen"
-    // folder beside itself instead of Documents. install() renames the
-    // extracted Mesen.exe to Mesen_P.exe for exactly this reason.
+    // folder beside itself instead of Documents. The archive ships plain
+    // Mesen.exe; install() renames it to Mesen_P.exe for exactly this
+    // reason (see archiveExecutableName).
     executableName: "Mesen_P.exe",
+    archiveExecutableName: "Mesen.exe",
     extraDirs: ["Mesen"],
     bios: { needed: false, note: "NES has no BIOS to dump." },
     configFiles: [{ src: "settings.json", dest: "Mesen/settings.json" }],
@@ -717,7 +728,7 @@ async function extract(entry: EmulatorEntry, archivePath: string, unpackDir: str
       throw new Error(`${sevenZip} exit ${result.exitCode} extracting ${archivePath}`);
     }
   }
-  return findExecutable(unpackDir, entry.executableName);
+  return findExecutable(unpackDir, entry.archiveExecutableName ?? entry.executableName);
 }
 
 /**

@@ -437,7 +437,7 @@ namespace Kiosk.Native
                     // A chain made for the console's window is already on the
                     // screen; only a composed one needs somewhere to land —
                     // and if it cannot land, the window is taken instead.
-                    if (composed && !Show(chain))
+                    if (composed)
                     {
                         // Both direct routes were measured refused on this
                         // console, every shape, with and without the app

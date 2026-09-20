@@ -265,6 +265,32 @@ namespace Kiosk.Native
             "7b7166ec-21c7-44ae-b21a-c9ae321ae369", // IDXGIFactory
             "770aae78-f26f-4dba-a829-253c83d1b387", // IDXGIFactory1
             "50c83a1c-e072-4c48-87b0-3630fa36a6d0", // IDXGIFactory2
+            // The five the list used to stop short of. An engine that asks for
+            // one of these and is handed the console's own factory instead of
+            // the stand-in has walked straight out of the bridge — and then
+            // asks that factory for a window-shaped swap chain, which is the
+            // one thing this console refuses. Unity asks for the fifth, to
+            // find out whether the screen can tear.
+            "25483823-cd46-4c7d-86ca-47aa95b837bd", // IDXGIFactory3
+            "1bc6ea02-ef36-464f-bf0c-21ca39e5168a", // IDXGIFactory4
+            "7632e1f5-ee65-4dca-87fd-84cd75f8838d", // IDXGIFactory5
+            "c1b6694f-ff09-44a9-b03c-77900a0a1d17", // IDXGIFactory6
+            "a4966eed-76db-44da-84c1-ee9a7afb20a8", // IDXGIFactory7
+        };
+
+        /// <summary>
+        /// Each factory interface and how many methods its table holds,
+        /// newest first. Handing back a table one entry short of what the
+        /// caller believes it has is a call into whatever sits next in memory.
+        /// </summary>
+        private static readonly Tuple<string, int>[] FactoryShapes =
+        {
+            Tuple.Create("a4966eed-76db-44da-84c1-ee9a7afb20a8", 32), // IDXGIFactory7
+            Tuple.Create("c1b6694f-ff09-44a9-b03c-77900a0a1d17", 30), // IDXGIFactory6
+            Tuple.Create("7632e1f5-ee65-4dca-87fd-84cd75f8838d", 29), // IDXGIFactory5
+            Tuple.Create("1bc6ea02-ef36-464f-bf0c-21ca39e5168a", 28), // IDXGIFactory4
+            Tuple.Create("25483823-cd46-4c7d-86ca-47aa95b837bd", 26), // IDXGIFactory3
+            Tuple.Create("50c83a1c-e072-4c48-87b0-3630fa36a6d0", 25), // IDXGIFactory2
         };
 
         // How many methods each version of the display-device interface has,
@@ -1637,6 +1663,59 @@ namespace Kiosk.Native
         }
 
         /// <summary>Builds the real factory, then the stand-in over it.</summary>
+        /// <summary>
+        /// Finds the newest factory interface this console actually answers
+        /// for, and says how long its table is.
+        ///
+        /// Asking for the newest on purpose is what makes the stand-in exact:
+        /// every older interface is a prefix of it, so one table serves every
+        /// version a game might ask for, and the entries the bridge overrides
+        /// sit at the same numbers in all of them.
+        /// </summary>
+        private static IntPtr AsNewestFactory(IntPtr original, out int methods)
+        {
+            methods = FactoryMethods;
+            if (original == IntPtr.Zero) return IntPtr.Zero;
+
+            IntPtr ask;
+            try
+            {
+                ask = ComProxy.Method(original, QueryInterfaceSlot);
+            }
+            catch
+            {
+                return IntPtr.Zero;
+            }
+            var query = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(ask);
+
+            foreach (var shape in FactoryShapes)
+            {
+                var id = new Guid(shape.Item1);
+                var riid = Marshal.AllocHGlobal(16);
+                var slot = Marshal.AllocHGlobal(IntPtr.Size);
+                try
+                {
+                    Marshal.StructureToPtr(id, riid, false);
+                    Marshal.WriteIntPtr(slot, IntPtr.Zero);
+                    if (query(original, riid, slot) != S_OK) continue;
+                    var found = Marshal.ReadIntPtr(slot);
+                    if (found == IntPtr.Zero) continue;
+                    methods = shape.Item2;
+                    return found;
+                }
+                catch
+                {
+                    // An interface that cannot be asked for is one we do not have.
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(riid);
+                    Marshal.FreeHGlobal(slot);
+                }
+            }
+            return IntPtr.Zero;
+        }
+
         private static int Make(string name, IntPtr riid, IntPtr result, uint flags)
         {
             try
@@ -1679,7 +1758,8 @@ namespace Kiosk.Native
                 // its table starts with every older one, so handing it back in
                 // place of what was asked for is exact, and the entries the
                 // bridge needs are inside it.
-                var newest = AsFactory2(original);
+                var methods = FactoryMethods;
+                var newest = AsNewestFactory(original, out methods);
                 if (newest == IntPtr.Zero)
                 {
                     // Without the newer interface there is no call on this
@@ -1693,7 +1773,7 @@ namespace Kiosk.Native
 
                 var stand = Proxy.Wrap(
                     original,
-                    FactoryMethods,
+                    methods,
                     new Dictionary<int, IntPtr>
                 {
                     { QueryInterfaceSlot, Marshal.GetFunctionPointerForDelegate(queryInterface) },
@@ -1704,7 +1784,8 @@ namespace Kiosk.Native
                 });
                 standingFactory = stand;
                 Marshal.WriteIntPtr(result, stand);
-                Note(name + ": standing in for 0x" + original.ToInt64().ToString("X"));
+                Note(name + ": standing in for 0x" + original.ToInt64().ToString("X")
+                     + " over " + methods + " methods");
                 return S_OK;
             }
             catch (Exception error)

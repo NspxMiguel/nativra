@@ -148,6 +148,20 @@ namespace Kiosk
             portal = await ConsolePortal.LoadAsync();
             portalReady = portal != null && await portal.ProbeAsync() != null;
             await RecordProbeAsync();
+            // Taken here because it cannot be taken anywhere else: a CoreWindow
+            // belongs to the thread that owns it, and the game runs on another.
+            // It is the surface a PC game's frames will end up on.
+            try
+            {
+                Native.GraphicsBridge.ConsoleWindow =
+                    System.Runtime.InteropServices.Marshal.GetIUnknownForObject(
+                        Windows.UI.Core.CoreWindow.GetForCurrentThread());
+            }
+            catch
+            {
+                // Without it the bridge says so rather than guessing.
+            }
+
             await Native.NativeProbe.RunAsync();
         }
 

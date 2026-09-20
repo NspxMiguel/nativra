@@ -16,6 +16,7 @@ namespace Kiosk.Native
     {
         private const string Folder = "win32";
         private const string ReportName = "native-probe.txt";
+        private const string PulseName = "native-pulse.txt";
 
         /// <summary>
         /// Everything here runs on a thread of its own. Setting up thread-local
@@ -136,6 +137,8 @@ namespace Kiosk.Native
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));
                 ProcessStubs.Install(imports);
                 WindowStubs.Install(imports);
+                GraphicsBridge.Install(imports);
+                LoaderStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 
                 // A module that imports another has to be loaded after it, or
@@ -222,6 +225,11 @@ namespace Kiosk.Native
                     lines.Add("stubs.called=" + imports.Shim.Called.Count);
                     foreach (var called in imports.Shim.Called) lines.Add("  called " + called);
                     lines.Add("ticks=" + Ticks(imports));
+                    lines.Add("window=0x" + GraphicsBridge.ConsoleWindow.ToInt64().ToString("X"));
+                    lock (LoaderStubs.Asked)
+                    {
+                        foreach (var name in LoaderStubs.Asked) lines.Add("  asked " + name);
+                    }
                     await WriteAsync(lines);
 
                     // The game's own entry point. It does not return — it opens
@@ -249,6 +257,50 @@ namespace Kiosk.Native
                         lines[lines.Count - 1] += $" base 0x{previousBase.ToInt64():X}"
                             + $" -> 0x{exe.BaseAddress.ToInt64():X}";
                         await WriteAsync(lines);
+
+                        // A heartbeat, started before the game is. The engine
+                        // can take the whole process down between two lines of
+                        // the loop below, and when it does the only thing left
+                        // is what reached the disk — so the last call each
+                        // thread made is written continuously, small and fast,
+                        // rather than waited for.
+                        var beating = true;
+                        var pulse = new System.Threading.Thread(() =>
+                        {
+                            while (beating)
+                            {
+                                try
+                                {
+                                    var beat = new List<string>
+                                    {
+                                        "at=" + DateTime.Now.ToString("HH:mm:ss.fff"),
+                                        "calls=" + imports.Shim.Total,
+                                        "pumped=" + WindowStubs.Pumped,
+                                        "stubs=" + imports.Shim.Called.Count,
+                                    };
+                                    beat.AddRange(imports.Shim.Threads());
+                                    lock (GraphicsBridge.Notes)
+                                    {
+                                        foreach (var note in GraphicsBridge.Notes)
+                                        {
+                                            beat.Add("dxgi " + note);
+                                        }
+                                    }
+                                    foreach (var name in imports.Shim.Recent())
+                                    {
+                                        beat.Add("recent " + name);
+                                    }
+                                    SwapAsync(PulseName, beat).GetAwaiter().GetResult();
+                                }
+                                catch
+                                {
+                                    // A missed beat is a missed beat.
+                                }
+                                System.Threading.Thread.Sleep(25);
+                            }
+                        });
+                        pulse.IsBackground = true;
+                        pulse.Start();
 
                         var runner = new System.Threading.Thread(() =>
                         {
@@ -289,6 +341,13 @@ namespace Kiosk.Native
                                 "exe.calls=" + now + " (+" + (now - seen) + ")",
                                 "exe.pumped=" + WindowStubs.Pumped,
                             };
+                            lock (GraphicsBridge.Notes)
+                            {
+                                foreach (var note in GraphicsBridge.Notes)
+                                {
+                                    snapshot.Add("  dxgi " + note);
+                                }
+                            }
                             seen = now;
                             foreach (var line in imports.Shim.Threads())
                             {
@@ -312,6 +371,7 @@ namespace Kiosk.Native
                             await WriteAsync(snapshot);
                             if (!runner.IsAlive) break;
                         }
+                        beating = false;
                         lines.Add("exe.finished");
                         if (previousBase != IntPtr.Zero)
                         {
@@ -484,19 +544,21 @@ namespace Kiosk.Native
         /// because what is left on disk is nothing at all. A swap is never
         /// caught halfway: either the old report is there or the new one is.
         /// </summary>
-        private static async Task WriteAsync(List<string> lines)
+        private static Task WriteAsync(List<string> lines) => SwapAsync(ReportName, lines);
+
+        private static async Task SwapAsync(string name, List<string> lines)
         {
             try
             {
                 var local = ApplicationData.Current.LocalFolder;
                 var draft = await local.CreateFileAsync(
-                    ReportName + ".new", CreationCollisionOption.ReplaceExisting);
+                    name + ".new", CreationCollisionOption.ReplaceExisting);
                 await FileIO.WriteLinesAsync(draft, lines);
 
-                var existing = await local.TryGetItemAsync(ReportName) as StorageFile;
+                var existing = await local.TryGetItemAsync(name) as StorageFile;
                 if (existing == null)
                 {
-                    await draft.RenameAsync(ReportName, NameCollisionOption.ReplaceExisting);
+                    await draft.RenameAsync(name, NameCollisionOption.ReplaceExisting);
                 }
                 else
                 {

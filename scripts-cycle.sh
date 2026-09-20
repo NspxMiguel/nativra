@@ -64,3 +64,6 @@ for _ in $(seq 1 "$WAIT"); do
   fi
 done
 bun src/xbdev.ts pull kiosk native-probe.txt LocalState >/dev/null 2>&1 || true
+bun src/xbdev.ts pull kiosk native-pulse.txt LocalState >/dev/null 2>&1 || true
+echo "== pulse =="
+cat native-pulse.txt 2>/dev/null | head -40

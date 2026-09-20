@@ -1,133 +1,57 @@
-# XboxDev
+# Kiosk
 
-Turns an Xbox Series X|S into a native game machine through the console's own
-Developer Mode — no PC, no streaming, no jailbreak. `xbdev` drives the console's
-Device Portal from a Mac: it finds the console, installs the whole catalogue and
-flips every app into game mode with one command.
+An Xbox Series X|S in developer mode, running PC games natively.
 
-```bash
-bun src/xbdev.ts find          # locate the console on the network
-bun src/xbdev.ts connect <ip>  # store address + Device Portal credentials
-bun src/xbdev.ts kit           # download and install everything, then enable game mode
-```
+Not streaming. Not a remote desktop. The game is downloaded by the console
+itself, from the player's own Steam account, and executed on the console's own
+processor — which is an x86-64 running Windows NT, and has been all along.
 
-## Your Steam library, partly
+## Why this is possible at all
 
-The console will never run the Steam client — but a good part of what people
-*buy* on Steam is an engine that has been reimplemented in the open, and those
-run natively here. You supply the game data you already own; the engine on the
-console loads it.
+An Xbox is not a different computer from a PC. It is the same architecture
+running the same kernel, with a different set of rules about what a program is
+allowed to do. A developer-mode console will run a packaged app, and a packaged
+app can map an ordinary Windows binary into itself: sections, relocations,
+imports, exception tables, thread local storage. Of the 931 functions the first
+game tried to import, 753 resolved to the console's own Windows.
 
-Measured inside the RetroArch package shipped by this catalogue — **218 distinct
-cores**, among them:
+The remaining 178 are the project. They are not translation — nothing is being
+emulated — they are the handful of libraries a packaged app does not have
+loaded, answered by hand. The window system is the big one, because a console
+has no windows.
 
-| Core | The PC game it runs |
-| --- | --- |
-| `boom3` | **Doom 3** |
-| `vitaquake2`, `vitaquake3` | **Quake II**, **Quake III Arena** |
-| `tyrquake`, `prboom` | **Quake**, **Doom / Doom II** |
-| `openlara` | **Tomb Raider** |
-| `ecwolf` | **Wolfenstein 3D**, Spear of Destiny |
-| `dosbox_pure`, `dosbox_core`, `dosbox_svn` | the **DOS** catalogue |
-| `scummvm` | LucasArts and Sierra adventures |
-| `nxengine` | Cave Story |
-| `reminiscence` | Flashback |
-| `easyrpg` | RPG Maker 2000/2003 games |
-| `fbneo`, `cannonball`, `mrboom` | arcade, OutRun, Bomberman |
+## What works today
 
-So: buy Doom on Steam, copy the `.wad` to the drive, and it runs on the console
-natively — no PC in the loop and nothing streamed. That is as close to "Steam on
-Xbox" as the hardware allows, and it is honest about what it is.
+- **Sign in to Steam** on the console, by QR code, natively.
+- **The full library**: owned games and family-shared ones, with the account's
+  real collections, filters and search.
+- **Downloading on the console**, from Steam's own content servers: the client
+  protocol, depot keys, manifests, chunks, and all three container formats.
+- **A game detail screen** with artwork, playtime, and an install dialog that
+  asks where to put it.
+- **Loading a game's binaries** — the engine of a commercial Unity game maps,
+  relocates, resolves and runs inside the app.
+- **Remote control of the console** from a terminal, for testing.
 
-## What runs natively
+## What does not work yet
 
-Everything below executes on the console itself, off an external NTFS drive.
+Rendering. The engine runs; the picture does not reach the screen. That is the
+swap chain, the audio path, and the parts of the window system a game touches
+on its way to a first frame. See [docs/ISSUES.md](docs/ISSUES.md) — the work is
+partitioned, and a lot of it needs no console.
 
-**PC games, natively**
+## Using it
 
-| Package | Runs |
-| --- | --- |
-| GZDoom | Doom, Doom II, Heretic, Hexen, Strife, and every mod or total conversion |
-| Raze | Duke Nukem 3D, Blood, Shadow Warrior, Redneck Rampage, Powerslave |
-| DOSBox Pure | The DOS catalogue — Warcraft, Command & Conquer, X-COM, Dune II, Tyrian |
-| ScummVM | Monkey Island, Day of the Tentacle, Grim Fandango, Broken Sword, Sam & Max |
-| OpenBOR / Ikemen GO | Beats of Rage and M.U.G.E.N engines |
-| Ruffle | Flash games |
+    bun src/xbdev.ts connect      # point at the console once
+    bun src/xbdev.ts install <package files>
+    bun src/xbdev.ts steam games  # what the account owns
+    bun src/xbdev.ts launch kiosk
 
-**Emulation**
+Builds happen on a hosted Windows runner; no Windows machine is needed locally.
 
-| Package | System |
-| --- | --- |
-| Xenia Canary | Xbox 360 |
-| XBSX2 | PlayStation 2 |
-| Dolphin | GameCube, Wii |
-| Flycast | Dreamcast, Naomi, Atomiswave |
-| PPSSPP | PSP |
-| Supermodel | Sega Model 3 arcade |
-| RetroArch | ~200 systems through libretro cores |
+## Licence
 
-## What this cannot do
+Free to use, change and share. Not to sell — see [LICENSE](LICENSE) and
+[NOTICE.md](NOTICE.md).
 
-Steam, Epic, GOG and commercial PC games **do not run on an Xbox**, and no amount
-of work changes that. Three hard limits in the console itself:
-
-1. **The console only executes signed packages** (MSIX/UWP). There is no path to
-   running a loose `.exe`.
-2. **A UWP app can only load DLLs bundled inside its own package**
-   (`LoadPackagedLibrary`). Every Steam game loads DLLs off disk at runtime.
-3. **Steam and Epic are closed-source Win32 programs.** You cannot recompile what
-   you do not have.
-
-A "Proton for Xbox" would mean reimplementing Wine inside those constraints, and
-the result would still be blocked by DRM and anti-cheat. This project does not
-pretend otherwise.
-
-## Verified
-
-The console side waits on Developer Mode, but the app itself is not theory — it
-was built by the cloud pipeline, installed on a Windows 11 machine and driven
-there. What that run proved:
-
-- the package builds, signs and installs;
-- `PackageManager` enumeration works under the `packageQuery` capability, and
-  each app's real tile art is loaded through `AppListEntry.DisplayInfo`;
-- focus moves with the gamepad/keyboard and the focused icon grows and rings;
-- `AppListEntry.LaunchAsync` opens another installed app;
-- the language is picked from the host: an English Windows produced English.
-
-Two things that only bite on Windows, not on the console: AppX deployment
-refuses to run from an SSH session (a scheduled task in the interactive session
-does it), and every CI run signs with a fresh self-signed certificate, so that
-run's `.cer` must be trusted first. The Xbox Device Portal needs neither.
-
-## Dual boot
-
-Developer Mode lives on its own partition. The retail system, its games and its
-saves are untouched, and switching between the two is a menu item — `Leave
-Developer Mode` in Dev Home reboots into retail, the activation app brings it
-back. Nothing here is destructive or irreversible.
-
-## Resources in Developer Mode
-
-An app gets 1GB of RAM, 2–4 shared CPU cores and 45% of the GPU. A **game** gets
-5GB, four exclusive cores plus two shared, and the whole GPU — and only a game can
-see an external drive. `xbdev gamemode` makes that switch; without it the
-emulators are both slow and blind to the hard drive.
-
-## External drive
-
-Format it **NTFS** — exFAT is not read in this path. The drive shows up as `E:`
-inside RetroArch. Suggested layout:
-
-```
-E:\Games\<system>\     ROMs and game data
-E:\BIOS\               BIOS files
-E:\Saves\  E:\States\  saves and save states
-```
-
-## Requirements
-
-- An Xbox Series X|S with Developer Mode activated (a one-time $19 Microsoft
-  developer account, already held here since 2021).
-- Device Portal enabled on the console, with a username and password.
-- Bun on the Mac side.
+This project does not bypass game licensing and will not accept code that does.

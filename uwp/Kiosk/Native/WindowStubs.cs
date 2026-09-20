@@ -240,6 +240,11 @@ namespace Kiosk.Native
             {
                 Pumped++;
                 ClearMessage(message);
+                // This call is supposed to block until something arrives, and
+                // nothing ever will. Handing back an empty message keeps the
+                // loop turning; the pause is so a loop that only waits does not
+                // eat a core doing it.
+                System.Threading.Thread.Sleep(1);
                 return 1;
             };
 

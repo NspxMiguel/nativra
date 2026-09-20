@@ -289,6 +289,20 @@ namespace Kiosk.Native
                 WriteRect(info + 4, 0, 0, Width, Height);
                 WriteRect(info + 20, 0, 0, Width, Height);
                 Marshal.WriteInt32(info, 36, 1); // MONITORINFOF_PRIMARY
+
+                // The caller says which of the two structures it passed by the
+                // size it wrote into the first field. The longer one carries a
+                // device name, and a caller that asked for one and got nothing
+                // reads whatever was on its stack.
+                if (Marshal.ReadInt32(info, 0) >= 104)
+                {
+                    const string device = @"\\.\DISPLAY1";
+                    for (var i = 0; i < 32; i++)
+                    {
+                        Marshal.WriteInt16(
+                            info, 40 + i * 2, (short)(i < device.Length ? device[i] : '\0'));
+                    }
+                }
                 return 1;
             };
 

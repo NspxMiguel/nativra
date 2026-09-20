@@ -92,6 +92,35 @@ namespace Kiosk.Native
             return true;
         }
 
+
+        /// <summary>
+        /// The messages a window sends the moment it appears.
+        ///
+        /// On a desktop these arrive before a program has finished asking for
+        /// the window: it is shown, it is sized, it is given focus, and the
+        /// program is told all three. Here nobody sends them, and an engine
+        /// waiting to be told its own size waits for something that is never
+        /// coming. So they are put in the queue at the start, once, exactly as
+        /// they would have arrived.
+        /// </summary>
+        public static void Announce()
+        {
+            const int WM_SHOWWINDOW = 0x0018;
+            const int WM_SIZE = 0x0005;
+            const int WM_ACTIVATE = 0x0006;
+            const int WM_ACTIVATEAPP = 0x001C;
+            const int WM_SETFOCUS = 0x0007;
+            const int WM_WINDOWPOSCHANGED = 0x0047;
+
+            var size = ((long)(Height & 0xFFFF) << 16) | (uint)(Width & 0xFFFF);
+            Post(WM_SHOWWINDOW, 1, 0);
+            Post(WM_WINDOWPOSCHANGED, 0, 0);
+            Post(WM_SIZE, 0, size);          // SIZE_RESTORED
+            Post(WM_ACTIVATEAPP, 1, 0);
+            Post(WM_ACTIVATE, 1, 0);         // WA_ACTIVE
+            Post(WM_SETFOCUS, 0, 0);
+        }
+
         private static double Lean(double value) =>
             Math.Abs(value) < Deadzone ? 0.0 : (value - Math.Sign(value) * Deadzone) / (1 - Deadzone);
 

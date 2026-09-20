@@ -306,11 +306,25 @@ namespace Kiosk.Native
                         });
                         pointer.IsBackground = true;
                         pointer.Start();
+                        PointerBridge.Announce();
 
                         var pulse = new System.Threading.Thread(() =>
                         {
+                            var wasFrames = 0L;
+                            var wasAt = Environment.TickCount;
+                            var rate = 0.0;
                             while (beating)
                             {
+                                // Frames per second, measured over the gap
+                                // between two beats rather than claimed.
+                                var now = Environment.TickCount;
+                                if (now - wasAt >= 500)
+                                {
+                                    rate = (GraphicsBridge.Frames - wasFrames)
+                                        * 1000.0 / (now - wasAt);
+                                    wasFrames = GraphicsBridge.Frames;
+                                    wasAt = now;
+                                }
                                 try
                                 {
                                     var beat = new List<string>
@@ -319,7 +333,8 @@ namespace Kiosk.Native
                                         "calls=" + imports.Shim.Total,
                                         "pumped=" + WindowStubs.Pumped,
                                         "pad=" + PadBridge.Reads,
-                                        "frames=" + GraphicsBridge.Frames,
+                                        "frames=" + GraphicsBridge.Frames
+                                            + " at " + rate.ToString("0.0") + " a second",
                                         "pointer=" + PointerBridge.Moves
                                             + " at " + PointerBridge.X + "," + PointerBridge.Y,
                                         "stubs=" + imports.Shim.Called.Count,

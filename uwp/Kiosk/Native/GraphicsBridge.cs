@@ -430,10 +430,21 @@ namespace Kiosk.Native
                         // Taken before the frame goes out: a flip-model chain
                         // rotates its buffers on the way, and what was just
                         // drawn is no longer where it was.
-                        if (Mirroring) FrameMirror.Take();
-                        var answer = presentThrough(ComProxy.Original(self), interval, flags);
+                        if (!Mirroring)
+                        {
+                            return presentThrough(ComProxy.Original(self), interval, flags);
+                        }
+
+                        // The frame is taken here and shown by this application,
+                        // so it is never handed to the display system — and it
+                        // must not be. A composed chain with nothing attached to
+                        // it has no one to consume what it is given: its buffers
+                        // fill, and the next call waits for a reader that will
+                        // never come. About a second in, measured, and it takes
+                        // the whole process with it.
+                        FrameMirror.Take();
                         Pace();
-                        return answer;
+                        return S_OK;
                     };
 
                     // A flip-model chain is often presented through the newer
@@ -445,7 +456,12 @@ namespace Kiosk.Native
                     {
                         if (Frames == 0) FirstFrameAt = Environment.TickCount;
                         Frames++;
-                        if (Mirroring) FrameMirror.Take();
+                        if (Mirroring)
+                        {
+                            FrameMirror.Take();
+                            Pace();
+                            return S_OK;
+                        }
                         return presentOneThrough(
                             ComProxy.Original(self), interval, flags, parameters);
                     };

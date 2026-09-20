@@ -88,6 +88,15 @@ namespace Kiosk.Native
         private static ItemDelegate item;
         private static TwoInDelegate missing;
 
+        /// <summary>
+        /// Whether to answer for the audio class at all. Sound is not needed to
+        /// put a picture on screen, and an audio path that half works is worse
+        /// than one that plainly does not: a game told "no such device" falls
+        /// back to silence and carries on, while a game handed a device that
+        /// disappoints it half way through stops where it stands.
+        /// </summary>
+        public static bool Enabled = true;
+
         private static readonly ComProxy Proxy = new ComProxy();
         private static IntPtr enumerator;
         private static IntPtr device;
@@ -355,9 +364,20 @@ namespace Kiosk.Native
                     return S_OK;
                 }
 
-                // Nothing under that name, said properly: an empty value and
-                // a success, which is what a store answers for a key it lacks.
-                return S_OK;
+                // Everything else, named out loud. A store that quietly says
+                // "nothing here, and it went fine" hands back an empty value
+                // that a caller may read as a pointer — which is how a program
+                // ends up reading address zero.
+                try
+                {
+                    Note("property " + Marshal.PtrToStructure<Guid>(key)
+                        + ":" + Marshal.ReadInt32(key, 16));
+                }
+                catch
+                {
+                    Note("property (unreadable key)");
+                }
+                return unchecked((int)0x80070490);   // ERROR_NOT_FOUND
             };
 
             propertySet = (self, key, value) => S_OK;
@@ -460,6 +480,7 @@ namespace Kiosk.Native
         /// </summary>
         public static IntPtr ClassFor(string clsid)
         {
+            if (!Enabled) return IntPtr.Zero;
             if (!string.Equals(clsid, EnumeratorClass, StringComparison.OrdinalIgnoreCase))
             {
                 return IntPtr.Zero;

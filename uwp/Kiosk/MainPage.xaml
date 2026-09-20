@@ -196,7 +196,7 @@
              hand a swap chain, and a XAML app cannot give away its own window,
              so the game draws into a surface the app composes like any other
              element. It stays out of the way until something is running. -->
-        <SwapChainPanel x:Name="GameSurface" Visibility="Collapsed"
+        <SwapChainPanel x:Name="GameSurface" IsHitTestVisible="False"
                         HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>
 </Page>

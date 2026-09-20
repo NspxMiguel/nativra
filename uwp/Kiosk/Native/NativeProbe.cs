@@ -123,6 +123,8 @@ namespace Kiosk.Native
                     // switch that only sometimes exists is worse than none.
                     Trace = await local.TryGetItemAsync("notrace.txt") == null,
                 };
+                AudioBridge.Enabled = await local.TryGetItemAsync("noaudio.txt") == null;
+                lines.Add("audio.bridge=" + AudioBridge.Enabled);
 
                 // Where the game thinks it lives, which is how it finds its data.
                 var exeName = "game.exe";
@@ -235,6 +237,8 @@ namespace Kiosk.Native
                     foreach (var called in imports.Shim.Called) lines.Add("  called " + called);
                     lines.Add("ticks=" + Ticks(imports));
                     lines.Add("window=0x" + GraphicsBridge.ConsoleWindow.ToInt64().ToString("X"));
+                    lines.Add("graphics=" + GraphicsBridge.SelfTest());
+                    await WriteAsync(lines);
                     lock (LoaderStubs.Asked)
                     {
                         foreach (var name in LoaderStubs.Asked) lines.Add("  asked " + name);

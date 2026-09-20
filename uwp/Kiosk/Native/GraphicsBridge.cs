@@ -24,6 +24,10 @@ namespace Kiosk.Native
     {
         // Slots in IDXGIFactory2, counting from IUnknown.
         private const int QueryInterfaceSlot = 0;
+        private const int EnumAdaptersSlot = 7;
+        private const int EnumAdapters1Slot = 12;
+        private const int GetParentSlot = 6;
+        private const int AdapterMethods = 11;
         private const int CreateSwapChainSlot = 10;
         private const int CreateForHwndSlot = 15;
         private const int CreateForCoreWindowSlot = 16;
@@ -95,6 +99,9 @@ namespace Kiosk.Native
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int SetSwapChainDelegate(IntPtr self, IntPtr chain);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ItemOutDelegate(IntPtr self, uint index, IntPtr result);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int SetFullscreenGetDelegate(IntPtr self, IntPtr target);
@@ -172,6 +179,17 @@ namespace Kiosk.Native
         /// </summary>
         private static IntPtr ConsoleDescription(int width, int height, int format, int flags)
         {
+            // Zero means "the size of the window" when there is a window. A
+            // composed surface has no window to measure, so the screen is the
+            // honest answer.
+            if (width <= 0) width = 1920;
+            if (height <= 0) height = 1080;
+
+            // Mode switching and tearing are things you ask a display for. A
+            // composed surface is not a display, and asking refuses the whole
+            // chain rather than just the flag.
+            flags = 0;
+
             var desc = Marshal.AllocHGlobal(48);
             Marshal.WriteInt32(desc, 0, width);
             Marshal.WriteInt32(desc, 4, height);
@@ -332,8 +350,10 @@ namespace Kiosk.Native
 
                     var set = Marshal.GetDelegateForFunctionPointer<SetSwapChainDelegate>(
                         ComProxy.Method(native, 3));
+                    // The panel is in the tree from the start — an element
+                    // that is not laid out has no surface to hand a swap chain
+                    // to, and it draws nothing until there is one anyway.
                     Note("compose: 0x" + set(native, chain).ToString("X8"));
-                    panel.Visibility = Windows.UI.Xaml.Visibility.Visible;
                 }
                 catch (Exception error)
                 {
@@ -345,6 +365,109 @@ namespace Kiosk.Native
                     if (unknown != IntPtr.Zero) Marshal.Release(unknown);
                 }
             });
+        }
+
+
+
+        /// <summary>
+        /// Wraps an adapter so that asking it who made it answers the
+        /// stand-in.
+        ///
+        /// Otherwise there is a way around the bridge, and an engine will
+        /// find it: from a device you can reach its adapter, and from an
+        /// adapter its factory — the real one. A game that walks that path
+        /// ends up holding the object whose window-shaped calls this console
+        /// refuses, and nothing here would ever see it happen.
+        /// </summary>
+        private static IntPtr WrapAdapter(IntPtr adapter)
+        {
+            if (adapter == IntPtr.Zero) return adapter;
+            try
+            {
+                return Proxy.Wrap(adapter, AdapterMethods, new Dictionary<int, IntPtr>
+                {
+                    { GetParentSlot, Marshal.GetFunctionPointerForDelegate(adapterParent) },
+                });
+            }
+            catch
+            {
+                return adapter;
+            }
+        }
+
+        [DllImport("d3d11.dll")]
+        private static extern int D3D11CreateDevice(
+            IntPtr adapter, int driverType, IntPtr software, uint flags,
+            IntPtr levels, uint levelCount, uint sdk,
+            out IntPtr device, out int level, out IntPtr context);
+
+        [DllImport("dxgi.dll")]
+        private static extern int CreateDXGIFactory2(
+            uint flags, ref Guid riid, out IntPtr factory);
+
+        /// <summary>
+        /// Proves the path on its own, before any game uses it.
+        ///
+        /// Everything between a game and the screen is ours except the parts
+        /// that are the console's, and when a frame does not appear there is
+        /// no way from outside to tell which half is at fault. So the app makes
+        /// a device, a swap chain and a frame by itself, with the same calls
+        /// and the same surface. If this works, the bridge works, and whatever
+        /// is wrong is on the engine's side of it.
+        /// </summary>
+        public static string SelfTest()
+        {
+            try
+            {
+                var code = D3D11CreateDevice(
+                    IntPtr.Zero, 1, IntPtr.Zero, 0, IntPtr.Zero, 0, 7,
+                    out var device, out var level, out var context);
+                if (code != S_OK || device == IntPtr.Zero)
+                {
+                    return "no device: 0x" + code.ToString("X8");
+                }
+
+                var id = new Guid("50c83a1c-e072-4c48-87b0-3630fa36a6d0");
+                code = CreateDXGIFactory2(0, ref id, out var factory);
+                if (code != S_OK || factory == IntPtr.Zero)
+                {
+                    return "device ok (level 0x" + level.ToString("X")
+                        + "), no factory: 0x" + code.ToString("X8");
+                }
+
+                var desc = ConsoleDescription(1920, 1080, 28, 0);
+                var slot = Marshal.AllocHGlobal(IntPtr.Size);
+                try
+                {
+                    Marshal.WriteIntPtr(slot, IntPtr.Zero);
+                    var compose = Marshal.GetDelegateForFunctionPointer<
+                        CreateForCompositionDelegate>(
+                        ComProxy.Method(factory, CreateForCompositionSlot));
+                    code = compose(factory, device, desc, IntPtr.Zero, slot);
+                    if (code != S_OK)
+                    {
+                        return "device and factory ok (level 0x" + level.ToString("X")
+                            + "), no chain: 0x" + code.ToString("X8");
+                    }
+
+                    var chain = Marshal.ReadIntPtr(slot);
+                    Show(chain);
+                    var present = Marshal.GetDelegateForFunctionPointer<PresentDelegate>(
+                        ComProxy.Method(chain, PresentSlot));
+                    var shown = present(chain, 1, 0);
+                    return "whole path works: level 0x" + level.ToString("X")
+                        + ", present 0x" + shown.ToString("X8");
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(slot);
+                    Marshal.FreeHGlobal(desc);
+                }
+            }
+            catch (Exception error)
+            {
+                return error.GetType().Name + ": " + error.Message;
+            }
         }
 
         public static void Install(SystemImports system)
@@ -418,6 +541,31 @@ namespace Kiosk.Native
                     ConsoleDescription(width, height, format, flags),
                     result, "CreateSwapChainForHwnd");
             };
+
+            adapterParent = (self, riid, result) =>
+            {
+                if (result == IntPtr.Zero) return E_FAIL;
+                if (IsFactoryId(riid) && standingFactory != IntPtr.Zero)
+                {
+                    Marshal.WriteIntPtr(result, standingFactory);
+                    Note("an adapter was asked who made it");
+                    return S_OK;
+                }
+                try
+                {
+                    var original = ComProxy.Original(self);
+                    var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
+                        ComProxy.Method(original, GetParentSlot));
+                    return ask(original, riid, result);
+                }
+                catch
+                {
+                    return E_FAIL;
+                }
+            };
+
+            enumAdapters = (self, index, result) => Enumerate(self, index, result, EnumAdaptersSlot);
+            enumAdapters1 = (self, index, result) => Enumerate(self, index, result, EnumAdapters1Slot);
 
             factory = (riid, result) => Make("CreateDXGIFactory", riid, result, 0);
             factory1 = (riid, result) => Make("CreateDXGIFactory1", riid, result, 0);
@@ -501,12 +649,32 @@ namespace Kiosk.Native
                     var make = Marshal.GetDelegateForFunctionPointer<DeviceDelegate>(real);
                     var code = make(adapter, driverType, software, flags, levels,
                         levelCount, sdk, resultDevice, resultLevel, resultContext);
-                    var level = resultLevel != IntPtr.Zero
-                        ? Marshal.ReadInt32(resultLevel)
-                        : 0;
                     Note("D3D11CreateDevice(type " + driverType + ", flags 0x"
-                        + flags.ToString("X") + "): 0x" + code.ToString("X8")
-                        + " level 0x" + level.ToString("X"));
+                        + flags.ToString("X") + "): 0x" + code.ToString("X8"));
+
+                    // Two things a desktop tolerates and a console does not:
+                    // the debug layer, which is not installed here, and a
+                    // specific adapter, which on a console is the only one
+                    // there is. An engine that asked for either and was
+                    // refused would retry forever without learning anything,
+                    // so the retry happens here instead, once, quietly.
+                    if (code != S_OK && (flags & 0x2) != 0)
+                    {
+                        code = make(adapter, driverType, software, flags & ~0x2u, levels,
+                            levelCount, sdk, resultDevice, resultLevel, resultContext);
+                        Note("without the debug layer: 0x" + code.ToString("X8"));
+                    }
+                    if (code != S_OK)
+                    {
+                        code = make(IntPtr.Zero, 1, IntPtr.Zero, flags & ~0x2u, IntPtr.Zero,
+                            0, sdk, resultDevice, resultLevel, resultContext);
+                        Note("on the default adapter: 0x" + code.ToString("X8"));
+                    }
+
+                    if (code == S_OK && resultLevel != IntPtr.Zero)
+                    {
+                        Note("feature level 0x" + Marshal.ReadInt32(resultLevel).ToString("X"));
+                    }
                     return code;
                 }
                 catch (Exception error)
@@ -552,6 +720,12 @@ namespace Kiosk.Native
 
         private static DeviceAndChainDelegate deviceAndChain;
         private static DeviceDelegate deviceOnly;
+        private static ItemOutDelegate enumAdapters;
+        private static ItemOutDelegate enumAdapters1;
+        private static QueryInterfaceDelegate adapterParent;
+
+        /// <summary>The stand-in every adapter should name as its parent.</summary>
+        private static IntPtr standingFactory;
 
         /// <summary>
         /// The factory that made a device, reached through the device itself.
@@ -680,6 +854,29 @@ namespace Kiosk.Native
             }
         }
 
+
+        /// <summary>Enumerates through to the real factory, then wraps what comes back.</summary>
+        private static int Enumerate(IntPtr self, uint index, IntPtr result, int slot)
+        {
+            if (result == IntPtr.Zero) return E_FAIL;
+            try
+            {
+                var original = ComProxy.Original(self);
+                var call = Marshal.GetDelegateForFunctionPointer<ItemOutDelegate>(
+                    ComProxy.Method(original, slot));
+                var code = call(original, index, result);
+                if (code == S_OK)
+                {
+                    Marshal.WriteIntPtr(result, WrapAdapter(Marshal.ReadIntPtr(result)));
+                }
+                return code;
+            }
+            catch
+            {
+                return E_FAIL;
+            }
+        }
+
         /// <summary>Builds the real factory, then the stand-in over it.</summary>
         private static int Make(string name, IntPtr riid, IntPtr result, uint flags)
         {
@@ -743,7 +940,10 @@ namespace Kiosk.Native
                     { QueryInterfaceSlot, Marshal.GetFunctionPointerForDelegate(queryInterface) },
                     { CreateSwapChainSlot, Marshal.GetFunctionPointerForDelegate(createSwapChain) },
                     { CreateForHwndSlot, Marshal.GetFunctionPointerForDelegate(createForHwnd) },
+                    { EnumAdaptersSlot, Marshal.GetFunctionPointerForDelegate(enumAdapters) },
+                    { EnumAdapters1Slot, Marshal.GetFunctionPointerForDelegate(enumAdapters1) },
                 });
+                standingFactory = stand;
                 Marshal.WriteIntPtr(result, stand);
                 Note(name + ": standing in for 0x" + original.ToInt64().ToString("X"));
                 return S_OK;

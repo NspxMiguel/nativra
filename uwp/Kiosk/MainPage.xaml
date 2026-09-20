@@ -191,5 +191,12 @@
             <TextBlock x:Name="StatusText" FontSize="12" HorizontalAlignment="Right"
                        VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}" />
         </Grid>
+
+        <!-- Where a PC game's frames land. A console has no window handle to
+             hand a swap chain, and a XAML app cannot give away its own window,
+             so the game draws into a surface the app composes like any other
+             element. It stays out of the way until something is running. -->
+        <SwapChainPanel x:Name="GameSurface" Visibility="Collapsed"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>
 </Page>

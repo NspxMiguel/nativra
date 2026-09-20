@@ -17,3 +17,13 @@ node_modules/
 
 # Sessao da Steam dele — token, nunca vai pro GitHub
 steam.json
+
+# Recovery notes for us, in our own shorthand — not documentation
+ESTADO.md
+
+# Per-cycle scratch: the downloaded build, the markers, the reports
+.cycle/
+.markers/
+native-probe.txt
+native-pulse.txt
+xbox-*.png

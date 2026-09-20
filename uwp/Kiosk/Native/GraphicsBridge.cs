@@ -45,6 +45,12 @@ namespace Kiosk.Native
         /// </summary>
         public static IntPtr ConsoleWindow;
 
+        /// <summary>The element the finished frames are composed into.</summary>
+        public static Windows.UI.Xaml.Controls.SwapChainPanel Surface;
+
+        /// <summary>The interface thread, which is the only one that may touch it.</summary>
+        public static Windows.UI.Core.CoreDispatcher OnUi;
+
         /// <summary>What happened, in order, for the report to carry.</summary>
         public static readonly List<string> Notes = new List<string>();
 
@@ -81,6 +87,13 @@ namespace Kiosk.Native
         private delegate int CreateForCoreWindowDelegate(
             IntPtr self, IntPtr device, IntPtr window, IntPtr desc,
             IntPtr restrict, IntPtr result);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int CreateForCompositionDelegate(
+            IntPtr self, IntPtr device, IntPtr desc, IntPtr restrict, IntPtr result);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int SetSwapChainDelegate(IntPtr self, IntPtr chain);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int SetFullscreenDelegate(IntPtr self, int on, IntPtr target);
@@ -188,10 +201,25 @@ namespace Kiosk.Native
 
             try
             {
-                var create = Marshal.GetDelegateForFunctionPointer<CreateForCoreWindowDelegate>(
-                    ComProxy.Method(original, CreateForCoreWindowSlot));
-                var code = create(original, device, ConsoleWindow, desc, IntPtr.Zero, result);
-                Note(from + ": 0x" + code.ToString("X8"));
+                // Composition, not the console's window directly. A XAML
+                // application does not own its CoreWindow — the framework
+                // does — so the supported way in is a surface the framework
+                // composes, which is also what keeps our own screen alive
+                // behind the game.
+                var compose = Marshal.GetDelegateForFunctionPointer<CreateForCompositionDelegate>(
+                    ComProxy.Method(original, CreateForCompositionSlot));
+                var code = compose(original, device, desc, IntPtr.Zero, result);
+                Note(from + " composition: 0x" + code.ToString("X8"));
+
+                if (code != S_OK)
+                {
+                    // Some hosts do hand over the window. Worth one attempt.
+                    var create = Marshal.GetDelegateForFunctionPointer<
+                        CreateForCoreWindowDelegate>(
+                        ComProxy.Method(original, CreateForCoreWindowSlot));
+                    code = create(original, device, ConsoleWindow, desc, IntPtr.Zero, result);
+                    Note(from + " core window: 0x" + code.ToString("X8"));
+                }
 
                 if (code == S_OK && result != IntPtr.Zero)
                 {
@@ -209,6 +237,7 @@ namespace Kiosk.Native
                             Marshal.GetFunctionPointerForDelegate(resizeTarget) },
                     });
                     Marshal.WriteIntPtr(result, stand);
+                    Show(chain);
                 }
                 return code;
             }
@@ -221,6 +250,66 @@ namespace Kiosk.Native
             {
                 Marshal.FreeHGlobal(desc);
             }
+        }
+
+
+        /// <summary>
+        /// Hands the finished chain to the surface on screen.
+        ///
+        /// The element is a XAML element, so this has to happen on the thread
+        /// that owns XAML, and the game is not on it. The panel's own COM
+        /// interface is what accepts a swap chain; C# has no declaration for
+        /// it, so it is asked for by identifier and called by slot.
+        /// </summary>
+        private static void Show(IntPtr chain)
+        {
+            var panel = Surface;
+            var ui = OnUi;
+            if (panel == null || ui == null || chain == IntPtr.Zero)
+            {
+                Note("no surface to compose into");
+                return;
+            }
+
+            var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High, () =>
+            {
+                var unknown = IntPtr.Zero;
+                var native = IntPtr.Zero;
+                try
+                {
+                    unknown = Marshal.GetIUnknownForObject(panel);
+                    var id = new Guid("63aad0b8-7c24-40ff-85a8-640d944cc325");
+                    var riid = Marshal.AllocHGlobal(16);
+                    Marshal.StructureToPtr(id, riid, false);
+                    var slot = Marshal.AllocHGlobal(IntPtr.Size);
+                    var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
+                        ComProxy.Method(unknown, 0));
+                    var code = ask(unknown, riid, slot);
+                    Marshal.FreeHGlobal(riid);
+                    if (code != S_OK)
+                    {
+                        Note("panel refused its own interface: 0x" + code.ToString("X8"));
+                        Marshal.FreeHGlobal(slot);
+                        return;
+                    }
+                    native = Marshal.ReadIntPtr(slot);
+                    Marshal.FreeHGlobal(slot);
+
+                    var set = Marshal.GetDelegateForFunctionPointer<SetSwapChainDelegate>(
+                        ComProxy.Method(native, 3));
+                    Note("compose: 0x" + set(native, chain).ToString("X8"));
+                    panel.Visibility = Windows.UI.Xaml.Visibility.Visible;
+                }
+                catch (Exception error)
+                {
+                    Note("compose: " + error.GetType().Name);
+                }
+                finally
+                {
+                    if (native != IntPtr.Zero) Marshal.Release(native);
+                    if (unknown != IntPtr.Zero) Marshal.Release(unknown);
+                }
+            });
         }
 
         public static void Install(SystemImports system)

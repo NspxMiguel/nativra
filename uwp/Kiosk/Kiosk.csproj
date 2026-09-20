@@ -83,6 +83,9 @@
     <Compile Include="Native\ComProxy.cs" />
     <Compile Include="Native\LoaderStubs.cs" />
     <Compile Include="Native\PadBridge.cs" />
+    <Compile Include="Native\FaultWatch.cs" />
+    <Compile Include="Native\TimerStubs.cs" />
+    <Compile Include="Native\ComStubs.cs" />
     <Compile Include="Native\GraphicsBridge.cs" />
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Texts.cs" />

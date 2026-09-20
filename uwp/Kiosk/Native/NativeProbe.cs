@@ -140,6 +140,9 @@ namespace Kiosk.Native
                 GraphicsBridge.Install(imports);
                 LoaderStubs.Install(imports);
                 PadBridge.Install(imports);
+                FaultWatch.Install();
+                TimerStubs.Install(imports);
+                ComStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 
                 // A module that imports another has to be loaded after it, or
@@ -280,6 +283,11 @@ namespace Kiosk.Native
                                         "pad=" + PadBridge.Reads,
                                         "stubs=" + imports.Shim.Called.Count,
                                     };
+                                    beat.AddRange(FaultWatch.Faults());
+                                    lock (ComStubs.Wanted)
+                                    {
+                                        foreach (var id in ComStubs.Wanted) beat.Add("com " + id);
+                                    }
                                     beat.AddRange(imports.Shim.Threads());
                                     lock (GraphicsBridge.Notes)
                                     {

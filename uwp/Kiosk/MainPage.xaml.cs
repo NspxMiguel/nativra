@@ -156,6 +156,8 @@ namespace Kiosk
                 Native.GraphicsBridge.ConsoleWindow =
                     System.Runtime.InteropServices.Marshal.GetIUnknownForObject(
                         Windows.UI.Core.CoreWindow.GetForCurrentThread());
+                Native.GraphicsBridge.Surface = GameSurface;
+                Native.GraphicsBridge.OnUi = Dispatcher;
             }
             catch
             {

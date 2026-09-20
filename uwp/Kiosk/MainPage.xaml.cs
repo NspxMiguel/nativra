@@ -228,8 +228,7 @@ namespace Kiosk
 
             // How many controllers are in the room. Shown beside the pad in
             // the dock, and only when there is more than one to tell apart.
-            var pads = Windows.Gaming.Input.Gamepad.Gamepads.Count;
-            CountText.Text = pads > 1 ? "\u00D7" + pads : string.Empty;
+            ShowPads();
             StatusText.Text = string.Empty;
 
             // Focus starts on the shelf rather than the dock, because the
@@ -627,6 +626,47 @@ namespace Kiosk
         }
 
         private bool menuOpen;
+
+        /// <summary>
+        /// The pads in the room. More than one and the count is what matters;
+        /// exactly one and the count says nothing anybody needed, so the
+        /// charge takes its place.
+        /// </summary>
+        private void ShowPads()
+        {
+            var pads = Windows.Gaming.Input.Gamepad.Gamepads;
+            CountText.Text = pads.Count > 1 ? "\u00D7" + pads.Count : string.Empty;
+
+            if (pads.Count != 1)
+            {
+                BatteryBox.Visibility = Visibility.Collapsed;
+                return;
+            }
+            try
+            {
+                var report = pads[0].TryGetBatteryReport();
+                var full = report?.FullChargeCapacityInMilliwattHours;
+                var left = report?.RemainingCapacityInMilliwattHours;
+                if (full == null || left == null || full == 0)
+                {
+                    // A wired pad reports no cell at all, which is not a
+                    // fault and should not be drawn as an empty battery.
+                    BatteryBox.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                var part = Math.Max(0, Math.Min(1, (double)left / full.Value));
+                BatteryFill.Width = 52 * part;
+                BatteryFill.Background = (Brush)Application.Current.Resources[
+                    part > 0.25 ? "Accent" : "Warning"];
+                BatteryText.Text = (int)Math.Round(part * 100) + "%";
+                BatteryBox.Visibility = Visibility.Visible;
+            }
+            catch
+            {
+                BatteryBox.Visibility = Visibility.Collapsed;
+            }
+        }
 
         private void Light(string where)
         {

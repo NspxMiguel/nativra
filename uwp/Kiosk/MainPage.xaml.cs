@@ -403,6 +403,15 @@ namespace Kiosk
 
         private async void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
+            // A game on screen has the controller. Ours is still behind it and
+            // still focused, and without this the player would be walking
+            // through a menu they cannot see while they play.
+            if (Native.NativeProbe.GameRunning)
+            {
+                e.Handled = true;
+                return;
+            }
+
             switch (e.Key)
             {
                 case Windows.System.VirtualKey.GamepadA:

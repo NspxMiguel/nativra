@@ -426,9 +426,21 @@ export const emulators: EmulatorEntry[] = [
     executableName: "gopher64.exe",
     portableMarkers: ["portable.txt"],
     bios: { needed: false, note: "N64 has no external BIOS to dump; the PIF boot ROM is emulated (HLE) by default." },
-    configFiles: [{ src: "config.toml", dest: "config.toml" }],
+    // No config file shipped, deliberately: gopher64's config is JSON, not
+    // TOML (confirmed by reading src/ui/config.rs), and its Config struct
+    // deserializes all-or-nothing — a config that omits the complex
+    // input_profiles map (a Rust tagged-enum array, keyed on raw SDL3
+    // button/axis IDs) either fails to parse entirely or risks a runtime
+    // lookup panic on a profile name that was never populated. gopher64
+    // does not need help here anyway: reading get_default_profile() in
+    // src/ui/input_profile.rs shows its own first-run default already
+    // binds SDL_GAMEPAD_BUTTON_* (an Xbox pad's XInput report, through
+    // SDL3) sensibly for every N64 button, and --fullscreen (verified
+    // against src/lib.rs's clap Args) covers the one thing worth forcing
+    // from the launch command instead.
+    configFiles: [],
     launchArgs: (romPath) => [romPath, "--fullscreen"],
-    note: "Successor to simple64 (archived 2025-02-14 by its own author in favor of this from-scratch rewrite). Newer project: config.toml's exact key set was not verified against a real first-run file, only against the portable.txt convention it documents — treat the shipped config.toml as a starting point, not gospel.",
+    note: "Successor to simple64 (archived 2025-02-14 by its own author in favor of this from-scratch rewrite). Ships no factory config file on purpose — see the comment above the configFiles field in this entry.",
   },
   {
     id: "snes",

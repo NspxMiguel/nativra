@@ -1,0 +1,46 @@
+# melonDS factory config — written by emulators.ts, see src/emulators.ts.
+# Stored flat next to melonDS.exe, per melonDS's own portable.txt convention.
+#
+# Key names and the 3D.Renderer / joystick encodings below were confirmed
+# against melonDS's own source (src/frontend/qt_sdl/Config.cpp and
+# EmuInstanceInput.cpp), not guessed: Screen.*/3D.* are global (shared by
+# every instance), while Window0.*/Joystick.* are per-instance, under
+# [Instance0].
+#
+# Joystick button values are melonDS's internal encoding: a plain SDL
+# joystick button index below 0x100, or 0x100 | (hat << 4) | direction for a
+# D-pad reported as a hat (direction bits: 1=up, 2=right, 4=down, 8=left —
+# SDL's own SDL_HAT_* values). An Xbox pad's SDL joystick button order on
+# Windows is A=0, B=1, X=2, Y=3, LB=4, RB=5, Back=6, Start=7, D-pad on hat 0.
+
+Screen.VSync = true
+Screen.VSyncInterval = 1
+# 0 = Software, 1 = OpenGL, 2 = OpenGL (compute) — confirmed in EmuInstance.h.
+3D.Renderer = 1
+3D.GL.ScaleFactor = 2
+
+[Instance0]
+JoystickID = 0
+
+[Instance0.Window0]
+ScreenSizing = 0
+ScreenRotation = 0
+ShowOSD = true
+
+[Instance0.Joystick]
+A = 0
+B = 1
+X = 2
+Y = 3
+L = 4
+R = 5
+Select = 6
+Start = 7
+Up = 257
+Right = 258
+Down = 260
+Left = 264
+
+[Firmware]
+Username = "Player"
+Language = 1

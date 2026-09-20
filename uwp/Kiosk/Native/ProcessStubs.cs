@@ -29,8 +29,62 @@ namespace Kiosk.Native
         private static CreateProcessDelegate createProcess;
         private static ShellExecuteDelegate shellExecute;
 
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void ExitDelegate(uint code);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int KillDelegate(IntPtr process, uint code);
+
+        private static ExitDelegate leave;
+        private static KillDelegate kill;
+
+        /// <summary>What the game asked to do to the process, and with what code.</summary>
+        public static string Attempted = "nothing";
+
+        /// <summary>
+        /// Stops the game from taking the application with it.
+        ///
+        /// A game owns its process and ends it when it decides it is done —
+        /// which here is this application, the screen it draws on, and the
+        /// launcher the player came from. So the call is caught: the thread
+        /// that made it is parked, its exit code written down, and everything
+        /// else carries on. Whatever the game wanted to end, it ends alone.
+        /// </summary>
+        private static void Install(SystemImports imports, string[] modules)
+        {
+            leave = code =>
+            {
+                Attempted = "ExitProcess(" + code + ")";
+                // Parked, not returned to: the caller believes it is gone, and
+                // code after a call that never returns is not written to run.
+                while (true) System.Threading.Thread.Sleep(1000);
+            };
+
+            kill = (process, code) =>
+            {
+                Attempted = "TerminateProcess(" + code + ")";
+                return 1;
+            };
+
+            foreach (var module in modules)
+            {
+                imports.Overrides[module + "!ExitProcess"] =
+                    Marshal.GetFunctionPointerForDelegate(leave);
+                imports.Overrides[module + "!TerminateProcess"] =
+                    Marshal.GetFunctionPointerForDelegate(kill);
+            }
+        }
+
         public static void Install(SystemImports imports)
         {
+            Install(imports, new[]
+            {
+                "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "kernelbase.dll",
+                "api-ms-win-core-processthreads-l1-1-0.dll",
+                "api-ms-win-core-processthreads-l1-1-1.dll",
+            });
+
             // ERROR_ACCESS_DENIED, which is the truth and a code every caller
             // already has a path for.
             createProcess = (a, b, c, d, e, f, g, h, i, j) =>

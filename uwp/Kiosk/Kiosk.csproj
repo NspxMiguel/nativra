@@ -113,6 +113,7 @@
   <ItemGroup>
     <Content Include="Assets\Steam.png" />
     <Content Include="Assets\controller-white.png" />
+    <Content Include="Assets\screen-glow.png" />
     <Content Include="Assets\store-steam.png" />
     <Content Include="Assets\store-gog.png" />
     <Content Include="Assets\store-epic.png" />

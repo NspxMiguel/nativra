@@ -46,11 +46,26 @@ namespace Kiosk.Native
         [DllImport("api-ms-win-core-processthreads-l1-1-0.dll", SetLastError = true)]
         private static extern uint TlsAlloc();
 
-        [DllImport("api-ms-win-core-heap-l1-1-0.dll", SetLastError = true)]
-        private static extern IntPtr GetProcessHeap();
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MemoryBasicInformation
+        {
+            public IntPtr BaseAddress;
+            public IntPtr AllocationBase;
+            public uint AllocationProtect;
+            public uint Alignment1;
+            public IntPtr RegionSize;
+            public uint State;
+            public uint Protect;
+            public uint Type;
+            public uint Alignment2;
+        }
 
-        [DllImport("api-ms-win-core-heap-l1-1-0.dll", SetLastError = true)]
-        private static extern UIntPtr HeapSize(IntPtr heap, uint flags, IntPtr memory);
+        // The table of blocks is not a process-heap allocation, so asking the
+        // heap how big it is faults. Asking the memory manager what is readable
+        // around it does not, and bounding the copy is all that is needed.
+        [DllImport("api-ms-win-core-memory-l1-1-4.dll", SetLastError = true)]
+        private static extern UIntPtr VirtualQueryFromApp(
+            IntPtr address, out MemoryBasicInformation info, UIntPtr length);
 
         /// <summary>
         /// Off by default. Setting up thread-local storage rewrites a pointer
@@ -427,9 +442,24 @@ namespace Kiosk.Native
                 var existingSlots = 0;
                 if (existing != IntPtr.Zero)
                 {
-                    var size = HeapSize(GetProcessHeap(), 0, existing);
-                    TlsNote += $" bytes={(ulong)size}";
-                    if ((ulong)size < (1UL << 20)) existingSlots = (int)((ulong)size / 8);
+                    var length = (UIntPtr)(uint)Marshal.SizeOf<MemoryBasicInformation>();
+                    if (VirtualQueryFromApp(existing, out var info, length) != UIntPtr.Zero)
+                    {
+                        // How much is readable from the pointer to the end of
+                        // its region: an upper bound, which is what keeps a
+                        // copy from reading off the end.
+                        var readable = (long)info.RegionSize
+                            - ((long)existing - (long)info.BaseAddress);
+                        if (readable > 0 && readable < (1 << 20))
+                        {
+                            existingSlots = (int)(readable / 8);
+                        }
+                        TlsNote += $" readable={readable} protect=0x{info.Protect:X}";
+                    }
+                    else
+                    {
+                        TlsNote += " query refused";
+                    }
                 }
                 Step?.Invoke(TlsNote);
                 if (TlsLevel < 4) return;

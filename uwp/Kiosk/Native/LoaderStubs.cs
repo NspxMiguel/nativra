@@ -60,6 +60,24 @@ namespace Kiosk.Native
         private static SystemImports imports;
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate IntPtr ThreadDelegate(
+            IntPtr security, IntPtr stack, IntPtr start, IntPtr argument,
+            uint flags, IntPtr id);
+
+        [DllImport("api-ms-win-core-processthreads-l1-1-0.dll", SetLastError = true)]
+        private static extern IntPtr CreateThread(
+            IntPtr security, IntPtr stack, IntPtr start, IntPtr argument,
+            uint flags, IntPtr id);
+
+        [DllImport("api-ms-win-core-processthreads-l1-1-0.dll", SetLastError = true)]
+        private static extern bool SetThreadPriority(IntPtr thread, int priority);
+
+        private static ThreadDelegate makeThread;
+
+        /// <summary>How many of the game's threads were told to stand back.</summary>
+        public static long Calmed;
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate void SayDelegate(IntPtr text);
 
         private static SayDelegate says;
@@ -216,8 +234,36 @@ namespace Kiosk.Native
                 }
             };
 
+            // Every thread the game starts, started one step below normal.
+            //
+            // The engine sizes itself to the machine and takes it: sixteen
+            // hardware threads become thirty-odd of its own, all at normal
+            // priority, and the one thread that draws this application's screen
+            // is left with almost nothing. Measured: fifteen screen updates in
+            // a minute. A console is not a desktop — there is one thing running
+            // and it still has to hand back a frame — so the game runs a step
+            // below the screen, which costs it nothing it can feel.
+            makeThread = (security, stack, start, argument, flags, id) =>
+            {
+                var thread = CreateThread(security, stack, start, argument, flags, id);
+                if (thread != IntPtr.Zero)
+                {
+                    try
+                    {
+                        SetThreadPriority(thread, -1);   // below normal
+                        Calmed++;
+                    }
+                    catch
+                    {
+                        // A thread that keeps its priority is not a failure.
+                    }
+                }
+                return thread;
+            };
+
             var answers = new Dictionary<string, IntPtr>
             {
+                { "CreateThread", Marshal.GetFunctionPointerForDelegate(makeThread) },
                 { "OutputDebugStringA", Marshal.GetFunctionPointerForDelegate(says) },
                 { "OutputDebugStringW", Marshal.GetFunctionPointerForDelegate(saysWide) },
                 { "LoadLibraryW", Marshal.GetFunctionPointerForDelegate(loadW) },

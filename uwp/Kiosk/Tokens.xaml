@@ -141,6 +141,74 @@
         <GradientStop Color="#FF1C8F6C" Offset="1" />
     </LinearGradientBrush>
 
+    <!-- ====================================================== older screens -->
+
+    <!-- The names the store and the game screens were written against, kept
+         pointing at the values this file now holds. They are not a second
+         palette: a missing StaticResource does not degrade, it throws while
+         the page is loading, and that is exactly what was happening when the
+         store refused to open. Keeping the names costs four lines; renaming
+         every use across two screens in the same change would have been two
+         risks instead of one. -->
+    <SolidColorBrush x:Key="Background" Color="{StaticResource ScreenColor}" />
+    <SolidColorBrush x:Key="Tile" Color="{StaticResource Surface2Color}" />
+    <SolidColorBrush x:Key="Hairline" Color="#1AF2F5F4" />
+    <SolidColorBrush x:Key="HairlineStrong" Color="#33F2F5F4" />
+
+    <!-- A row in a list. The platform paints selection in its own purple, and
+         a console front end should not borrow a colour it never chose. -->
+    <Style x:Key="RowStyle" TargetType="ListViewItem">
+        <Setter Property="Padding" Value="10,6,10,6" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="UseSystemFocusVisuals" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <Grid Background="Transparent">
+                        <Border x:Name="Fill" CornerRadius="8" Background="Transparent" />
+                        <ContentPresenter Margin="{TemplateBinding Padding}" />
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Fill"
+                                            Storyboard.TargetProperty="Background">
+                                            <DiscreteObjectKeyFrame KeyTime="0"
+                                                Value="{StaticResource Surface3}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Selected">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Fill"
+                                            Storyboard.TargetProperty="Background">
+                                            <DiscreteObjectKeyFrame KeyTime="0"
+                                                Value="{StaticResource Surface3}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="FocusStates">
+                                <VisualState x:Name="Unfocused" />
+                                <VisualState x:Name="Focused">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Fill"
+                                            Storyboard.TargetProperty="Background">
+                                            <DiscreteObjectKeyFrame KeyTime="0"
+                                                Value="{StaticResource AccentDim}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ============================================================ movement -->
 
     <!-- The handoff gives two cubic-bezier curves. This platform's XAML has no

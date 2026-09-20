@@ -2,11 +2,5 @@
   <Application>
     <Assembly Name="*Application*" Dynamic="Required All" />
   
-    <!-- The panel's native interface. Without this the compiler leaves out the
-         stub that asks the panel for it, and the cast fails at runtime with no
-         hint of why — the interface is only ever named through a cast, which
-         is exactly the pattern the optimiser removes. -->
-    <Type Name="Kiosk.Native.ISwapChainPanelNative" Dynamic="Required All"
-          MarshalObject="Required All" />
   </Application>
 </Directives>

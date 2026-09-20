@@ -235,6 +235,10 @@ namespace Kiosk.Native
                 "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "kernelbase.dll",
                 "api-ms-win-core-libraryloader-l1-2-0.dll",
                 "api-ms-win-core-libraryloader-l1-1-0.dll",
+                // A game often imports the debug functions from the api set
+                // rather than from kernel32, and the narration is worth having.
+                "api-ms-win-core-debug-l1-1-0.dll",
+                "api-ms-win-core-debug-l1-1-1.dll",
             })
             {
                 foreach (var pair in answers)

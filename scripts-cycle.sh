@@ -52,6 +52,9 @@ bun src/xbdev.ts sync >/dev/null 2>&1 || true
 # The app cannot read the developer share (UnauthorizedAccessException on every
 # drive letter, measured), and its own storage goes with the uninstall. So the
 # game is fetched again each turn, by the console, from his own Steam account.
+# Which game this turn tests. The app downloads it on the console itself, so
+# trying another one is a number, not a new build.
+printf '%s\n' "${APPID:-1919460}" > .markers/autodownload.txt
 bun src/xbdev.ts push kiosk .markers/autodownload.txt LocalState
 # TRACE=off turns off the per-call recording, which costs a managed transition
 # on every function the engine uses — fine while measuring, not while timing.

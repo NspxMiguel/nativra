@@ -96,6 +96,9 @@ namespace Kiosk.Native
         private delegate int SetSwapChainDelegate(IntPtr self, IntPtr chain);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int SetFullscreenGetDelegate(IntPtr self, IntPtr target);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int SetFullscreenDelegate(IntPtr self, int on, IntPtr target);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -190,12 +193,16 @@ namespace Kiosk.Native
         }
 
         private static int MakeChain(
-            IntPtr self, IntPtr device, IntPtr desc, IntPtr result, string from)
+            IntPtr self, IntPtr device, IntPtr desc, IntPtr result, string from) =>
+            MakeChainOn(ComProxy.Original(self), device, desc, result, from);
+
+        private static int MakeChainOn(
+            IntPtr original, IntPtr device, IntPtr desc, IntPtr result, string from)
         {
-            var original = ComProxy.Original(self);
-            if (original == IntPtr.Zero || ConsoleWindow == IntPtr.Zero)
+            if (original == IntPtr.Zero)
             {
-                Note(from + ": no console window to draw into");
+                Note(from + ": no factory to ask");
+                Marshal.FreeHGlobal(desc);
                 return E_FAIL;
             }
 
@@ -388,6 +395,73 @@ namespace Kiosk.Native
             factory1 = (riid, result) => Make("CreateDXGIFactory1", riid, result, 0);
             factory2 = (flags, riid, result) => Make("CreateDXGIFactory2", riid, result, flags);
 
+            // One call that makes the device and the chain together. The
+            // device half is the system's; the chain half is ours, reached
+            // through the factory the new device came from.
+            deviceAndChain = (adapter, driverType, software, flags, levels, levelCount,
+                sdk, chainDesc, resultChain, resultDevice, resultLevel, resultContext) =>
+            {
+                var real = imports.SystemAddress("d3d11.dll", "D3D11CreateDevice");
+                if (real == IntPtr.Zero)
+                {
+                    Note("d3d11 has no device entry point");
+                    return E_FAIL;
+                }
+
+                var ownDevice = resultDevice;
+                var borrowed = IntPtr.Zero;
+                if (ownDevice == IntPtr.Zero)
+                {
+                    borrowed = Marshal.AllocHGlobal(IntPtr.Size);
+                    Marshal.WriteIntPtr(borrowed, IntPtr.Zero);
+                    ownDevice = borrowed;
+                }
+
+                try
+                {
+                    var make = Marshal.GetDelegateForFunctionPointer<DeviceDelegate>(real);
+                    var code = make(adapter, driverType, software, flags, levels,
+                        levelCount, sdk, ownDevice, resultLevel, resultContext);
+                    Note("D3D11CreateDevice: 0x" + code.ToString("X8"));
+                    if (code != S_OK || resultChain == IntPtr.Zero || chainDesc == IntPtr.Zero)
+                    {
+                        return code;
+                    }
+
+                    var device = Marshal.ReadIntPtr(ownDevice);
+                    var made = FactoryBehind(device);
+                    if (made == IntPtr.Zero)
+                    {
+                        Note("no factory behind the new device");
+                        return E_FAIL;
+                    }
+
+                    return MakeChainOn(
+                        made, device,
+                        ConsoleDescription(
+                            Marshal.ReadInt32(chainDesc, 0),
+                            Marshal.ReadInt32(chainDesc, 4),
+                            Marshal.ReadInt32(chainDesc, 16),
+                            Marshal.ReadInt32(chainDesc, 64)),
+                        resultChain, "D3D11CreateDeviceAndSwapChain");
+                }
+                catch (Exception error)
+                {
+                    Note("D3D11CreateDeviceAndSwapChain: " + error.GetType().Name);
+                    return E_FAIL;
+                }
+                finally
+                {
+                    if (borrowed != IntPtr.Zero) Marshal.FreeHGlobal(borrowed);
+                }
+            };
+
+            foreach (var module in new[] { "d3d11.dll", "D3D11.dll" })
+            {
+                system.Overrides[module + "!D3D11CreateDeviceAndSwapChain"] =
+                    Marshal.GetFunctionPointerForDelegate(deviceAndChain);
+            }
+
             foreach (var module in new[] { "dxgi.dll", "DXGI.dll" })
             {
                 system.Overrides[module + "!CreateDXGIFactory"] =
@@ -399,6 +473,119 @@ namespace Kiosk.Native
             }
         }
 
+
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int DeviceAndChainDelegate(
+            IntPtr adapter, int driverType, IntPtr software, uint flags,
+            IntPtr levels, uint levelCount, uint sdk, IntPtr chainDesc,
+            IntPtr resultChain, IntPtr resultDevice, IntPtr resultLevel,
+            IntPtr resultContext);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int DeviceDelegate(
+            IntPtr adapter, int driverType, IntPtr software, uint flags,
+            IntPtr levels, uint levelCount, uint sdk,
+            IntPtr resultDevice, IntPtr resultLevel, IntPtr resultContext);
+
+        private static DeviceAndChainDelegate deviceAndChain;
+
+        /// <summary>
+        /// The factory that made a device, reached through the device itself.
+        ///
+        /// Some engines create the device and the swap chain in one call and
+        /// never touch a factory, so there is nothing to stand in front of.
+        /// But every device knows its adapter and every adapter knows its
+        /// factory, so the way in is through the back.
+        /// </summary>
+        private static IntPtr FactoryBehind(IntPtr device)
+        {
+            var dxgiDevice = Ask(device, "54ec77fa-1377-44e6-8c32-88fd5f44c84c");
+            if (dxgiDevice == IntPtr.Zero) return IntPtr.Zero;
+
+            var adapter = OneOut(dxgiDevice, 7);            // IDXGIDevice::GetAdapter
+            if (adapter == IntPtr.Zero) return IntPtr.Zero;
+
+            return Parent(adapter, "50c83a1c-e072-4c48-87b0-3630fa36a6d0");
+        }
+
+        private static IntPtr Ask(IntPtr instance, string id)
+        {
+            if (instance == IntPtr.Zero) return IntPtr.Zero;
+            var riid = IntPtr.Zero;
+            var slot = IntPtr.Zero;
+            try
+            {
+                riid = Marshal.AllocHGlobal(16);
+                Marshal.StructureToPtr(new Guid(id), riid, false);
+                slot = Marshal.AllocHGlobal(IntPtr.Size);
+                Marshal.WriteIntPtr(slot, IntPtr.Zero);
+                var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
+                    ComProxy.Method(instance, QueryInterfaceSlot));
+                return ask(instance, riid, slot) == S_OK
+                    ? Marshal.ReadIntPtr(slot)
+                    : IntPtr.Zero;
+            }
+            catch
+            {
+                return IntPtr.Zero;
+            }
+            finally
+            {
+                if (riid != IntPtr.Zero) Marshal.FreeHGlobal(riid);
+                if (slot != IntPtr.Zero) Marshal.FreeHGlobal(slot);
+            }
+        }
+
+        private static IntPtr OneOut(IntPtr instance, int slot)
+        {
+            var target = Marshal.AllocHGlobal(IntPtr.Size);
+            try
+            {
+                Marshal.WriteIntPtr(target, IntPtr.Zero);
+                var call = Marshal.GetDelegateForFunctionPointer<SetFullscreenGetDelegate>(
+                    ComProxy.Method(instance, slot));
+                return call(instance, target) == S_OK
+                    ? Marshal.ReadIntPtr(target)
+                    : IntPtr.Zero;
+            }
+            catch
+            {
+                return IntPtr.Zero;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(target);
+            }
+        }
+
+        /// <summary>IDXGIObject::GetParent, which is slot six on everything.</summary>
+        private static IntPtr Parent(IntPtr instance, string id)
+        {
+            var riid = IntPtr.Zero;
+            var slot = IntPtr.Zero;
+            try
+            {
+                riid = Marshal.AllocHGlobal(16);
+                Marshal.StructureToPtr(new Guid(id), riid, false);
+                slot = Marshal.AllocHGlobal(IntPtr.Size);
+                Marshal.WriteIntPtr(slot, IntPtr.Zero);
+                var call = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
+                    ComProxy.Method(instance, 6));
+                return call(instance, riid, slot) == S_OK
+                    ? Marshal.ReadIntPtr(slot)
+                    : IntPtr.Zero;
+            }
+            catch
+            {
+                return IntPtr.Zero;
+            }
+            finally
+            {
+                if (riid != IntPtr.Zero) Marshal.FreeHGlobal(riid);
+                if (slot != IntPtr.Zero) Marshal.FreeHGlobal(slot);
+            }
+        }
 
         /// <summary>The same object, asked for by its newest interface.</summary>
         private static IntPtr AsFactory2(IntPtr original)

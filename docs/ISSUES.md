@@ -48,3 +48,19 @@ Drafts for the issues to open. Each one says what done looks like, because
     world is not a new copy of Minecraft.
 16. **A ProtonDB-shaped site.** Per-game reports, per-console badges, fed by
     what people send from issue 9.
+
+## Known gaps, written down so nobody rediscovers them
+
+- **`D3D11CreateDeviceAndSwapChain`** is not bridged. Engines that use it hand
+  a window handle to Direct3D in one call, and that call cannot be redirected
+  the way the factory can. The fix is to split it: create the device with
+  `D3D11CreateDevice`, then reach the factory through the device and make the
+  chain the same way `GraphicsBridge` already does.
+- **Direct3D 9 does not exist on this console.** Games older than about 2012
+  link `d3d9.dll`, and there is nothing to forward to. Translating D3D9 onto
+  D3D11 is a project in itself — it is what DXVK does on Linux — and it is the
+  single biggest thing standing between this and an old catalogue.
+- **`steam_api64.dll`.** Most Steam games load it and quit if it fails. The
+  app already signs in as the player and speaks the Steam protocol, so the
+  honest answer is to implement the interface against that real session rather
+  than to fake ownership. Nothing here will ever pretend a game is owned.

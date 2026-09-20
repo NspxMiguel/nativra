@@ -100,8 +100,6 @@ namespace Kiosk.Native
                 { "SystemParametersInfoA", 1 },
                 { "SetTimer", 1 },
                 { "KillTimer", 1 },
-                { "GetAsyncKeyState", 0 },
-                { "GetKeyState", 0 },
                 { "GetKeyboardState", 1 },
                 { "GetKeyboardLayout", 0x04090409 },
                 { "MapVirtualKeyW", 0 },
@@ -170,6 +168,7 @@ namespace Kiosk.Native
         private static PeekDelegate peek;
         private static GetMessageDelegate getMessage;
         private static PointDelegate cursorPos;
+        private static MetricDelegate keyState;
         private static MonitorInfoDelegate monitorInfo;
         private static EnumMonitorsDelegate enumMonitors;
 
@@ -230,6 +229,8 @@ namespace Kiosk.Native
             {
                 Pumped++;
                 ClearMessage(message);
+                // PM_REMOVE: the caller is consuming, not glancing.
+                if (PointerBridge.Take(message, (remove & 1) != 0)) return 1;
                 return 0;
             };
 
@@ -240,6 +241,7 @@ namespace Kiosk.Native
             {
                 Pumped++;
                 ClearMessage(message);
+                if (PointerBridge.Take(message, true)) return 1;
                 // This call is supposed to block until something arrives, and
                 // nothing ever will. Handing back an empty message keeps the
                 // loop turning; the pause is so a loop that only waits does not
@@ -251,9 +253,18 @@ namespace Kiosk.Native
             cursorPos = point =>
             {
                 if (point == IntPtr.Zero) return 0;
-                Marshal.WriteInt32(point, 0, Width / 2);
-                Marshal.WriteInt32(point, 4, Height / 2);
+                Marshal.WriteInt32(point, 0, PointerBridge.X);
+                Marshal.WriteInt32(point, 4, PointerBridge.Y);
                 return 1;
+            };
+
+            // A game that polls instead of reading messages asks this, and it
+            // has to agree with what the messages said.
+            keyState = key =>
+            {
+                if (key == 1 && PointerBridge.Left) return unchecked((int)0xFFFF8001);
+                if (key == 2 && PointerBridge.Right) return unchecked((int)0xFFFF8001);
+                return 0;
             };
 
             // MONITORINFO: size, the monitor rectangle, the working area, flags.
@@ -301,6 +312,8 @@ namespace Kiosk.Native
                 { "GetMessageW", Marshal.GetFunctionPointerForDelegate(getMessage) },
                 { "GetMessageA", Marshal.GetFunctionPointerForDelegate(getMessage) },
                 { "GetCursorPos", Marshal.GetFunctionPointerForDelegate(cursorPos) },
+                { "GetAsyncKeyState", Marshal.GetFunctionPointerForDelegate(keyState) },
+                { "GetKeyState", Marshal.GetFunctionPointerForDelegate(keyState) },
                 { "GetMonitorInfoW", Marshal.GetFunctionPointerForDelegate(monitorInfo) },
                 { "GetMonitorInfoA", Marshal.GetFunctionPointerForDelegate(monitorInfo) },
                 { "EnumDisplayMonitors", Marshal.GetFunctionPointerForDelegate(enumMonitors) },

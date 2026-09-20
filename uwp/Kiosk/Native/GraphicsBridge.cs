@@ -20,6 +20,23 @@ namespace Kiosk.Native
     /// answer came from somewhere else — which is the whole point: no game
     /// should have to be modified to run here.
     /// </summary>
+    /// <summary>
+    /// The panel's own interface, declared so the runtime does the asking.
+    ///
+    /// Asking for it by hand — taking the object's IUnknown and querying by
+    /// identifier — is refused on this runtime: what comes back from
+    /// GetIUnknownForObject is a managed wrapper that does not carry the
+    /// panel's native interfaces. Declared like this, the cast itself is the
+    /// query, and it goes to the right object.
+    /// </summary>
+    [ComImport]
+    [Guid("63aad0b8-7c24-40ff-85a8-640d944cc325")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface ISwapChainPanelNative
+    {
+        void SetSwapChain(IntPtr swapChain);
+    }
+
     public static class GraphicsBridge
     {
         // Slots in IDXGIFactory2, counting from IUnknown.
@@ -38,6 +55,7 @@ namespace Kiosk.Native
         private const int PresentSlot = 8;
         private const int SetFullscreenSlot = 10;
         private const int GetFullscreenSlot = 11;
+        private const int GetDescSlot = 12;
         private const int ResizeTargetSlot = 14;
         private const int SwapChainMethods = 29;
 
@@ -138,6 +156,7 @@ namespace Kiosk.Native
         public static int FirstFrameAt;
         private static GetFullscreenDelegate getFullscreen;
         private static ResizeTargetDelegate resizeTarget;
+        private static SetFullscreenGetDelegate describe;
 
         /// <summary>The interface identifiers a factory stand-in answers for.</summary>
         private static readonly string[] FactoryIds =
@@ -321,6 +340,7 @@ namespace Kiosk.Native
                             Marshal.GetFunctionPointerForDelegate(getFullscreen) },
                         { ResizeTargetSlot,
                             Marshal.GetFunctionPointerForDelegate(resizeTarget) },
+                        { GetDescSlot, Marshal.GetFunctionPointerForDelegate(describe) },
                     });
                     Marshal.WriteIntPtr(result, stand);
                     Show(chain);
@@ -359,43 +379,14 @@ namespace Kiosk.Native
 
             var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High, () =>
             {
-                var unknown = IntPtr.Zero;
-                var native = IntPtr.Zero;
                 try
                 {
-                    unknown = Marshal.GetIUnknownForObject(panel);
-                    var id = new Guid("63aad0b8-7c24-40ff-85a8-640d944cc325");
-                    var riid = Marshal.AllocHGlobal(16);
-                    Marshal.StructureToPtr(id, riid, false);
-                    var slot = Marshal.AllocHGlobal(IntPtr.Size);
-                    var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
-                        ComProxy.Method(unknown, 0));
-                    var code = ask(unknown, riid, slot);
-                    Marshal.FreeHGlobal(riid);
-                    if (code != S_OK)
-                    {
-                        Note("panel refused its own interface: 0x" + code.ToString("X8"));
-                        Marshal.FreeHGlobal(slot);
-                        return;
-                    }
-                    native = Marshal.ReadIntPtr(slot);
-                    Marshal.FreeHGlobal(slot);
-
-                    var set = Marshal.GetDelegateForFunctionPointer<SetSwapChainDelegate>(
-                        ComProxy.Method(native, 3));
-                    // The panel is in the tree from the start — an element
-                    // that is not laid out has no surface to hand a swap chain
-                    // to, and it draws nothing until there is one anyway.
-                    Note("compose: 0x" + set(native, chain).ToString("X8"));
+                    ((ISwapChainPanelNative)(object)panel).SetSwapChain(chain);
+                    Note("composed onto the panel");
                 }
                 catch (Exception error)
                 {
-                    Note("compose: " + error.GetType().Name);
-                }
-                finally
-                {
-                    if (native != IntPtr.Zero) Marshal.Release(native);
-                    if (unknown != IntPtr.Zero) Marshal.Release(unknown);
+                    Note("compose: " + error.GetType().Name + " " + error.Message);
                 }
             });
         }
@@ -452,8 +443,12 @@ namespace Kiosk.Native
         {
             try
             {
+                // BGRA support is not a preference here: a chain that is
+                // composed rather than presented to a window requires it, and
+                // without it the chain is refused with the same undifferentiated
+                // error as a malformed description.
                 var code = D3D11CreateDevice(
-                    IntPtr.Zero, 1, IntPtr.Zero, 0, IntPtr.Zero, 0, 7,
+                    IntPtr.Zero, 1, IntPtr.Zero, 0x20, IntPtr.Zero, 0, 7,
                     out var device, out var level, out var context);
                 if (code != S_OK || device == IntPtr.Zero)
                 {
@@ -522,6 +517,31 @@ namespace Kiosk.Native
                 return S_OK;
             };
             resizeTarget = (self, mode) => S_OK;
+
+            // A composed chain honestly reports that it belongs to no window,
+            // and a game that reads that field decides its own window is gone.
+            // The description is the system's; only the window is ours.
+            describe = (self, desc) =>
+            {
+                if (desc == IntPtr.Zero) return E_FAIL;
+                try
+                {
+                    var original = ComProxy.Original(self);
+                    var read = Marshal.GetDelegateForFunctionPointer<SetFullscreenGetDelegate>(
+                        ComProxy.Method(original, GetDescSlot));
+                    var code = read(original, desc);
+                    if (code == S_OK)
+                    {
+                        Marshal.WriteInt64(desc, 48, 0x00BA5E11);   // OutputWindow
+                        Marshal.WriteInt32(desc, 56, 1);            // Windowed
+                    }
+                    return code;
+                }
+                catch
+                {
+                    return E_FAIL;
+                }
+            };
 
             // Asked for itself by another name, the stand-in has to hand back
             // the stand-in — otherwise the game walks around it on the next
@@ -686,11 +706,18 @@ namespace Kiosk.Native
                 }
                 try
                 {
+                    // Added whether or not the game asked. A device without it
+                    // cannot be composed, and composing is the only way a frame
+                    // reaches the screen on this console — so a game that did
+                    // not know to ask would simply never draw.
+                    var wanted = flags | 0x20u;
+
                     var make = Marshal.GetDelegateForFunctionPointer<DeviceDelegate>(real);
-                    var code = make(adapter, driverType, software, flags, levels,
+                    var code = make(adapter, driverType, software, wanted, levels,
                         levelCount, sdk, resultDevice, resultLevel, resultContext);
                     Note("D3D11CreateDevice(type " + driverType + ", flags 0x"
-                        + flags.ToString("X") + "): 0x" + code.ToString("X8"));
+                        + wanted.ToString("X") + "): 0x" + code.ToString("X8"));
+                    flags = wanted;
 
                     // Two things a desktop tolerates and a console does not:
                     // the debug layer, which is not installed here, and a

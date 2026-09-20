@@ -427,13 +427,6 @@ namespace Kiosk.Native
                                     {
                                         foreach (var f in FileWatch.Seen) beat.Add("file " + f);
                                     }
-                                    lock (ComProxy.Used)
-                                    {
-                                        foreach (var pair in ComProxy.Used)
-                                        {
-                                            beat.Add("used " + pair.Key + " " + pair.Value + "x");
-                                        }
-                                    }
                                     lock (GraphicsBridge.Notes)
                                     {
                                         foreach (var note in GraphicsBridge.Notes)

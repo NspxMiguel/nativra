@@ -80,6 +80,22 @@ namespace Kiosk.Native
             new Dictionary<IntPtr, IntPtr>();
 
         /// <summary>mov rcx, original ; mov rax, target ; jmp rax.</summary>
+        /// <summary>
+        /// Makes the page the thunks live on, once. A thunk that cannot be
+        /// built has to say so rather than quietly hand back the function it
+        /// was meant to wrap: that function would then be called with the
+        /// stand-in in place of the object it belongs to, which is a crash
+        /// with no explanation attached.
+        /// </summary>
+        private bool HavePage()
+        {
+            if (page != IntPtr.Zero) return true;
+            page = VirtualAllocFromApp(
+                IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
+                MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+            return page != IntPtr.Zero;
+        }
+
         private IntPtr Forward(IntPtr original, IntPtr target)
         {
             IntPtr at;

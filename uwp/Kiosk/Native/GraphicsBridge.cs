@@ -161,6 +161,13 @@ namespace Kiosk.Native
         /// the whole path costs — and a console has always had this dial.
         /// </summary>
         public static bool Smaller;
+
+        /// <summary>
+        /// Refuse to make a swap chain at all. Only to find out whether making
+        /// one is what takes the screen away from this application: a chain is
+        /// the one thing a game creates that the display system knows about.
+        /// </summary>
+        public static bool NoChain;
         private static SetFullscreenDelegate setFullscreen;
 
         /// <summary>
@@ -330,6 +337,12 @@ namespace Kiosk.Native
                 // host allows it, everything downstream gets simpler.
                 var composed = false;
                 var code = E_FAIL;
+                if (NoChain)
+                {
+                    Note(from + ": refused on purpose");
+                    Marshal.FreeHGlobal(desc);
+                    return E_FAIL;
+                }
                 if (ConsoleWindow != IntPtr.Zero)
                 {
                     var direct = Marshal.GetDelegateForFunctionPointer<

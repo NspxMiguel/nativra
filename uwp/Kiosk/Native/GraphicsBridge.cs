@@ -32,9 +32,10 @@ namespace Kiosk.Native
         // On IDXGIDevice, that same seventh slot is GetAdapter.
         private const int GetAdapterSlot = 7;
         // On IDXGIAdapter: GetDesc is eight, and IDXGIAdapter1 adds GetDesc1
-        // at ten with CheckInterfaceSupport between them.
-        private const int GetDescSlot = 8;
-        private const int GetDesc1Slot = 10;
+        // at ten with CheckInterfaceSupport between them. Named for the
+        // adapter because the swap chain has a GetDesc of its own, at twelve.
+        private const int AdapterDescSlot = 8;
+        private const int AdapterDesc1Slot = 10;
         // ID3D11Device, counting from IUnknown. A device asked for by that
         // name has exactly this many, whatever the console's is underneath.
         private const int DeviceMethods = 43;
@@ -811,8 +812,8 @@ namespace Kiosk.Native
                 {
                     { GetParentSlot, Marshal.GetFunctionPointerForDelegate(adapterParent) },
                     { EnumOutputsSlot, Marshal.GetFunctionPointerForDelegate(adapterOutputs) },
-                    { GetDescSlot, Marshal.GetFunctionPointerForDelegate(adapterDesc) },
-                    { GetDesc1Slot, Marshal.GetFunctionPointerForDelegate(adapterDesc1) },
+                    { AdapterDescSlot, Marshal.GetFunctionPointerForDelegate(adapterDesc) },
+                    { AdapterDesc1Slot, Marshal.GetFunctionPointerForDelegate(adapterDesc1) },
                 });
             }
             catch
@@ -1180,8 +1181,8 @@ namespace Kiosk.Native
                     return E_FAIL;
                 }
             };
-            adapterDesc = (self, desc) => describeCard(self, desc, GetDescSlot);
-            adapterDesc1 = (self, desc) => describeCard(self, desc, GetDesc1Slot);
+            adapterDesc = (self, desc) => describeCard(self, desc, AdapterDescSlot);
+            adapterDesc1 = (self, desc) => describeCard(self, desc, AdapterDesc1Slot);
 
             displayParent = (self, riid, result) =>
             {

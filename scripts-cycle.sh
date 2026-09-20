@@ -9,6 +9,12 @@ cd "$(dirname "$0")"
 MSG="${1:-wip}"
 WAIT="${2:-30}"   # turns of 20 seconds
 
+# Catch the mistakes that are cheap here and expensive on the runner.
+if ! ./tools/preflight.sh; then
+  echo "preflight refused the tree; nothing was pushed"
+  exit 1
+fi
+
 git add -A
 git commit -q -m "$MSG" || true
 git push -q

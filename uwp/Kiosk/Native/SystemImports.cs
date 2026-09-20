@@ -47,6 +47,7 @@ namespace Kiosk.Native
         public int FromSystem { get; private set; }
         public int FromImages { get; private set; }
         public int FromStubs { get; private set; }
+        public int FromOverrides { get; private set; }
 
         /// <summary>Stands in for what the console does not provide.</summary>
         public Win32Shim Shim { get; } = new Win32Shim();
@@ -92,8 +93,22 @@ namespace Kiosk.Native
             return handle;
         }
 
+        /// <summary>
+        /// Answers we give instead of the system's. A program asks the system
+        /// which file it is and where its data sits; the honest answer here is
+        /// the host application, which is not what it needs to hear.
+        /// </summary>
+        public Dictionary<string, IntPtr> Overrides { get; } =
+            new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
+
         public IntPtr Resolve(string module, string function)
         {
+            if (Overrides.TryGetValue(module + "!" + function, out var ours))
+            {
+                FromOverrides++;
+                return ours;
+            }
+
             if (loaded.TryGetValue(module, out var image))
             {
                 var own = image.Export(function);

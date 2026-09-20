@@ -139,6 +139,11 @@ namespace Kiosk
                 (AppRail.ContainerFromIndex(0) as Control)?.Focus(FocusState.Programmatic);
             }
 
+            // A test harness: a file naming an app id makes the console fetch
+            // that game itself. It is how a build gets something to load
+            // without a hundred megabytes crossing the network by hand.
+            await AutoDownloadAsync();
+
             // The measurements run after the screen is usable, never before.
             portal = await ConsolePortal.LoadAsync();
             portalReady = portal != null && await portal.ProbeAsync() != null;
@@ -214,6 +219,43 @@ namespace Kiosk
             catch
             {
                 return null;
+            }
+        }
+
+        private async Task AutoDownloadAsync()
+        {
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder
+                    .TryGetItemAsync("autodownload.txt") as StorageFile;
+                if (file == null) return;
+
+                var text = (await FileIO.ReadTextAsync(file)).Trim();
+                if (!uint.TryParse(text, out var appId)) return;
+
+                var games = await ApplicationData.Current.LocalFolder
+                    .TryGetItemAsync("games") as StorageFolder;
+                if (games != null && await games.TryGetItemAsync(appId.ToString()) != null)
+                {
+                    return;
+                }
+
+                var session = await SteamSession.LoadAsync();
+                if (!session.IsSignedIn) return;
+
+                StatusText.Text = Texts.Get("steam.starting", text);
+                await Steam.SteamDownload.RunAsync(session, appId, "local", progress =>
+                {
+                    var _ = Dispatcher.RunAsync(
+                        Windows.UI.Core.CoreDispatcherPriority.Low,
+                        () => StatusText.Text = Texts.Get(
+                            "steam.downloading", text, progress.Percent, progress.File));
+                });
+                StatusText.Text = Texts.Get("steam.downloaded", text);
+            }
+            catch (Exception error)
+            {
+                StatusText.Text = Texts.Get("steam.downloadfailed", "auto", error.Message);
             }
         }
 

@@ -136,6 +136,7 @@ namespace Kiosk.Native
                 GraphicsBridge.NoChain = await local.TryGetItemAsync("nochain.txt") != null;
                 lines.Add("audio.bridge=" + AudioBridge.Enabled);
                 lines.Add("smaller=" + GraphicsBridge.Smaller);
+                lines.Add("threads=" + ThreadRank.Note);
 
                 // Where the game thinks it lives, which is how it finds its data.
                 var exeName = "game.exe";

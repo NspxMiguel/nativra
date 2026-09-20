@@ -49,6 +49,27 @@ Drafts for the issues to open. Each one says what done looks like, because
 16. **A ProtonDB-shaped site.** Per-game reports, per-console badges, fed by
     what people send from issue 9.
 
+## The display problem, measured
+
+Worth writing down before anyone spends a night on it:
+
+- The game runs. Six million calls, its own message loop turning, **60.3 frames
+  a second** measured at `Present`. Direct3D 11 comes up at feature level 11_0
+  with the console's adapter, and the swap chain is created through the bridge.
+- **The composition panel on this console does not implement
+  `ISwapChainPanelNative`, nor version 2 of it.** Both return `E_NOINTERFACE`,
+  asked by hand on the raw pointer. `IInspectable` on the same pointer answers
+  `S_OK`, which rules out the managed runtime being at fault: the object is the
+  panel, and the panel does not offer the interface.
+- **`CreateSwapChainForCoreWindow` is refused** with `DXGI_ERROR_INVALID_CALL`
+  in every combination of scaling, swap effect and alpha mode, with and without
+  the application releasing its own content first.
+
+So the frames are copied back to ordinary memory and shown as a picture, which
+is the one route that asks the platform for nothing. It costs a read back from
+the card and two screen-sized copies per frame. A better answer almost
+certainly exists and would be a very welcome contribution.
+
 ## Known gaps, written down so nobody rediscovers them
 
 - **`D3D11CreateDeviceAndSwapChain`** is not bridged. Engines that use it hand

@@ -364,6 +364,22 @@ namespace Kiosk.Native
                     return S_OK;
                 }
 
+                // Which speakers exist, and whether the endpoint can be driven
+                // by events rather than polled. A game that plans its buffering
+                // around these reads them before it opens anything.
+                if (Is(key, EndpointGroup, 3))
+                {
+                    Marshal.WriteInt16(value, 0, 19);
+                    Marshal.WriteInt32(value, 8, 3);     // front left and right
+                    return S_OK;
+                }
+                if (Is(key, EndpointGroup, 7))
+                {
+                    Marshal.WriteInt16(value, 0, 19);
+                    Marshal.WriteInt32(value, 8, 1);     // yes
+                    return S_OK;
+                }
+
                 // Everything else, named out loud. A store that quietly says
                 // "nothing here, and it went fine" hands back an empty value
                 // that a caller may read as a pointer — which is how a program

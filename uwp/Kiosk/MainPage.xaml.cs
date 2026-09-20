@@ -601,33 +601,6 @@ namespace Kiosk
         }
 
         /// <summary>
-        /// Trades size between the menu and the shelf, and puts focus where
-        /// the size went — the two have to agree or the larger thing is not
-        /// the thing the controller is driving.
-        /// </summary>
-        private void ShowMenu(bool menu)
-        {
-            if (menu == menuOpen) return;
-            menuOpen = menu;
-
-            var move = (Storyboard)Resources[menu ? "ToMenu" : "ToGames"];
-            move.Begin();
-
-            if (menu)
-            {
-                DockLibrary.Focus(FocusState.Programmatic);
-                return;
-            }
-            AppRail.UpdateLayout();
-            if (VisualTreeHelper.GetChildrenCount(AppRail) > 0)
-            {
-                (AppRail.Items.Count > 0 ? AppRail : null)?.Focus(FocusState.Programmatic);
-            }
-        }
-
-        private bool menuOpen;
-
-        /// <summary>
         /// The pads in the room. More than one and the count is what matters;
         /// exactly one and the count says nothing anybody needed, so the
         /// charge takes its place.
@@ -791,24 +764,6 @@ namespace Kiosk
             // through a menu they cannot see while they play.
             if (Native.NativeProbe.GameRunning)
             {
-                e.Handled = true;
-                return;
-            }
-
-            // Up goes to the menu, down comes back to the games. The one
-            // that has focus is the larger of the two, so where you are is
-            // something you can see rather than something you remember.
-            if (e.Key == Windows.System.VirtualKey.GamepadDPadUp ||
-                e.Key == Windows.System.VirtualKey.Up)
-            {
-                ShowMenu(true);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Windows.System.VirtualKey.GamepadDPadDown ||
-                e.Key == Windows.System.VirtualKey.Down)
-            {
-                ShowMenu(false);
                 e.Handled = true;
                 return;
             }

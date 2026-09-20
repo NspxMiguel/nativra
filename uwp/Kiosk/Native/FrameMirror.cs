@@ -275,7 +275,7 @@ namespace Kiosk.Native
                 // never draws it — which is how an application ends up alive,
                 // busy, and absent from the screen.
                 var now = Environment.TickCount;
-                if (now - lastShown < 33) return;
+                if (now - lastShown < 50) return;
                 if (System.Threading.Interlocked.Exchange(ref busy, 1) == 1) return;
                 lastShown = now;
                 var showing = into;

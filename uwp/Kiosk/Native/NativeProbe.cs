@@ -154,7 +154,13 @@ namespace Kiosk.Native
                 var started = "\"" + folder.Path + "\\" + exeName + "\""
                     + " -logFile \"" + local.Path + "\\unity.log\""
                     + " -force-d3d11"
-                    + " -screen-fullscreen 1 -screen-width 1920 -screen-height 1080";
+                    + " -screen-fullscreen 1 -screen-width 1920 -screen-height 1080"
+                    // The engine sizes its worker pool to the machine and this
+                    // machine has sixteen threads, so it takes thirty-four and
+                    // leaves the thread that draws the screen with nothing.
+                    // On a console the application is not competing with a
+                    // desktop; it only has to leave room for itself.
+                    + " -job-worker-count=4";
                 ModuleFileName.SetCommandLine(imports, started);
                 ImageLookup.Install(
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));

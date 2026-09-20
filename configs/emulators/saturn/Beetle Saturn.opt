@@ -1,0 +1,5 @@
+beetle_saturn_region = "Auto Detect"
+beetle_saturn_cart = "Auto Detect"
+beetle_saturn_autortc = "enabled"
+beetle_saturn_sh2_jit = "enabled"
+beetle_saturn_cdimagecache = "enabled"

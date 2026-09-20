@@ -35,6 +35,9 @@ namespace Kiosk
         public string AppId { get; set; }
 
         public ImageSource Icon { get; set; }
+
+        /// <summary>The game on Steam, when it came from there.</summary>
+        public uint SteamAppId { get; set; }
         public Visibility IconShown =>
             Icon == null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility LetterShown =>
@@ -207,12 +210,9 @@ namespace Kiosk
             CountText.Text = pads > 1 ? "\u00D7" + pads : string.Empty;
             StatusText.Text = string.Empty;
 
-            if (Tiles.Count > 0)
-            {
-                AppRail.UpdateLayout();
-                AppRail.SelectedIndex = 0;
-                (AppRail.ContainerFromIndex(0) as Control)?.Focus(FocusState.Programmatic);
-            }
+            // Focus starts on the shelf rather than the dock, because the
+            // first thing a person wants is the game they last played.
+            AppRail.UpdateLayout();
 
             // A test harness: a file naming an app id makes the console fetch
             // that game itself. It is how a build gets something to load
@@ -384,9 +384,10 @@ namespace Kiosk
                         Route = "game:" + appId,
                         Initial = title.Substring(0, 1).ToUpperInvariant(),
                         Accent = new SolidColorBrush(Accents[(int)(appId % 6)]),
+                        SteamAppId = appId,
                         Icon = Artwork(
                             "https://cdn.cloudflare.steamstatic.com/steam/apps/"
-                            + appId + "/header.jpg"),
+                            + appId + "/library_600x900.jpg"),
                     });
                 }
             }
@@ -427,13 +428,14 @@ namespace Kiosk
             }
         }
 
-        private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+        /// <summary>
+        /// The dock names whatever the shelf has focus on, in the same row it
+        /// names its own icons in — one place for "what am I pointing at".
+        /// </summary>
+        private void OnTileFocused(object sender, RoutedEventArgs e)
         {
-            if (!(AppRail.SelectedItem is Tile tile)) return;
-            NameText.Text = tile.Title;
-            var reachable = portalReady || !string.IsNullOrEmpty(tile.Protocol)
-                || !string.IsNullOrEmpty(tile.Route);
-            StatusText.Text = reachable ? string.Empty : Texts.Get("status.noprotocol");
+            var tile = (sender as FrameworkElement)?.Tag as Tile;
+            if (tile != null) NameText.Text = tile.Title;
         }
 
         /// <summary>
@@ -482,6 +484,25 @@ namespace Kiosk
         /// not, a focused icon was grey on near-white — the least readable
         /// thing on the screen, which is the opposite of what focus is for.
         /// </summary>
+        /// <summary>
+        /// Moves one place along the dock and opens it, wrapping at both ends
+        /// so a shoulder held down keeps going rather than stopping dead.
+        /// </summary>
+        private void Step(int by)
+        {
+            var icons = new[]
+            {
+                DockLibrary, DockShop, DockEmulators,
+                DockFriends, DockMods, DockDownloads,
+            };
+            var at = Array.FindIndex(
+                icons, icon => icon.Background == Application.Current.Resources["Accent"]);
+            if (at < 0) at = 0;
+            var next = icons[((at + by) % icons.Length + icons.Length) % icons.Length];
+            next.Focus(FocusState.Programmatic);
+            OnDockClicked(next, null);
+        }
+
         private void Light(string where)
         {
             var lit = (Brush)Application.Current.Resources["Accent"];
@@ -609,11 +630,23 @@ namespace Kiosk
                 return;
             }
 
+            // The shoulders walk the dock, which is how a console moves
+            // between places: the sticks belong to whatever is on screen, and
+            // the way out of it should not be one of them.
+            if (e.Key == Windows.System.VirtualKey.GamepadLeftShoulder ||
+                e.Key == Windows.System.VirtualKey.GamepadRightShoulder)
+            {
+                Step(e.Key == Windows.System.VirtualKey.GamepadRightShoulder ? 1 : -1);
+                e.Handled = true;
+                return;
+            }
+
             switch (e.Key)
             {
                 case Windows.System.VirtualKey.GamepadA:
                 case Windows.System.VirtualKey.Enter:
-                    await LaunchAsync(AppRail.SelectedItem as Tile);
+                    await LaunchAsync(FocusManager.GetFocusedElement() is FrameworkElement on
+                        ? on.Tag as Tile : null);
                     e.Handled = true;
                     break;
 

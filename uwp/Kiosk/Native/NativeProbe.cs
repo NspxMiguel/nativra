@@ -135,6 +135,8 @@ namespace Kiosk.Native
                 GraphicsBridge.Smaller = await local.TryGetItemAsync("small.txt") != null;
                 GraphicsBridge.NoChain = await local.TryGetItemAsync("nochain.txt") != null;
                 GraphicsBridge.NoMirror = await local.TryGetItemAsync("nomirror.txt") != null;
+                GraphicsBridge.Ceiling =
+                    await local.TryGetItemAsync("slow.txt") != null ? 30 : 0;
                 lines.Add("audio.bridge=" + AudioBridge.Enabled);
                 lines.Add("smaller=" + GraphicsBridge.Smaller);
                 lines.Add("threads=" + ThreadRank.Note);

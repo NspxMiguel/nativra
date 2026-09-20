@@ -106,7 +106,13 @@ namespace Kiosk.Native
         {
             try
             {
-                if (device == IntPtr.Zero || swapChain == IntPtr.Zero || image == null)
+                // A chain is one way to reach the finished frame; being handed
+                // the texture directly is another, and it is the one this
+                // console ends up using — the chain the game holds is ours,
+                // and it has no display behind it to ask. Requiring both was
+                // left over from when there was only the first way.
+                if (device == IntPtr.Zero || image == null ||
+                    (swapChain == IntPtr.Zero && texture == IntPtr.Zero))
                 {
                     Note = "nothing to mirror";
                     return false;

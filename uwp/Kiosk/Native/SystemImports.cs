@@ -56,6 +56,19 @@ namespace Kiosk.Native
         public PeImage Find(string name) =>
             loaded.TryGetValue(name, out var image) ? image : null;
 
+        /// <summary>The program itself, as opposed to the libraries it uses.</summary>
+        public PeImage FindExecutable()
+        {
+            foreach (var pair in loaded)
+            {
+                if (pair.Key.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    return pair.Value;
+                }
+            }
+            return null;
+        }
+
         private IntPtr Module(string name)
         {
             if (modules.TryGetValue(name, out var handle)) return handle;

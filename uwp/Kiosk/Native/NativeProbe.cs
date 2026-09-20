@@ -168,6 +168,42 @@ namespace Kiosk.Native
                     lines.Add("stubs.called=" + imports.Shim.Called.Count);
                     foreach (var called in imports.Shim.Called) lines.Add("  called " + called);
                     lines.Add("ticks=" + Ticks(imports));
+                    await WriteAsync(lines);
+
+                    // The game's own entry point. It does not return — it opens
+                    // a window and loops — so it runs on a thread of its own and
+                    // what it asked for is read a few seconds later.
+                    var exe = imports.FindExecutable();
+                    if (exe != null && exe.EntryPoint != IntPtr.Zero)
+                    {
+                        lines.Add("exe=" + exe.Name + " starting");
+                        await WriteAsync(lines);
+
+                        var runner = new System.Threading.Thread(() =>
+                        {
+                            try
+                            {
+                                var main = Marshal.GetDelegateForFunctionPointer<MainDelegate>(
+                                    exe.EntryPoint);
+                                main();
+                            }
+                            catch
+                            {
+                                // Whatever it did is in the list of stubs it reached.
+                            }
+                        }, 16 * 1024 * 1024);
+                        runner.IsBackground = true;
+                        runner.Start();
+
+                        await Task.Delay(6000);
+                        lines[lines.Count - 1] = "exe=" + exe.Name
+                            + (runner.IsAlive ? " still running" : " returned");
+                        lines.Add("exe.stubs=" + imports.Shim.Called.Count);
+                        foreach (var called in imports.Shim.Called)
+                        {
+                            lines.Add("  called " + called);
+                        }
+                    }
                 }
             }
             catch (Exception error)

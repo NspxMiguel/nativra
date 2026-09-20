@@ -1,12 +1,14 @@
-at=2026-09-19 18:00:04
+at=2026-09-19 18:09:21
 tls.level=6
-baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0x1673091000 table=0x1A84E804060 readable=147360 protect=0x4 slot=45 of 18420 index written block ready wrote in place]
-UnityPlayer.dll: mapped at 0x1A8710D0000 exports=1 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=321+0 teb=0x1673091000 table=0x1A84E804060 readable=147360 protect=0x4 slot=46 of 18420 index written block ready wrote in place]
-GameAssembly.dll: mapped at 0x1A879600000 exports=391 unresolved=0 unwind=True tls=0 slot=47 [dir ok size=8+0 teb=0x1673091000 table=0x1A84E804060 readable=147360 protect=0x4 slot=47 of 18420 index written block ready wrote in place]
+as=Q:\Users\UserMgr1\AppData\Local\Packages\NSPX.Kiosk_8r28b9prq7p9c\LocalState\games\1919460\Seraph's Last Stand.exe
+baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0xE3AD1A5000 table=0x271959FA9C0 readable=95808 protect=0x4 slot=45 of 11976 index written block ready wrote in place]
+UnityPlayer.dll: mapped at 0x271B9020000 exports=1 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=321+0 teb=0xE3AD1A5000 table=0x271959FA9C0 readable=95808 protect=0x4 slot=46 of 11976 index written block ready wrote in place]
+GameAssembly.dll: mapped at 0x271C1600000 exports=391 unresolved=0 unwind=True tls=0 slot=47 [dir ok size=8+0 teb=0xE3AD1A5000 table=0x271959FA9C0 readable=95808 protect=0x4 slot=47 of 11976 index written block ready wrote in place]
 Seraph's Last Stand.exe: mapped at 0x140000000 exports=2 unresolved=0 unwind=True tls=0 slot=-1 [no tls directory]
-resolved.system=753 resolved.images=14
-modules.missing=USER32.dll,VERSION.dll,SHLWAPI.dll,SETUPAPI.dll,OPENGL32.dll,WINMM.dll,IMM32.dll,HID.DLL,dwmapi.dll,dbghelp.dll
-functions.missing=178 stubbed=178
+UnityCrashHandler64.exe: mapped at 0x271BACB0000 exports=0 unresolved=0 unwind=True tls=2 slot=48 [dir ok size=305+0 teb=0xE3AD1A5000 table=0x271959FA9C0 readable=95808 protect=0x4 slot=48 of 11976 index written block ready wrote in place]
+resolved.system=918 resolved.images=14
+modules.missing=USER32.dll,VERSION.dll,SHLWAPI.dll,SETUPAPI.dll,OPENGL32.dll,WINMM.dll,IMM32.dll,HID.DLL,dwmapi.dll,dbghelp.dll,PSAPI.DLL
+functions.missing=201 stubbed=201
   USER32.dll!GetRawInputDeviceList
   USER32.dll!EnumDisplaySettingsA
   USER32.dll!GetDC
@@ -185,9 +187,32 @@ functions.missing=178 stubbed=178
   USER32.dll!MessageBoxA
   dbghelp.dll!SymInitialize
   dbghelp.dll!SymFromAddr
+  USER32.dll!SetForegroundWindow
+  USER32.dll!SetWindowTextW
+  USER32.dll!InflateRect
+  USER32.dll!UnionRect
+  USER32.dll!SetWindowPos
+  USER32.dll!LookupIconIdFromDirectoryEx
+  USER32.dll!GetDlgItem
+  USER32.dll!SendMessageW
+  USER32.dll!SendDlgItemMessageA
+  USER32.dll!GetWindowLongA
+  USER32.dll!OffsetRect
+  USER32.dll!AdjustWindowRect
+  USER32.dll!EndDialog
+  USER32.dll!CreateIconFromResourceEx
+  USER32.dll!DialogBoxParamA
+  USER32.dll!LoadImageA
+  USER32.dll!GetIconInfo
+  dbghelp.dll!SymRegisterFunctionEntryCallback64
+  dbghelp.dll!SymLoadModuleEx
+  PSAPI.DLL!GetModuleFileNameExW
+  VERSION.dll!GetFileVersionInfoSizeA
+  VERSION.dll!VerQueryValueA
+  VERSION.dll!GetFileVersionInfoA
 entry.baselib.dll=1
 entry.UnityPlayer.dll=1
 entry.GameAssembly.dll=1
 stubs.called=0
-ticks=OK 56612520215289->56612520215394
-exe=Seraph's Last Stand.exe starting base 0x7FF7CE5C0000 -> 0x140000000
+ticks=OK 57584927162204->57584927162309
+exe=UnityMain starting base 0x7FF68AFA0000 -> 0x140000000

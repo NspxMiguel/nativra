@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 MSG="${1:-wip}"
-WAIT="${2:-40}"
+WAIT="${2:-30}"   # turns of 20 seconds
 
 git add -A
 git commit -q -m "$MSG" || true
@@ -42,8 +42,19 @@ FILES=$(find .cycle/Kiosk_*_Test -type f \
 DEPS=$(find .cycle/Kiosk_*_Test/Dependencies/x64 -type f -name '*.appx' | tr '\n' ' ')
 bun src/xbdev.ts install $FILES $DEPS
 bun src/xbdev.ts sync >/dev/null 2>&1 || true
-bun src/xbdev.ts markers || true
+
+# The app cannot read the developer share (UnauthorizedAccessException on every
+# drive letter, measured), and its own storage goes with the uninstall. So the
+# game is fetched again each turn, by the console, from his own Steam account.
+bun src/xbdev.ts push kiosk .markers/autodownload.txt LocalState >/dev/null
 bun src/xbdev.ts launch kiosk >/dev/null
-echo "== running ${WAIT}s"
-sleep "$WAIT"
-bun src/xbdev.ts pull kiosk native-probe.txt LocalState || true
+
+echo "== downloading and running"
+for _ in $(seq 1 "$WAIT"); do
+  sleep 20
+  if bun src/xbdev.ts pull kiosk native-probe.txt LocalState >/dev/null 2>&1; then
+    if grep -q "exe\.\|FAILED\|probe failed" native-probe.txt; then break; fi
+    echo "   $(tail -1 native-probe.txt)"
+  fi
+done
+bun src/xbdev.ts pull kiosk native-probe.txt LocalState >/dev/null 2>&1 || true

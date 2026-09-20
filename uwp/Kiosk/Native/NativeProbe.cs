@@ -194,6 +194,7 @@ namespace Kiosk.Native
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));
                 FileWatch.Install(imports);
                 SuspendWatch.Install(imports);
+                ThreadTls.Install(imports);
                 ProcessStubs.Install(imports);
                 WindowStubs.Install(imports);
                 GraphicsBridge.Install(imports);
@@ -520,6 +521,7 @@ namespace Kiosk.Native
                                 "exe.stubs=" + imports.Shim.Called.Count,
                                 "exe.thunks.full=" + imports.Shim.Overflowed,
                                 "exe.files.failed=" + FileWatch.Failures,
+                                "exe.tls.threads=" + ThreadTls.Adopted,
                                 "exe.suspended=" + string.Join(
                                     "; ", SuspendWatch.Held()),
                                 // Two numbers decide everything: a total that

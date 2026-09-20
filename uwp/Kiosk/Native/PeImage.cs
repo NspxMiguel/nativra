@@ -479,9 +479,9 @@ namespace Kiosk.Native
                 var total = templateSize + (int)zeroFill;
                 var block = Marshal.AllocHGlobal(Math.Max(total, 8));
                 for (var i = 0; i < total; i++) Marshal.WriteByte(block, i, 0);
+                var template = new byte[Math.Max(templateSize, 0)];
                 if (templateSize > 0)
                 {
-                    var template = new byte[templateSize];
                     Marshal.Copy((IntPtr)start, template, 0, templateSize);
                     Marshal.Copy(template, 0, block, templateSize);
                 }
@@ -499,6 +499,12 @@ namespace Kiosk.Native
                     return;
                 }
                 TlsSlot = slot;
+
+                // And the same copy for every thread made after this one. The
+                // loader used to fill in only the thread that did the loading,
+                // so the main thread had its variables and the thirty the game
+                // starts afterwards had whatever was at that address.
+                ThreadTls.Remember(slot, template, total);
                 Step?.Invoke(TlsNote);
                 if (TlsLevel < 6 || callbacks == 0) return;
 

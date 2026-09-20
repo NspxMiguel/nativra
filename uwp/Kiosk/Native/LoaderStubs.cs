@@ -113,6 +113,59 @@ namespace Kiosk.Native
             return cut >= 0 ? path.Substring(cut + 1) : path;
         }
 
+        // Libraries the console does not have and the bridge does. Kept so the
+        // same name always answers with the same handle, the way a real loader
+        // behaves.
+        private static readonly Dictionary<string, IntPtr> Invented =
+            new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Hands back a handle for a library the bridge can answer for.
+        ///
+        /// The controller is the case this was written for. A game asks the
+        /// loader for XInput by name at run time, and on this console no file
+        /// by that name exists, so it is told no — and it falls back to
+        /// reading raw devices, which is a road that ends nowhere here. Every
+        /// XInput function it would have called is already implemented, over
+        /// the console's own pad; the only thing missing was a handle to hang
+        /// them on.
+        ///
+        /// The handle is real memory rather than an invented number, so that
+        /// anything which pokes at it instead of merely passing it around
+        /// finds something readable there.
+        /// </summary>
+        private static IntPtr Invent(string name)
+        {
+            lock (Invented)
+            {
+                if (Invented.TryGetValue(name, out var already)) return already;
+
+                var prefix = name + "!";
+                var serves = false;
+                try
+                {
+                    foreach (var key in new List<string>(imports.Overrides.Keys))
+                    {
+                        if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+                        serves = true;
+                        break;
+                    }
+                }
+                catch
+                {
+                    return IntPtr.Zero;
+                }
+                if (!serves) return IntPtr.Zero;
+
+                var handle = Marshal.AllocHGlobal(64);
+                for (var i = 0; i < 64; i++) Marshal.WriteByte(handle, i, 0);
+                Invented[name] = handle;
+                named[handle.ToInt64()] = name;
+                Remember("invented " + name);
+                return handle;
+            }
+        }
+
         private static IntPtr Open(string requested)
         {
             if (string.IsNullOrEmpty(requested)) return IntPtr.Zero;
@@ -140,8 +193,16 @@ namespace Kiosk.Native
                     handle = IntPtr.Zero;
                 }
             }
-            if (handle != IntPtr.Zero) named[handle.ToInt64()] = name;
-            return handle;
+            if (handle != IntPtr.Zero)
+            {
+                named[handle.ToInt64()] = name;
+                return handle;
+            }
+
+            // Nothing on the console carries this one — but the bridge might.
+            // A library every one of whose functions we already answer is a
+            // library that exists, as far as the game has any way to tell.
+            return Invent(name);
         }
 
         public static void Install(SystemImports system)

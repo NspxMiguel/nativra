@@ -179,6 +179,14 @@ namespace Kiosk.Native
                         lines.Add("exe=" + exe.Name + " starting");
                         await WriteAsync(lines);
 
+                        // The program has to believe it is the process, or its
+                        // startup reads the host application's headers instead
+                        // of its own and dies before it asks for anything.
+                        var previousBase = PeImage.SetProcessImageBase(exe.BaseAddress);
+                        lines[lines.Count - 1] += $" base 0x{previousBase.ToInt64():X}"
+                            + $" -> 0x{exe.BaseAddress.ToInt64():X}";
+                        await WriteAsync(lines);
+
                         var runner = new System.Threading.Thread(() =>
                         {
                             try
@@ -217,6 +225,10 @@ namespace Kiosk.Native
                             if (!runner.IsAlive) break;
                         }
                         lines.Add("exe.finished");
+                        if (previousBase != IntPtr.Zero)
+                        {
+                            PeImage.SetProcessImageBase(previousBase);
+                        }
                     }
                 }
             }

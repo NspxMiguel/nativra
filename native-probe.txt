@@ -1,8 +1,8 @@
-at=2026-09-19 17:49:41
+at=2026-09-19 17:55:13
 tls.level=6
-baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0x98E9036000 table=0x1D2E09FE400 readable=80896 protect=0x4 slot=45 of 10112 index written block ready wrote in place]
-UnityPlayer.dll: mapped at 0x1D286800000 exports=1 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=321+0 teb=0x98E9036000 table=0x1D2E09FE400 readable=80896 protect=0x4 slot=46 of 10112 index written block ready wrote in place]
-GameAssembly.dll: mapped at 0x1D28D200000 exports=391 unresolved=0 unwind=True tls=0 slot=47 [dir ok size=8+0 teb=0x98E9036000 table=0x1D2E09FE400 readable=80896 protect=0x4 slot=47 of 10112 index written block ready wrote in place]
+baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0x3C84132000 table=0x1CA8D881B90 readable=66672 protect=0x4 slot=45 of 8334 index written block ready wrote in place]
+UnityPlayer.dll: mapped at 0x1CAB0620000 exports=1 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=321+0 teb=0x3C84132000 table=0x1CA8D881B90 readable=66672 protect=0x4 slot=46 of 8334 index written block ready wrote in place]
+GameAssembly.dll: mapped at 0x1CAB8C00000 exports=391 unresolved=0 unwind=True tls=0 slot=47 [dir ok size=8+0 teb=0x3C84132000 table=0x1CA8D881B90 readable=66672 protect=0x4 slot=47 of 8334 index written block ready wrote in place]
 Seraph's Last Stand.exe: mapped at 0x140000000 exports=2 unresolved=0 unwind=True tls=0 slot=-1 [no tls directory]
 resolved.system=753 resolved.images=14
 modules.missing=USER32.dll,VERSION.dll,SHLWAPI.dll,SETUPAPI.dll,OPENGL32.dll,WINMM.dll,IMM32.dll,HID.DLL,dwmapi.dll,dbghelp.dll
@@ -189,5 +189,5 @@ entry.baselib.dll=1
 entry.UnityPlayer.dll=1
 entry.GameAssembly.dll=1
 stubs.called=0
-ticks=OK 55523913834583->55523913834688
+ticks=OK 56104717855975->56104717856080
 exe=Seraph's Last Stand.exe starting

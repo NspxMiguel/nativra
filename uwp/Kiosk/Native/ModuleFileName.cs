@@ -23,9 +23,161 @@ namespace Kiosk.Native
 
         // Held so the collector cannot take them while native code holds their
         // addresses.
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate IntPtr LineDelegate();
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate IntPtr SplitDelegate(IntPtr line, IntPtr count);
+
         private static WideDelegate wide;
         private static NarrowDelegate narrow;
+        private static LineDelegate lineWide;
+        private static LineDelegate lineNarrow;
+        private static SplitDelegate split;
+        private static IntPtr wideLine;
+        private static IntPtr narrowLine;
         private static string path = "";
+
+        /// <summary>
+        /// What the game believes it was started with.
+        ///
+        /// The command line handed to an entry point is only half the story:
+        /// most programs read `GetCommandLineW` instead, and that answers with
+        /// the host application's line — which names this app, not the game,
+        /// and carries none of the switches the game was started for. Every
+        /// option passed in would be silently dropped, which is exactly the
+        /// sort of failure that looks like the option not working.
+        /// </summary>
+
+        /// <summary>
+        /// Splits a command line the way Windows splits it.
+        ///
+        /// This lives in the shell library, which a packaged app does not have
+        /// loaded — so a game asking for its arguments was getting nothing at
+        /// all, not even its own name. A program whose argument zero is missing
+        /// does not know where it is, and an engine works out where its data
+        /// sits from exactly that.
+        ///
+        /// The rules are Microsoft's, quirks included: a quote opens or closes
+        /// a run, two backslashes are one backslash, and a backslash before a
+        /// quote makes the quote ordinary.
+        /// </summary>
+        private static List<string> Split(string line)
+        {
+            var found = new List<string>();
+            if (line == null) return found;
+
+            var current = new StringBuilder();
+            var quoted = false;
+            var started = false;
+            var slashes = 0;
+
+            void Slashes(bool beforeQuote)
+            {
+                if (beforeQuote)
+                {
+                    current.Append('\\', slashes / 2);
+                    if (slashes % 2 == 1) current.Append('"');
+                }
+                else
+                {
+                    current.Append('\\', slashes);
+                }
+                slashes = 0;
+            }
+
+            foreach (var letter in line)
+            {
+                if (letter == '\\')
+                {
+                    slashes++;
+                    started = true;
+                    continue;
+                }
+                if (letter == '"')
+                {
+                    var literal = slashes % 2 == 1;
+                    Slashes(true);
+                    if (!literal) quoted = !quoted;
+                    started = true;
+                    continue;
+                }
+                Slashes(false);
+                if ((letter == ' ' || letter == '\t') && !quoted)
+                {
+                    if (started) found.Add(current.ToString());
+                    current.Clear();
+                    started = false;
+                    continue;
+                }
+                current.Append(letter);
+                started = true;
+            }
+            Slashes(false);
+            if (started) found.Add(current.ToString());
+            return found;
+        }
+
+        /// <summary>One block holding the pointers and the strings they name.</summary>
+        private static IntPtr Pack(List<string> parts)
+        {
+            var bytes = parts.Count * IntPtr.Size;
+            foreach (var part in parts) bytes += (part.Length + 1) * 2;
+
+            var block = Marshal.AllocHGlobal(bytes);
+            var text = block + parts.Count * IntPtr.Size;
+            for (var i = 0; i < parts.Count; i++)
+            {
+                Marshal.WriteIntPtr(block, i * IntPtr.Size, text);
+                for (var letter = 0; letter < parts[i].Length; letter++)
+                {
+                    Marshal.WriteInt16(text, letter * 2, parts[i][letter]);
+                }
+                Marshal.WriteInt16(text, parts[i].Length * 2, 0);
+                text += (parts[i].Length + 1) * 2;
+            }
+            return block;
+        }
+
+        public static void SetCommandLine(SystemImports imports, string line)
+        {
+            wideLine = Marshal.StringToHGlobalUni(line);
+            narrowLine = Marshal.StringToHGlobalAnsi(line);
+            lineWide = () => wideLine;
+            lineNarrow = () => narrowLine;
+
+            split = (given, count) =>
+            {
+                var text = given == IntPtr.Zero ? line : Marshal.PtrToStringUni(given);
+                var parts = Split(text);
+                if (parts.Count == 0) parts.Add(path);
+                if (count != IntPtr.Zero) Marshal.WriteInt32(count, parts.Count);
+                return Pack(parts);
+            };
+
+            foreach (var module in new[]
+            {
+                "SHELL32.dll", "shell32.dll", "Shell32.dll",
+                "api-ms-win-shell-shellcom-l1-1-0.dll",
+            })
+            {
+                imports.Overrides[module + "!CommandLineToArgvW"] =
+                    Marshal.GetFunctionPointerForDelegate(split);
+            }
+
+            foreach (var module in new[]
+            {
+                "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "kernelbase.dll",
+                "api-ms-win-core-processenvironment-l1-1-0.dll",
+                "api-ms-win-core-processenvironment-l1-2-0.dll",
+            })
+            {
+                imports.Overrides[module + "!GetCommandLineW"] =
+                    Marshal.GetFunctionPointerForDelegate(lineWide);
+                imports.Overrides[module + "!GetCommandLineA"] =
+                    Marshal.GetFunctionPointerForDelegate(lineNarrow);
+            }
+        }
 
         public static void Install(SystemImports imports, string executablePath)
         {

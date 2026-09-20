@@ -56,6 +56,13 @@ namespace Kiosk.Native
         /// </summary>
         public bool Trace;
 
+        /// <summary>Functions whose caller is recorded, not just the call.</summary>
+        public static readonly HashSet<string> Watched =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Sleep", "SleepEx", "WaitForSingleObjectEx", "WaitForMultipleObjects",
+            };
+
         /// <summary>Stands in for what the console does not provide.</summary>
         public Win32Shim Shim { get; } = new Win32Shim();
 
@@ -161,7 +168,12 @@ namespace Kiosk.Native
                 if (address != IntPtr.Zero)
                 {
                     FromSystem++;
-                    return Trace ? Shim.TraceFor(module + "!" + function, address) : address;
+                    if (!Trace) return address;
+                    // The handful a stuck program spends its life in are worth
+                    // the extra instruction that says who called them.
+                    return Watched.Contains(function)
+                        ? Shim.CallerFor(module + "!" + function, address)
+                        : Shim.TraceFor(module + "!" + function, address);
                 }
             }
 

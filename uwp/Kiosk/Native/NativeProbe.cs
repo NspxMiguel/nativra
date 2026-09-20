@@ -138,6 +138,14 @@ namespace Kiosk.Native
                     }
                 }
                 ModuleFileName.Install(imports, folder.Path + "\\" + exeName);
+
+                // The switches only reach the game if the game can read them,
+                // and it reads them from here rather than from its entry point.
+                var started = "\"" + folder.Path + "\\" + exeName + "\""
+                    + " -logFile \"" + local.Path + "\\unity.log\""
+                    + " -force-d3d11"
+                    + " -screen-fullscreen 1 -screen-width 1920 -screen-height 1080";
+                ModuleFileName.SetCommandLine(imports, started);
                 ImageLookup.Install(
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));
                 ProcessStubs.Install(imports);
@@ -266,14 +274,9 @@ namespace Kiosk.Native
                         // The engine keeps its own diary, and it names what
                         // failed far better than any trace from outside can.
                         // It only writes one when told where to put it.
-                        var commandLine = Marshal.StringToHGlobalAnsi(
-                            "\"" + folder.Path + "\\game.exe\""
-                            + " -logFile \"" + local.Path + "\\unity.log\""
-                            + " -screen-fullscreen 1 -screen-width 1920 -screen-height 1080"
-                            // Naming the renderer removes a decision the engine
-                            // would otherwise make by probing, and probing is
-                            // where a console differs from a desktop.
-                            + " -force-d3d11");
+                        // The same line the game will read back from the
+                        // system, so the two never disagree.
+                        var commandLine = Marshal.StringToHGlobalAnsi(started);
                         var previousBase = PeImage.SetProcessImageBase(
                             exe?.BaseAddress ?? engine.BaseAddress);
                         lines[lines.Count - 1] += $" base 0x{previousBase.ToInt64():X}"
@@ -336,6 +339,13 @@ namespace Kiosk.Native
                                         for (var i = from; i < LoaderStubs.Said.Count; i++)
                                         {
                                             beat.Add("said " + LoaderStubs.Said[i]);
+                                        }
+                                    }
+                                    lock (imports.Shim.Callers)
+                                    {
+                                        foreach (var pair in imports.Shim.Callers)
+                                        {
+                                            beat.Add("waiting " + pair.Value + "x " + pair.Key);
                                         }
                                     }
                                     beat.AddRange(imports.Shim.Threads());

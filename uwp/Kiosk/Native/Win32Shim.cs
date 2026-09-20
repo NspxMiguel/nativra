@@ -36,6 +36,9 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate long RecorderDelegate(long index);
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate long CallerDelegate(long index, long from);
+
         private const int ThunkSize = 96;
         private const int Capacity = 1200;
 
@@ -47,6 +50,11 @@ namespace Kiosk.Native
         private readonly bool[] seen = new bool[Capacity];
         private readonly RecorderDelegate recorder;
         private readonly IntPtr recorderPointer;
+        private readonly CallerDelegate noting;
+        private readonly IntPtr notingPointer;
+
+        /// <summary>Where each watched function was called from, and how often.</summary>
+        public readonly Dictionary<string, long> Callers = new Dictionary<string, long>();
 
         private IntPtr page;
         private int used;
@@ -132,6 +140,8 @@ namespace Kiosk.Native
             // while native code still holds its address.
             recorder = Record;
             recorderPointer = Marshal.GetFunctionPointerForDelegate(recorder);
+            noting = NoteCaller;
+            notingPointer = Marshal.GetFunctionPointerForDelegate(noting);
         }
 
         private long Record(long index)
@@ -160,6 +170,72 @@ namespace Kiosk.Native
                 lock (Called) Called.Add(names[slot]);
             }
             return 0;
+        }
+
+
+        private long NoteCaller(long index, long from)
+        {
+            var slot = (int)index;
+            if (slot < 0 || slot >= names.Count) return 0;
+            var key = names[slot] + " from 0x" + from.ToString("X");
+            lock (Callers)
+            {
+                if (Callers.Count < 40 || Callers.ContainsKey(key))
+                {
+                    Callers.TryGetValue(key, out var seen);
+                    Callers[key] = seen + 1;
+                }
+            }
+            return Record(index);
+        }
+
+        /// <summary>
+        /// Like a trace, but it also writes down where the call came from.
+        ///
+        /// A program stuck in a loop names the same three functions forever,
+        /// and none of them is the answer — the answer is which piece of the
+        /// program is calling them. The return address is sitting on the stack
+        /// at the moment of the call, so it costs one instruction to take it.
+        /// </summary>
+        public IntPtr CallerFor(string name, IntPtr target)
+        {
+            if (page == IntPtr.Zero)
+            {
+                page = VirtualAllocFromApp(
+                    IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
+                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+                if (page == IntPtr.Zero) return target;
+            }
+            if (used >= Capacity) return target;
+
+            var index = names.Count;
+            names.Add(name);
+
+            var code = new List<byte>();
+            code.AddRange(new byte[] { 0x48, 0x83, 0xEC, 0x48 });       // sub rsp, 0x48
+            code.AddRange(new byte[] { 0x48, 0x89, 0x4C, 0x24, 0x20 }); // mov [rsp+20], rcx
+            code.AddRange(new byte[] { 0x48, 0x89, 0x54, 0x24, 0x28 }); // mov [rsp+28], rdx
+            code.AddRange(new byte[] { 0x4C, 0x89, 0x44, 0x24, 0x30 }); // mov [rsp+30], r8
+            code.AddRange(new byte[] { 0x4C, 0x89, 0x4C, 0x24, 0x38 }); // mov [rsp+38], r9
+            code.AddRange(new byte[] { 0x48, 0x8B, 0x54, 0x24, 0x48 }); // mov rdx, [rsp+48]
+            code.AddRange(new byte[] { 0x48, 0xB9 });                   // mov rcx, index
+            code.AddRange(BitConverter.GetBytes((long)index));
+            code.AddRange(new byte[] { 0x48, 0xB8 });                   // mov rax, noting
+            code.AddRange(BitConverter.GetBytes(notingPointer.ToInt64()));
+            code.AddRange(new byte[] { 0xFF, 0xD0 });                   // call rax
+            code.AddRange(new byte[] { 0x48, 0x8B, 0x4C, 0x24, 0x20 });
+            code.AddRange(new byte[] { 0x48, 0x8B, 0x54, 0x24, 0x28 });
+            code.AddRange(new byte[] { 0x4C, 0x8B, 0x44, 0x24, 0x30 });
+            code.AddRange(new byte[] { 0x4C, 0x8B, 0x4C, 0x24, 0x38 });
+            code.AddRange(new byte[] { 0x48, 0x83, 0xC4, 0x48 });       // add rsp, 0x48
+            code.AddRange(new byte[] { 0x48, 0xB8 });                   // mov rax, target
+            code.AddRange(BitConverter.GetBytes(target.ToInt64()));
+            code.AddRange(new byte[] { 0xFF, 0xE0 });                   // jmp rax
+
+            var at = page + used * ThunkSize;
+            Write(at, code.ToArray());
+            used++;
+            return at;
         }
 
         /// <summary>

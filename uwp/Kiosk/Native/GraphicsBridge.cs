@@ -177,7 +177,25 @@ namespace Kiosk.Native
         /// it can see — it is asking for how frames reach the screen, and here
         /// there is one way.
         /// </summary>
-        private static IntPtr ConsoleDescription(int width, int height, int format, int flags)
+        /// <summary>
+        /// The combinations a composed chain is willing to be made with.
+        ///
+        /// Scaling, the swap effect and the alpha mode are not preferences —
+        /// each platform accepts a short list and refuses everything else with
+        /// one undifferentiated error. Rather than guess which one this console
+        /// wants, the bridge tries them in order and keeps the one that works.
+        /// </summary>
+        private static readonly int[][] Shapes =
+        {
+            //  scaling, swap effect, alpha
+            new[] { 0, 3, 1 },   // stretch, flip sequential, ignore
+            new[] { 0, 4, 1 },   // stretch, flip discard, ignore
+            new[] { 0, 3, 2 },   // stretch, flip sequential, premultiplied
+            new[] { 1, 4, 1 },   // none, flip discard, ignore
+        };
+
+        private static IntPtr ConsoleDescription(
+            int width, int height, int format, int flags, int shape = 0)
         {
             // Zero means "the size of the window" when there is a window. A
             // composed surface has no window to measure, so the screen is the
@@ -199,9 +217,10 @@ namespace Kiosk.Native
             Marshal.WriteInt32(desc, 20, 0);        // SampleDesc.Quality
             Marshal.WriteInt32(desc, 24, 0x20);     // DXGI_USAGE_RENDER_TARGET_OUTPUT
             Marshal.WriteInt32(desc, 28, 2);        // BufferCount
-            Marshal.WriteInt32(desc, 32, 1);        // DXGI_SCALING_NONE
-            Marshal.WriteInt32(desc, 36, 4);        // DXGI_SWAP_EFFECT_FLIP_DISCARD
-            Marshal.WriteInt32(desc, 40, 1);        // DXGI_ALPHA_MODE_IGNORE
+            var chosen = Shapes[shape % Shapes.Length];
+            Marshal.WriteInt32(desc, 32, chosen[0]);   // scaling
+            Marshal.WriteInt32(desc, 36, chosen[1]);   // swap effect
+            Marshal.WriteInt32(desc, 40, chosen[2]);   // alpha mode
             Marshal.WriteInt32(desc, 44, flags);
             return desc;
         }
@@ -248,8 +267,22 @@ namespace Kiosk.Native
                 // behind the game.
                 var compose = Marshal.GetDelegateForFunctionPointer<CreateForCompositionDelegate>(
                     ComProxy.Method(original, CreateForCompositionSlot));
+
                 var code = compose(original, device, desc, IntPtr.Zero, result);
                 Note(from + " composition: 0x" + code.ToString("X8"));
+
+                // The size and the format came from the game and are kept; the
+                // rest is this platform's business, so each accepted shape is
+                // tried until one is.
+                for (var shape = 1; code != S_OK && shape < Shapes.Length; shape++)
+                {
+                    var another = ConsoleDescription(
+                        Marshal.ReadInt32(desc, 0), Marshal.ReadInt32(desc, 4),
+                        Marshal.ReadInt32(desc, 8), 0, shape);
+                    code = compose(original, device, another, IntPtr.Zero, result);
+                    Note("shape " + shape + ": 0x" + code.ToString("X8"));
+                    Marshal.FreeHGlobal(another);
+                }
 
                 if (code != S_OK)
                 {
@@ -444,6 +477,13 @@ namespace Kiosk.Native
                         CreateForCompositionDelegate>(
                         ComProxy.Method(factory, CreateForCompositionSlot));
                     code = compose(factory, device, desc, IntPtr.Zero, slot);
+                    for (var shape = 1; code != S_OK && shape < Shapes.Length; shape++)
+                    {
+                        var another = ConsoleDescription(1920, 1080, 28, 0, shape);
+                        code = compose(factory, device, another, IntPtr.Zero, slot);
+                        Marshal.FreeHGlobal(another);
+                        if (code == S_OK) Note("the console wanted shape " + shape);
+                    }
                     if (code != S_OK)
                     {
                         return "device and factory ok (level 0x" + level.ToString("X")

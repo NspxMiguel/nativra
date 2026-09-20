@@ -271,6 +271,8 @@ namespace Kiosk.Native
                     foreach (var called in imports.Shim.Called) lines.Add("  called " + called);
                     lines.Add("ticks=" + Ticks(imports));
                     lines.Add("window=0x" + GraphicsBridge.ConsoleWindow.ToInt64().ToString("X"));
+                    lines.Add("graphics=" + GraphicsBridge.SelfTest());
+                    await WriteAsync(lines);
                     lock (LoaderStubs.Asked)
                     {
                         foreach (var name in LoaderStubs.Asked) lines.Add("  asked " + name);
@@ -529,6 +531,7 @@ namespace Kiosk.Native
                         }
                         beating = false;
                         GameRunning = false;
+                        GraphicsBridge.RestoreInterface();
                         lines.Add("exe.finished");
 
                         // The engine's whole account of its startup, not just

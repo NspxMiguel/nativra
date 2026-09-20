@@ -97,6 +97,7 @@
     <Compile Include="Native\FakeOutput.cs" />
     <Compile Include="Native\FileWatch.cs" />
     <Compile Include="Native\SuspendWatch.cs" />
+    <Compile Include="Native\ThreadTls.cs" />
     <Compile Include="Native\SurfaceBridge.cs" />
     <Compile Include="Native\GraphicsBridge.cs" />
     <Compile Include="Native\NativeProbe.cs" />

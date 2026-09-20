@@ -95,9 +95,16 @@ done
 bun src/xbdev.ts pull kiosk native-probe.txt LocalState >/dev/null 2>&1 || true
 bun src/xbdev.ts pull kiosk native-pulse.txt LocalState >/dev/null 2>&1 || true
 bun src/xbdev.ts shot /tmp/xbox-cycle.png >/dev/null 2>&1 || true
-if bun src/xbdev.ts pull kiosk unity.log LocalState >/dev/null 2>&1; then
-  echo "== unity =="
-  head -60 unity.log
-fi
+# The engine ignores -logFile and writes where it always writes: its own
+# folder under the container. That log says in one line what days of call
+# tracing only hinted at, so it is fetched every turn.
+for MAKER in OddGiant "LEGO" .; do
+  if bun src/xbdev.ts pull kiosk Player.log \
+       "AC/$MAKER/$(printf '%s' "${GAME:-Seraph's Last Stand}")" >/dev/null 2>&1; then
+    echo "== the game's own log =="
+    tail -40 Player.log
+    break
+  fi
+done
 echo "== pulse =="
 cat native-pulse.txt 2>/dev/null | head -40

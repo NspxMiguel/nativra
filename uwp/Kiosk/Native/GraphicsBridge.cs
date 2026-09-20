@@ -31,6 +31,10 @@ namespace Kiosk.Native
         private const int EnumOutputsSlot = 7;
         // On IDXGIDevice, that same seventh slot is GetAdapter.
         private const int GetAdapterSlot = 7;
+        // On IDXGIAdapter: GetDesc is eight, and IDXGIAdapter1 adds GetDesc1
+        // at ten with CheckInterfaceSupport between them.
+        private const int GetDescSlot = 8;
+        private const int GetDesc1Slot = 10;
         // ID3D11Device, counting from IUnknown. A device asked for by that
         // name has exactly this many, whatever the console's is underneath.
         private const int DeviceMethods = 43;
@@ -190,6 +194,26 @@ namespace Kiosk.Native
         /// no way of switching off while it is being judged.
         /// </summary>
         public static bool NoDeviceStandIn;
+
+        /// <summary>
+        /// Describes the console's graphics part the way the rest of the world
+        /// describes it.
+        ///
+        /// The console answers "Microsoft", "SraKmd_arden", device 0xD000 —
+        /// true, and a name no engine has ever heard of. Engines keep tables
+        /// of which hardware needs which workaround, keyed on exactly those
+        /// numbers, and hardware that matches nothing gets the cautious
+        /// defaults instead of the right ones. Some go further and refuse what
+        /// they cannot name.
+        ///
+        /// What is underneath is an AMD RDNA2 part, the same architecture as
+        /// the desktop cards of its generation. Saying so is not a disguise —
+        /// it is a more useful truth than the console's own answer, because it
+        /// is the one those tables are written against. The memory figures and
+        /// the adapter's identity are left exactly as the console reported
+        /// them; only the three fields that name the part are answered.
+        /// </summary>
+        public static bool NameTheCard;
 
         /// <summary>
         /// Leave the frames where they are. The copy runs on the engine's own
@@ -456,6 +480,13 @@ namespace Kiosk.Native
         private static int MakeChainOn(
             IntPtr original, IntPtr device, IntPtr desc, IntPtr result, string from)
         {
+            // Written down before anything is attempted. The engine's own log
+            // proved it had a swap chain that none of these notes mentioned,
+            // which can only mean it was asked for somewhere this does not
+            // watch — and a note that is only written on success can never
+            // tell the difference between "not asked" and "asked and stuck".
+            Note(from + ": asked");
+
             if (original == IntPtr.Zero)
             {
                 Note(from + ": no factory to ask");
@@ -780,6 +811,8 @@ namespace Kiosk.Native
                 {
                     { GetParentSlot, Marshal.GetFunctionPointerForDelegate(adapterParent) },
                     { EnumOutputsSlot, Marshal.GetFunctionPointerForDelegate(adapterOutputs) },
+                    { GetDescSlot, Marshal.GetFunctionPointerForDelegate(adapterDesc) },
+                    { GetDesc1Slot, Marshal.GetFunctionPointerForDelegate(adapterDesc1) },
                 });
             }
             catch
@@ -1119,6 +1152,37 @@ namespace Kiosk.Native
                 }
             };
 
+            // The three fields that name the part, and nothing else: the
+            // description text, the vendor and the device. Memory, revision
+            // and the adapter's own identity stay as the console gave them.
+            Func<IntPtr, IntPtr, int, int> describeCard = (self, desc, slot) =>
+            {
+                if (desc == IntPtr.Zero) return E_FAIL;
+                try
+                {
+                    var original = ComProxy.Original(self);
+                    var call = Marshal.GetDelegateForFunctionPointer<OneOutDelegate>(
+                        ComProxy.Method(original, slot));
+                    var code = call(original, desc);
+                    if (code != S_OK || !NameTheCard) return code;
+
+                    var name = "AMD Radeon RX 6800 XT";
+                    for (var i = 0; i < 128; i++)
+                    {
+                        Marshal.WriteInt16(desc, i * 2, (short)(i < name.Length ? name[i] : '\0'));
+                    }
+                    Marshal.WriteInt32(desc, 256, 0x1002);   // AMD
+                    Marshal.WriteInt32(desc, 260, 0x73BF);   // Navi 21
+                    return S_OK;
+                }
+                catch
+                {
+                    return E_FAIL;
+                }
+            };
+            adapterDesc = (self, desc) => describeCard(self, desc, GetDescSlot);
+            adapterDesc1 = (self, desc) => describeCard(self, desc, GetDesc1Slot);
+
             displayParent = (self, riid, result) =>
             {
                 if (result == IntPtr.Zero) return E_FAIL;
@@ -1395,6 +1459,8 @@ namespace Kiosk.Native
         private static QueryInterfaceDelegate deviceAsk;
         private static QueryInterfaceDelegate displayParent;
         private static OneOutDelegate displayAdapter;
+        private static OneOutDelegate adapterDesc;
+        private static OneOutDelegate adapterDesc1;
         private static QueryInterfaceDelegate adapterParent;
         private static QueryInterfaceDelegate chainAsk;
 

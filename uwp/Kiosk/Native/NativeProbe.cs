@@ -372,6 +372,7 @@ namespace Kiosk.Native
                                         "calls=" + imports.Shim.Total,
                                         "pumped=" + WindowStubs.Pumped,
                                         "pad=" + PadBridge.Reads,
+                                        "calmed=" + LoaderStubs.Calmed,
                                         "buffers=" + GraphicsBridge.Buffers,
                                         "mirrored=" + FrameMirror.Copied + " shown=" + FrameMirror.Shown,
                                         "frames=" + GraphicsBridge.Frames
@@ -446,6 +447,8 @@ namespace Kiosk.Native
                             }
                         }, 16 * 1024 * 1024);
                         runner.IsBackground = true;
+                        // The engine's own thread too, for the same reason.
+                        runner.Priority = System.Threading.ThreadPriority.BelowNormal;
                         runner.Start();
 
                         // Written over and over while it runs: the program can

@@ -25,7 +25,11 @@ namespace Kiosk.Native
     {
         // ID3D11Device
         private const int CreateTexture2DSlot = 5;
-        private const int GetImmediateContextSlot = 39;
+        // Forty, not thirty-nine: CheckFeatureSupport sits between the counter
+        // calls and the private-data ones, and leaving it out of the count
+        // lands on GetDeviceRemovedReason — which takes no arguments, writes
+        // nothing, and leaves the context quietly null.
+        private const int GetImmediateContextSlot = 40;
 
         // ID3D11DeviceContext
         private const int MapSlot = 14;

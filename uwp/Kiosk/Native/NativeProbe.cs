@@ -287,8 +287,19 @@ namespace Kiosk.Native
                         // The same line the game will read back from the
                         // system, so the two never disagree.
                         var commandLine = Marshal.StringToHGlobalAnsi(started);
-                        var previousBase = PeImage.SetProcessImageBase(
-                            exe?.BaseAddress ?? engine.BaseAddress);
+                        // Rewriting the process-wide image base was needed
+                        // back when the game had no other way to learn what it
+                        // was. It now gets told its own path and its own
+                        // command line, so the change may be pure cost — and
+                        // the cost looks like the console taking the screen
+                        // back a few seconds in. A marker turns it off so the
+                        // two can be told apart.
+                        var previousBase = IntPtr.Zero;
+                        if (await local.TryGetItemAsync("nopeb.txt") == null)
+                        {
+                            previousBase = PeImage.SetProcessImageBase(
+                                exe?.BaseAddress ?? engine.BaseAddress);
+                        }
                         lines[lines.Count - 1] += $" base 0x{previousBase.ToInt64():X}"
                             + $" -> 0x{exe.BaseAddress.ToInt64():X}";
                         await WriteAsync(lines);

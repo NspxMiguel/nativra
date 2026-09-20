@@ -70,6 +70,10 @@ fi
 if [ "${SMALL:-off}" = "on" ]; then
   bun src/xbdev.ts push kiosk .markers/small.txt LocalState
 fi
+# PEB=off leaves the process-wide image base alone.
+if [ "${PEB:-on}" = "off" ]; then
+  bun src/xbdev.ts push kiosk .markers/nopeb.txt LocalState
+fi
 bun src/xbdev.ts launch kiosk >/dev/null
 
 echo "== downloading and running"

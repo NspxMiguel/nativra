@@ -141,6 +141,9 @@ namespace Kiosk.Native
             };
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int TwoOutDelegate(IntPtr first, IntPtr second);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int RectDelegate(IntPtr window, IntPtr rect);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -178,6 +181,8 @@ namespace Kiosk.Native
         // still holds their addresses.
         private static RectDelegate rect;
         private static MetricDelegate metric;
+        private static TwoOutDelegate pointerDevices;
+        private static TwoOutDelegate twoOut;
         private static PeekDelegate peek;
         private static GetMessageDelegate getMessage;
         private static PointDelegate cursorPos;
@@ -219,6 +224,32 @@ namespace Kiosk.Native
             {
                 if (target == IntPtr.Zero) return 0;
                 WriteRect(target, 0, 0, Width, Height);
+                return 1;
+            };
+
+            // A console has no pen and no touch screen, and saying so is not
+            // the same as refusing to answer.
+            //
+            // This call is asked how many pointer devices there are, through a
+            // pointer it is required to write even when the answer is none. A
+            // constant stub returns without writing it, so the engine reads
+            // whatever was on the stack, believes it has that many devices and
+            // walks off the end of a list that was never there. Measured: the
+            // last thing the trace records before everything stops is a stack
+            // being captured, which is what a program does on the way down.
+            pointerDevices = (count, devices) =>
+            {
+                if (count == IntPtr.Zero) return 0;
+                Marshal.WriteInt32(count, 0);
+                return 1;
+            };
+
+            // The same shape, for the two beside it: nothing to report, and
+            // the caller told so plainly rather than left to guess.
+            twoOut = (first, second) =>
+            {
+                if (first != IntPtr.Zero) Marshal.WriteInt32(first, 0);
+                if (second != IntPtr.Zero) Marshal.WriteInt32(second, 0);
                 return 1;
             };
 
@@ -358,6 +389,9 @@ namespace Kiosk.Native
                 { "GetClientRect", Marshal.GetFunctionPointerForDelegate(rect) },
                 { "GetWindowRect", Marshal.GetFunctionPointerForDelegate(rect) },
                 { "GetSystemMetrics", Marshal.GetFunctionPointerForDelegate(metric) },
+                { "GetPointerDevices", Marshal.GetFunctionPointerForDelegate(pointerDevices) },
+                { "GetPointerDeviceRects", Marshal.GetFunctionPointerForDelegate(twoOut) },
+                { "GetPointerDevice", Marshal.GetFunctionPointerForDelegate(twoOut) },
                 { "PeekMessageW", Marshal.GetFunctionPointerForDelegate(peek) },
                 { "PeekMessageA", Marshal.GetFunctionPointerForDelegate(peek) },
                 { "GetMessageW", Marshal.GetFunctionPointerForDelegate(getMessage) },
@@ -370,7 +404,7 @@ namespace Kiosk.Native
                 { "EnumDisplayMonitors", Marshal.GetFunctionPointerForDelegate(enumMonitors) },
             };
 
-            foreach (var module in new[] { "USER32.dll", "user32.dll" })
+            foreach (var module in new[] { "USER32.dll", "user32.dll", "User32.dll" })
             {
                 foreach (var pair in ours)
                 {

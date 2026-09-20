@@ -41,7 +41,58 @@ namespace Kiosk
             Icon == null ? Visibility.Visible : Visibility.Collapsed;
 
         public SolidColorBrush Accent { get; set; }
-        public double Dimmed => 1.0;
+
+        // ---------------------------------------------------------- the shelf
+
+        /// <summary>
+        /// Box art. Real art comes from the store; until it has arrived this is
+        /// one of six gradients, chosen by the title so a given game always
+        /// gets the same one. A shelf of identical empty rectangles reads as a
+        /// fault, and a shelf of arbitrary colours reads as noise.
+        /// </summary>
+        public Brush Art { get; set; }
+
+        /// <summary>
+        /// The first tile on the shelf is the one played most recently and is
+        /// drawn larger. Everything after it is the same size as everything
+        /// else, so the eye has exactly one place to start.
+        /// </summary>
+        public bool Hero { get; set; }
+
+        public double TileWidth => Hero ? 300 : 220;
+        public double TileHeight => Hero ? 420 : 300;
+
+        public bool Installed { get; set; } = true;
+        public bool Favourite { get; set; }
+
+        /// <summary>Not installed: dimmed, with a cloud in the corner.</summary>
+        public double Dimmed => Installed ? 1.0 : 0.6;
+        public Visibility CloudShown =>
+            Installed ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility StarShown =>
+            Favourite ? Visibility.Visible : Visibility.Collapsed;
+
+        /// <summary>
+        /// The tile that ends the shelf and opens everything at once. It is a
+        /// tile rather than a button because it lives in the same row and the
+        /// same focus order as the games.
+        /// </summary>
+        public bool IsAllGames { get; set; }
+        public Visibility ArtShown =>
+            IsAllGames ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility AllGamesShown =>
+            IsAllGames ? Visibility.Visible : Visibility.Collapsed;
+
+        /// <summary>
+        /// The six gradients of the handoff, cycled by name so the choice is
+        /// stable across restarts rather than by list position, which is not.
+        /// </summary>
+        public static Brush ArtFor(string title, ResourceDictionary from)
+        {
+            var sum = 0;
+            foreach (var letter in title ?? string.Empty) sum += letter;
+            return from["Art" + (sum % 6)] as Brush;
+        }
     }
 
     public sealed partial class MainPage : Page
@@ -74,11 +125,13 @@ namespace Kiosk
 
         private void ApplyStaticText()
         {
-            HintOpenText.Text = Texts.Get("hint.open");
-            HintRefreshText.Text = Texts.Get("hint.refresh");
+            // The console says what it is running, once, in the quietest text
+            // on the screen. Useful to know; never the thing being read.
             try
             {
-                MachineText.Text = new EasClientDeviceInformation().FriendlyName;
+                MachineText.Text =
+                    Texts.Get("app.eyebrow") + "  \u00B7  " +
+                    new EasClientDeviceInformation().FriendlyName.ToUpperInvariant();
             }
             catch
             {
@@ -127,9 +180,31 @@ namespace Kiosk
                 Tiles.Add(app);
             }
 
-            // Asking the console's own portal is what reaches the apps that
-            // register no protocol; without it they can only open from Dev Home.
-            CountText.Text = Texts.Get("status.count", Tiles.Count);
+            // The shelf reads as a shelf, not as a list: the first tile is
+            // the one played most recently and is drawn larger, every tile
+            // gets its stand-in art, and the row ends with the one tile that
+            // opens everything at once.
+            var first = true;
+            foreach (var tile in Tiles)
+            {
+                tile.Hero = first;
+                first = false;
+                if (tile.Art == null && tile.Icon == null)
+                {
+                    tile.Art = Tile.ArtFor(tile.Title, Application.Current.Resources);
+                }
+            }
+            Tiles.Add(new Tile
+            {
+                Title = Texts.Get("tile.allgames", Tiles.Count),
+                IsAllGames = true,
+                Route = "allgames",
+            });
+
+            // How many controllers are in the room. Shown beside the pad in
+            // the dock, and only when there is more than one to tell apart.
+            var pads = Windows.Gaming.Input.Gamepad.Gamepads.Count;
+            CountText.Text = pads > 1 ? "\u00D7" + pads : string.Empty;
             StatusText.Text = string.Empty;
 
             if (Tiles.Count > 0)
@@ -356,15 +431,102 @@ namespace Kiosk
         {
             if (!(AppRail.SelectedItem is Tile tile)) return;
             NameText.Text = tile.Title;
-            SubText.Text = tile.Subtitle;
             var reachable = portalReady || !string.IsNullOrEmpty(tile.Protocol)
                 || !string.IsNullOrEmpty(tile.Route);
             StatusText.Text = reachable ? string.Empty : Texts.Get("status.noprotocol");
         }
 
-        private async void OnTileInvoked(object sender, ItemClickEventArgs e)
+        /// <summary>
+        /// A tile was chosen. The tile is the button now rather than a row in a
+        /// list, so the game comes from the sender instead of from a click
+        /// event — which also means a controller's A button and a pointer end
+        /// up in exactly the same place.
+        /// </summary>
+        private async void OnTileClicked(object sender, RoutedEventArgs e)
         {
-            await LaunchAsync(e.ClickedItem as Tile);
+            await LaunchAsync((sender as FrameworkElement)?.Tag as Tile);
+        }
+
+        /// <summary>
+        /// The dock. Six places, always in the same order, always reachable:
+        /// on a television there is no menu bar to fall back on, so the way
+        /// between screens has to be permanently on screen.
+        /// </summary>
+        private void OnDockClicked(object sender, RoutedEventArgs e)
+        {
+            var where = (sender as FrameworkElement)?.Tag as string;
+            foreach (var icon in new[]
+                     {
+                         DockLibrary, DockShop, DockEmulators,
+                         DockFriends, DockMods, DockDownloads,
+                     })
+            {
+                icon.Background = (icon.Tag as string) == where
+                    ? (Brush)Application.Current.Resources["Accent"]
+                    : (Brush)Application.Current.Resources["Surface2"];
+            }
+
+            // Only the library exists as a screen so far. The rest are named,
+            // reachable and deliberately honest about not being built yet,
+            // which is better than an icon that swallows the press.
+            var built = where == "library";
+            LibraryScreen.Visibility = built ? Visibility.Visible : Visibility.Collapsed;
+            StatusText.Text = built ? string.Empty : Texts.Get("status.notyet", where);
+        }
+
+        /// <summary>
+        /// The dock names whatever has focus, in a row of fixed height above
+        /// the icons — so the icons never move when the name appears.
+        /// </summary>
+        private void OnDockHover(object sender, RoutedEventArgs e)
+        {
+            var where = (sender as FrameworkElement)?.Tag as string;
+            if (where != null) NameText.Text = Texts.Get("dock." + where);
+        }
+
+        private void OnDockHover(object sender, PointerRoutedEventArgs e)
+        {
+            OnDockHover(sender, (RoutedEventArgs)null);
+        }
+
+        private void OnDockLeave(object sender, RoutedEventArgs e)
+        {
+            NameText.Text = string.Empty;
+        }
+
+        private void OnDockLeave(object sender, PointerRoutedEventArgs e)
+        {
+            NameText.Text = string.Empty;
+        }
+
+        private async void OnAvatarClicked(object sender, RoutedEventArgs e)
+        {
+            await LaunchAsync(new Tile { Route = "steam", Title = Texts.Get("tile.steam") });
+        }
+
+        private async void OnSignInClicked(object sender, RoutedEventArgs e)
+        {
+            await LaunchAsync(new Tile { Route = "steam", Title = Texts.Get("tile.steam") });
+        }
+
+        private async void OnRetryClicked(object sender, RoutedEventArgs e)
+        {
+            ErrorScreen.Visibility = Visibility.Collapsed;
+            await LoadAppsAsync();
+        }
+
+        /// <summary>
+        /// Every failure fills the content area rather than tucking a line
+        /// under something else. Three metres from a screen, an inline warning
+        /// is a warning nobody reads.
+        /// </summary>
+        private void ShowError(string title, string body)
+        {
+            ErrorTitle.Text = title;
+            ErrorBody.Text = body;
+            LibraryScreen.Visibility = Visibility.Collapsed;
+            EmptyScreen.Visibility = Visibility.Collapsed;
+            ErrorScreen.Visibility = Visibility.Visible;
         }
 
         /// <summary>

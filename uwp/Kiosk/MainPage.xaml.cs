@@ -68,8 +68,12 @@ namespace Kiosk
         /// </summary>
         public bool Hero { get; set; }
 
-        public double TileWidth => Hero ? 300 : 220;
-        public double TileHeight => Hero ? 420 : 300;
+        // One size for every tile. The one being looked at is grown by the
+        // template when it takes focus, so the largest thing on the shelf is
+        // always the thing the controller is pointing at — which is the whole
+        // job of the large tile, and position cannot do it.
+        public double TileWidth => 220;
+        public double TileHeight => 300;
 
         public bool Installed { get; set; } = true;
         public bool Favourite { get; set; }
@@ -161,7 +165,15 @@ namespace Kiosk
         private void StartClock()
         {
             clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
-            clock.Tick += (s, e) => ClockText.Text = DateTime.Now.ToString("HH:mm");
+            clock.Tick += (s, e) =>
+            {
+                ClockText.Text = DateTime.Now.ToString("HH:mm");
+
+                // Controllers come and go while the app is open, and a charge
+                // read once at startup is a charge that is wrong by the
+                // evening. Read again on every tick, which is cheap.
+                ShowPads();
+            };
             ClockText.Text = DateTime.Now.ToString("HH:mm");
             clock.Start();
         }
@@ -204,10 +216,6 @@ namespace Kiosk
             var first = true;
             foreach (var tile in Tiles)
             {
-                // The shelf leads with the game played most recently. Steam is
-                // the way into the library rather than something in it, so it
-                // never takes the large tile even when it comes first.
-                tile.Hero = first && tile.Route != "steam";
                 first = false;
                 if (tile.Art == null) tile.Art = Tile.ArtFor(tile.Title, Application.Current.Resources);
             }

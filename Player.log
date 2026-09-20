@@ -7,7 +7,7 @@ Direct3D:
     Renderer: SraKmd_arden (ID=0xd000)
     Vendor:   Microsoft
     VRAM:     4096 MB
-Failed to load cursor from 'Q:\Users\UserMgr1\AppData\Local\Packages\nspx.kiosk_8r28b9prq7p9c\AC\Temp\curDCB7.tmp': The operation completed successfully.
+Failed to load cursor from 'Q:\Users\UserMgr1\AppData\Local\Packages\nspx.kiosk_8r28b9prq7p9c\AC\Temp\curB89A.tmp': The operation completed successfully.
 FMOD failed to get number of drivers ... : "Error initializing output device. " (60)
 FMOD failed to get number of drivers ... : "Error initializing output device. " (60)
 FMOD failed to initialize any audio devices, running on emulated software output with no sound. Please check your audio drivers and/or hardware for malfunction.

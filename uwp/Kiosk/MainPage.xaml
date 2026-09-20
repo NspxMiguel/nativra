@@ -23,7 +23,7 @@
                     Click="OnTileClicked"
                     GotFocus="OnTileFocused"
                     Tag="{x:Bind}"
-                    Margin="0,0,28,0" Padding="6"
+                    Margin="0,0,28,0" Padding="0,110,0,0"
                     VerticalAlignment="Bottom">
                 <StackPanel>
                     <Grid Width="{x:Bind TileWidth}" Height="{x:Bind TileHeight}"

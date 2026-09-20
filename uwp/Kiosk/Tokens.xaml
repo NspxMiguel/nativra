@@ -335,10 +335,10 @@
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Grow"
-                                            Storyboard.TargetProperty="ScaleX" To="1.035"
+                                            Storyboard.TargetProperty="ScaleX" To="1.36"
                                             Duration="0:0:0.13" EasingFunction="{StaticResource Settle}" />
                                         <DoubleAnimation Storyboard.TargetName="Grow"
-                                            Storyboard.TargetProperty="ScaleY" To="1.035"
+                                            Storyboard.TargetProperty="ScaleY" To="1.36"
                                             Duration="0:0:0.13" EasingFunction="{StaticResource Settle}" />
                                     </Storyboard>
                                 </VisualState>
@@ -348,10 +348,10 @@
                                 <VisualState x:Name="Focused">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Grow"
-                                            Storyboard.TargetProperty="ScaleX" To="1.035"
+                                            Storyboard.TargetProperty="ScaleX" To="1.36"
                                             Duration="0:0:0.13" EasingFunction="{StaticResource Settle}" />
                                         <DoubleAnimation Storyboard.TargetName="Grow"
-                                            Storyboard.TargetProperty="ScaleY" To="1.035"
+                                            Storyboard.TargetProperty="ScaleY" To="1.36"
                                             Duration="0:0:0.13" EasingFunction="{StaticResource Settle}" />
                                     </Storyboard>
                                 </VisualState>

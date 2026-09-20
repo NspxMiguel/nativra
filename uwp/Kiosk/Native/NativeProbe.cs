@@ -219,6 +219,9 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int DllMainDelegate(IntPtr instance, uint reason, IntPtr reserved);
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int MainDelegate();
+
         /// <summary>Runs a module's entry point, which is where it sets itself up.</summary>
         private static string StartModule(PeImage image)
         {

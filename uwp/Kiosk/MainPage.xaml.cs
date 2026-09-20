@@ -234,6 +234,7 @@ namespace Kiosk
             // Focus starts on the shelf rather than the dock, because the
             // first thing a person wants is the game they last played.
             AppRail.UpdateLayout();
+            FocusShelf();
 
             // A test harness: a file naming an app id makes the console fetch
             // that game itself. It is how a build gets something to load
@@ -641,6 +642,33 @@ namespace Kiosk
             }
         }
 
+        /// <summary>
+        /// Puts focus on the first tile of whichever shelf is showing.
+        ///
+        /// Walking the tree for it rather than keeping a reference: the tiles
+        /// are made by a template, so there is nothing to hold on to until
+        /// the layout has actually produced them.
+        /// </summary>
+        private void FocusShelf()
+        {
+            var first = FirstButton(AppRail);
+            if (first != null) first.Focus(FocusState.Programmatic);
+        }
+
+        private static Button FirstButton(DependencyObject from)
+        {
+            if (from == null) return null;
+            var count = VisualTreeHelper.GetChildrenCount(from);
+            for (var i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(from, i);
+                if (child is Button button) return button;
+                var deeper = FirstButton(child);
+                if (deeper != null) return deeper;
+            }
+            return null;
+        }
+
         private void Light(string where)
         {
             var lit = (Brush)Application.Current.Resources["Accent"];
@@ -764,6 +792,24 @@ namespace Kiosk
             // through a menu they cannot see while they play.
             if (Native.NativeProbe.GameRunning)
             {
+                e.Handled = true;
+                return;
+            }
+
+            // One press, one move. Left to itself the focus walks into the
+            // scroller first and out of it second, so crossing between the
+            // shelf and the menu cost two presses where it should cost one.
+            if (e.Key == Windows.System.VirtualKey.GamepadDPadDown ||
+                e.Key == Windows.System.VirtualKey.Down)
+            {
+                DockLibrary.Focus(FocusState.Programmatic);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Windows.System.VirtualKey.GamepadDPadUp ||
+                e.Key == Windows.System.VirtualKey.Up)
+            {
+                FocusShelf();
                 e.Handled = true;
                 return;
             }

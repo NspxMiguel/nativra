@@ -5,6 +5,7 @@
 // It exists so the client can be exercised before the console is available.
 
 import { join } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
 
 export type FakePortalOptions = {
   port?: number;
@@ -34,6 +35,31 @@ export type FakePortalState = {
 };
 
 const CSRF_VALUE = "fake-csrf-token-42";
+
+/**
+ * Makes a self-signed certificate for the stand-in console, once.
+ *
+ * Kept out of the repository on purpose: a checked-in private key is a private
+ * key that leaks, even one that only ever signs for 127.0.0.1.
+ */
+function ensureCertificate(certDir: string): void {
+  mkdirSync(certDir, { recursive: true });
+  const cert = join(certDir, "cert.pem");
+  const key = join(certDir, "key.pem");
+  if (existsSync(cert) && existsSync(key)) return;
+
+  const made = Bun.spawnSync([
+    "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", key, "-out", cert, "-days", "365",
+    "-subj", "/CN=127.0.0.1",
+    "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost",
+  ]);
+  if (made.exitCode !== 0) {
+    throw new Error(
+      "could not make a test certificate: " + made.stderr.toString(),
+    );
+  }
+}
 
 export function startFakePortal(options: FakePortalOptions) {
   const user = options.user ?? "xbox";
@@ -78,6 +104,12 @@ export function startFakePortal(options: FakePortalOptions) {
       ...init,
       headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
     });
+
+  // The real console answers over HTTPS with a certificate it signed itself,
+  // so the stand-in has to as well — the client's handling of that is part of
+  // what these tests cover. Making it here keeps the suite self-contained:
+  // it used to expect the pair to already exist and failed on a clean machine.
+  ensureCertificate(options.certDir);
 
   const server = Bun.serve({
     port: options.port ?? 0,

@@ -355,7 +355,8 @@ export async function identify(filePath: string): Promise<IdentifyResult | null>
 
   const size = file.size;
   const candidates = KNOWN_BIOS_FILES.filter(
-    (entry): entry is SingleBiosEntry => !entry.archive && entry.size === size,
+    (entry): entry is SingleBiosEntry =>
+      !entry.archive && "size" in entry && entry.size === size,
   );
   if (candidates.length === 0) return null;
 

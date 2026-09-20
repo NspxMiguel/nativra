@@ -53,6 +53,9 @@ namespace Kiosk.Native
         /// </summary>
         public static IntPtr ConsoleWindow;
 
+        /// <summary>Where copied frames are shown when composing is refused.</summary>
+        public static Windows.UI.Xaml.Controls.Image Mirror;
+
         /// <summary>The element the finished frames are composed into.</summary>
         public static Windows.UI.Xaml.Controls.SwapChainPanel Surface;
 
@@ -148,6 +151,9 @@ namespace Kiosk.Native
         /// presents is drawing into something it cannot show.
         /// </summary>
         public static long Buffers;
+
+        /// <summary>Whether frames are being copied to the screen.</summary>
+        public static bool mirroring;
         private static SetFullscreenDelegate setFullscreen;
 
         /// <summary>
@@ -252,7 +258,11 @@ namespace Kiosk.Native
             var desc = Marshal.AllocHGlobal(48);
             Marshal.WriteInt32(desc, 0, width);
             Marshal.WriteInt32(desc, 4, height);
-            Marshal.WriteInt32(desc, 8, Supported(format));
+            // Blue first. Nothing here presents directly to a screen — the
+            // frames are copied and shown as a picture — and a picture on this
+            // framework is laid out blue, green, red, alpha. Matching it costs
+            // nothing and saves two million byte swaps a frame.
+            Marshal.WriteInt32(desc, 8, 87);
             Marshal.WriteInt32(desc, 12, 0);        // Stereo
             Marshal.WriteInt32(desc, 16, 1);        // SampleDesc.Count
             Marshal.WriteInt32(desc, 20, 0);        // SampleDesc.Quality
@@ -364,6 +374,10 @@ namespace Kiosk.Native
                     {
                         if (Frames == 0) FirstFrameAt = Environment.TickCount;
                         Frames++;
+                        // Taken before the frame goes out: a flip-model chain
+                        // rotates its buffers on the way, and what was just
+                        // drawn is no longer where it was.
+                        if (mirroring) FrameMirror.Take();
                         return presentThrough(ComProxy.Original(self), interval, flags);
                     };
 
@@ -376,6 +390,7 @@ namespace Kiosk.Native
                     {
                         if (Frames == 0) FirstFrameAt = Environment.TickCount;
                         Frames++;
+                        if (mirroring) FrameMirror.Take();
                         return presentOneThrough(
                             ComProxy.Original(self), interval, flags, parameters);
                     };
@@ -410,26 +425,17 @@ namespace Kiosk.Native
                     // A chain made for the console's window is already on the
                     // screen; only a composed one needs somewhere to land —
                     // and if it cannot land, the window is taken instead.
-                    if (composed && !Show(chain) && ConsoleWindow != IntPtr.Zero)
+                    if (composed && !Show(chain))
                     {
-                        ReleaseInterface();
-                        var again = ConsoleDescription(
+                        // Both direct routes were measured refused on this
+                        // console, every shape, with and without the app
+                        // holding its own screen. So the frames are copied.
+                        var going = FrameMirror.Start(
+                            device, chain,
                             Marshal.ReadInt32(desc, 0), Marshal.ReadInt32(desc, 4),
-                            Marshal.ReadInt32(desc, 8), 0);
-                        var direct = Marshal.GetDelegateForFunctionPointer<
-                            CreateForCoreWindowDelegate>(
-                            ComProxy.Method(original, CreateForCoreWindowSlot));
-                        var second = Marshal.AllocHGlobal(IntPtr.Size);
-                        Marshal.WriteIntPtr(second, IntPtr.Zero);
-                        var retry = direct(
-                            original, device, ConsoleWindow, again, IntPtr.Zero, second);
-                        Note("core window, second try: 0x" + retry.ToString("X8"));
-                        if (retry == S_OK)
-                        {
-                            Marshal.WriteIntPtr(result, Marshal.ReadIntPtr(second));
-                        }
-                        Marshal.FreeHGlobal(second);
-                        Marshal.FreeHGlobal(again);
+                            87, Mirror, OnUi);
+                        Note("mirror: " + FrameMirror.Note);
+                        mirroring = going;
                     }
                 }
                 return code;

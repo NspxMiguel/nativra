@@ -435,6 +435,74 @@ async function cmdPush(args: string[]): Promise<void> {
   console.log(`-> ${pkg.Name}:${remoteDir}/${localPath.split("/").pop()}`);
 }
 
+/**
+ * Files a BIOS or key the owner already has.
+ *
+ * The whole point is that he does nothing but point at the file: what it is,
+ * which emulators want it and what each of them insists on calling it are
+ * worked out here, not by him. A folder is treated as a stick that was just
+ * plugged in and swept in one pass.
+ */
+async function cmdBios(args: string[]): Promise<void> {
+  const [target] = args;
+  if (!target) {
+    console.error("xbdev bios <file-or-folder>");
+    process.exit(2);
+  }
+  const { identify, fileIt, scan, defaultRoots } = await import("./bios");
+  const { DRIVE } = await import("./emulators");
+  const roots = defaultRoots(DRIVE);
+
+  const say = (report: Awaited<ReturnType<typeof fileIt>>) => {
+    console.log(`= ${report.entry.system} (${report.confidence})`);
+    for (const copy of report.copies) {
+      console.log(`  + ${copy.emulator}: ${copy.path}`);
+    }
+    for (const missed of report.skipped) {
+      console.log(`  - ${missed.emulator}: ${missed.reason}`);
+    }
+  };
+
+  // A folder is a stick that was just plugged in: sweep it in one pass.
+  if (!(await Bun.file(target).exists())) {
+    const report = await scan(target, roots);
+    for (const one of report.filed) say(one);
+    for (const name of report.unrecognised) console.log(`? ${name}`);
+    console.log(
+      `${report.filed.length} filed, ${report.unrecognised.length} unrecognised`,
+    );
+    return;
+  }
+
+  const found = await identify(target);
+  if (!found) {
+    console.log(`? ${target} — not a BIOS or key this knows`);
+    return;
+  }
+  say(await fileIt(target, roots));
+}
+
+/** Lists the emulator shelf, or puts one of them on the console. */
+async function cmdEmulators(args: string[]): Promise<void> {
+  const [action, id] = args;
+  const shelf = await import("./emulators");
+  if (!action || action === "list") {
+    for (const entry of shelf.emulators) {
+      const needs = entry.bios?.needed ? " (needs your own BIOS)" : "";
+      console.log(`  ${entry.id.padEnd(16)} ${entry.system.padEnd(18)} ${entry.name}${needs}`);
+    }
+    return;
+  }
+  if (action !== "install" || !id) {
+    console.error("xbdev emulators [list | install <id>]");
+    process.exit(2);
+  }
+  const entry = shelf.findEmulator(id);
+  const where = await shelf.install(entry, "pacotes/emuladores");
+  await shelf.configure(entry, where);
+  console.log(`+ ${entry.name} -> ${where}`);
+}
+
 async function cmdRemove(args: string[]): Promise<void> {
   const [appName, ...names] = args;
   if (!appName || names.length === 0) {
@@ -835,6 +903,8 @@ function usage(): void {
     ["push <app> <file> [dir]", t("cmd.push")],
     ["pull <app> <file> [dir]", t("cmd.pull")],
     ["rm <app> <file...> [--dir d]", t("cmd.rm")],
+    ["bios <file-or-folder>", t("cmd.bios")],
+    ["emulators [list|install <id>]", t("cmd.emulators")],
     ["ls <app> [dir]", t("cmd.ls")],
     ["setup-retroarch", t("cmd.setupRetroarch")],
     ["verify", t("cmd.verify")],
@@ -878,6 +948,9 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   push: cmdPush,
   pull: cmdPull,
   rm: cmdRemove,
+  bios: cmdBios,
+  emulators: cmdEmulators,
+  emuladores: cmdEmulators,
   ls: cmdLs,
   "setup-retroarch": cmdSetupRetroarch,
   verify: cmdVerify,

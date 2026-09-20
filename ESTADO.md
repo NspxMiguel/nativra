@@ -125,3 +125,51 @@ ordem de implementação é ditada pelo jogo, não por palpite.
 6. Achievements, Steam Cloud, Epic/GOG, multiconta, setup inicial.
 7. Site estilo ProtonDB com selo por console.
 8. Minecraft Java.
+
+## Noite de 19-20/09 — o ciclo automatico e o que ele mediu
+
+**`./scripts-cycle.sh "mensagem" <voltas>`** faz a volta inteira: commit, push,
+espera o build do sha certo, baixa a release, desinstala, instala Kiosk + as
+dependencias x64, abre uma vez (senao nao existe `LocalState` e todo push falha
+**em silencio**), sincroniza, manda o `autodownload.txt`, abre, e traz
+`native-probe.txt` e `native-pulse.txt`.
+
+Coisas medidas nesta noite, todas contraintuitivas:
+
+- **O app nao le a pasta de desenvolvimento.** `D:\DevelopmentFiles` e mais
+  cinco letras: `UnauthorizedAccessException` em todas. O portal le, o app nao.
+  Entao o jogo e baixado de novo pelo console a cada volta (o `autodownload.txt`
+  com o appid), porque `LocalState` vai embora junto com a desinstalacao.
+- **`LocalState` so existe depois da primeira execucao.** Instalar e empurrar
+  arquivo falha ate o app rodar uma vez.
+- **`pull` precisa da pasta**: `pull kiosk native-probe.txt LocalState`. Sem ela
+  o portal procura na raiz do pacote e devolve erro.
+- **Gravar por cima do relatorio o esvazia primeiro**, e o processo morre dentro
+  dessa janela: o que sobra e um arquivo de zero byte. Agora grava num rascunho
+  e troca (`MoveAndReplaceAsync`), entao ou o antigo esta la ou o novo.
+- **`HashSet` lido enquanto outra thread insere derruba o processo.** Foi erro
+  meu ao tirar o lock do contador; virou um `bool[]`.
+- **Pagina de codigo selada nao aceita stub novo** — e `GetProcAddress` em tempo
+  de execucao cria stub novo. Cada escrita abre e fecha a pagina.
+
+## O que foi construido nesta noite
+
+- **`ComProxy`**: stand-in para objeto COM. Copia a tabela de metodos, entrada
+  por entrada, com thunks gerados que trocam o ponteiro do objeto, e substitui
+  so as entradas que a gente responde. E o que permite mexer em DXGI sem tocar
+  no jogo.
+- **`GraphicsBridge`**: `CreateSwapChainForHwnd` e `CreateSwapChain` caem em
+  `CreateSwapChainForCoreWindow`, com a descricao reescrita para o que o console
+  aceita (modelo flip, sem MSAA, dois buffers). `SetFullscreenState` responde
+  que sim. A `CoreWindow` e capturada na thread de interface.
+- **`LoaderStubs`**: `LoadLibrary`/`GetProcAddress`/`GetModuleHandle`. Sem isso
+  a ponte do DXGI nunca seria usada — o Unity escolhe o renderizador em tempo de
+  execucao, entao nada decidido na tabela de imports encosta nele.
+- **`PadBridge`**: XInput por cima de `Windows.Gaming.Input`. Os dezesseis bytes
+  do `XINPUT_STATE` escritos a partir da leitura do controle do console.
+- **`WindowStubs`** agora responde de verdade: fila de mensagens (MSG zerada,
+  `PeekMessage` devolve 0, `GetMessage` devolve WM_NULL), `GetMonitorInfo`,
+  `EnumDisplayMonitors` chamando o callback do jogo com um monitor 1920x1080.
+- **Pulso**: uma thread grava `native-pulse.txt` a cada 25 ms com o total de
+  chamadas, o que cada thread chamou por ultimo e ha quanto tempo. O motor morre
+  em menos de 2 ms as vezes, e so isso alcanca.

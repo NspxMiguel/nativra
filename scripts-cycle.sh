@@ -10,7 +10,7 @@ MSG="${1:-wip}"
 WAIT="${2:-30}"   # turns of 20 seconds
 
 # Catch the mistakes that are cheap here and expensive on the runner.
-if ! ./tools/xaml-check.sh || ! ./tools/preflight.sh; then
+if ! ./tools/xaml-check.sh || ! ./tools/resource-check.sh || ! ./tools/preflight.sh; then
   echo "preflight refused the tree; nothing was pushed"
   exit 1
 fi

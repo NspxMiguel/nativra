@@ -91,6 +91,7 @@
     <Compile Include="Native\PointerBridge.cs" />
     <Compile Include="Native\DisplayStubs.cs" />
     <Compile Include="Native\FrameMirror.cs" />
+    <Compile Include="Native\ThreadRank.cs" />
     <Compile Include="Native\GraphicsBridge.cs" />
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Texts.cs" />

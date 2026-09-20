@@ -157,6 +157,16 @@ namespace Kiosk
                     System.Runtime.InteropServices.Marshal.GetIUnknownForObject(
                         Windows.UI.Core.CoreWindow.GetForCurrentThread());
                 Native.GraphicsBridge.Mirror = GameImage;
+
+                // The thread that draws this screen asks to go first.
+                //
+                // A game sizes its worker pool to the machine and takes it, and
+                // this thread is left with a handful of turns a minute —
+                // measured. Lowering the game's threads was not enough on its
+                // own, so the screen's thread also asks for a step up. The two
+                // together are the whole difference between an application that
+                // is running and an application that is visible.
+                Native.ThreadRank.RaiseThisThread();
                 Native.GraphicsBridge.OnUi = Dispatcher;
             }
             catch

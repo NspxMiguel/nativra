@@ -59,18 +59,22 @@ namespace Kiosk.Native
                 // scratch folder is only for binaries pushed by hand.
                 StorageFolder folder = null;
 
-                // The app can only read its own storage: a sideloaded package
-                // has no way into the developer share, measured on this console.
+                // The developer share survives reinstalling the app; the app's
+                // own storage does not, and a reinstall is every single build.
+                // So the game is looked for there first, and a copy that is
+                // still only in local storage is moved there once.
+                folder = await GameIn(await DevelopmentFiles());
+
                 var games = await local.TryGetItemAsync("games") as StorageFolder;
-                if (games != null && folder == null)
+                if (folder == null && games != null)
                 {
-                    foreach (var candidate in await games.GetFoldersAsync())
+                    var here = await GameIn(games);
+                    if (here != null)
                     {
-                        if (await candidate.TryGetItemAsync("UnityPlayer.dll") != null)
-                        {
-                            folder = candidate;
-                            break;
-                        }
+                        lines.Add("mirror=" + here.Name);
+                        await WriteAsync(lines);
+                        folder = await MirrorAsync(here) ?? here;
+                        lines[lines.Count - 1] = "mirror=" + here.Name + " -> " + folder.Path;
                     }
                 }
                 folder = folder ?? await local.TryGetItemAsync(Folder) as StorageFolder;
@@ -260,14 +264,30 @@ namespace Kiosk.Native
                         // function it reached is the whole answer.
                         // It dies in under a frame, so the first look is
                         // immediate and the rest are close behind.
-                        for (var tick = 0; tick < 120; tick++)
+                        var seen = 0L;
+                        for (var tick = 0; tick < 200; tick++)
                         {
-                            await Task.Delay(tick == 0 ? 2 : 50);
+                            await Task.Delay(tick == 0 ? 2 : (tick < 40 ? 50 : 500));
+                            var now = imports.Shim.Total;
                             var snapshot = new List<string>(lines)
                             {
                                 "exe.alive=" + runner.IsAlive,
                                 "exe.stubs=" + imports.Shim.Called.Count,
+                                // Two numbers decide everything: a total that
+                                // climbs means the engine is running, and a
+                                // total that stands still means it is blocked.
+                                "exe.calls=" + now + " (+" + (now - seen) + ")",
+                                "exe.pumped=" + WindowStubs.Pumped,
                             };
+                            seen = now;
+                            foreach (var line in imports.Shim.Threads())
+                            {
+                                snapshot.Add("  " + line);
+                            }
+                            foreach (var line in imports.Shim.Busiest(20))
+                            {
+                                snapshot.Add("  busiest " + line);
+                            }
                             foreach (var name in imports.Shim.Recent())
                             {
                                 snapshot.Add("  recent " + name);
@@ -295,6 +315,82 @@ namespace Kiosk.Native
                 lines.Add("probe failed: " + error.GetType().Name + ": " + error.Message);
             }
             await WriteAsync(lines);
+        }
+
+
+        /// <summary>
+        /// The console's developer share. It is the one place this app can
+        /// write that an uninstall does not take with it.
+        /// </summary>
+        private static async Task<StorageFolder> DevelopmentFiles()
+        {
+            try
+            {
+                var root = await StorageFolder.GetFolderFromPathAsync(@"D:\DevelopmentFiles");
+                return await root.CreateFolderAsync(
+                    "games", CreationCollisionOption.OpenIfExists);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>A folder under this one that holds a Unity game.</summary>
+        private static async Task<StorageFolder> GameIn(StorageFolder parent)
+        {
+            if (parent == null) return null;
+            try
+            {
+                foreach (var candidate in await parent.GetFoldersAsync())
+                {
+                    if (await candidate.TryGetItemAsync("UnityPlayer.dll") != null)
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch
+            {
+                // An unreadable share is the same as an empty one here.
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Copies a game tree into the developer share, once. Downloading it
+        /// again on every build costs more than the whole rest of the cycle.
+        /// </summary>
+        private static async Task<StorageFolder> MirrorAsync(StorageFolder source)
+        {
+            var games = await DevelopmentFiles();
+            if (games == null) return null;
+            try
+            {
+                var target = await games.CreateFolderAsync(
+                    source.Name, CreationCollisionOption.OpenIfExists);
+                await CopyInto(source, target);
+                return target;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static async Task CopyInto(StorageFolder source, StorageFolder target)
+        {
+            foreach (var file in await source.GetFilesAsync())
+            {
+                if (await target.TryGetItemAsync(file.Name) != null) continue;
+                await file.CopyAsync(target, file.Name, NameCollisionOption.ReplaceExisting);
+            }
+            foreach (var child in await source.GetFoldersAsync())
+            {
+                var into = await target.CreateFolderAsync(
+                    child.Name, CreationCollisionOption.OpenIfExists);
+                await CopyInto(child, into);
+            }
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

@@ -453,7 +453,10 @@ async function cmdPull(args: string[]): Promise<void> {
 }
 
 async function cmdLs(args: string[]): Promise<void> {
-  const [appName, remoteDir = ""] = args;
+  // The developer share is a different root from the app's own storage, and
+  // most of what is worth looking at during a build lives there.
+  const known = args.includes("--dev") ? "DevelopmentFiles" : "LocalAppData";
+  const [appName, remoteDir = ""] = args.filter((a) => a !== "--dev");
   if (!appName) {
     console.error("xbdev ls <app> [remote-dir]");
     process.exit(2);
@@ -464,7 +467,7 @@ async function cmdLs(args: string[]): Promise<void> {
     console.error(`? ${appName}`);
     process.exit(1);
   }
-  for (const item of await portal.listFiles(pkg.PackageFullName, remoteDir)) {
+  for (const item of await portal.listFiles(pkg.PackageFullName, remoteDir, known)) {
     const name = String(item.Name ?? item.Id ?? "?");
     const size = Number(item.SizeInBytes ?? 0);
     const isFolder = Number(item.Type ?? 0) === 16 || size === 0;
@@ -862,6 +865,7 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   type: cmdType,
   win32: cmdWin32,
   "push-game": cmdPushGame,
+  markers: cmdMarkers,
 };
 
 /**
@@ -952,6 +956,47 @@ async function cmdWin32(args: string[]): Promise<void> {
 }
 
 /** Drives the console with the controller channel of the Device Portal. */
+/**
+ * Writes the marker files the loader reads, into the game's folder on the
+ * developer share. They decide how far the loader goes and whether it traces,
+ * and they have to survive a reinstall the same way the game does.
+ */
+async function cmdMarkers(args: string[]): Promise<void> {
+  const portal = await portalOrExit();
+  const kiosk = await findPackage(portal, "kiosk");
+  if (!kiosk) {
+    console.error("Kiosk is not installed");
+    process.exit(1);
+  }
+
+  const wanted = args.length > 0 ? args : ["tls.txt=6", "call.txt=1", "trace.txt=1"];
+  const games = await portal.listFiles(kiosk.PackageFullName, "games", "DevelopmentFiles");
+  const folders = games
+    .map((entry) => String(entry.Name ?? ""))
+    .filter((name) => name.length > 0);
+  if (folders.length === 0) {
+    console.error("no game on the developer share yet");
+    return;
+  }
+
+  const scratch = join(ROOT, ".markers");
+  await mkdir(scratch, { recursive: true });
+  for (const target of folders) {
+    for (const pair of wanted) {
+      const [name, body = "1"] = pair.split("=");
+      const local = join(scratch, name);
+      await Bun.write(local, body + "\n");
+      await portal.pushFile(
+        kiosk.PackageFullName,
+        local,
+        `games/${target}`,
+        "DevelopmentFiles",
+      );
+    }
+    console.log(`-> ${target}: ${wanted.join(" ")}`);
+  }
+}
+
 async function cmdPress(args: string[]): Promise<void> {
   const config = await loadConfig();
   if (!config) {

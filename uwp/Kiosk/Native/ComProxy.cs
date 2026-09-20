@@ -80,88 +80,6 @@ namespace Kiosk.Native
             new Dictionary<IntPtr, IntPtr>();
 
         /// <summary>mov rcx, original ; mov rax, target ; jmp rax.</summary>
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate void SeenDelegate(long slot);
-
-        private SeenDelegate seen;
-        private IntPtr seenPointer;
-        private string watching;
-
-        /// <summary>
-        /// Which numbered methods of a watched object were called, and how
-        /// often. Reading a table entry by entry is the only way to answer
-        /// "which of these thirty-two did it use" without guessing.
-        /// </summary>
-        public static readonly Dictionary<string, long> Used =
-            new Dictionary<string, long>();
-
-        /// <summary>
-        /// A forwarding thunk that says it was used before forwarding.
-        ///
-        /// The plain one is two instructions and leaves no trace, which is
-        /// right for everything except the one object under suspicion. For
-        /// that one, knowing which entry an engine reached for is the whole
-        /// question — a swap chain appeared that this bridge never made, and
-        /// every theory about where it came from was wrong.
-        /// </summary>
-        private IntPtr Watched(IntPtr original, IntPtr target, int slot)
-        {
-            if (seen == null)
-            {
-                seen = number =>
-                {
-                    var key = watching + " slot " + number;
-                    lock (Used)
-                    {
-                        Used.TryGetValue(key, out var count);
-                        Used[key] = count + 1;
-                    }
-                };
-                seenPointer = Marshal.GetFunctionPointerForDelegate(seen);
-            }
-            IntPtr at;
-            if (!Room(out at)) return Forward(original, target);
-
-            var code = new List<byte>();
-            code.AddRange(new byte[] { 0x48, 0x83, 0xEC, 0x48 });        // sub rsp, 0x48
-            code.AddRange(new byte[] { 0x48, 0x89, 0x54, 0x24, 0x20 });  // mov [rsp+20], rdx
-            code.AddRange(new byte[] { 0x4C, 0x89, 0x44, 0x24, 0x28 });  // mov [rsp+28], r8
-            code.AddRange(new byte[] { 0x4C, 0x89, 0x4C, 0x24, 0x30 });  // mov [rsp+30], r9
-            code.AddRange(new byte[] { 0x48, 0xB9 });                    // mov rcx, slot
-            code.AddRange(BitConverter.GetBytes((long)slot));
-            code.AddRange(new byte[] { 0x48, 0xB8 });                    // mov rax, recorder
-            code.AddRange(BitConverter.GetBytes(seenPointer.ToInt64()));
-            code.AddRange(new byte[] { 0xFF, 0xD0 });                    // call rax
-            code.AddRange(new byte[] { 0x48, 0x8B, 0x54, 0x24, 0x20 });  // mov rdx, [rsp+20]
-            code.AddRange(new byte[] { 0x4C, 0x8B, 0x44, 0x24, 0x28 });  // mov r8, [rsp+28]
-            code.AddRange(new byte[] { 0x4C, 0x8B, 0x4C, 0x24, 0x30 });  // mov r9, [rsp+30]
-            code.AddRange(new byte[] { 0x48, 0x83, 0xC4, 0x48 });        // add rsp, 0x48
-            code.AddRange(new byte[] { 0x48, 0xB9 });                    // mov rcx, original
-            code.AddRange(BitConverter.GetBytes(original.ToInt64()));
-            code.AddRange(new byte[] { 0x48, 0xB8 });                    // mov rax, target
-            code.AddRange(BitConverter.GetBytes(target.ToInt64()));
-            code.AddRange(new byte[] { 0xFF, 0xE0 });                    // jmp rax
-
-            Marshal.Copy(code.ToArray(), 0, at, code.Count);
-            return at;
-        }
-
-        /// <summary>
-        /// Makes the page the thunks live on, once. Both kinds of thunk need
-        /// it, and a thunk that cannot be built has to say so rather than
-        /// quietly hand back the function it was meant to wrap: that function
-        /// would then be called with the stand-in in place of the object it
-        /// belongs to, which is a crash with no explanation attached.
-        /// </summary>
-        private bool HavePage()
-        {
-            if (page != IntPtr.Zero) return true;
-            page = VirtualAllocFromApp(
-                IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
-                MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-            return page != IntPtr.Zero;
-        }
-
         private IntPtr Forward(IntPtr original, IntPtr target)
         {
             IntPtr at;
@@ -182,13 +100,11 @@ namespace Kiosk.Native
         /// the interface has, counting the three of IUnknown — getting it wrong
         /// by too few loses methods, and by too many reads past the table.
         /// </summary>
-        public IntPtr Wrap(
-            IntPtr original, int methods, Dictionary<int, IntPtr> ours, string watch = null)
+        public IntPtr Wrap(IntPtr original, int methods, Dictionary<int, IntPtr> ours)
         {
             if (original == IntPtr.Zero) return IntPtr.Zero;
 
             Unseal();
-            watching = watch;
             var realTable = Marshal.ReadIntPtr(original);
             var table = Marshal.AllocHGlobal(IntPtr.Size * methods);
             for (var slot = 0; slot < methods; slot++)
@@ -200,10 +116,8 @@ namespace Kiosk.Native
                 }
                 else
                 {
-                    var real = Marshal.ReadIntPtr(realTable, slot * IntPtr.Size);
-                    entry = watch == null
-                        ? Forward(original, real)
-                        : Watched(original, real, slot);
+                    entry = Forward(
+                        original, Marshal.ReadIntPtr(realTable, slot * IntPtr.Size));
                 }
                 Marshal.WriteIntPtr(table, slot * IntPtr.Size, entry);
             }

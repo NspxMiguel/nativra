@@ -1241,6 +1241,31 @@ namespace Kiosk.Native
                 }
             };
 
+            // Both land in the same place as the window-shaped one: whatever
+            // the engine asks for, it gets a chain this bridge owns, drawing
+            // into a texture this bridge can read.
+            createForCoreWindow = (self, device, window, desc, restrict, result) =>
+            {
+                var width = Marshal.ReadInt32(desc, 4);
+                var height = Marshal.ReadInt32(desc, 8);
+                var format = Marshal.ReadInt32(desc, 0);
+                return MakeChain(
+                    self, device,
+                    ConsoleDescription(width, height, format, 0),
+                    result, "CreateSwapChainForCoreWindow");
+            };
+
+            createForComposition = (self, device, desc, restrict, result) =>
+            {
+                var width = Marshal.ReadInt32(desc, 4);
+                var height = Marshal.ReadInt32(desc, 8);
+                var format = Marshal.ReadInt32(desc, 0);
+                return MakeChain(
+                    self, device,
+                    ConsoleDescription(width, height, format, 0),
+                    result, "CreateSwapChainForComposition");
+            };
+
             adapterParent = (self, riid, result) =>
             {
                 if (result == IntPtr.Zero) return E_FAIL;
@@ -1495,6 +1520,8 @@ namespace Kiosk.Native
         private static ItemOutDelegate enumAdapters;
         private static ItemOutDelegate enumAdapters1;
         private static ItemOutDelegate adapterOutputs;
+        private static CreateForCoreWindowDelegate createForCoreWindow;
+        private static CreateForCompositionDelegate createForComposition;
         private static QueryInterfaceDelegate deviceAsk;
         private static QueryInterfaceDelegate displayParent;
         private static OneOutDelegate displayAdapter;
@@ -1793,12 +1820,11 @@ namespace Kiosk.Native
                     { CreateForHwndSlot, Marshal.GetFunctionPointerForDelegate(createForHwnd) },
                     { EnumAdaptersSlot, Marshal.GetFunctionPointerForDelegate(enumAdapters) },
                     { EnumAdapters1Slot, Marshal.GetFunctionPointerForDelegate(enumAdapters1) },
-                },
-                    // Every other entry is recorded on its way through. A swap
-                    // chain appeared that this bridge never made, and every
-                    // guess about which call produced it has been wrong; the
-                    // table itself can simply be asked.
-                    "factory");
+                    { CreateForCoreWindowSlot,
+                        Marshal.GetFunctionPointerForDelegate(createForCoreWindow) },
+                    { CreateForCompositionSlot,
+                        Marshal.GetFunctionPointerForDelegate(createForComposition) },
+                });
                 standingFactory = stand;
                 Marshal.WriteIntPtr(result, stand);
                 Note(name + ": standing in for 0x" + original.ToInt64().ToString("X")

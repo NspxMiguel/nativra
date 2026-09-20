@@ -345,7 +345,7 @@ namespace Kiosk.Native
                                         "pumped=" + WindowStubs.Pumped,
                                         "pad=" + PadBridge.Reads,
                                         "buffers=" + GraphicsBridge.Buffers,
-                                        "mirrored=" + FrameMirror.Copied,
+                                        "mirrored=" + FrameMirror.Copied + " shown=" + FrameMirror.Shown,
                                         "frames=" + GraphicsBridge.Frames
                                             + " at " + rate.ToString("0.0") + " a second",
                                         "keys=" + PointerBridge.Keys,

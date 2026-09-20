@@ -21,6 +21,7 @@
         <DataTemplate x:Key="TileTemplate" x:DataType="local:Tile">
             <Button Style="{StaticResource TileStyle}"
                     Click="OnTileClicked"
+                    GotFocus="OnTileFocused"
                     Tag="{x:Bind}"
                     Margin="0,0,28,0"
                     VerticalAlignment="Bottom">
@@ -209,24 +210,23 @@
                             </HyperlinkButton>
                         </StackPanel>
 
-                        <ListView x:Name="AppRail" Grid.Row="1"
-                                  ItemsSource="{x:Bind Tiles}"
-                                  ItemTemplate="{StaticResource TileTemplate}"
-                                  ItemContainerStyle="{StaticResource ShelfItemStyle}"
-                                  SelectionChanged="OnSelectionChanged"
-                                  SelectionMode="Single"
-                                  Padding="56,0,56,0"
-                                  ScrollViewer.HorizontalScrollMode="Enabled"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                  ScrollViewer.VerticalScrollMode="Disabled"
-                                  ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                            <ListView.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <ItemsStackPanel Orientation="Horizontal"
-                                                     VerticalAlignment="Bottom" />
-                                </ItemsPanelTemplate>
-                            </ListView.ItemsPanel>
-                        </ListView>
+                        <ScrollViewer Grid.Row="1"
+                                      HorizontalScrollMode="Enabled"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollMode="Disabled"
+                                      VerticalScrollBarVisibility="Disabled"
+                                      Padding="56,0,56,0">
+                            <ItemsControl x:Name="AppRail"
+                                          ItemsSource="{x:Bind Tiles}"
+                                          ItemTemplate="{StaticResource TileTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"
+                                                    VerticalAlignment="Bottom" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </ScrollViewer>
                     </Grid>
 
                     <!-- The library with nothing in it. Not an error: a start. -->

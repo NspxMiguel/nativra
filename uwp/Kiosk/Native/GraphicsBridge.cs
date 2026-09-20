@@ -153,7 +153,7 @@ namespace Kiosk.Native
         public static long Buffers;
 
         /// <summary>Whether frames are being copied to the screen.</summary>
-        public static bool mirroring;
+        public static bool Mirroring;
         private static SetFullscreenDelegate setFullscreen;
 
         /// <summary>
@@ -377,7 +377,7 @@ namespace Kiosk.Native
                         // Taken before the frame goes out: a flip-model chain
                         // rotates its buffers on the way, and what was just
                         // drawn is no longer where it was.
-                        if (mirroring) FrameMirror.Take();
+                        if (Mirroring) FrameMirror.Take();
                         return presentThrough(ComProxy.Original(self), interval, flags);
                     };
 
@@ -390,7 +390,7 @@ namespace Kiosk.Native
                     {
                         if (Frames == 0) FirstFrameAt = Environment.TickCount;
                         Frames++;
-                        if (mirroring) FrameMirror.Take();
+                        if (Mirroring) FrameMirror.Take();
                         return presentOneThrough(
                             ComProxy.Original(self), interval, flags, parameters);
                     };
@@ -435,7 +435,7 @@ namespace Kiosk.Native
                             Marshal.ReadInt32(desc, 0), Marshal.ReadInt32(desc, 4),
                             87, Mirror, OnUi);
                         Note("mirror: " + FrameMirror.Note);
-                        mirroring = going;
+                        Mirroring = going;
                     }
                 }
                 return code;

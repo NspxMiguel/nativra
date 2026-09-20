@@ -63,8 +63,9 @@ namespace Kiosk.Native
         // The table of blocks is not a process-heap allocation, so asking the
         // heap how big it is faults. Asking the memory manager what is readable
         // around it does not, and bounding the copy is all that is needed.
-        [DllImport("api-ms-win-core-memory-l1-1-4.dll", SetLastError = true)]
-        private static extern UIntPtr VirtualQueryFromApp(
+        [DllImport("api-ms-win-core-memory-l1-1-0.dll", EntryPoint = "VirtualQuery",
+            SetLastError = true)]
+        private static extern UIntPtr QueryMemory(
             IntPtr address, out MemoryBasicInformation info, UIntPtr length);
 
         /// <summary>
@@ -443,7 +444,7 @@ namespace Kiosk.Native
                 if (existing != IntPtr.Zero)
                 {
                     var length = (UIntPtr)(uint)Marshal.SizeOf<MemoryBasicInformation>();
-                    if (VirtualQueryFromApp(existing, out var info, length) != UIntPtr.Zero)
+                    if (QueryMemory(existing, out var info, length) != UIntPtr.Zero)
                     {
                         // How much is readable from the pointer to the end of
                         // its region: an upper bound, which is what keeps a

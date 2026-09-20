@@ -29,6 +29,11 @@ namespace Kiosk.Native
         // On IDXGIAdapter, slot seven is EnumOutputs — the same number the
         // factory uses for EnumAdapters, on a different interface.
         private const int EnumOutputsSlot = 7;
+        // On IDXGIDevice, that same seventh slot is GetAdapter.
+        private const int GetAdapterSlot = 7;
+        // ID3D11Device, counting from IUnknown. A device asked for by that
+        // name has exactly this many, whatever the console's is underneath.
+        private const int DeviceMethods = 43;
         private const int DXGI_ERROR_NOT_FOUND = unchecked((int)0x887A0002);
         private const int GetParentSlot = 6;
         private const int AdapterMethods = 11;
@@ -112,6 +117,9 @@ namespace Kiosk.Native
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int ItemOutDelegate(IntPtr self, uint index, IntPtr result);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int OneOutDelegate(IntPtr self, IntPtr result);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int SetFullscreenGetDelegate(IntPtr self, IntPtr target);
@@ -223,6 +231,90 @@ namespace Kiosk.Native
             "770aae78-f26f-4dba-a829-253c83d1b387", // IDXGIFactory1
             "50c83a1c-e072-4c48-87b0-3630fa36a6d0", // IDXGIFactory2
         };
+
+        // How many methods each version of the display-device interface has,
+        // counted from IUnknown. Copying a table needs its length, and a table
+        // copied one entry short is a call into whatever follows it.
+        private static readonly Dictionary<string, int> DxgiDeviceIds =
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "54ec77fa-1377-44e6-8c32-88fd5f44c84c", 12 },  // IDXGIDevice
+                { "77db970f-6276-48ba-ba28-070143b4392c", 14 },  // IDXGIDevice1
+                { "05008617-fbfd-4051-a790-144884b4f6a9", 17 },  // IDXGIDevice2
+                { "6007896c-3244-4afd-bf18-a6d3beda5023", 18 },  // IDXGIDevice3
+                { "95b4f95f-d8da-4ca4-9ee6-3b76d5968a10", 20 },  // IDXGIDevice4
+            };
+
+        /// <summary>
+        /// The way around the bridge, and the reason a game could take it.
+        ///
+        /// Everything here stands between a game and the factory, because the
+        /// factory is where a window-shaped swap chain is asked for and this
+        /// console refuses that. But a graphics device knows its own display
+        /// device, a display device knows its adapter, and an adapter knows
+        /// the factory that made it — the real one. An engine that walks those
+        /// three steps is holding the object the bridge exists to replace, and
+        /// nothing here would ever see it happen.
+        ///
+        /// Measured, and this is what the game does: the device is created,
+        /// the bridge sees nothing more, and the engine turns forever. It was
+        /// asking for its swap chain the whole time, on the other side.
+        ///
+        /// So the device handed back is a stand-in too. It answers only one
+        /// question differently — which display device it is — and from there
+        /// the walk lands back on our adapter and our factory.
+        /// </summary>
+        private static IntPtr WrapDevice(IntPtr device)
+        {
+            if (device == IntPtr.Zero) return device;
+            try
+            {
+                // Only the first slot is ours. A device created by asking for
+                // ID3D11Device has forty-three methods by contract, and any
+                // later version is asked for through the slot we own, so the
+                // ones past the end are never reached from here.
+                return Proxy.Wrap(device, DeviceMethods, new Dictionary<int, IntPtr>
+                {
+                    { QueryInterfaceSlot, Marshal.GetFunctionPointerForDelegate(deviceAsk) },
+                });
+            }
+            catch
+            {
+                return device;
+            }
+        }
+
+        private static IntPtr WrapDisplayDevice(IntPtr display, int methods)
+        {
+            if (display == IntPtr.Zero) return display;
+            try
+            {
+                return Proxy.Wrap(display, methods, new Dictionary<int, IntPtr>
+                {
+                    { GetAdapterSlot, Marshal.GetFunctionPointerForDelegate(displayAdapter) },
+                    { GetParentSlot, Marshal.GetFunctionPointerForDelegate(displayParent) },
+                });
+            }
+            catch
+            {
+                return display;
+            }
+        }
+
+        private static bool IsDisplayDeviceId(IntPtr riid, out int methods)
+        {
+            methods = 0;
+            if (riid == IntPtr.Zero) return false;
+            try
+            {
+                var id = Marshal.PtrToStructure<Guid>(riid).ToString();
+                return DxgiDeviceIds.TryGetValue(id, out methods);
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         private static bool IsFactoryId(IntPtr riid)
         {
@@ -973,6 +1065,69 @@ namespace Kiosk.Native
                     result, "CreateSwapChainForHwnd");
             };
 
+            // A graphics device asked which display device it is. Every
+            // version of that question is answered with a stand-in, because
+            // answering only the oldest leaves the newer ones as a way out.
+            deviceAsk = (self, riid, result) =>
+            {
+                if (result == IntPtr.Zero) return E_FAIL;
+                var original = ComProxy.Original(self);
+                var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
+                    ComProxy.Method(original, QueryInterfaceSlot));
+                var code = ask(original, riid, result);
+                if (code != S_OK) return code;
+
+                int methods;
+                if (!IsDisplayDeviceId(riid, out methods)) return code;
+
+                var real = Marshal.ReadIntPtr(result);
+                var stood = WrapDisplayDevice(real, methods);
+                if (stood != real) Marshal.WriteIntPtr(result, stood);
+                Note("a device was asked which screen device it is");
+                return S_OK;
+            };
+
+            // …and from the display device, its adapter — which has to be the
+            // one whose factory is ours, or the walk ends at the real one.
+            displayAdapter = (self, result) =>
+            {
+                if (result == IntPtr.Zero) return E_FAIL;
+                try
+                {
+                    var original = ComProxy.Original(self);
+                    var call = Marshal.GetDelegateForFunctionPointer<OneOutDelegate>(
+                        ComProxy.Method(original, GetAdapterSlot));
+                    var code = call(original, result);
+                    if (code != S_OK) return code;
+                    Marshal.WriteIntPtr(result, WrapAdapter(Marshal.ReadIntPtr(result)));
+                    Note("a screen device was asked for its adapter");
+                    return S_OK;
+                }
+                catch
+                {
+                    return E_FAIL;
+                }
+            };
+
+            displayParent = (self, riid, result) =>
+            {
+                if (result == IntPtr.Zero) return E_FAIL;
+                try
+                {
+                    var original = ComProxy.Original(self);
+                    var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
+                        ComProxy.Method(original, GetParentSlot));
+                    var code = ask(original, riid, result);
+                    if (code != S_OK) return code;
+                    Marshal.WriteIntPtr(result, WrapAdapter(Marshal.ReadIntPtr(result)));
+                    return S_OK;
+                }
+                catch
+                {
+                    return E_FAIL;
+                }
+            };
+
             adapterParent = (self, riid, result) =>
             {
                 if (result == IntPtr.Zero) return E_FAIL;
@@ -1167,6 +1322,18 @@ namespace Kiosk.Native
                     {
                         Note("feature level 0x" + Marshal.ReadInt32(resultLevel).ToString("X"));
                     }
+
+                    // The device goes back as a stand-in as well. Without this
+                    // the engine reaches the real factory through it and asks
+                    // the console for a window-shaped swap chain, which the
+                    // console refuses — for ever, quietly, off to one side
+                    // where none of this could see it.
+                    if (code == S_OK && resultDevice != IntPtr.Zero)
+                    {
+                        var born = Marshal.ReadIntPtr(resultDevice);
+                        var stood = WrapDevice(born);
+                        if (stood != born) Marshal.WriteIntPtr(resultDevice, stood);
+                    }
                     return code;
                 }
                 catch (Exception error)
@@ -1215,6 +1382,9 @@ namespace Kiosk.Native
         private static ItemOutDelegate enumAdapters;
         private static ItemOutDelegate enumAdapters1;
         private static ItemOutDelegate adapterOutputs;
+        private static QueryInterfaceDelegate deviceAsk;
+        private static QueryInterfaceDelegate displayParent;
+        private static OneOutDelegate displayAdapter;
         private static QueryInterfaceDelegate adapterParent;
         private static QueryInterfaceDelegate chainAsk;
 

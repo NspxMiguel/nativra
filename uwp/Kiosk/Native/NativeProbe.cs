@@ -493,6 +493,7 @@ namespace Kiosk.Native
                             {
                                 "exe.alive=" + runner.IsAlive,
                                 "exe.stubs=" + imports.Shim.Called.Count,
+                                "exe.thunks.full=" + imports.Shim.Overflowed,
                                 // Two numbers decide everything: a total that
                                 // climbs means the engine is running, and a
                                 // total that stands still means it is blocked.

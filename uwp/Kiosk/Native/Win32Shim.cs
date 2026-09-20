@@ -40,7 +40,13 @@ namespace Kiosk.Native
         private delegate long CallerDelegate(long index, long from);
 
         private const int ThunkSize = 96;
-        private const int Capacity = 1200;
+        // Measured: 845 system functions traced plus 180 stubs is 1025 on one
+        // game, before anything resolved at run time is counted. The old
+        // ceiling of 1200 left no room for those, and running out is not a
+        // clean failure — a stub that cannot be built is a null in the import
+        // table, which the program calls and dies on. Address space is free
+        // until it is written to, so the ceiling is now far above the need.
+        private const int Capacity = 4096;
 
         private readonly List<string> names = new List<string>();
 
@@ -48,6 +54,9 @@ namespace Kiosk.Native
         // starts while another thread is still adding to it, and a hash set
         // read during someone else's insert is how the whole process dies.
         private readonly bool[] seen = new bool[Capacity];
+
+        /// <summary>Thunks that could not be built because the page was full.</summary>
+        public long Overflowed;
         private readonly RecorderDelegate recorder;
         private readonly IntPtr recorderPointer;
         private readonly CallerDelegate noting;
@@ -197,19 +206,53 @@ namespace Kiosk.Native
         /// program is calling them. The return address is sitting on the stack
         /// at the moment of the call, so it costs one instruction to take it.
         /// </summary>
+        /// <summary>
+        /// Takes the next slot in the code page, for one caller at a time.
+        ///
+        /// Every generator below used to do this in the open: read the count,
+        /// append the name, work out the address, bump the counter. Two threads
+        /// resolving imports at the same moment — which is what a game with
+        /// forty threads does on the way up — could take the same index and the
+        /// same address, and the second one wrote its thunk over the first.
+        /// What the program jumped into afterwards was half of one function and
+        /// half of another. It showed up as a hang in a different place on
+        /// every run, which is exactly what it looked like.
+        /// </summary>
+        private bool Reserve(string name, out int index, out IntPtr at)
+        {
+            lock (names)
+            {
+                index = -1;
+                at = IntPtr.Zero;
+
+                if (page == IntPtr.Zero)
+                {
+                    page = VirtualAllocFromApp(
+                        IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
+                        MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+                    if (page == IntPtr.Zero) return false;
+                }
+                if (used >= Capacity)
+                {
+                    // Worth saying out loud: the caller turns this into a null
+                    // import, and a program that calls a null import dies
+                    // somewhere that looks nothing like the cause.
+                    Overflowed++;
+                    return false;
+                }
+
+                index = names.Count;
+                names.Add(name);
+                at = page + used * ThunkSize;
+                return true;
+            }
+        }
+
         public IntPtr CallerFor(string name, IntPtr target)
         {
-            if (page == IntPtr.Zero)
-            {
-                page = VirtualAllocFromApp(
-                    IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
-                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-                if (page == IntPtr.Zero) return target;
-            }
-            if (used >= Capacity) return target;
-
-            var index = names.Count;
-            names.Add(name);
+            int index;
+            IntPtr at;
+            if (!Reserve(name, out index, out at)) return target;
 
             var code = new List<byte>();
             code.AddRange(new byte[] { 0x48, 0x83, 0xEC, 0x48 });       // sub rsp, 0x48
@@ -232,9 +275,7 @@ namespace Kiosk.Native
             code.AddRange(BitConverter.GetBytes(target.ToInt64()));
             code.AddRange(new byte[] { 0xFF, 0xE0 });                   // jmp rax
 
-            var at = page + used * ThunkSize;
             Write(at, code.ToArray());
-            used++;
             return at;
         }
 
@@ -245,19 +286,10 @@ namespace Kiosk.Native
         /// </summary>
         public IntPtr StubFor(string name)
         {
-            if (page == IntPtr.Zero)
-            {
-                page = VirtualAllocFromApp(
-                    IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
-                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-                if (page == IntPtr.Zero) return IntPtr.Zero;
-            }
-            if (used >= Capacity) return IntPtr.Zero;
+            int index;
+            IntPtr at;
+            if (!Reserve(name, out index, out at)) return IntPtr.Zero;
 
-            var index = names.Count;
-            names.Add(name);
-
-            var at = page + used * ThunkSize;
             var code = new List<byte> { 0x48, 0xB9 };            // mov rcx, imm64
             code.AddRange(BitConverter.GetBytes((long)index));
             code.AddRange(new byte[] { 0x48, 0xB8 });            // mov rax, imm64
@@ -265,7 +297,6 @@ namespace Kiosk.Native
             code.AddRange(new byte[] { 0xFF, 0xE0 });            // jmp rax
             Write(at, code.ToArray());
 
-            used++;
             return at;
         }
 
@@ -279,17 +310,9 @@ namespace Kiosk.Native
         /// </summary>
         public IntPtr TraceFor(string name, IntPtr target)
         {
-            if (page == IntPtr.Zero)
-            {
-                page = VirtualAllocFromApp(
-                    IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
-                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-                if (page == IntPtr.Zero) return target;
-            }
-            if (used >= Capacity) return target;
-
-            var index = names.Count;
-            names.Add(name);
+            int index;
+            IntPtr at;
+            if (!Reserve(name, out index, out at)) return target;
 
             var code = new List<byte>();
             code.AddRange(new byte[] { 0x48, 0x83, 0xEC, 0x48 });             // sub rsp, 0x48
@@ -311,9 +334,7 @@ namespace Kiosk.Native
             code.AddRange(BitConverter.GetBytes(target.ToInt64()));
             code.AddRange(new byte[] { 0xFF, 0xE0 });                         // jmp rax
 
-            var at = page + used * ThunkSize;
             Write(at, code.ToArray());
-            used++;
             return at;
         }
 
@@ -328,17 +349,9 @@ namespace Kiosk.Native
         /// </summary>
         public IntPtr StubReturning(string name, long value)
         {
-            if (page == IntPtr.Zero)
-            {
-                page = VirtualAllocFromApp(
-                    IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
-                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-                if (page == IntPtr.Zero) return IntPtr.Zero;
-            }
-            if (used >= Capacity) return IntPtr.Zero;
-
-            var index = names.Count;
-            names.Add(name);
+            int index;
+            IntPtr at;
+            if (!Reserve(name, out index, out at)) return IntPtr.Zero;
 
             var code = new List<byte>();
             code.AddRange(new byte[] { 0x48, 0x83, 0xEC, 0x28 });       // sub rsp, 0x28
@@ -352,9 +365,7 @@ namespace Kiosk.Native
             code.AddRange(BitConverter.GetBytes(value));
             code.AddRange(new byte[] { 0xC3 });                         // ret
 
-            var at = page + used * ThunkSize;
             Write(at, code.ToArray());
-            used++;
             return at;
         }
 

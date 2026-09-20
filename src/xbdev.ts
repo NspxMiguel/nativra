@@ -861,7 +861,52 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   press: cmdPress,
   type: cmdType,
   win32: cmdWin32,
+  "push-game": cmdPushGame,
 };
+
+/**
+ * Mirrors a downloaded game into the console, folder by folder. The portal
+ * uploads one file at a time and creates one folder at a time, so the tree is
+ * walked rather than handed over.
+ */
+async function cmdPushGame(args: string[]): Promise<void> {
+  const [source, appId] = args;
+  if (!source || !appId) {
+    console.error("uso: xbdev push-game <pasta> <appid>");
+    process.exit(2);
+  }
+  const portal = await portalOrExit();
+  const kiosk = await findPackage(portal, "kiosk");
+  if (!kiosk) {
+    console.error("Kiosk is not installed");
+    process.exit(1);
+  }
+
+  await portal.makeFolder(kiosk.PackageFullName, "LocalState", "games");
+  await portal.makeFolder(kiosk.PackageFullName, "LocalState/games", appId);
+
+  let sent = 0;
+  let bytes = 0;
+  const walk = async (localDir: string, remoteDir: string): Promise<void> => {
+    const entries = await readdir(localDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const localPath = join(localDir, entry.name);
+      if (entry.isDirectory()) {
+        await portal.makeFolder(kiosk.PackageFullName, remoteDir, entry.name);
+        await walk(localPath, `${remoteDir}/${entry.name}`);
+        continue;
+      }
+      const file = Bun.file(localPath);
+      await portal.pushFile(kiosk.PackageFullName, localPath, remoteDir);
+      sent++;
+      bytes += file.size;
+      if (sent % 20 === 0) console.log(`${sent} arquivos, ${human(bytes)}`);
+    }
+  };
+
+  await walk(source, `LocalState/games/${appId}`);
+  console.log(`pronto: ${sent} arquivos, ${human(bytes)}`);
+}
 
 /** Types text on the console, for fields that raise its keyboard. */
 async function cmdType(args: string[]): Promise<void> {

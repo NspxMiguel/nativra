@@ -218,6 +218,8 @@ namespace Kiosk.Native
                         // The program has to believe it is the process, or its
                         // startup reads the host application's headers instead
                         // of its own and dies before it asks for anything.
+                        var commandLine = Marshal.StringToHGlobalAnsi(
+                            "\"" + folder.Path + "\\game.exe\"");
                         var previousBase = PeImage.SetProcessImageBase(
                             exe?.BaseAddress ?? engine.BaseAddress);
                         lines[lines.Count - 1] += $" base 0x{previousBase.ToInt64():X}"
@@ -230,7 +232,10 @@ namespace Kiosk.Native
                             {
                                 var main = Marshal.GetDelegateForFunctionPointer<UnityMainDelegate>(
                                     entry);
-                                main(engine.BaseAddress, IntPtr.Zero, IntPtr.Zero, 1);
+                                // An empty string, not nothing: a program that
+                                // reads its command line reads through this
+                                // pointer, and nothing is a fault.
+                                main(engine.BaseAddress, IntPtr.Zero, commandLine, 1);
                             }
                             catch
                             {
@@ -245,7 +250,7 @@ namespace Kiosk.Native
                         // function it reached is the whole answer.
                         for (var tick = 0; tick < 40; tick++)
                         {
-                            await Task.Delay(300);
+                            await Task.Delay(tick == 0 ? 60 : 300);
                             var snapshot = new List<string>(lines)
                             {
                                 "exe.alive=" + runner.IsAlive,

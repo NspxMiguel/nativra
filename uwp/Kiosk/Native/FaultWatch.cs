@@ -116,7 +116,7 @@ namespace Kiosk.Native
                 var kind = Marshal.ReadInt64(from, 16);
                 found.Add(
                     "fault 0x" + ((uint)code).ToString("X8") +
-                    " at 0x" + Marshal.ReadInt64(from, 8).ToString("X") +
+                    " at " + ImageLookup.Describe(Marshal.ReadInt64(from, 8)) +
                     (kind < 0 ? "" :
                         (kind == 1 ? " writing 0x" : " reading 0x") +
                         Marshal.ReadInt64(from, 24).ToString("X")));

@@ -177,7 +177,7 @@ namespace Kiosk.Native
         {
             var slot = (int)index;
             if (slot < 0 || slot >= names.Count) return 0;
-            var key = names[slot] + " from 0x" + from.ToString("X");
+            var key = names[slot] + " from " + ImageLookup.Describe(from);
             lock (Callers)
             {
                 if (Callers.Count < 40 || Callers.ContainsKey(key))

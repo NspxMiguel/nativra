@@ -53,6 +53,7 @@ namespace Kiosk.Native
 
         // Slots in IDXGISwapChain1.
         private const int PresentSlot = 8;
+        private const int Present1Slot = 22;
         private const int SetFullscreenSlot = 10;
         private const int GetFullscreenSlot = 11;
         private const int GetDescSlot = 12;
@@ -128,6 +129,10 @@ namespace Kiosk.Native
         private delegate int PresentDelegate(IntPtr self, uint interval, uint flags);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int Present1Delegate(
+            IntPtr self, uint interval, uint flags, IntPtr parameters);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int SetFullscreenDelegate(IntPtr self, int on, IntPtr target);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -144,6 +149,8 @@ namespace Kiosk.Native
         private static CreateForHwndDelegate createForHwnd;
         private static PresentDelegate present;
         private static PresentDelegate presentThrough;
+        private static Present1Delegate presentOne;
+        private static Present1Delegate presentOneThrough;
         private static SetFullscreenDelegate setFullscreen;
 
         /// <summary>
@@ -279,16 +286,31 @@ namespace Kiosk.Native
 
             try
             {
-                // Composition, not the console's window directly. A XAML
-                // application does not own its CoreWindow — the framework
-                // does — so the supported way in is a surface the framework
-                // composes, which is also what keeps our own screen alive
-                // behind the game.
+                // The console's own window first. It is the shortest path
+                // there is — the frames go straight to the screen, with no
+                // surface to attach and nothing to keep in step — and if this
+                // host allows it, everything downstream gets simpler.
+                var composed = false;
+                var code = E_FAIL;
+                if (ConsoleWindow != IntPtr.Zero)
+                {
+                    var direct = Marshal.GetDelegateForFunctionPointer<
+                        CreateForCoreWindowDelegate>(
+                        ComProxy.Method(original, CreateForCoreWindowSlot));
+                    code = direct(original, device, ConsoleWindow, desc, IntPtr.Zero, result);
+                    Note(from + " core window: 0x" + code.ToString("X8"));
+                }
+
+                // Otherwise a surface the framework composes, which is the
+                // supported route for an application built out of XAML.
                 var compose = Marshal.GetDelegateForFunctionPointer<CreateForCompositionDelegate>(
                     ComProxy.Method(original, CreateForCompositionSlot));
-
-                var code = compose(original, device, desc, IntPtr.Zero, result);
-                Note(from + " composition: 0x" + code.ToString("X8"));
+                if (code != S_OK)
+                {
+                    composed = true;
+                    code = compose(original, device, desc, IntPtr.Zero, result);
+                    Note(from + " composition: 0x" + code.ToString("X8"));
+                }
 
                 // The size and the format came from the game and are kept; the
                 // rest is this platform's business, so each accepted shape is
@@ -303,15 +325,7 @@ namespace Kiosk.Native
                     Marshal.FreeHGlobal(another);
                 }
 
-                if (code != S_OK)
-                {
-                    // Some hosts do hand over the window. Worth one attempt.
-                    var create = Marshal.GetDelegateForFunctionPointer<
-                        CreateForCoreWindowDelegate>(
-                        ComProxy.Method(original, CreateForCoreWindowSlot));
-                    code = create(original, device, ConsoleWindow, desc, IntPtr.Zero, result);
-                    Note(from + " core window: 0x" + code.ToString("X8"));
-                }
+
 
                 if (code == S_OK && result != IntPtr.Zero)
                 {
@@ -328,9 +342,23 @@ namespace Kiosk.Native
                         return presentThrough(ComProxy.Original(self), interval, flags);
                     };
 
+                    // A flip-model chain is often presented through the newer
+                    // call instead, and a frame counted on only one of the two
+                    // says zero while the screen is busy.
+                    presentOneThrough = Marshal.GetDelegateForFunctionPointer<Present1Delegate>(
+                        ComProxy.Method(chain, Present1Slot));
+                    presentOne = (self, interval, flags, parameters) =>
+                    {
+                        if (Frames == 0) FirstFrameAt = Environment.TickCount;
+                        Frames++;
+                        return presentOneThrough(
+                            ComProxy.Original(self), interval, flags, parameters);
+                    };
+
                     var stand = Proxy.Wrap(chain, SwapChainMethods, new Dictionary<int, IntPtr>
                     {
                         { PresentSlot, Marshal.GetFunctionPointerForDelegate(present) },
+                        { Present1Slot, Marshal.GetFunctionPointerForDelegate(presentOne) },
                         // Going fullscreen is a desktop idea. On a console the
                         // app already owns the screen, so the honest answer to
                         // "make me fullscreen" is that it is done.
@@ -343,7 +371,9 @@ namespace Kiosk.Native
                         { GetDescSlot, Marshal.GetFunctionPointerForDelegate(describe) },
                     });
                     Marshal.WriteIntPtr(result, stand);
-                    Show(chain);
+                    // A chain made for the console's window is already on the
+                    // screen; only a composed one needs somewhere to land.
+                    if (composed) Show(chain);
                 }
                 return code;
             }
@@ -471,7 +501,15 @@ namespace Kiosk.Native
                     var compose = Marshal.GetDelegateForFunctionPointer<
                         CreateForCompositionDelegate>(
                         ComProxy.Method(factory, CreateForCompositionSlot));
-                    code = compose(factory, device, desc, IntPtr.Zero, slot);
+                    var direct = Marshal.GetDelegateForFunctionPointer<
+                        CreateForCoreWindowDelegate>(
+                        ComProxy.Method(factory, CreateForCoreWindowSlot));
+                    code = ConsoleWindow == IntPtr.Zero
+                        ? unchecked((int)0x80004005)
+                        : direct(factory, device, ConsoleWindow, desc, IntPtr.Zero, slot);
+                    if (code == S_OK) Note("the console's own window took it");
+
+                    if (code != S_OK) code = compose(factory, device, desc, IntPtr.Zero, slot);
                     for (var shape = 1; code != S_OK && shape < Shapes.Length; shape++)
                     {
                         var another = ConsoleDescription(1920, 1080, 28, 0, shape);

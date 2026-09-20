@@ -1,3 +1,9 @@
-at=2026-09-19 17:30:21
+at=2026-09-19 17:36:17
 tls.level=6
-tls.step=dir ok size=8+0 teb=0x41DFD36000 table=0x177BA80F280
+baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=-1 [dir ok size=8+0 teb=0x583DC79000 table=0x19FCBAB37A0 | TypeLoadException: Unresolved P/Invoke method 'api-ms-win-core-memory-l1-1-4.dll!VirtualQueryFromApp' from this method. Please look for this method in build warnings for more details. ]
+resolved.system=140 resolved.images=0
+modules.missing=
+functions.missing=0 stubbed=0
+entry.baselib.dll=1
+stubs.called=0
+ticks=OK 54121867165411->54121867165534

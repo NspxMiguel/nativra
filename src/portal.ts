@@ -370,6 +370,32 @@ export class DevicePortal {
     return res.arrayBuffer();
   }
 
+  /**
+   * Remove one file from an app's folder.
+   *
+   * The markers this project drives the console with are files, and a marker
+   * left behind from an earlier run silently changes what the next run does.
+   * Overwriting one is a push; clearing one needs this.
+   */
+  async deleteFile(
+    packageFullName: string,
+    fileName: string,
+    remoteDir = "",
+    knownFolderId = "LocalAppData",
+  ): Promise<void> {
+    const query = new URLSearchParams({
+      knownfolderid: knownFolderId,
+      packagefullname: packageFullName,
+      filename: fileName,
+      path: rootedPath(remoteDir),
+    });
+    const res = await this.request("DELETE", `/api/filesystem/apps/file?${query}`);
+    // A marker that was not there is the state that was wanted anyway.
+    if (!res.ok && res.status !== 404) {
+      throw new PortalError(`delete of ${fileName} failed`, res.status, await res.text());
+    }
+  }
+
   /** Reboot the console. The resource switch only takes effect after one. */
   async restart(): Promise<void> {
     const res = await this.request("POST", "/api/control/restart");

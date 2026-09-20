@@ -435,6 +435,32 @@ async function cmdPush(args: string[]): Promise<void> {
   console.log(`-> ${pkg.Name}:${remoteDir}/${localPath.split("/").pop()}`);
 }
 
+async function cmdRemove(args: string[]): Promise<void> {
+  const [appName, ...names] = args;
+  if (!appName || names.length === 0) {
+    console.error("xbdev rm <app> <file...> [--dir <remote-dir>]");
+    process.exit(2);
+  }
+  // The folder is named the same way push and pull name it, so that a marker
+  // is cleared from exactly where it was written.
+  let remoteDir = "";
+  const at = names.indexOf("--dir");
+  if (at !== -1) {
+    remoteDir = names[at + 1] ?? "";
+    names.splice(at, 2);
+  }
+  const portal = await portalOrExit();
+  const pkg = await findPackage(portal, appName);
+  if (!pkg) {
+    console.error(`? ${appName}`);
+    process.exit(1);
+  }
+  for (const name of names) {
+    await portal.deleteFile(pkg.PackageFullName, name, remoteDir);
+    console.log(`x ${name}`);
+  }
+}
+
 async function cmdPull(args: string[]): Promise<void> {
   const [appName, fileName, remoteDir = ""] = args;
   if (!appName || !fileName) {
@@ -808,6 +834,7 @@ function usage(): void {
     ["gamemode", t("cmd.gamemode")],
     ["push <app> <file> [dir]", t("cmd.push")],
     ["pull <app> <file> [dir]", t("cmd.pull")],
+    ["rm <app> <file...> [--dir d]", t("cmd.rm")],
     ["ls <app> [dir]", t("cmd.ls")],
     ["setup-retroarch", t("cmd.setupRetroarch")],
     ["verify", t("cmd.verify")],
@@ -850,6 +877,7 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   gamemode: cmdGameMode,
   push: cmdPush,
   pull: cmdPull,
+  rm: cmdRemove,
   ls: cmdLs,
   "setup-retroarch": cmdSetupRetroarch,
   verify: cmdVerify,

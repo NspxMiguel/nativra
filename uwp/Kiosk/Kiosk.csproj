@@ -93,6 +93,8 @@
     <Compile Include="Native\FrameMirror.cs" />
     <Compile Include="Native\ThreadRank.cs" />
     <Compile Include="Native\FakeSwapChain.cs" />
+    <Compile Include="Native\FakeOutput.cs" />
+    <Compile Include="Native\SurfaceBridge.cs" />
     <Compile Include="Native\GraphicsBridge.cs" />
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Texts.cs" />

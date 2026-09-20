@@ -26,6 +26,10 @@ namespace Kiosk.Native
         private const int QueryInterfaceSlot = 0;
         private const int EnumAdaptersSlot = 7;
         private const int EnumAdapters1Slot = 12;
+        // On IDXGIAdapter, slot seven is EnumOutputs — the same number the
+        // factory uses for EnumAdapters, on a different interface.
+        private const int EnumOutputsSlot = 7;
+        private const int DXGI_ERROR_NOT_FOUND = unchecked((int)0x887A0002);
         private const int GetParentSlot = 6;
         private const int AdapterMethods = 11;
         private const int CreateSwapChainSlot = 10;
@@ -673,6 +677,7 @@ namespace Kiosk.Native
                 return Proxy.Wrap(adapter, AdapterMethods, new Dictionary<int, IntPtr>
                 {
                     { GetParentSlot, Marshal.GetFunctionPointerForDelegate(adapterParent) },
+                    { EnumOutputsSlot, Marshal.GetFunctionPointerForDelegate(adapterOutputs) },
                 });
             }
             catch
@@ -990,6 +995,52 @@ namespace Kiosk.Native
                 }
             };
 
+            // What an engine does between making its device and asking for
+            // a swap chain: walk the adapter's screens to learn what they can
+            // show. Inside this console's container there are none to walk,
+            // and the walk coming back empty is where the engine stopped —
+            // measured, twice, at exactly this point.
+            adapterOutputs = (self, index, result) =>
+            {
+                if (result == IntPtr.Zero) return E_FAIL;
+                Marshal.WriteIntPtr(result, IntPtr.Zero);
+
+                // One screen, and only one. Asked for a second, the answer has
+                // to be the one that ends the loop rather than an error.
+                if (index != 0) return DXGI_ERROR_NOT_FOUND;
+
+                // The real adapter is asked first, and the answer is written
+                // down on both sides of the call: if the console never returns
+                // from it, the report says which line was the last one.
+                var real = IntPtr.Zero;
+                Note("asking the adapter for its screen");
+                try
+                {
+                    var original = ComProxy.Original(self);
+                    var call = Marshal.GetDelegateForFunctionPointer<ItemOutDelegate>(
+                        ComProxy.Method(original, EnumOutputsSlot));
+                    var code = call(original, index, result);
+                    Note("the adapter answered 0x" + code.ToString("X8"));
+                    if (code == S_OK) real = Marshal.ReadIntPtr(result);
+                }
+                catch
+                {
+                    Note("the adapter refused to be asked");
+                }
+                if (real != IntPtr.Zero) return S_OK;
+
+                var invented = FakeOutput.Build(Proxy, self);
+                if (invented == IntPtr.Zero)
+                {
+                    Marshal.WriteIntPtr(result, IntPtr.Zero);
+                    return DXGI_ERROR_NOT_FOUND;
+                }
+                Marshal.AddRef(invented);
+                Marshal.WriteIntPtr(result, invented);
+                Note("made up a screen: " + FakeOutput.Note);
+                return S_OK;
+            };
+
             enumAdapters = (self, index, result) => Enumerate(self, index, result, EnumAdaptersSlot);
             enumAdapters1 = (self, index, result) => Enumerate(self, index, result, EnumAdapters1Slot);
 
@@ -1163,6 +1214,7 @@ namespace Kiosk.Native
         private static DeviceDelegate deviceOnly;
         private static ItemOutDelegate enumAdapters;
         private static ItemOutDelegate enumAdapters1;
+        private static ItemOutDelegate adapterOutputs;
         private static QueryInterfaceDelegate adapterParent;
         private static QueryInterfaceDelegate chainAsk;
 

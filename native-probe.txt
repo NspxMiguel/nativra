@@ -1,12 +1,12 @@
-at=2026-09-19 18:39:44
+at=2026-09-19 18:51:40
 tls.level=6
 as=Q:\Users\UserMgr1\AppData\Local\Packages\NSPX.Kiosk_8r28b9prq7p9c\LocalState\games\1919460\Seraph's Last Stand.exe
-baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=43 [dir ok size=8+0 teb=0xB4887C5000 table=0x2A13C92E620 readable=317920 protect=0x4 slot=43 of 39740 index written block ready wrote in place]
-UnityPlayer.dll: mapped at 0x2A162800000 exports=1 unresolved=0 unwind=True tls=2 slot=44 [dir ok size=321+0 teb=0xB4887C5000 table=0x2A13C92E620 readable=317920 protect=0x4 slot=44 of 39740 index written block ready wrote in place]
-GameAssembly.dll: mapped at 0x2A15F000000 exports=391 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0xB4887C5000 table=0x2A13C92E620 readable=317920 protect=0x4 slot=45 of 39740 index written block ready wrote in place]
+baselib.dll: mapped at 0x180000000 exports=112 unresolved=0 unwind=True tls=0 slot=43 [dir ok size=8+0 teb=0xFCD052B000 table=0x27F3D9B8450 readable=68528 protect=0x4 slot=43 of 8566 index written block ready wrote in place]
+UnityPlayer.dll: mapped at 0x27F63800000 exports=1 unresolved=0 unwind=True tls=2 slot=44 [dir ok size=321+0 teb=0xFCD052B000 table=0x27F3D9B8450 readable=68528 protect=0x4 slot=44 of 8566 index written block ready wrote in place]
+GameAssembly.dll: mapped at 0x27F60000000 exports=391 unresolved=0 unwind=True tls=0 slot=45 [dir ok size=8+0 teb=0xFCD052B000 table=0x27F3D9B8450 readable=68528 protect=0x4 slot=45 of 8566 index written block ready wrote in place]
 Seraph's Last Stand.exe: mapped at 0x140000000 exports=2 unresolved=0 unwind=True tls=0 slot=-1 [no tls directory]
-UnityCrashHandler64.exe: mapped at 0x2A15DEB0000 exports=0 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=305+0 teb=0xB4887C5000 table=0x2A13C92E620 readable=317920 protect=0x4 slot=46 of 39740 index written block ready wrote in place]
-resolved.system=918 resolved.images=14
+UnityCrashHandler64.exe: mapped at 0x27F5E920000 exports=0 unresolved=0 unwind=True tls=2 slot=46 [dir ok size=305+0 teb=0xFCD052B000 table=0x27F3D9B8450 readable=68528 protect=0x4 slot=46 of 8566 index written block ready wrote in place]
+resolved.system=914 resolved.images=14
 modules.missing=USER32.dll,VERSION.dll,SHLWAPI.dll,SETUPAPI.dll,OPENGL32.dll,WINMM.dll,IMM32.dll,HID.DLL,dwmapi.dll,dbghelp.dll,PSAPI.DLL
 functions.missing=201 stubbed=201
   USER32.dll!GetRawInputDeviceList
@@ -213,7 +213,7 @@ functions.missing=201 stubbed=201
 entry.baselib.dll=1
 entry.UnityPlayer.dll=1
 entry.GameAssembly.dll=1
-stubs.called=107
+stubs.called=104
   called KERNEL32.dll!GetSystemTimeAsFileTime
   called KERNEL32.dll!GetCurrentThreadId
   called KERNEL32.dll!GetCurrentProcessId
@@ -243,7 +243,6 @@ stubs.called=107
   called KERNEL32.dll!GetCurrentThread
   called KERNEL32.dll!GetThreadTimes
   called KERNEL32.dll!QueryPerformanceFrequency
-  called KERNEL32.dll!RtlPcToFileHeader
   called KERNEL32.dll!GetSystemTimeAsFileTime
   called KERNEL32.dll!GetCurrentThreadId
   called KERNEL32.dll!GetCurrentProcessId
@@ -282,7 +281,6 @@ stubs.called=107
   called KERNEL32.dll!VirtualFree
   called KERNEL32.dll!GetLocalTime
   called KERNEL32.dll!SystemTimeToFileTime
-  called KERNEL32.dll!RtlPcToFileHeader
   called KERNEL32.dll!GetSystemTimeAsFileTime
   called KERNEL32.dll!GetCurrentThreadId
   called KERNEL32.dll!GetCurrentProcessId
@@ -320,6 +318,5 @@ stubs.called=107
   called KERNEL32.dll!HeapSize
   called KERNEL32.dll!HeapReAlloc
   called KERNEL32.dll!InitializeSRWLock
-  called KERNEL32.dll!RtlPcToFileHeader
-ticks=OK 60767559090445->60767559090620
-exe=UnityMain starting base 0x7FF791910000 -> 0x140000000
+ticks=OK 62016932989942->62016932990117
+exe=UnityMain starting base 0x7FF7E06D0000 -> 0x140000000

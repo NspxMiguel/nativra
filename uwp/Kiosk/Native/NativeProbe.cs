@@ -258,12 +258,16 @@ namespace Kiosk.Native
                         // function it reached is the whole answer.
                         for (var tick = 0; tick < 40; tick++)
                         {
-                            await Task.Delay(tick == 0 ? 60 : 300);
+                            await Task.Delay(tick == 0 ? 30 : 150);
                             var snapshot = new List<string>(lines)
                             {
                                 "exe.alive=" + runner.IsAlive,
                                 "exe.stubs=" + imports.Shim.Called.Count,
                             };
+                            foreach (var name in imports.Shim.Recent())
+                            {
+                                snapshot.Add("  recent " + name);
+                            }
                             lock (imports.Shim.Called)
                             {
                                 foreach (var called in imports.Shim.Called)

@@ -50,6 +50,28 @@ namespace Kiosk.Native
         /// <summary>Names of the stubs the program actually reached, in order.</summary>
         public List<string> Called { get; } = new List<string>();
 
+        /// <summary>
+        /// The last few calls including repeats. The list above records each
+        /// name once, which hides the one a program dies on when it has been
+        /// called before.
+        /// </summary>
+        private readonly string[] recent = new string[24];
+        private int recentAt;
+
+        public List<string> Recent()
+        {
+            var out_ = new List<string>();
+            lock (recent)
+            {
+                for (var i = 0; i < recent.Length; i++)
+                {
+                    var name = recent[(recentAt + i) % recent.Length];
+                    if (name != null) out_.Add(name);
+                }
+            }
+            return out_;
+        }
+
         public Win32Shim()
         {
             // Held in a field so the garbage collector cannot take the delegate
@@ -61,7 +83,13 @@ namespace Kiosk.Native
         private long Record(long index)
         {
             var slot = (int)index;
-            if (slot >= 0 && slot < names.Count && called.Add(slot))
+            if (slot < 0 || slot >= names.Count) return 0;
+            lock (recent)
+            {
+                recent[recentAt] = names[slot];
+                recentAt = (recentAt + 1) % recent.Length;
+            }
+            if (called.Add(slot))
             {
                 lock (Called) Called.Add(names[slot]);
             }

@@ -1,0 +1,20 @@
+{
+  "//": "Mesen2 factory config — written by emulators.ts, see src/emulators.ts. Property names confirmed against UI/Config/Configuration.cs, VideoConfig.cs and PreferencesConfig.cs. Each top-level section (Video, Preferences, ...) already has a default instance in Mesen's own Configuration class, so a partial file like this one deserializes fine — unlike a couple of other entries in this shelf, there is no all-or-nothing risk here. No controller mapping is set: Mesen's own default gamepad auto-detection covers a standard Xbox/XInput pad for the NES's simple 4-button-plus-d-pad layout without help.",
+  "Video": {
+    "VerticalSync": true,
+    "UseExclusiveFullscreen": true,
+    "FullscreenForceIntegerScale": false,
+    "UseBilinearInterpolation": false
+  },
+  "Preferences": {
+    "OverrideSaveDataFolder": true,
+    "SaveDataFolder": "E:\\Saves\\nes",
+    "OverrideSaveStateFolder": true,
+    "SaveStateFolder": "E:\\States\\nes",
+    "OverrideScreenshotFolder": true,
+    "ScreenshotFolder": "E:\\Saves\\nes\\screenshots",
+    "OverrideGameFolder": true,
+    "GameFolder": "E:\\Games\\nes",
+    "AutoLoadPatches": true
+  }
+}

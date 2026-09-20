@@ -46,7 +46,7 @@ namespace Kiosk.Native
         // clean failure — a stub that cannot be built is a null in the import
         // table, which the program calls and dies on. Address space is free
         // until it is written to, so the ceiling is now far above the need.
-        private const int Capacity = 4096;
+        private const int Capacity = 1200;
 
         private readonly List<string> names = new List<string>();
 

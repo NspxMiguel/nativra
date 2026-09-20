@@ -499,10 +499,12 @@ export const emulators: EmulatorEntry[] = [
       needed: false,
       note: "Runs Game Boy/Color/Advance without BIOS via HLE; a real GBA BIOS dump only improves a few edge-case games.",
     },
-    configFiles: [
-      { src: "config.ini", dest: "config.ini" },
-      { src: "qt.ini", dest: "qt.ini" },
-    ],
+    // No qt.ini: that file is window geometry/recent-files bookkeeping, not
+    // factory configuration, and config.ini alone covers everything a
+    // first launch needs (paths, fullscreen). No gamepad remap either —
+    // mGBA's own default binds a connected SDL/XInput pad sensibly for the
+    // Game Boy family's small button set without one.
+    configFiles: [{ src: "config.ini", dest: "config.ini" }],
     launchArgs: (romPath) => ["-f", romPath],
   },
   {
@@ -517,7 +519,11 @@ export const emulators: EmulatorEntry[] = [
       needed: false,
       note: "Most Genesis/Mega Drive games run without BIOS; Sega CD/32X add-ons (not covered by this entry) do need their own.",
     },
-    configFiles: [{ src: "retroarch.cfg", dest: "retroarch.cfg" }],
+    // The shared retroarch.cfg is installed once by installRetroArchCore()
+    // itself (see RETROARCH_ID); this is this core's own per-core options
+    // file, in RetroArch's real "config/<core display name>/<same>.opt"
+    // layout.
+    configFiles: [{ src: "Genesis Plus GX.opt", dest: "config/Genesis Plus GX/Genesis Plus GX.opt" }],
     retroarchCore: { coreFileName: "genesis_plus_gx_libretro.dll", displayName: "Genesis Plus GX" },
     launchArgs: (romPath) => ["-L", "cores/genesis_plus_gx_libretro.dll", "--fullscreen", romPath],
     note: "No standalone Genesis emulator has a clearly-better, actively-maintained official Windows build (BlastEm does not publish one); RetroArch's core is the community's actual daily driver here.",
@@ -534,7 +540,7 @@ export const emulators: EmulatorEntry[] = [
       needed: true,
       note: "Required — Saturn emulation needs the real region BIOS (saturn_bios.bin or region-specific dumps); no HLE path.",
     },
-    configFiles: [{ src: "retroarch.cfg", dest: "retroarch.cfg" }],
+    configFiles: [{ src: "Beetle Saturn.opt", dest: "config/Beetle Saturn/Beetle Saturn.opt" }],
     retroarchCore: { coreFileName: "mednafen_saturn_libretro.dll", displayName: "Beetle Saturn" },
     launchArgs: (romPath) => ["-L", "cores/mednafen_saturn_libretro.dll", "--fullscreen", romPath],
   },
@@ -580,10 +586,16 @@ export const emulators: EmulatorEntry[] = [
       needed: true,
       note: "Per-game, not per-system: many arcade boards need their own small BIOS ROM inside the game's own zip (e.g. neogeo.zip) — there is no single shared arcade BIOS file. Cross-reference the console's BIOS table per game, not per system.",
     },
-    configFiles: [
-      { src: "mame.ini", dest: "ini/mame.ini" },
-      { src: "default.cfg", dest: "cfg/default.cfg" },
-    ],
+    // No default.cfg: arcade control layouts genuinely differ per game
+    // (a fighter wants 6 buttons, a shooter wants 1-2, a driving cabinet
+    // wants a wheel/pedals) in a way none of the other, single-controller
+    // systems in this shelf do, so there is no one global button mapping
+    // that is "sensible" the way there is for a console. mame.ini's paths
+    // and video/window settings are still real factory config; per-game
+    // control mapping is left to MAME's own (already solid) joystick
+    // auto-detection and, where it matters, per-game overrides the console
+    // owner drops in E:\Emulators\arcade\cfg\<romname>.cfg themselves.
+    configFiles: [{ src: "mame.ini", dest: "ini/mame.ini" }],
     launchArgs: (romPath) => ["-rompath", dirname(romPath), basename(romPath, extname(romPath))],
   },
   {
@@ -750,19 +762,34 @@ async function installRetroArchCore(entry: EmulatorEntry, root: string): Promise
   const dir = stagingDir(root, RETROARCH_ID);
   const { url, fileName } = await resolveDownloadUrl(RETROARCH_SOURCE);
   const archivePath = join(dir, "download", fileName);
-  const appDir = join(dir, "app");
+  const unpackDir = join(dir, "app");
 
-  if (!(await pathExists(join(appDir, "retroarch.exe")))) {
+  // The nightly 7z nests everything under a "RetroArch-Win64/" folder
+  // (checked directly: it is NOT flat, unlike the stable installer's own
+  // .7z) — so the real app folder is wherever retroarch.exe actually
+  // turns up, found the same way every other entry in this shelf does,
+  // not assumed to be the top of the archive.
+  let appDir: string;
+  const alreadyThere = await findExecutable(unpackDir, "retroarch.exe").catch(() => null);
+  if (alreadyThere) {
+    appDir = dirname(alreadyThere);
+    console.log("RetroArch (shared): already installed");
+  } else {
     await downloadFile(url, archivePath, "RetroArch (shared)");
     await verify({ ...entry, archive: "7z" }, archivePath);
-    const exePath = await extract({ ...entry, archive: "7z", executableName: "retroarch.exe" }, archivePath, appDir);
-    if (dirname(exePath) !== appDir) {
-      // RetroArch's own 7z is flat, but guard against that changing.
-      throw new Error(`expected retroarch.exe at the top of the archive, found it in ${dirname(exePath)}`);
-    }
-  } else {
-    console.log("RetroArch (shared): already installed");
+    const exePath = await extract({ ...entry, archive: "7z", executableName: "retroarch.exe" }, archivePath, unpackDir);
+    appDir = dirname(exePath);
   }
+  // The base retroarch.cfg (paths, video/input driver, XInput) is shared by
+  // every core-based entry — written from configs/emulators/retroarch/,
+  // not from this entry's own configFiles, and refreshed every run since
+  // it is pure factory config with nothing a user would have hand-edited
+  // through RetroArch's own menu that this should preserve.
+  const sharedCfgSrc = configTemplatePath(RETROARCH_ID, "retroarch.cfg");
+  if (!(await pathExists(sharedCfgSrc))) {
+    throw new Error(`missing config template: ${sharedCfgSrc}`);
+  }
+  await Bun.write(join(appDir, "retroarch.cfg"), Bun.file(sharedCfgSrc));
 
   const coreUrl = `${RETROARCH_CORE_BASE_URL}${core.coreFileName}.zip`;
   const coreZip = join(dir, "download", `${core.coreFileName}.zip`);

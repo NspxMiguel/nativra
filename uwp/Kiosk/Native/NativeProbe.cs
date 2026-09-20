@@ -19,6 +19,14 @@ namespace Kiosk.Native
         private const string PulseName = "native-pulse.txt";
 
         /// <summary>
+        /// Whether a game has the screen. The console's own interface is still
+        /// behind it, still focused and still listening to the same controller
+        /// the game is reading — so it has to be told to sit still, or the
+        /// player navigates a menu they cannot see while they play.
+        /// </summary>
+        public static bool GameRunning;
+
+        /// <summary>
         /// Everything here runs on a thread of its own. Setting up thread-local
         /// storage rewrites state that belongs to the thread doing it, and the
         /// interface thread is the last one that should be experimented on.
@@ -307,6 +315,7 @@ namespace Kiosk.Native
                         pointer.IsBackground = true;
                         pointer.Start();
                         PointerBridge.Announce();
+                        GameRunning = true;
 
                         var pulse = new System.Threading.Thread(() =>
                         {
@@ -333,6 +342,7 @@ namespace Kiosk.Native
                                         "calls=" + imports.Shim.Total,
                                         "pumped=" + WindowStubs.Pumped,
                                         "pad=" + PadBridge.Reads,
+                                        "buffers=" + GraphicsBridge.Buffers,
                                         "frames=" + GraphicsBridge.Frames
                                             + " at " + rate.ToString("0.0") + " a second",
                                         "keys=" + PointerBridge.Keys,
@@ -461,6 +471,7 @@ namespace Kiosk.Native
                             if (!runner.IsAlive) break;
                         }
                         beating = false;
+                        GameRunning = false;
                         lines.Add("exe.finished");
 
                         // The engine's whole account of its startup, not just

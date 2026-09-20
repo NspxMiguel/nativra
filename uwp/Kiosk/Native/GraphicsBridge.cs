@@ -52,6 +52,7 @@ namespace Kiosk.Native
         private const int FactoryMethods = 25;
 
         // Slots in IDXGISwapChain1.
+        private const int GetBufferSlot = 9;
         private const int PresentSlot = 8;
         private const int Present1Slot = 22;
         private const int SetFullscreenSlot = 10;
@@ -129,6 +130,10 @@ namespace Kiosk.Native
         private delegate int PresentDelegate(IntPtr self, uint interval, uint flags);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int BufferDelegate(
+            IntPtr self, uint index, IntPtr riid, IntPtr surface);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int Present1Delegate(
             IntPtr self, uint interval, uint flags, IntPtr parameters);
 
@@ -151,6 +156,15 @@ namespace Kiosk.Native
         private static PresentDelegate presentThrough;
         private static Present1Delegate presentOne;
         private static Present1Delegate presentOneThrough;
+        private static BufferDelegate buffer;
+        private static BufferDelegate bufferThrough;
+
+        /// <summary>
+        /// How many times the back buffer was handed out. A game that never
+        /// asks for it is not drawing at all; a game that asks and never
+        /// presents is drawing into something it cannot show.
+        /// </summary>
+        public static long Buffers;
         private static SetFullscreenDelegate setFullscreen;
 
         /// <summary>
@@ -355,8 +369,17 @@ namespace Kiosk.Native
                             ComProxy.Original(self), interval, flags, parameters);
                     };
 
+                    bufferThrough = Marshal.GetDelegateForFunctionPointer<BufferDelegate>(
+                        ComProxy.Method(chain, GetBufferSlot));
+                    buffer = (self, index, riid, surface) =>
+                    {
+                        Buffers++;
+                        return bufferThrough(ComProxy.Original(self), index, riid, surface);
+                    };
+
                     var stand = Proxy.Wrap(chain, SwapChainMethods, new Dictionary<int, IntPtr>
                     {
+                        { GetBufferSlot, Marshal.GetFunctionPointerForDelegate(buffer) },
                         { PresentSlot, Marshal.GetFunctionPointerForDelegate(present) },
                         { Present1Slot, Marshal.GetFunctionPointerForDelegate(presentOne) },
                         // Going fullscreen is a desktop idea. On a console the
@@ -369,7 +392,9 @@ namespace Kiosk.Native
                         { ResizeTargetSlot,
                             Marshal.GetFunctionPointerForDelegate(resizeTarget) },
                         { GetDescSlot, Marshal.GetFunctionPointerForDelegate(describe) },
+                        { QueryInterfaceSlot, Marshal.GetFunctionPointerForDelegate(chainAsk) },
                     });
+                    standingChain = stand;
                     Marshal.WriteIntPtr(result, stand);
                     // A chain made for the console's window is already on the
                     // screen; only a composed one needs somewhere to land.
@@ -409,14 +434,57 @@ namespace Kiosk.Native
 
             var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High, () =>
             {
+                var unknown = IntPtr.Zero;
                 try
                 {
-                    ((ISwapChainPanelNative)(object)panel).SetSwapChain(chain);
-                    Note("composed onto the panel");
+                    // Asked for by hand rather than by cast. The native
+                    // compiler will not generate the stub a cast needs here,
+                    // and there are two interfaces a panel might answer for —
+                    // the original, and the one that came later. Both are
+                    // tried, and what each said is written down, because
+                    // "it did not work" is not a thing anyone can act on.
+                    unknown = Marshal.GetIUnknownForObject(panel);
+                    var names = new[]
+                    {
+                        "63aad0b8-7c24-40ff-85a8-640d944cc325", // ISwapChainPanelNative
+                        "ec7d9b13-79ff-4f1e-b8f1-e0e8e6dd93dc", // ISwapChainPanelNative2
+                    };
+
+                    foreach (var name in names)
+                    {
+                        var riid = Marshal.AllocHGlobal(16);
+                        var slot = Marshal.AllocHGlobal(IntPtr.Size);
+                        try
+                        {
+                            Marshal.StructureToPtr(new Guid(name), riid, false);
+                            Marshal.WriteIntPtr(slot, IntPtr.Zero);
+                            var ask = Marshal.GetDelegateForFunctionPointer<
+                                QueryInterfaceDelegate>(ComProxy.Method(unknown, 0));
+                            var code = ask(unknown, riid, slot);
+                            Note("panel " + name.Substring(0, 8) + ": 0x" + code.ToString("X8"));
+                            if (code != S_OK) continue;
+
+                            var native = Marshal.ReadIntPtr(slot);
+                            var set = Marshal.GetDelegateForFunctionPointer<
+                                SetSwapChainDelegate>(ComProxy.Method(native, 3));
+                            Note("composed onto the panel: 0x" + set(native, chain).ToString("X8"));
+                            Marshal.Release(native);
+                            return;
+                        }
+                        finally
+                        {
+                            Marshal.FreeHGlobal(riid);
+                            Marshal.FreeHGlobal(slot);
+                        }
+                    }
                 }
                 catch (Exception error)
                 {
                     Note("compose: " + error.GetType().Name + " " + error.Message);
+                }
+                finally
+                {
+                    if (unknown != IntPtr.Zero) Marshal.Release(unknown);
                 }
             });
         }
@@ -555,6 +623,44 @@ namespace Kiosk.Native
                 return S_OK;
             };
             resizeTarget = (self, mode) => S_OK;
+
+            // Asked for itself by another name, the chain has to answer the
+            // stand-in — otherwise the next frame is presented through the
+            // real one and everything measured here says nothing is happening.
+            chainAsk = (self, riid, result) =>
+            {
+                var original = ComProxy.Original(self);
+                if (result != IntPtr.Zero && riid != IntPtr.Zero && standingChain != IntPtr.Zero)
+                {
+                    try
+                    {
+                        var id = Marshal.PtrToStructure<Guid>(riid).ToString();
+                        foreach (var known in ChainIds)
+                        {
+                            if (!string.Equals(id, known, StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+                            Marshal.WriteIntPtr(result, standingChain);
+                            return S_OK;
+                        }
+                    }
+                    catch
+                    {
+                        // An unreadable identifier is not one of ours.
+                    }
+                }
+                try
+                {
+                    var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
+                        ComProxy.Method(original, QueryInterfaceSlot));
+                    return ask(original, riid, result);
+                }
+                catch
+                {
+                    return E_FAIL;
+                }
+            };
 
             // A composed chain honestly reports that it belongs to no window,
             // and a game that reads that field decides its own window is gone.
@@ -828,6 +934,25 @@ namespace Kiosk.Native
         private static ItemOutDelegate enumAdapters;
         private static ItemOutDelegate enumAdapters1;
         private static QueryInterfaceDelegate adapterParent;
+        private static QueryInterfaceDelegate chainAsk;
+
+        /// <summary>The stand-in a chain should give back when asked for itself.</summary>
+        private static IntPtr standingChain;
+
+        /// <summary>
+        /// Interfaces the chain stand-in admits to being. The newer ones are
+        /// deliberately absent: its table is as long as IDXGISwapChain1 and no
+        /// longer, and handing it over as something with more methods on it
+        /// would have a caller read past the end.
+        /// </summary>
+        private static readonly string[] ChainIds =
+        {
+            "00000000-0000-0000-c000-000000000046", // IUnknown
+            "aec22fb8-76f3-4639-9be0-28eb43a67a2e", // IDXGIObject
+            "3d3e0379-f9de-4d58-bb6c-18d62992f1a6", // IDXGIDeviceSubObject
+            "310d36a0-d2e7-4c0a-aa04-6a9d23b8886a", // IDXGISwapChain
+            "790a45f7-0d42-4876-983a-0a55cfe6f4aa", // IDXGISwapChain1
+        };
 
         /// <summary>The stand-in every adapter should name as its parent.</summary>
         private static IntPtr standingFactory;

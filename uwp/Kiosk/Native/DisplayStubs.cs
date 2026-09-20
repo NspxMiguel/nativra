@@ -147,7 +147,7 @@ namespace Kiosk.Native
                 return 1;
             };
 
-            foreach (var module in new[] { "USER32.dll", "user32.dll" })
+            foreach (var module in new[] { "USER32.dll", "user32.dll", "User32.dll" })
             {
                 imports.Overrides[module + "!EnumDisplaySettingsW"] =
                     Marshal.GetFunctionPointerForDelegate(settingsWide);

@@ -97,7 +97,7 @@ namespace Kiosk.Native
                 // so asking has become guessing at a race with the download
                 // that writes them.
                 PeImage.TlsLevel = 6;
-                if (await folder.TryGetItemAsync("tls.txt") is StorageFile marker)
+                if (await local.TryGetItemAsync("tls.txt") is StorageFile marker)
                 {
                     int.TryParse((await FileIO.ReadTextAsync(marker)).Trim(), out var level);
                     if (level > 0) PeImage.TlsLevel = level;
@@ -118,7 +118,10 @@ namespace Kiosk.Native
                 // file once the answer is "how fast does it run".
                 var imports = new SystemImports
                 {
-                    Trace = await folder.TryGetItemAsync("notrace.txt") == null,
+                    // Read from the app's own folder, not the game's: the game
+                    // folder is created by a download that races this, and a
+                    // switch that only sometimes exists is worse than none.
+                    Trace = await local.TryGetItemAsync("notrace.txt") == null,
                 };
 
                 // Where the game thinks it lives, which is how it finds its data.
@@ -143,6 +146,7 @@ namespace Kiosk.Native
                 FaultWatch.Install();
                 TimerStubs.Install(imports);
                 ComStubs.Install(imports);
+                PlainAnswers.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 
                 // A module that imports another has to be loaded after it, or
@@ -254,8 +258,14 @@ namespace Kiosk.Native
                         // The program has to believe it is the process, or its
                         // startup reads the host application's headers instead
                         // of its own and dies before it asks for anything.
+                        // The engine keeps its own diary, and it names what
+                        // failed far better than any trace from outside can.
+                        // It only writes one when told where to put it.
                         var commandLine = Marshal.StringToHGlobalAnsi(
-                            "\"" + folder.Path + "\\game.exe\"");
+                            "\"" + folder.Path + "\\game.exe\""
+                            + " -logFile \"" + local.Path + "\\unity.log\""
+                            + " -screen-fullscreen 1 -screen-width 1920 -screen-height 1080"
+                            + " -nolog-abort");
                         var previousBase = PeImage.SetProcessImageBase(
                             exe?.BaseAddress ?? engine.BaseAddress);
                         lines[lines.Count - 1] += $" base 0x{previousBase.ToInt64():X}"
@@ -287,6 +297,18 @@ namespace Kiosk.Native
                                     lock (ComStubs.Wanted)
                                     {
                                         foreach (var id in ComStubs.Wanted) beat.Add("com " + id);
+                                    }
+                                    lock (AudioBridge.Notes)
+                                    {
+                                        foreach (var n in AudioBridge.Notes) beat.Add("audio " + n);
+                                    }
+                                    lock (LoaderStubs.Said)
+                                    {
+                                        var from = Math.Max(0, LoaderStubs.Said.Count - 40);
+                                        for (var i = from; i < LoaderStubs.Said.Count; i++)
+                                        {
+                                            beat.Add("said " + LoaderStubs.Said[i]);
+                                        }
                                     }
                                     beat.AddRange(imports.Shim.Threads());
                                     lock (GraphicsBridge.Notes)

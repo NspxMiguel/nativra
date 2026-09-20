@@ -86,6 +86,8 @@
     <Compile Include="Native\FaultWatch.cs" />
     <Compile Include="Native\TimerStubs.cs" />
     <Compile Include="Native\ComStubs.cs" />
+    <Compile Include="Native\PlainAnswers.cs" />
+    <Compile Include="Native\AudioBridge.cs" />
     <Compile Include="Native\GraphicsBridge.cs" />
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Texts.cs" />

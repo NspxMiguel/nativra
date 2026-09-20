@@ -53,6 +53,11 @@ bun src/xbdev.ts sync >/dev/null 2>&1 || true
 # drive letter, measured), and its own storage goes with the uninstall. So the
 # game is fetched again each turn, by the console, from his own Steam account.
 bun src/xbdev.ts push kiosk .markers/autodownload.txt LocalState
+# TRACE=off turns off the per-call recording, which costs a managed transition
+# on every function the engine uses — fine while measuring, not while timing.
+if [ "${TRACE:-on}" = "off" ]; then
+  bun src/xbdev.ts push kiosk .markers/notrace.txt LocalState
+fi
 bun src/xbdev.ts launch kiosk >/dev/null
 
 echo "== downloading and running"
@@ -65,5 +70,10 @@ for _ in $(seq 1 "$WAIT"); do
 done
 bun src/xbdev.ts pull kiosk native-probe.txt LocalState >/dev/null 2>&1 || true
 bun src/xbdev.ts pull kiosk native-pulse.txt LocalState >/dev/null 2>&1 || true
+bun src/xbdev.ts shot /tmp/xbox-cycle.png >/dev/null 2>&1 || true
+if bun src/xbdev.ts pull kiosk unity.log LocalState >/dev/null 2>&1; then
+  echo "== unity =="
+  head -60 unity.log
+fi
 echo "== pulse =="
 cat native-pulse.txt 2>/dev/null | head -40

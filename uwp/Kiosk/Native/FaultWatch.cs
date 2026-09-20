@@ -40,8 +40,10 @@ namespace Kiosk.Native
         {
             // A C++ throw, a managed throw, and the breakpoint a debugger-less
             // process raises and swallows. Engines raise these constantly.
+            // The last two are a program talking to a debugger that is not
+            // there: OutputDebugString raises one every time it is called.
             return code == 0xE06D7363 || code == 0xE0434352 || code == 0x40010006
-                || code == 0x406D1388;
+                || code == 0x406D1388 || code == 0x4001000A;
         }
 
         public static void Install()

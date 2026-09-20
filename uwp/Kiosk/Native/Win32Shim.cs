@@ -55,19 +55,69 @@ namespace Kiosk.Native
         /// name once, which hides the one a program dies on when it has been
         /// called before.
         /// </summary>
-        private readonly string[] recent = new string[24];
+        private readonly int[] recent = new int[64];
         private int recentAt;
+
+        /// <summary>
+        /// How many times each stub was entered. A program that is stuck and a
+        /// program that is busy look identical in a list of names; they look
+        /// nothing alike in a count taken twice.
+        /// </summary>
+        private readonly long[] counts = new long[Capacity];
+
+        /// <summary>Total calls, which is the cheapest sign of life there is.</summary>
+        public long Total;
+
+        // Where each thread was last seen. A engine whose worker threads are
+        // busy while the main thread has not called anything for seconds is not
+        // slow, it is blocked — and only a per-thread mark shows the difference.
+        private const int Slots = 64;
+        private readonly int[] threadId = new int[Slots];
+        private readonly int[] threadWhere = new int[Slots];
+        private readonly long[] threadCount = new long[Slots];
+        private readonly int[] threadWhen = new int[Slots];
 
         public List<string> Recent()
         {
             var out_ = new List<string>();
-            lock (recent)
+            for (var i = 0; i < recent.Length; i++)
             {
-                for (var i = 0; i < recent.Length; i++)
-                {
-                    var name = recent[(recentAt + i) % recent.Length];
-                    if (name != null) out_.Add(name);
-                }
+                var slot = recent[(recentAt + i) % recent.Length];
+                if (slot > 0 && slot - 1 < names.Count) out_.Add(names[slot - 1]);
+            }
+            return out_;
+        }
+
+        /// <summary>The busiest calls, which is what the program is doing.</summary>
+        public List<string> Busiest(int take)
+        {
+            var pairs = new List<KeyValuePair<long, string>>();
+            for (var i = 0; i < names.Count && i < counts.Length; i++)
+            {
+                if (counts[i] > 0) pairs.Add(new KeyValuePair<long, string>(counts[i], names[i]));
+            }
+            pairs.Sort((a, b) => b.Key.CompareTo(a.Key));
+            var out_ = new List<string>();
+            for (var i = 0; i < pairs.Count && i < take; i++)
+            {
+                out_.Add(pairs[i].Key + "x " + pairs[i].Value);
+            }
+            return out_;
+        }
+
+        /// <summary>Each live thread, where it was last, and how long ago.</summary>
+        public List<string> Threads()
+        {
+            var now = Environment.TickCount;
+            var out_ = new List<string>();
+            for (var i = 0; i < Slots; i++)
+            {
+                if (threadId[i] == 0) continue;
+                var where = threadWhere[i] > 0 && threadWhere[i] - 1 < names.Count
+                    ? names[threadWhere[i] - 1]
+                    : "?";
+                out_.Add($"thread {threadId[i]} calls={threadCount[i]} " +
+                         $"idle={now - threadWhen[i]}ms at {where}");
             }
             return out_;
         }
@@ -84,14 +134,28 @@ namespace Kiosk.Native
         {
             var slot = (int)index;
             if (slot < 0 || slot >= names.Count) return 0;
-            lock (recent)
+
+            // No lock here on purpose: this runs on every call the engine makes,
+            // millions of them, and a lock would make the measurement the
+            // slowest thing in the process. A lost increment costs nothing.
+            counts[slot]++;
+            Total++;
+            recent[recentAt] = slot + 1;
+            recentAt = (recentAt + 1) % recent.Length;
+
+            var id = System.Threading.Thread.CurrentThread.ManagedThreadId;
+            var bucket = id & (Slots - 1);
+            threadId[bucket] = id;
+            threadWhere[bucket] = slot + 1;
+            threadCount[bucket]++;
+            threadWhen[bucket] = Environment.TickCount;
+
+            if (!called.Contains(slot))
             {
-                recent[recentAt] = names[slot];
-                recentAt = (recentAt + 1) % recent.Length;
-            }
-            if (called.Add(slot))
-            {
-                lock (Called) Called.Add(names[slot]);
+                lock (Called)
+                {
+                    if (called.Add(slot)) Called.Add(names[slot]);
+                }
             }
             return 0;
         }

@@ -36,7 +36,7 @@ namespace Kiosk.Native
                     systemImplementation);
             }
 
-            ours = (pc, out IntPtr baseOfImage) =>
+            ours = (IntPtr pc, out IntPtr baseOfImage) =>
             {
                 lock (images)
                 {

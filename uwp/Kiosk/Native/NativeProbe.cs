@@ -409,7 +409,7 @@ namespace Kiosk.Native
                                     }
                                     lock (LoaderStubs.Said)
                                     {
-                                        var from = Math.Max(0, LoaderStubs.Said.Count - 40);
+                                        var from = Math.Max(0, LoaderStubs.Said.Count - 200);
                                         for (var i = from; i < LoaderStubs.Said.Count; i++)
                                         {
                                             beat.Add("said " + LoaderStubs.Said[i]);

@@ -67,6 +67,14 @@ namespace Kiosk.Native
                 // only thing that names the deadlock. Both are what a lock
                 // checks when it asks whether this thread already holds it.
                 "GetCurrentThreadId", "TlsGetValue",
+                // Not spins either: the last call a blocked thread made. A
+                // thread sitting idle for half a second has gone into
+                // something that is not traced at all — the console's own
+                // graphics library, or one of this bridge's own answers — and
+                // the only clue left is which part of the engine it was in
+                // when it went.
+                "QueryPerformanceCounter", "ReadFile", "EnterCriticalSection",
+                "LoadLibraryW", "LoadLibraryA", "LoadLibraryExW", "LoadLibraryExA",
             };
 
         /// <summary>Stands in for what the console does not provide.</summary>

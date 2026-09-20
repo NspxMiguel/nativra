@@ -70,6 +70,10 @@ fi
 if [ "${SMALL:-off}" = "on" ]; then
   bun src/xbdev.ts push kiosk .markers/small.txt LocalState
 fi
+# PLAY=off loads everything but never starts the engine.
+if [ "${PLAY:-on}" = "off" ]; then
+  bun src/xbdev.ts push kiosk .markers/noplay.txt LocalState
+fi
 # PEB=off leaves the process-wide image base alone.
 if [ "${PEB:-on}" = "off" ]; then
   bun src/xbdev.ts push kiosk .markers/nopeb.txt LocalState

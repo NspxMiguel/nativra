@@ -40,7 +40,11 @@ namespace Kiosk.Native
         private const int Capacity = 1200;
 
         private readonly List<string> names = new List<string>();
-        private readonly HashSet<int> called = new HashSet<int>();
+
+        // A flat array, not a set: this is read from every thread the engine
+        // starts while another thread is still adding to it, and a hash set
+        // read during someone else's insert is how the whole process dies.
+        private readonly bool[] seen = new bool[Capacity];
         private readonly RecorderDelegate recorder;
         private readonly IntPtr recorderPointer;
 
@@ -150,12 +154,10 @@ namespace Kiosk.Native
             threadCount[bucket]++;
             threadWhen[bucket] = Environment.TickCount;
 
-            if (!called.Contains(slot))
+            if (!seen[slot])
             {
-                lock (Called)
-                {
-                    if (called.Add(slot)) Called.Add(names[slot]);
-                }
+                seen[slot] = true;
+                lock (Called) Called.Add(names[slot]);
             }
             return 0;
         }

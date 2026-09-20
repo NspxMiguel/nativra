@@ -134,6 +134,8 @@ namespace Kiosk.Native
                 AudioBridge.Enabled = await local.TryGetItemAsync("noaudio.txt") == null;
                 GraphicsBridge.Smaller = await local.TryGetItemAsync("small.txt") != null;
                 GraphicsBridge.NoChain = await local.TryGetItemAsync("nochain.txt") != null;
+                GraphicsBridge.NoDeviceStandIn =
+                    await local.TryGetItemAsync("nodevice.txt") != null;
                 GraphicsBridge.NoMirror = await local.TryGetItemAsync("nomirror.txt") != null;
                 // Sixty by default. The frame is shown by this application
                 // rather than handed to the display, so nothing paces the game

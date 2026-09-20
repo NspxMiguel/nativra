@@ -182,6 +182,16 @@ namespace Kiosk.Native
         public static bool NoChain;
 
         /// <summary>
+        /// Leaves the graphics device as the console made it.
+        ///
+        /// Standing in for the device closes the way round the bridge, and
+        /// closing it is the point — but it also puts a stand-in under every
+        /// call a game makes to its own device, which is a large thing to have
+        /// no way of switching off while it is being judged.
+        /// </summary>
+        public static bool NoDeviceStandIn;
+
+        /// <summary>
         /// Leave the frames where they are. The copy runs on the engine's own
         /// render thread, which makes it the largest source of managed calls
         /// coming out of native code — and that is worth being able to switch
@@ -1328,7 +1338,7 @@ namespace Kiosk.Native
                     // the console for a window-shaped swap chain, which the
                     // console refuses — for ever, quietly, off to one side
                     // where none of this could see it.
-                    if (code == S_OK && resultDevice != IntPtr.Zero)
+                    if (code == S_OK && resultDevice != IntPtr.Zero && !NoDeviceStandIn)
                     {
                         var born = Marshal.ReadIntPtr(resultDevice);
                         var stood = WrapDevice(born);

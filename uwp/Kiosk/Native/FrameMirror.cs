@@ -60,6 +60,7 @@ namespace Kiosk.Native
 
         private static IntPtr context;
         private static IntPtr staging;
+        private static IntPtr back;
         private static IntPtr chain;
         private static int width;
         private static int height;
@@ -163,6 +164,31 @@ namespace Kiosk.Native
                     return false;
                 }
 
+                // Taken once. With the flip model the runtime rotates its own
+                // buffers and buffer zero stays valid, so asking for it sixty
+                // times a second is sixty interface calls that answer the same.
+                var handle = Marshal.AllocHGlobal(IntPtr.Size);
+                var id = Marshal.AllocHGlobal(16);
+                try
+                {
+                    Marshal.StructureToPtr(
+                        new Guid("6f15aaf2-d208-4e89-9ab4-489535d34f9c"), id, false);
+                    Marshal.WriteIntPtr(handle, IntPtr.Zero);
+                    var get = Marshal.GetDelegateForFunctionPointer<BufferDelegate>(
+                        ComProxy.Method(chain, GetBufferSlot));
+                    if (get(chain, 0, id, handle) != S_OK)
+                    {
+                        Note = "no back buffer";
+                        return false;
+                    }
+                    back = Marshal.ReadIntPtr(handle);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(handle);
+                    Marshal.FreeHGlobal(id);
+                }
+
                 scratch = new[]
                 {
                     new byte[width * height * 4],
@@ -208,23 +234,9 @@ namespace Kiosk.Native
         public static void Take()
         {
             if (!Running) return;
-            var back = IntPtr.Zero;
-            var riid = IntPtr.Zero;
-            var slot = IntPtr.Zero;
             var mapped = IntPtr.Zero;
             try
             {
-                riid = Marshal.AllocHGlobal(16);
-                Marshal.StructureToPtr(
-                    new Guid("6f15aaf2-d208-4e89-9ab4-489535d34f9c"), riid, false);
-                slot = Marshal.AllocHGlobal(IntPtr.Size);
-                Marshal.WriteIntPtr(slot, IntPtr.Zero);
-
-                var get = Marshal.GetDelegateForFunctionPointer<BufferDelegate>(
-                    ComProxy.Method(chain, GetBufferSlot));
-                if (get(chain, 0, riid, slot) != S_OK) return;
-                back = Marshal.ReadIntPtr(slot);
-
                 var copy = Marshal.GetDelegateForFunctionPointer<CopyDelegate>(
                     ComProxy.Method(context, CopyResourceSlot));
                 copy(context, staging, back);
@@ -285,9 +297,6 @@ namespace Kiosk.Native
             }
             finally
             {
-                if (back != IntPtr.Zero) Marshal.Release(back);
-                if (riid != IntPtr.Zero) Marshal.FreeHGlobal(riid);
-                if (slot != IntPtr.Zero) Marshal.FreeHGlobal(slot);
                 if (mapped != IntPtr.Zero) Marshal.FreeHGlobal(mapped);
             }
         }

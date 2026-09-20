@@ -66,6 +66,10 @@ fi
 if [ "${AUDIO:-on}" = "off" ]; then
   bun src/xbdev.ts push kiosk .markers/noaudio.txt LocalState
 fi
+# SMALL=on renders at 1280x720, which halves what every copied frame costs.
+if [ "${SMALL:-off}" = "on" ]; then
+  bun src/xbdev.ts push kiosk .markers/small.txt LocalState
+fi
 bun src/xbdev.ts launch kiosk >/dev/null
 
 echo "== downloading and running"

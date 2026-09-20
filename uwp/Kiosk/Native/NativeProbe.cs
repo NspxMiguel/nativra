@@ -132,7 +132,9 @@ namespace Kiosk.Native
                     Trace = await local.TryGetItemAsync("notrace.txt") == null,
                 };
                 AudioBridge.Enabled = await local.TryGetItemAsync("noaudio.txt") == null;
+                GraphicsBridge.Smaller = await local.TryGetItemAsync("small.txt") != null;
                 lines.Add("audio.bridge=" + AudioBridge.Enabled);
+                lines.Add("smaller=" + GraphicsBridge.Smaller);
 
                 // Where the game thinks it lives, which is how it finds its data.
                 var exeName = "game.exe";

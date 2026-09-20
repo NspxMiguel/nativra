@@ -154,6 +154,13 @@ namespace Kiosk.Native
 
         /// <summary>Whether frames are being copied to the screen.</summary>
         public static bool Mirroring;
+
+        /// <summary>
+        /// Render at 1280x720 instead of full size. Every copied frame costs
+        /// its own size twice over, so this is the one dial that changes what
+        /// the whole path costs — and a console has always had this dial.
+        /// </summary>
+        public static bool Smaller;
         private static SetFullscreenDelegate setFullscreen;
 
         /// <summary>
@@ -249,6 +256,11 @@ namespace Kiosk.Native
             // honest answer.
             if (width <= 0) width = 1920;
             if (height <= 0) height = 1080;
+            if (Smaller)
+            {
+                width = 1280;
+                height = 720;
+            }
 
             // Mode switching and tearing are things you ask a display for. A
             // composed surface is not a display, and asking refuses the whole

@@ -175,6 +175,47 @@ namespace Kiosk.Native
             return at;
         }
 
+        /// <summary>
+        /// A stub that answers with something other than zero.
+        ///
+        /// Zero is the wrong answer for most of what a program asks a window
+        /// system: a window handle of zero means the window was never created,
+        /// and the caller gives up or walks into it. Registering a class,
+        /// creating a window, showing it — each has a value that means "fine",
+        /// and this returns that value after recording the call.
+        /// </summary>
+        public IntPtr StubReturning(string name, long value)
+        {
+            if (page == IntPtr.Zero)
+            {
+                page = VirtualAllocFromApp(
+                    IntPtr.Zero, (UIntPtr)(ThunkSize * Capacity),
+                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+                if (page == IntPtr.Zero) return IntPtr.Zero;
+            }
+            if (used >= Capacity) return IntPtr.Zero;
+
+            var index = names.Count;
+            names.Add(name);
+
+            var code = new List<byte>();
+            code.AddRange(new byte[] { 0x48, 0x83, 0xEC, 0x28 });       // sub rsp, 0x28
+            code.AddRange(new byte[] { 0x48, 0xB9 });                   // mov rcx, index
+            code.AddRange(BitConverter.GetBytes((long)index));
+            code.AddRange(new byte[] { 0x48, 0xB8 });                   // mov rax, recorder
+            code.AddRange(BitConverter.GetBytes(recorderPointer.ToInt64()));
+            code.AddRange(new byte[] { 0xFF, 0xD0 });                   // call rax
+            code.AddRange(new byte[] { 0x48, 0x83, 0xC4, 0x28 });       // add rsp, 0x28
+            code.AddRange(new byte[] { 0x48, 0xB8 });                   // mov rax, value
+            code.AddRange(BitConverter.GetBytes(value));
+            code.AddRange(new byte[] { 0xC3 });                         // ret
+
+            var at = page + used * ThunkSize;
+            Marshal.Copy(code.ToArray(), 0, at, code.Count);
+            used++;
+            return at;
+        }
+
         /// <summary>Call once every stub exists: a page cannot be written and run.</summary>
         public void Seal()
         {

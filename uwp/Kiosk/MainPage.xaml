@@ -113,6 +113,35 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- The menu and the shelf trade places for size. Whichever has
+             focus is the larger of the two, and getting there is a move you
+             can see — on a television that is what tells you where you are,
+             because there is no cursor to look for. -->
+        <Storyboard x:Key="ToMenu">
+            <DoubleAnimation Storyboard.TargetName="MenuScale" Storyboard.TargetProperty="ScaleX"
+                To="1" Duration="0:0:0.22" EasingFunction="{StaticResource Settle}" />
+            <DoubleAnimation Storyboard.TargetName="MenuScale" Storyboard.TargetProperty="ScaleY"
+                To="1" Duration="0:0:0.22" EasingFunction="{StaticResource Settle}" />
+            <DoubleAnimation Storyboard.TargetName="StageScale" Storyboard.TargetProperty="ScaleX"
+                To="0.82" Duration="0:0:0.22" EasingFunction="{StaticResource Settle}" />
+            <DoubleAnimation Storyboard.TargetName="StageScale" Storyboard.TargetProperty="ScaleY"
+                To="0.82" Duration="0:0:0.22" EasingFunction="{StaticResource Settle}" />
+            <DoubleAnimation Storyboard.TargetName="Stage" Storyboard.TargetProperty="Opacity"
+                To="0.55" Duration="0:0:0.22" />
+        </Storyboard>
+
+        <Storyboard x:Key="ToGames">
+            <DoubleAnimation Storyboard.TargetName="MenuScale" Storyboard.TargetProperty="ScaleX"
+                To="0.72" Duration="0:0:0.22" EasingFunction="{StaticResource Settle}" />
+            <DoubleAnimation Storyboard.TargetName="MenuScale" Storyboard.TargetProperty="ScaleY"
+                To="0.72" Duration="0:0:0.22" EasingFunction="{StaticResource Settle}" />
+            <DoubleAnimation Storyboard.TargetName="StageScale" Storyboard.TargetProperty="ScaleX"
+                To="1" Duration="0:0:0.22" EasingFunction="{StaticResource Settle}" />
+            <DoubleAnimation Storyboard.TargetName="StageScale" Storyboard.TargetProperty="ScaleY"
+                To="1" Duration="0:0:0.22" EasingFunction="{StaticResource Settle}" />
+            <DoubleAnimation Storyboard.TargetName="Stage" Storyboard.TargetProperty="Opacity"
+                To="1" Duration="0:0:0.22" />
+        </Storyboard>
     </Page.Resources>
 
     <Grid Background="{StaticResource Screen}">
@@ -121,8 +150,8 @@
             <Grid Width="1920" Height="1080">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="76" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="150" />
                 </Grid.RowDefinitions>
 
                 <!-- The glow: an ellipse 1400 by 900, centred at seven tenths
@@ -176,9 +205,98 @@
                     </StackPanel>
                 </Grid>
 
+<Grid x:Name="MenuStrip" Grid.Row="1" Background="Transparent"
+                      RenderTransformOrigin="0.5,0.5">
+                    <Grid.RenderTransform>
+                        <ScaleTransform x:Name="MenuScale" ScaleX="0.72" ScaleY="0.72" />
+                    </Grid.RenderTransform>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="22" />
+                    </Grid.RowDefinitions>
+
+                    <!-- The name of whatever has focus. Fixed height, so the
+                         icons never move when it appears or empties. -->
+                    <TextBlock x:Name="NameText" Grid.Row="1"
+                               Margin="0,10,0,0"
+                               FontSize="{StaticResource LabelSize}"
+                               Foreground="{StaticResource TextTertiary}"
+                               HorizontalAlignment="Center" />
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="30"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+
+                        <Button x:Name="DockLibrary" Style="{StaticResource DockIconStyle}"
+                                Background="{StaticResource Accent}"
+                                Foreground="{StaticResource OnAccent}"
+                                Tag="library"
+                                Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" />
+                        </Button>
+
+                        <Button x:Name="DockShop" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
+                                Tag="shop" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE7BF;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" />
+                        </Button>
+
+                        <Button x:Name="DockEmulators" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
+                                Tag="emulators" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" />
+                        </Button>
+
+                        <Button x:Name="DockFriends" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
+                                Tag="friends" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE716;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" />
+                        </Button>
+
+                        <Button x:Name="DockMods" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
+                                Tag="mods" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" />
+                        </Button>
+
+                        <Button x:Name="DockDownloads" Style="{StaticResource DockIconStyle}"
+                                Foreground="{StaticResource TextTertiary}"
+                                Tag="downloads" Click="OnDockClicked"
+                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
+                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+                            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22" />
+                        </Button>
+                    </StackPanel>
+
+                    <!-- The controllers in the room, and a way into their
+                         screen. Bottom left, out of the path of the icons. -->
+
+                    <!-- What the app is doing, when it is doing something the
+                         person should be able to see. -->
+                
+
                 <!-- =================================================== content -->
 
-                <Grid Grid.Row="1">
+                <Grid Grid.Row="2" x:Name="Stage"
+                          RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
+                            <ScaleTransform x:Name="StageScale" ScaleX="1" ScaleY="1" />
+                        </Grid.RenderTransform>
 
                     <!-- Library. Vertically centred, because the shelf is the
                          only thing on it and a console screen should not make
@@ -348,104 +466,26 @@
 
                 <!-- ====================================================== dock -->
 
-                <Grid Grid.Row="2" Background="{StaticResource Dock}"
-                      BorderBrush="{StaticResource DockEdge}" BorderThickness="0,1,0,0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="22" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-
-                    <!-- The name of whatever has focus. Fixed height, so the
-                         icons never move when it appears or empties. -->
-                    <TextBlock x:Name="NameText" Grid.Row="0"
-                               Margin="0,18,0,0"
-                               FontSize="{StaticResource LabelSize}"
-                               Foreground="{StaticResource TextTertiary}"
-                               HorizontalAlignment="Center" />
-
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="30"
-                                HorizontalAlignment="Center" VerticalAlignment="Center">
-
-                        <Button x:Name="DockLibrary" Style="{StaticResource DockIconStyle}"
-                                Background="{StaticResource Accent}"
-                                Foreground="{StaticResource OnAccent}"
-                                Tag="library"
-                                Click="OnDockClicked"
-                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
-                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
-                            <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" />
-                        </Button>
-
-                        <Button x:Name="DockShop" Style="{StaticResource DockIconStyle}"
-                                Foreground="{StaticResource TextTertiary}"
-                                Tag="shop" Click="OnDockClicked"
-                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
-                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
-                            <TextBlock Text="&#xE7BF;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" />
-                        </Button>
-
-                        <Button x:Name="DockEmulators" Style="{StaticResource DockIconStyle}"
-                                Foreground="{StaticResource TextTertiary}"
-                                Tag="emulators" Click="OnDockClicked"
-                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
-                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
-                            <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" />
-                        </Button>
-
-                        <Button x:Name="DockFriends" Style="{StaticResource DockIconStyle}"
-                                Foreground="{StaticResource TextTertiary}"
-                                Tag="friends" Click="OnDockClicked"
-                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
-                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
-                            <TextBlock Text="&#xE716;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" />
-                        </Button>
-
-                        <Button x:Name="DockMods" Style="{StaticResource DockIconStyle}"
-                                Foreground="{StaticResource TextTertiary}"
-                                Tag="mods" Click="OnDockClicked"
-                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
-                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
-                            <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" />
-                        </Button>
-
-                        <Button x:Name="DockDownloads" Style="{StaticResource DockIconStyle}"
-                                Foreground="{StaticResource TextTertiary}"
-                                Tag="downloads" Click="OnDockClicked"
-                                PointerEntered="OnDockHover" GotFocus="OnDockHover"
-                                PointerExited="OnDockLeave" LostFocus="OnDockLeave">
-                            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="22" />
-                        </Button>
-                    </StackPanel>
-
-                    <!-- The controllers in the room, and a way into their
-                         screen. Bottom left, out of the path of the icons. -->
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10"
-                                HorizontalAlignment="Left" VerticalAlignment="Center"
-                                Margin="56,0,0,0">
-                        <Image Source="ms-appx:///Assets/controller-white.png"
-                               Width="48" Opacity="0.75" />
-                        <TextBlock x:Name="CountText"
-                                   FontSize="{StaticResource LabelSize}" FontWeight="Bold"
-                                   Foreground="{StaticResource TextTertiary}"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-
-                    <!-- What the app is doing, when it is doing something the
-                         person should be able to see. -->
-                    <TextBlock x:Name="StatusText" Grid.Row="1"
-                               HorizontalAlignment="Right" VerticalAlignment="Center"
-                               Margin="0,0,56,0"
-                               FontSize="{StaticResource LabelSize}"
-                               Foreground="{StaticResource TextMuted}" />
                 </Grid>
             </Grid>
         </Viewbox>
+
+        <!-- The controllers in the room, and what the app is doing. At the
+             foot of the screen, outside the strip that changes size. -->
+        <Grid VerticalAlignment="Bottom" Margin="56,0,56,40" IsHitTestVisible="False">
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Left">
+                <Image Source="ms-appx:///Assets/controller-white.png"
+                       Width="48" Opacity="0.75" />
+                <TextBlock x:Name="CountText"
+                           FontSize="{StaticResource LabelSize}" FontWeight="Bold"
+                           Foreground="{StaticResource TextTertiary}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock x:Name="StatusText" HorizontalAlignment="Right"
+                       VerticalAlignment="Center"
+                       FontSize="{StaticResource LabelSize}"
+                       Foreground="{StaticResource TextMuted}" />
+        </Grid>
 
         <!-- Where a PC game's frames land. This console's composition panel
              does not offer the interface that accepts a swap chain, and it

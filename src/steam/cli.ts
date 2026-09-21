@@ -23,22 +23,89 @@ export async function loadSession(root: string): Promise<Session | null> {
   return session.refresh && session.steamid ? session : null;
 }
 
-async function ownedGames(session: Session): Promise<
+/**
+ * Renews the short-lived access token from the long-lived refresh token.
+ *
+ * Steam hands out an access token that lasts hours and a refresh token that
+ * lasts months. Nothing here was renewing the first, so the moment it aged
+ * out every call started coming back as a refusal — and the refusal is not
+ * JSON, so what the owner saw was "Failed to parse JSON" rather than "your
+ * session expired". The renewed token is written back beside the other, so
+ * the next run starts with a live one.
+ */
+async function renew(root: string, session: Session): Promise<boolean> {
+  try {
+    const answer = await fetch(
+      "https://api.steampowered.com/IAuthenticationService/GenerateAccessTokenForApp/v1/",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          refresh_token: session.refresh,
+          steamid: session.steamid,
+        }),
+      },
+    );
+    if (!answer.ok) return false;
+
+    const data = (await answer.json()) as {
+      response?: { access_token?: string };
+    };
+    const fresh = data.response?.access_token;
+    if (!fresh) return false;
+
+    session.access = fresh;
+    await Bun.write(join(root, "steam.json"), JSON.stringify(session, null, 2));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Asks Steam something, renewing the session once if it says no.
+ *
+ * One retry and no more: a refusal that survives a fresh token is not about
+ * the token, and retrying it again only turns a clear failure into a slow one.
+ */
+async function ask<T>(
+  root: string,
+  session: Session,
+  build: (session: Session) => string,
+): Promise<T> {
+  let answer = await fetch(build(session));
+  if (answer.status === 401 || answer.status === 403) {
+    if (!(await renew(root, session))) {
+      throw new Error(
+        "Steam will not renew this session: the refresh token has expired.\n" +
+          "Sign in again from the console — open the app, choose Shop, and\n" +
+          "scan the code with the Steam app on your phone.",
+      );
+    }
+    answer = await fetch(build(session));
+  }
+  if (!answer.ok) {
+    throw new Error("Steam answered " + answer.status + " " + answer.statusText);
+  }
+  return (await answer.json()) as T;
+}
+
+async function ownedGames(root: string, session: Session): Promise<
   Array<{ appid: number; name: string; minutes: number }>
 > {
-  const query = new URLSearchParams({
-    access_token: session.access,
-    steamid: session.steamid,
-    include_appinfo: "true",
-    include_played_free_games: "true",
-  });
-  const url =
-    "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?" + query;
-  const data = (await (await fetch(url)).json()) as {
+  const data = await ask<{
     response?: {
       games?: Array<{ appid: number; name: string; playtime_forever: number }>;
     };
-  };
+  }>(root, session, (live) =>
+    "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?" +
+    new URLSearchParams({
+      access_token: live.access,
+      steamid: live.steamid,
+      include_appinfo: "true",
+      include_played_free_games: "true",
+    }),
+  );
   return (data.response?.games ?? [])
     .map((g) => ({ appid: g.appid, name: g.name, minutes: g.playtime_forever }))
     .sort((a, b) => b.minutes - a.minutes);
@@ -87,7 +154,7 @@ export async function runSteam(root: string, args: string[]): Promise<void> {
   }
 
   if (!subcommand || subcommand === "games") {
-    const games = await ownedGames(session);
+    const games = await ownedGames(root, session);
     console.log(t("steam.signedin", { account: session.account }));
     console.log(t("steam.games", { count: games.length }));
     for (const game of games) {

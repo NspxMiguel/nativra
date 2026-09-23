@@ -477,7 +477,7 @@ namespace Kiosk.Native
                 if (TlsLevel < 5) return;
 
                 if (!ThreadTls.Adopt()) throw new InvalidOperationException(ThreadTls.LastError);
-                TlsNote += " private vector installed";
+                TlsNote += " Windows-owned TLS installed";
                 TlsSlot = slot;
 
                 // And the same copy for every thread made after this one. The

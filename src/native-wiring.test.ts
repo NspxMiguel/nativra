@@ -11,20 +11,16 @@ test("only the selected game executable is mapped alongside its libraries", () =
   );
 });
 
-test("game TLS owns a private vector instead of writing past the system table", () => {
+test("game TLS uses Windows-owned slots without replacing the system vector", () => {
   expect(pe).not.toContain("extern uint TlsAlloc");
   expect(pe).not.toContain("Marshal.WriteIntPtr(existing, slot");
-  expect(tls).toContain("state.Copies.ContainsKey(one.Slot)");
-  expect(tls).toContain("Marshal.WriteIntPtr(state.Table, one.Slot");
-  expect(tls).toContain("Marshal.WriteIntPtr(teb + 0x58, state.Original)");
-  expect(tls).toContain('imports.Overrides[module + "!ExitThread"]');
-  expect(tls).toContain(
-    'imports.Overrides[module + "!FreeLibraryAndExitThread"]',
-  );
+  expect(tls).toContain('LoadPackagedLibrary("NativraTls"');
+  expect(tls).toContain('"NativraTlsConfigure"');
+  expect(tls).not.toContain("Marshal.WriteIntPtr(teb");
+  expect(tls).not.toContain("state.Table");
 });
 
-test("thread TLS uses the proven PE reader and reports adoption failures", () => {
-  expect(tls).toContain("PeImage.CurrentTeb()");
+test("thread TLS reports adoption failures", () => {
   expect(tls).not.toContain("VirtualAllocFromApp");
   expect(probe).toContain('"exe.tls.failures="');
 });

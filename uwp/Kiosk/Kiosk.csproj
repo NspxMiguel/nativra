@@ -50,6 +50,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="..\TlsCarrier\bin\NativraTls*.dll">
+      <Link>%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>

@@ -306,7 +306,7 @@ namespace Kiosk.Native
 
             propertyCount = (self, result) =>
             {
-                if (result != IntPtr.Zero) Marshal.WriteInt32(result, 2);
+                if (result != IntPtr.Zero) Marshal.WriteInt32(result, 3);
                 return S_OK;
             };
 
@@ -323,6 +323,12 @@ namespace Kiosk.Native
                 {
                     Marshal.StructureToPtr(FriendlyNameGroup, result, false);
                     Marshal.WriteInt32(result, 16, 14);
+                    return S_OK;
+                }
+                if (index == 2)
+                {
+                    Marshal.StructureToPtr(FriendlyNameGroup, result, false);
+                    Marshal.WriteInt32(result, 16, 2); // PKEY_Device_DeviceDesc
                     return S_OK;
                 }
                 return E_FAIL;
@@ -343,9 +349,11 @@ namespace Kiosk.Native
                     return S_OK;
                 }
 
-                if (Is(key, FriendlyNameGroup, 14))
+                // DeviceDesc and FriendlyName are distinct properties. FMOD
+                // reads the description before attempting client activation.
+                if (Is(key, FriendlyNameGroup, 14) || Is(key, FriendlyNameGroup, 2))
                 {
-                    const string name = "Xbox";
+                    var name = Is(key, FriendlyNameGroup, 2) ? "Speakers" : "Xbox";
                     var text = Marshal.AllocHGlobal((name.Length + 1) * 2);
                     for (var i = 0; i < name.Length; i++)
                     {

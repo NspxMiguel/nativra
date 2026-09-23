@@ -107,6 +107,8 @@ namespace Kiosk.Native
         // The properties a game reads off an endpoint before it will use it.
         private static readonly Guid FriendlyNameGroup =
             new Guid("a45c254e-df1c-4efd-8020-67d146a850e0");
+        private static readonly Guid InterfaceNameGroup =
+            new Guid("026e516e-b814-414b-83cd-856d6fef4822");
         private static readonly Guid DeviceFormatGroup =
             new Guid("f19f064d-082c-4e27-bc73-6882a1bb8e4c");
         private static readonly Guid OemFormatGroup =
@@ -306,7 +308,7 @@ namespace Kiosk.Native
 
             propertyCount = (self, result) =>
             {
-                if (result != IntPtr.Zero) Marshal.WriteInt32(result, 3);
+                if (result != IntPtr.Zero) Marshal.WriteInt32(result, 4);
                 return S_OK;
             };
 
@@ -331,6 +333,12 @@ namespace Kiosk.Native
                     Marshal.WriteInt32(result, 16, 2); // PKEY_Device_DeviceDesc
                     return S_OK;
                 }
+                if (index == 3)
+                {
+                    Marshal.StructureToPtr(InterfaceNameGroup, result, false);
+                    Marshal.WriteInt32(result, 16, 2); // PKEY_DeviceInterface_FriendlyName
+                    return S_OK;
+                }
                 return E_FAIL;
             };
 
@@ -351,7 +359,8 @@ namespace Kiosk.Native
 
                 // DeviceDesc and FriendlyName are distinct properties. FMOD
                 // reads the description before attempting client activation.
-                if (Is(key, FriendlyNameGroup, 14) || Is(key, FriendlyNameGroup, 2))
+                if (Is(key, FriendlyNameGroup, 14) || Is(key, FriendlyNameGroup, 2)
+                    || Is(key, InterfaceNameGroup, 2))
                 {
                     var name = Is(key, FriendlyNameGroup, 2) ? "Speakers" : "Xbox";
                     var text = Marshal.AllocHGlobal((name.Length + 1) * 2);

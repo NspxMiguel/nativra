@@ -13,7 +13,12 @@ test("setup persists real input choices without replacing download preferences",
     expect(settings.split(`\"${key}\"`).length).toBe(3);
   expect(setup).toContain("ContentDialogResult.Primary");
   expect(setup).toContain("Settings.SetInputAsync");
-  expect(pointer.split("Settings.PointerSensitivity").length).toBe(3);
+  expect(pointer).toContain(
+    "var distance = Speed * Settings.PointerSensitivity * seconds;",
+  );
+  expect(pointer).toContain(
+    "position.Move(dx * distance, -dy * distance, Width, Height);",
+  );
 });
 
 test("hiding diagnostics preserves the input overlay and launch defaults", async () => {

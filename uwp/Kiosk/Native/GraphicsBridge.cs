@@ -520,6 +520,7 @@ namespace Kiosk.Native
                 return E_FAIL;
             }
 
+            var renderDevice = IntPtr.Zero;
             try
             {
                 // The console's own window first. It is the shortest path
@@ -534,21 +535,31 @@ namespace Kiosk.Native
                 // texture, and handing the frame over copies it to the screen.
                 if (!NoMirror && Mirror != null && OnUi != null)
                 {
+                    // DXGI accepts IUnknown here, not an ID3D11Device vtable.
+                    // Query the interface before calling device-specific slots.
+                    renderDevice = Ask(device, "db6f6ddb-ac77-4e88-8253-819df9bbf140");
+                    if (renderDevice == IntPtr.Zero)
+                    {
+                        Note("swap-chain device has no ID3D11Device interface");
+                        return E_FAIL;
+                    }
+                    var mirrorDevice = renderDevice;
+                    Note("swap-chain device normalized=" + (renderDevice != device));
                     var wide = Marshal.ReadInt32(desc, 0);
                     var high = Marshal.ReadInt32(desc, 4);
                     var shape = Marshal.ReadInt32(desc, 8);
 
-                    var invented = FakeSwapChain.Build(Proxy, device, wide, high, shape);
+                    var invented = FakeSwapChain.Build(Proxy, mirrorDevice, wide, high, shape);
                     Note("made up a chain: " + FakeSwapChain.Note);
                     if (invented == IntPtr.Zero) return E_FAIL;
 
                     Mirroring = FrameMirror.Start(
-                        device, IntPtr.Zero, wide, high, shape, Mirror, OnUi,
+                        mirrorDevice, IntPtr.Zero, wide, high, shape, Mirror, OnUi,
                         FakeSwapChain.BackBuffer);
                     Note("mirror: " + FrameMirror.Note);
                     FakeSwapChain.OnResize = (w, h, f, texture) =>
                     {
-                        Mirroring = FrameMirror.Start(device, IntPtr.Zero, w, h, f, Mirror, OnUi, texture);
+                        Mirroring = FrameMirror.Start(mirrorDevice, IntPtr.Zero, w, h, f, Mirror, OnUi, texture);
                         Note("mirror resize: " + FrameMirror.Note);
                     };
                     FakeSwapChain.OnPresent = () =>
@@ -718,6 +729,8 @@ namespace Kiosk.Native
             finally
             {
                 Marshal.FreeHGlobal(desc);
+                // FakeSwapChain retains its own device reference after Build.
+                if (renderDevice != IntPtr.Zero) Marshal.Release(renderDevice);
             }
         }
 

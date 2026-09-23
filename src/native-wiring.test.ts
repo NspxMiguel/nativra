@@ -67,6 +67,14 @@ test("swap-chain interface getters preserve the IID and return owned references"
   expect(chain).not.toContain("Marshal.WriteIntPtr(surface, held)");
 });
 
+test("swap-chain creation queries a D3D11 device before using its vtable", () => {
+  expect(graphics).toContain('Ask(device, "db6f6ddb-ac77-4e88-8253-819df9bbf140")');
+  expect(graphics).toContain("FakeSwapChain.Build(Proxy, mirrorDevice,");
+  expect(graphics).toContain("FrameMirror.Start(mirrorDevice, IntPtr.Zero,");
+  expect(graphics).toContain("if (renderDevice != IntPtr.Zero) Marshal.Release(renderDevice);");
+  expect(chain).toContain("Marshal.AddRef(ownerDevice);");
+});
+
 test("mirror reserves its frame buffer before copying and ignores window alpha", () => {
   const take = mirror.slice(mirror.indexOf("public static void Take()"));
   expect(take.indexOf("Interlocked.Exchange(ref busy, 1)")).toBeLessThan(

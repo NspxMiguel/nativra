@@ -22,6 +22,12 @@ test("window dispatch invokes the registered procedure and writes keyboard state
   expect(pointer).not.toContain("Post(WM_WINDOWPOSCHANGED, 0, 0)");
 });
 
+test("input and callback ownership last until the native game exits", () => {
+  expect(probe).toContain("runner.IsAlive; tick = Math.Min(tick + 1, 500)");
+  expect(probe).not.toContain("tick < 500; tick++");
+  expect(probe).toContain("GC.KeepAlive(imports);");
+});
+
 test("host input survives a disconnected pad and handles key release", () => {
   expect(pointer).not.toContain("if (pads.Count == 0) return;");
   expect(pointer).toContain("host[0xD9] ? 1 : 0");

@@ -538,7 +538,6 @@ namespace Kiosk.Native
                     var wide = Marshal.ReadInt32(desc, 0);
                     var high = Marshal.ReadInt32(desc, 4);
                     var shape = Marshal.ReadInt32(desc, 8);
-                    Marshal.FreeHGlobal(desc);
 
                     var invented = FakeSwapChain.Build(Proxy, device, wide, high, shape);
                     Note("made up a chain: " + FakeSwapChain.Note);
@@ -565,7 +564,6 @@ namespace Kiosk.Native
                 if (NoChain)
                 {
                     Note(from + ": refused on purpose");
-                    Marshal.FreeHGlobal(desc);
                     return E_FAIL;
                 }
                 if (ConsoleWindow != IntPtr.Zero)

@@ -25,22 +25,6 @@ namespace Kiosk.Native
     /// </summary>
     internal static class ThreadTls
     {
-        private const uint MEM_COMMIT = 0x1000;
-        private const uint MEM_RESERVE = 0x2000;
-        private const uint PAGE_READWRITE = 0x04;
-        private const uint PAGE_EXECUTE_READ = 0x20;
-
-        [DllImport("api-ms-win-core-memory-l1-1-0.dll", SetLastError = true)]
-        private static extern IntPtr VirtualAllocFromApp(
-            IntPtr address, UIntPtr size, uint type, uint protect);
-
-        [DllImport("api-ms-win-core-memory-l1-1-0.dll", SetLastError = true)]
-        private static extern bool VirtualProtectFromApp(
-            IntPtr address, UIntPtr size, uint protect, out uint old);
-
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate IntPtr TebDelegate();
-
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         internal delegate IntPtr CreateThreadDelegate(
             IntPtr attributes, IntPtr stackSize, IntPtr start, IntPtr parameter,
@@ -60,13 +44,15 @@ namespace Kiosk.Native
         private static readonly List<Block> Blocks = new List<Block>();
         private static readonly object Gate = new object();
 
-        private static IntPtr tebReader;
         private static CreateThreadDelegate createThread;
         private static CreateThreadDelegate realCreateThread;
         private static StartDelegate trampoline;
 
         /// <summary>Threads that were given their own copies.</summary>
         public static long Adopted;
+        public static long CopiedBlocks;
+        public static long Failures;
+        public static string LastError;
 
         /// <summary>
         /// Records a library's template so every thread made after this gets a
@@ -80,28 +66,6 @@ namespace Kiosk.Native
             }
         }
 
-        private static IntPtr CurrentTeb()
-        {
-            if (tebReader == IntPtr.Zero)
-            {
-                // The thread's own block, read from where the processor keeps
-                // it. There is no call for this and no way to ask for it from
-                // managed code, so it is two instructions written by hand.
-                var code = new byte[]
-                {
-                    0x65, 0x48, 0x8B, 0x04, 0x25, 0x30, 0x00, 0x00, 0x00, // mov rax, gs:[0x30]
-                    0xC3,                                                 // ret
-                };
-                var page = VirtualAllocFromApp(
-                    IntPtr.Zero, (UIntPtr)64, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-                if (page == IntPtr.Zero) return IntPtr.Zero;
-                Marshal.Copy(code, 0, page, code.Length);
-                VirtualProtectFromApp(page, (UIntPtr)64, PAGE_EXECUTE_READ, out _);
-                tebReader = page;
-            }
-            return Marshal.GetDelegateForFunctionPointer<TebDelegate>(tebReader)();
-        }
-
         /// <summary>
         /// Gives the calling thread its own copies. Safe to call more than
         /// once: a slot that already holds something is left alone, because
@@ -111,11 +75,13 @@ namespace Kiosk.Native
         {
             try
             {
-                var teb = CurrentTeb();
-                if (teb == IntPtr.Zero) return;
+                // Reuse the reader already initialized by PE mapping. Its
+                // app-memory API contract has been measured on this console.
+                var teb = PeImage.CurrentTeb();
+                if (teb == IntPtr.Zero) throw new InvalidOperationException("No thread environment block");
 
                 var table = Marshal.ReadIntPtr(teb + 0x58);
-                if (table == IntPtr.Zero) return;
+                if (table == IntPtr.Zero) throw new InvalidOperationException("No static TLS table");
 
                 lock (Gate)
                 {
@@ -130,13 +96,15 @@ namespace Kiosk.Native
                             Marshal.Copy(one.Template, 0, block, one.Template.Length);
                         }
                         Marshal.WriteIntPtr(table, one.Slot * 8, block);
+                        System.Threading.Interlocked.Increment(ref CopiedBlocks);
                     }
                 }
                 System.Threading.Interlocked.Increment(ref Adopted);
             }
-            catch
+            catch (Exception error)
             {
-                // A thread without a table is a thread that will not read one.
+                System.Threading.Interlocked.Increment(ref Failures);
+                LastError = error.GetType().Name + ": " + error.Message;
             }
         }
 

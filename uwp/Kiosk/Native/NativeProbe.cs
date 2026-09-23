@@ -526,6 +526,8 @@ namespace Kiosk.Native
                                 "exe.thunks.full=" + imports.Shim.Overflowed,
                                 "exe.files.failed=" + FileWatch.Failures,
                                 "exe.tls.threads=" + ThreadTls.Adopted,
+                                "exe.tls.blocks=" + ThreadTls.CopiedBlocks,
+                                "exe.tls.failures=" + ThreadTls.Failures + " " + ThreadTls.LastError,
                                 "exe.suspended=" + string.Join(
                                     "; ", SuspendWatch.Held()),
                                 // Two numbers decide everything: a total that

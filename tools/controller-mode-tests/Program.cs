@@ -7,6 +7,28 @@ static void Check(bool condition, string message)
 }
 
 Check(ControllerMode.Desktop, "The pre-alpha keeps its existing desktop default");
+var forward = new PointerPosition(960, 540);
+var backward = new PointerPosition(960, 540);
+for (var sample = 0; sample < 100; sample++)
+{
+    forward.Move(0.1, 0.1, 1920, 1080);
+    backward.Move(-0.1, -0.1, 1920, 1080);
+}
+Check(forward.X == 970 && forward.Y == 550, "Small positive motions must accumulate");
+Check(backward.X == 950 && backward.Y == 530, "Small negative motions must be symmetric");
+var coarse = new PointerPosition(960, 540);
+coarse.Move(10, 10, 1920, 1080);
+Check(coarse.X == forward.X && coarse.Y == forward.Y, "Sample frequency must not change distance");
+forward.Move(10000, 10000, 1920, 1080);
+Check(forward.X == 1919 && forward.Y == 1079, "Motion must stop at the screen edge");
+forward.Move(-1, -1, 1920, 1080);
+Check(forward.X == 1918 && forward.Y == 1078, "Leaving an edge must respond immediately");
+forward.Move(double.NaN, 0, 1920, 1080);
+Check(forward.X == 1918 && forward.Y == 1078, "Invalid motion must not poison future samples");
+forward.Move(-10000, -10000, 1920, 1080);
+forward.Move(1, 1, 1920, 1080);
+Check(forward.X == 1 && forward.Y == 1, "Leaving the minimum edges must respond immediately");
+Console.WriteLine("Subpixel pointer behavioral checks passed.");
 ControllerMode.Update(true, false, 0.1);
 Check(ControllerMode.SystemButtons == 0, "A possible chord must not leak Menu");
 ControllerMode.Update(false, false, 0.01);

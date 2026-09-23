@@ -12,7 +12,9 @@ test("game TLS owns a private vector instead of writing past the system table", 
   expect(tls).toContain("Marshal.WriteIntPtr(state.Table, one.Slot");
   expect(tls).toContain("Marshal.WriteIntPtr(teb + 0x58, state.Original)");
   expect(tls).toContain('imports.Overrides[module + "!ExitThread"]');
-  expect(tls).toContain('imports.Overrides[module + "!FreeLibraryAndExitThread"]');
+  expect(tls).toContain(
+    'imports.Overrides[module + "!FreeLibraryAndExitThread"]',
+  );
 });
 
 test("thread TLS uses the proven PE reader and reports adoption failures", () => {

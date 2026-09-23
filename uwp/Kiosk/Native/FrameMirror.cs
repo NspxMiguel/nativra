@@ -80,7 +80,22 @@ namespace Kiosk.Native
         private static byte[][] scratch;
         private static int filling;
         private static int busy;
-        private static int lastShown;
+        private static long mapTicks;
+        private static long pixelsTicks;
+        private static long uiTicks;
+        private static long timedFrames;
+
+        public static string Timing
+        {
+            get
+            {
+                var count = Math.Max(1, timedFrames);
+                var scale = 1000.0 / System.Diagnostics.Stopwatch.Frequency / count;
+                return "map=" + (mapTicks * scale).ToString("F2") +
+                    "ms pixels=" + (pixelsTicks * scale).ToString("F2") +
+                    "ms ui=" + (uiTicks * scale).ToString("F2") + "ms samples=" + count;
+            }
+        }
 
         /// <summary>How many frames actually reached the screen.</summary>
         public static long Shown;
@@ -302,14 +317,15 @@ namespace Kiosk.Native
             if (!Running) return;
             // Reserve the CPU buffer before writing it, including while the
             // dispatcher is still consuming the previous frame.
-            var now = Environment.TickCount;
-            if (unchecked(now - lastShown) < 16) return;
+            // The in-flight update is the backpressure. A second 16 ms gate
+            // skips otherwise-ready frames when the render clock jitters.
             if (System.Threading.Interlocked.Exchange(ref busy, 1) == 1) return;
             var mapped = IntPtr.Zero;
             var isMapped = false;
             var queued = false;
             try
             {
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var copy = Marshal.GetDelegateForFunctionPointer<CopyDelegate>(
                     ComProxy.Method(context, CopyResourceSlot));
                 copy(context, staging, back);
@@ -319,13 +335,19 @@ namespace Kiosk.Native
                     ComProxy.Method(context, MapSlot));
                 if (map(context, staging, 0, 1, 0, mapped) != S_OK) return;
                 isMapped = true;
+                var mappedAt = System.Diagnostics.Stopwatch.GetTimestamp();
 
                 var from = Marshal.ReadIntPtr(mapped, 0);
                 var pitch = Marshal.ReadInt32(mapped, 8);
                 var into = scratch[filling];
-                for (var row = 0; row < height; row++)
+                if (pitch == width * 4)
                 {
-                    Marshal.Copy(from + row * pitch, into, row * width * 4, width * 4);
+                    Marshal.Copy(from, into, 0, into.Length);
+                }
+                else
+                {
+                    for (var row = 0; row < height; row++)
+                        Marshal.Copy(from + row * pitch, into, row * width * 4, width * 4);
                 }
                 // The window back buffer uses IGNORE alpha; WriteableBitmap
                 // instead composites alpha, so an otherwise valid frame can
@@ -347,6 +369,10 @@ namespace Kiosk.Native
                     ComProxy.Method(context, UnmapSlot));
                 unmap(context, staging, 0);
                 isMapped = false;
+                var pixelsAt = System.Diagnostics.Stopwatch.GetTimestamp();
+                mapTicks += mappedAt - started;
+                pixelsTicks += pixelsAt - mappedAt;
+                timedFrames++;
 
                 Copied++;
                 // One bounded raw-frame capture separates a renderer problem
@@ -380,10 +406,10 @@ namespace Kiosk.Native
 
                 // Keep one update in flight; drop frames while the UI is busy
                 // instead of accumulating latency behind the current picture.
-                lastShown = now;
                 var showing = into;
                 var showingPicture = picture;
                 var version = generation;
+                var queuedAt = System.Diagnostics.Stopwatch.GetTimestamp();
                 var __ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                 {
                     try
@@ -399,6 +425,8 @@ namespace Kiosk.Native
                             stream.Write(showing, 0, showing.Length);
                         }
                         showingPicture.Invalidate();
+                        System.Threading.Interlocked.Add(ref uiTicks,
+                            System.Diagnostics.Stopwatch.GetTimestamp() - queuedAt);
                         Shown++;
                     }
                     catch

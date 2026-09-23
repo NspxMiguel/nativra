@@ -11,7 +11,6 @@ for /l %%i in (0,1,7) do (
   link /nologo /dll /noentry /nodefaultlib /appcontainer /dynamicbase /nxcompat /machine:x64 /include:_tls_used /out:bin\NativraTls%%i.dll bin\TlsCarrier.obj
   if errorlevel 1 exit /b 1
 )
-dumpbin /headers /disasm bin\NativraTls0.dll
 cl /nologo /W4 /Febin\TestCarrier.exe /Fobin\TestCarrier.obj TestCarrier.c
 if errorlevel 1 exit /b 1
 bin\TestCarrier.exe

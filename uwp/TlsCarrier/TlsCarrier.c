@@ -4,9 +4,11 @@
 // Each packaged copy owns one Windows-managed static TLS index. No CRT,
 // DllMain, heap allocation, or replacement of the system TLS vector.
 #define TLS_CAPACITY 16384
-#pragma section(".tls", read, write)
+#pragma section(".data$TLS", read, write)
 #pragma section(".rdata$T", read)
-__declspec(allocate(".tls")) unsigned char tls_template[TLS_CAPACITY + 16];
+// LINK merges .tls into read-only .rdata. The TLS directory accepts a VA in
+// ordinary writable data, which lets configuration precede game startup.
+__declspec(allocate(".data$TLS")) unsigned char tls_template[TLS_CAPACITY + 16];
 unsigned long _tls_index;
 PIMAGE_TLS_CALLBACK tls_callbacks[] = { 0 };
 __declspec(allocate(".rdata$T")) const IMAGE_TLS_DIRECTORY64 _tls_used = {

@@ -96,6 +96,7 @@ namespace Kiosk.Native
         public static bool Running { get; private set; }
 
         public static string Note = "not started";
+        public static string CaptureNote = "not captured";
 
         /// <summary>
         /// Prepares the copy. Everything here is one-off: the staging texture
@@ -348,6 +349,27 @@ namespace Kiosk.Native
                 isMapped = false;
 
                 Copied++;
+                // One bounded raw-frame capture separates a renderer problem
+                // from a screen-capture/compositor problem without tracing the
+                // graphics hot path. Pixels only; no process memory or tokens.
+                if (Copied == 600)
+                {
+                    var captured = (byte[])into.Clone();
+                    var capturedWidth = width;
+                    var capturedHeight = height;
+                    var capture = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var local = Windows.Storage.ApplicationData.Current.LocalFolder;
+                            var file = await local.CreateFileAsync("native-frame.bgra",
+                                Windows.Storage.CreationCollisionOption.ReplaceExisting);
+                            await Windows.Storage.FileIO.WriteBytesAsync(file, captured);
+                            CaptureNote = capturedWidth + "x" + capturedHeight + " BGRA8";
+                        }
+                        catch (Exception error) { CaptureNote = error.GetType().Name; }
+                    });
+                }
                 if (Copied % 60 == 1)
                 {
                     var peak = 0;

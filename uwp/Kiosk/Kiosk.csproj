@@ -85,6 +85,7 @@
     <Compile Include="Native\ImageLookup.cs" />
     <Compile Include="Native\ProcessStubs.cs" />
     <Compile Include="Native\WindowStubs.cs" />
+    <Compile Include="Native\WindowMessages.cs" />
     <Compile Include="Native\ComProxy.cs" />
     <Compile Include="Native\LoaderStubs.cs" />
     <Compile Include="Native\PadBridge.cs" />

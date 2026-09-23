@@ -9,6 +9,16 @@ const chain = await Bun.file("uwp/Kiosk/Native/FakeSwapChain.cs").text();
 const mirror = await Bun.file("uwp/Kiosk/Native/FrameMirror.cs").text();
 const pointer = await Bun.file("uwp/Kiosk/Native/PointerBridge.cs").text();
 const mainPage = await Bun.file("uwp/Kiosk/MainPage.xaml.cs").text();
+const messages = await Bun.file("uwp/Kiosk/Native/WindowMessages.cs").text();
+
+test("window dispatch invokes the registered procedure and writes keyboard state", () => {
+  expect(probe).toContain("WindowMessages.Install(imports);");
+  expect(messages).toContain("state.Values[-4] = entry.Procedure;");
+  expect(messages).toContain("return Call(procedure, window,");
+  expect(messages).toContain("Marshal.WriteByte(keys, key, down ? (byte)0x80 : (byte)0);");
+  expect(pointer).toContain("WindowMessages.InputWindow");
+  expect(pointer).not.toContain("Post(WM_WINDOWPOSCHANGED, 0, 0)");
+});
 
 test("host input survives a disconnected pad and handles key release", () => {
   expect(pointer).not.toContain("if (pads.Count == 0) return;");

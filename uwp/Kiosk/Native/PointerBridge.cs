@@ -139,7 +139,7 @@ namespace Kiosk.Native
             }
             if (target == IntPtr.Zero) return true;
 
-            Marshal.WriteInt64(target, 0, 0x00BA5E11);      // hwnd
+            Marshal.WriteIntPtr(target, 0, WindowMessages.InputWindow);
             Marshal.WriteInt32(target, 8, next.Message);
             Marshal.WriteInt32(target, 12, 0);
             Marshal.WriteInt64(target, 16, next.Word);
@@ -171,11 +171,9 @@ namespace Kiosk.Native
             const int WM_ACTIVATE = 0x0006;
             const int WM_ACTIVATEAPP = 0x001C;
             const int WM_SETFOCUS = 0x0007;
-            const int WM_WINDOWPOSCHANGED = 0x0047;
 
             var size = ((long)(Height & 0xFFFF) << 16) | (uint)(Width & 0xFFFF);
             Post(WM_SHOWWINDOW, 1, 0);
-            Post(WM_WINDOWPOSCHANGED, 0, 0);
             Post(WM_SIZE, 0, size);          // SIZE_RESTORED
             Post(WM_ACTIVATEAPP, 1, 0);
             Post(WM_ACTIVATE, 1, 0);         // WA_ACTIVE

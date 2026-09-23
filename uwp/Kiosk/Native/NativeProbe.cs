@@ -433,6 +433,7 @@ namespace Kiosk.Native
                                         "exit=" + ProcessStubs.Attempted,
                                         "buffers=" + GraphicsBridge.Buffers,
                                         "mirrored=" + FrameMirror.Copied + " shown=" + FrameMirror.Shown,
+                                        "mirror=" + FrameMirror.Note + " chain=" + FakeSwapChain.Note,
                                         "frames=" + GraphicsBridge.Frames
                                             + " at " + rate.ToString("0.0") + " a second",
                                         "keys=" + PointerBridge.Keys,

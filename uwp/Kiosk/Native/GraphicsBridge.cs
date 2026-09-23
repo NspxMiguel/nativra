@@ -97,7 +97,7 @@ namespace Kiosk.Native
         private delegate int Factory2Delegate(uint flags, IntPtr riid, IntPtr factory);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate int QueryInterfaceDelegate(IntPtr self, IntPtr riid, IntPtr result);
+        internal delegate int QueryInterfaceDelegate(IntPtr self, IntPtr riid, IntPtr result);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int CreateSwapChainDelegate(
@@ -547,6 +547,11 @@ namespace Kiosk.Native
                         device, IntPtr.Zero, wide, high, shape, Mirror, OnUi,
                         FakeSwapChain.BackBuffer);
                     Note("mirror: " + FrameMirror.Note);
+                    FakeSwapChain.OnResize = (w, h, f, texture) =>
+                    {
+                        Mirroring = FrameMirror.Start(device, IntPtr.Zero, w, h, f, Mirror, OnUi, texture);
+                        Note("mirror resize: " + FrameMirror.Note);
+                    };
                     FakeSwapChain.OnPresent = () =>
                     {
                         if (Frames == 0) FirstFrameAt = Environment.TickCount;

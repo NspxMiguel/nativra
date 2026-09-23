@@ -69,6 +69,9 @@ namespace Kiosk.Native
         private static IntPtr chain;
         private static int width;
         private static int height;
+        private static int pixelFormat;
+        private static readonly object frameGate = new object();
+        private static int generation;
 
         private static WriteableBitmap picture;
         // Two buffers, used in turn: the game fills one while the interface
@@ -104,6 +107,15 @@ namespace Kiosk.Native
             Windows.UI.Xaml.Controls.Image image, Windows.UI.Core.CoreDispatcher dispatcher,
             IntPtr texture = default(IntPtr))
         {
+            lock (frameGate)
+                return Prepare(device, swapChain, pixelsWide, pixelsHigh, format, image, dispatcher, texture);
+        }
+
+        private static bool Prepare(
+            IntPtr device, IntPtr swapChain, int pixelsWide, int pixelsHigh, int format,
+            Windows.UI.Xaml.Controls.Image image, Windows.UI.Core.CoreDispatcher dispatcher,
+            IntPtr texture)
+        {
             try
             {
                 // A chain is one way to reach the finished frame; being handed
@@ -118,10 +130,18 @@ namespace Kiosk.Native
                     return false;
                 }
 
+                Running = false;
+                var version = ++generation;
+                if (back != IntPtr.Zero) Marshal.Release(back);
+                if (staging != IntPtr.Zero) Marshal.Release(staging);
+                if (context != IntPtr.Zero) Marshal.Release(context);
+                back = staging = context = IntPtr.Zero;
+                picture = null;
                 chain = swapChain;
                 given = texture;
                 width = pixelsWide;
                 height = pixelsHigh;
+                pixelFormat = format;
                 ui = dispatcher;
                 target = image;
 
@@ -230,7 +250,8 @@ namespace Kiosk.Native
                 {
                     try
                     {
-                        picture = new WriteableBitmap(width, height);
+                        if (version != generation) return;
+                        picture = new WriteableBitmap(pixelsWide, pixelsHigh);
                         target.Source = picture;
                         target.Visibility = Windows.UI.Xaml.Visibility.Visible;
 
@@ -255,7 +276,7 @@ namespace Kiosk.Native
                 ready.Wait(3000);
 
                 Running = picture != null;
-                Note = Running ? "mirroring" : Note;
+                Note = Running ? "mirroring " + width + "x" + height + " format=" + format : Note;
                 return Running;
             }
             catch (Exception error)
@@ -271,6 +292,11 @@ namespace Kiosk.Native
         /// out and what was just drawn is no longer where it was.
         /// </summary>
         public static void Take()
+        {
+            lock (frameGate) TakeLocked();
+        }
+
+        private static void TakeLocked()
         {
             if (!Running) return;
             // Reserve the CPU buffer before writing it, including while the
@@ -304,7 +330,16 @@ namespace Kiosk.Native
                 // instead composites alpha, so an otherwise valid frame can
                 // disappear entirely unless we make it opaque here.
                 for (var alpha = 3; alpha < into.Length; alpha += 4)
+                {
                     into[alpha] = 255;
+                    // WriteableBitmap is BGRA, while games may request RGBA.
+                    if (pixelFormat == 28 || pixelFormat == 29)
+                    {
+                        var red = into[alpha - 3];
+                        into[alpha - 3] = into[alpha - 1];
+                        into[alpha - 1] = red;
+                    }
+                }
                 filling = 1 - filling;
 
                 var unmap = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(
@@ -313,6 +348,13 @@ namespace Kiosk.Native
                 isMapped = false;
 
                 Copied++;
+                if (Copied % 60 == 1)
+                {
+                    var peak = 0;
+                    for (var p = 0; p < into.Length; p += 256)
+                        peak = Math.Max(peak, Math.Max(into[p], Math.Max(into[p + 1], into[p + 2])));
+                    Note = "mirroring " + width + "x" + height + " format=" + pixelFormat + " sampledRgbPeak=" + peak;
+                }
 
                 // One update in flight at a time, and no more than thirty a
                 // second. The interface thread has its own frame to draw, and
@@ -321,20 +363,23 @@ namespace Kiosk.Native
                 // busy, and absent from the screen.
                 lastShown = now;
                 var showing = into;
+                var showingPicture = picture;
+                var version = generation;
                 var __ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                 {
                     try
                     {
+                        if (version != generation) return;
                         // Named in full rather than as an extension: which
                         // namespace carries it differs between runtimes, and a
                         // missing using here is a build that fails for a
                         // reason that has nothing to do with the problem.
                         using (var stream = WindowsRuntimeBufferExtensions.AsStream(
-                            picture.PixelBuffer))
+                            showingPicture.PixelBuffer))
                         {
                             stream.Write(showing, 0, showing.Length);
                         }
-                        picture.Invalidate();
+                        showingPicture.Invalidate();
                         Shown++;
                     }
                     catch

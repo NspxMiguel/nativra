@@ -49,3 +49,17 @@ The source-wiring tests do not replace Xbox testing. On the console, check:
 Device Portal input tests exercise the host-event path. They do not certify
 physical controller behavior by themselves. The owner's report that Seraph's
 menu did not respond remains an open physical-controller validation item.
+
+## Console checks on September 23, 2026
+
+Build 200 displayed the loading acknowledgement, cursor and active-mode hint.
+The remote View+Menu chord switched modes without opening the game's pause menu.
+In PC mode, pointing at Seraph's Start button and clicking entered a match;
+subsequent movement and firing were observed in console screenshots.
+
+Build 203 made Setup reachable with D-pad Up from the shelf and A. Its controls
+saved PC mode, 0.25× pointer speed and the diagnostic visibility setting.
+In build 202, hiding diagnostics survived an app restart while keeping the
+cursor and mode hint visible. Reinstallation into build 203 also restored the
+backed-up preference file. These were Device Portal input tests, not physical
+controller certification. Native XInput gameplay remains unverified.

@@ -48,7 +48,9 @@ test("resizing rebinds the mirror and queued UI frames retain their own bitmap",
   expect(mirror).toContain("lock (frameGate) TakeLocked();");
   expect(mirror).toContain("var showingPicture = picture;");
   expect(mirror).toContain("if (version != generation) return;");
-  expect(chain).toContain("GetDelegateForFunctionPointer<GraphicsBridge.QueryInterfaceDelegate>");
+  expect(chain).toContain(
+    "GetDelegateForFunctionPointer<GraphicsBridge.QueryInterfaceDelegate>",
+  );
 });
 
 test("swap-chain description is only freed by the finally block after entering try", () => {

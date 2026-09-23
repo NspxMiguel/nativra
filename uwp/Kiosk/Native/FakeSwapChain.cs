@@ -111,6 +111,7 @@ namespace Kiosk.Native
 
         /// <summary>Called on every present, with the frame ready to be read.</summary>
         public static Action OnPresent;
+        public static Action<int, int, int, IntPtr> OnResize;
 
         /// <summary>
         /// Makes the texture the game will draw into, and the object it will
@@ -323,6 +324,7 @@ namespace Kiosk.Native
                 width = (int)w;
                 height = (int)h;
                 if (f != 0) format = f;
+                OnResize?.Invoke(width, height, format, held);
                 if (old != IntPtr.Zero) Marshal.Release(old);
                 Note = "resized to " + width + "x" + height;
                 return S_OK;
@@ -363,7 +365,7 @@ namespace Kiosk.Native
             if (result == IntPtr.Zero) return E_FAIL;
             Marshal.WriteIntPtr(result, IntPtr.Zero);
             if (instance == IntPtr.Zero || riid == IntPtr.Zero) return E_NOINTERFACE;
-            var query = Marshal.GetDelegateForFunctionPointer<TwoOut>(
+            var query = Marshal.GetDelegateForFunctionPointer<GraphicsBridge.QueryInterfaceDelegate>(
                 ComProxy.Method(instance, 0));
             return query(instance, riid, result);
         }

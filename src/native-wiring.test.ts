@@ -42,6 +42,15 @@ test("mirror reserves its frame buffer before copying and ignores window alpha",
   expect(take).toContain("if (!queued)");
 });
 
+test("resizing rebinds the mirror and queued UI frames retain their own bitmap", () => {
+  expect(chain).toContain("OnResize?.Invoke(width, height, format, held);");
+  expect(graphics).toContain("FakeSwapChain.OnResize =");
+  expect(mirror).toContain("lock (frameGate) TakeLocked();");
+  expect(mirror).toContain("var showingPicture = picture;");
+  expect(mirror).toContain("if (version != generation) return;");
+  expect(chain).toContain("GetDelegateForFunctionPointer<GraphicsBridge.QueryInterfaceDelegate>");
+});
+
 test("swap-chain description is only freed by the finally block after entering try", () => {
   const method = graphics.slice(
     graphics.indexOf("private static int MakeChainOn("),

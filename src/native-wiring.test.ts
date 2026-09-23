@@ -8,12 +8,20 @@ test("TLS wraps the loader thread hook after installation", () => {
   const wrapper = probe.indexOf("ThreadTls.Install(imports);");
   expect(loader).toBeGreaterThan(-1);
   expect(wrapper).toBeGreaterThan(loader);
-  expect(tls).toContain('imports.Overrides.TryGetValue("kernel32.dll!CreateThread"');
+  expect(tls).toContain(
+    'imports.Overrides.TryGetValue("kernel32.dll!CreateThread"',
+  );
 });
 
 test("managed entry threads adopt TLS before entering game code", () => {
-  expect(probe).toMatch(/ThreadTls\.Adopt\(\);\s+var result = StartModule\(image\);/);
-  const runner = probe.slice(probe.indexOf("var runner = new System.Threading.Thread"));
+  expect(probe).toMatch(
+    /ThreadTls\.Adopt\(\);\s+var result = StartModule\(image\);/,
+  );
+  const runner = probe.slice(
+    probe.indexOf("var runner = new System.Threading.Thread"),
+  );
   expect(runner.indexOf("ThreadTls.Adopt();")).toBeGreaterThan(-1);
-  expect(runner.indexOf("ThreadTls.Adopt();")).toBeLessThan(runner.indexOf("main(engine.BaseAddress"));
+  expect(runner.indexOf("ThreadTls.Adopt();")).toBeLessThan(
+    runner.indexOf("main(engine.BaseAddress"),
+  );
 });

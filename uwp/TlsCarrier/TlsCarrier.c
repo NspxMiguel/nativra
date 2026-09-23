@@ -2,7 +2,7 @@
 #include <intrin.h>
 
 // Each packaged copy owns one Windows-managed static TLS index. No CRT,
-// DllMain, heap allocation, or replacement of the system TLS vector.
+// heap allocation or replacement of the system TLS vector.
 #define TLS_CAPACITY 16384
 #pragma section(".data$TLS", read, write)
 #pragma section(".rdata$T", read)
@@ -16,6 +16,13 @@ __declspec(allocate(".rdata$T")) const IMAGE_TLS_DIRECTORY64 _tls_used = {
     (ULONGLONG)(tls_template + sizeof(tls_template)),
     (ULONGLONG)&_tls_index, (ULONGLONG)tls_callbacks, 0, IMAGE_SCN_ALIGN_16BYTES
 };
+
+BOOL WINAPI NativraTlsEntry(HINSTANCE instance, DWORD reason, LPVOID reserved) {
+    (void)instance;
+    (void)reason;
+    (void)reserved;
+    return TRUE;
+}
 
 __declspec(dllexport) int NativraTlsConfigure(const unsigned char *source,
                                             unsigned int size,

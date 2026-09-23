@@ -50,6 +50,10 @@ jobs:
           Export-Certificate -Cert $imported -FilePath "uwp/Kiosk.cer" | Out-Null
           Write-Host "signing as $($imported.Subject), thumbprint $($imported.Thumbprint)"
 
+      - name: Build native TLS carriers
+        shell: cmd
+        run: uwp\TlsCarrier\build.cmd
+
       - name: Restore
         run: msbuild uwp\Kiosk.sln /t:Restore /p:Configuration=Release /p:Platform=x64
 

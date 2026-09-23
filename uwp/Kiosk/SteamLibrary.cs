@@ -75,56 +75,56 @@ namespace Kiosk
         }
 
         /// <summary>
-    /// Games shared through a Steam family. They appear in his client and are
-    /// not in GetOwnedGames, which is why the console's list looked short.
-    /// </summary>
-    public static async Task<List<OwnedGame>> FamilyAsync(SteamSession session)
-    {
-        var games = new List<OwnedGame>();
-        try
+        /// Games shared through a Steam family. They appear in his client and are
+        /// not in GetOwnedGames, which is why the console's list looked short.
+        /// </summary>
+        public static async Task<List<OwnedGame>> FamilyAsync(SteamSession session)
         {
-            var token = await session.EnsureAccessTokenAsync();
-            if (string.IsNullOrEmpty(token)) return games;
-
-            const string Base = "https://api.steampowered.com/IFamilyGroupsService";
-            var groupText = await Http.GetStringAsync(
-                $"{Base}/GetFamilyGroupForUser/v1/?access_token={Uri.EscapeDataString(token)}"
-                + $"&steamid={session.SteamId}");
-            if (!JsonObject.TryParse(groupText, out var groupRoot)) return games;
-
-            var familyId = groupRoot.GetNamedObject("response", new JsonObject())
-                .GetNamedString("family_groupid", string.Empty);
-            if (string.IsNullOrEmpty(familyId)) return games;
-
-            var sharedText = await Http.GetStringAsync(
-                $"{Base}/GetSharedLibraryApps/v1/?access_token={Uri.EscapeDataString(token)}"
-                + $"&family_groupid={familyId}&include_own=true&include_excluded=true&include_free=true");
-            if (!JsonObject.TryParse(sharedText, out var sharedRoot)) return games;
-
-            var payload = sharedRoot.GetNamedObject("response", new JsonObject());
-            if (!payload.ContainsKey("apps")) return games;
-
-            foreach (var value in payload.GetNamedArray("apps"))
+            var games = new List<OwnedGame>();
+            try
             {
-                var item = value.GetObject();
-                var name = item.GetNamedString("name", string.Empty);
-                if (string.IsNullOrWhiteSpace(name)) continue;
-                games.Add(new OwnedGame
-                {
-                    AppId = (uint)item.GetNamedNumber("appid", 0),
-                    Name = name,
-                    Shared = true,
-                });
-            }
-        }
-        catch
-        {
-            // No family, or a refusal: the owned library still stands on its own.
-        }
-        return games;
-    }
+                var token = await session.EnsureAccessTokenAsync();
+                if (string.IsNullOrEmpty(token)) return games;
 
-    /// <summary>Null means Steam refused the token; an empty list means no games.</summary>
+                const string Base = "https://api.steampowered.com/IFamilyGroupsService";
+                var groupText = await Http.GetStringAsync(
+                    $"{Base}/GetFamilyGroupForUser/v1/?access_token={Uri.EscapeDataString(token)}"
+                    + $"&steamid={session.SteamId}");
+                if (!JsonObject.TryParse(groupText, out var groupRoot)) return games;
+
+                var familyId = groupRoot.GetNamedObject("response", new JsonObject())
+                    .GetNamedString("family_groupid", string.Empty);
+                if (string.IsNullOrEmpty(familyId)) return games;
+
+                var sharedText = await Http.GetStringAsync(
+                    $"{Base}/GetSharedLibraryApps/v1/?access_token={Uri.EscapeDataString(token)}"
+                    + $"&family_groupid={familyId}&include_own=true&include_excluded=true&include_free=true");
+                if (!JsonObject.TryParse(sharedText, out var sharedRoot)) return games;
+
+                var payload = sharedRoot.GetNamedObject("response", new JsonObject());
+                if (!payload.ContainsKey("apps")) return games;
+
+                foreach (var value in payload.GetNamedArray("apps"))
+                {
+                    var item = value.GetObject();
+                    var name = item.GetNamedString("name", string.Empty);
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    games.Add(new OwnedGame
+                    {
+                        AppId = (uint)item.GetNamedNumber("appid", 0),
+                        Name = name,
+                        Shared = true,
+                    });
+                }
+            }
+            catch
+            {
+                // No family, or a refusal: the owned library still stands on its own.
+            }
+            return games;
+        }
+
+        /// <summary>Null means Steam refused the token; an empty list means no games.</summary>
         private static async Task<List<OwnedGame>> FetchAsync(ulong steamId, string token)
         {
             var url = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"

@@ -6,6 +6,11 @@ using Windows.Storage;
 
 namespace Kiosk
 {
+    public sealed class SteamSignInRequiredException : Exception
+    {
+        public SteamSignInRequiredException() : base("Steam sign-in is required.") { }
+    }
+
     /// <summary>
     /// What the console remembers about the signed-in Steam account. It lives in
     /// the app's own folder and never leaves the console.
@@ -122,10 +127,11 @@ namespace Kiosk
         public async Task<string> EnsureAccessTokenAsync(bool force = false)
         {
             if (!force && !string.IsNullOrEmpty(AccessToken)) return AccessToken;
-            if (string.IsNullOrEmpty(RefreshToken) || SteamId == 0) return null;
+            if (string.IsNullOrEmpty(RefreshToken) || SteamId == 0)
+                throw new SteamSignInRequiredException();
 
             var fresh = await SteamAuth.RenewAccessTokenAsync(RefreshToken, SteamId);
-            if (string.IsNullOrEmpty(fresh)) return null;
+            if (string.IsNullOrEmpty(fresh)) throw new SteamSignInRequiredException();
 
             AccessToken = fresh;
             await SaveAsync();

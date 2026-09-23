@@ -45,7 +45,8 @@ namespace Kiosk
         private SteamSession session = new SteamSession();
         private QrSession challenge;
         private string shownUrl;
-        private bool polling;
+        private int signInGeneration;
+        private bool isActive;
 
         public SteamPage()
         {
@@ -65,7 +66,9 @@ namespace Kiosk
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
+            isActive = true;
             session = await SteamSession.LoadAsync();
+            if (!isActive) return;
             if (session.IsSignedIn)
             {
                 await ShowLibraryAsync();
@@ -76,10 +79,21 @@ namespace Kiosk
             }
         }
 
+        protected override void OnNavigatedFrom(NavigationEventArgs e)
+        {
+            isActive = false;
+            signInGeneration++;
+            base.OnNavigatedFrom(e);
+        }
+
         // ------------------------------------------------------------- sign in
 
         private async Task StartSignInAsync()
         {
+            if (!isActive) return;
+            var generation = ++signInGeneration;
+            QrImage.Source = null;
+            shownUrl = null;
             SignInPanel.Visibility = Visibility.Visible;
             LibraryPanel.Visibility = Visibility.Collapsed;
             SearchHint.Visibility = Visibility.Collapsed;
@@ -93,59 +107,57 @@ namespace Kiosk
 
             try
             {
-                challenge = await SteamAuth.BeginAsync("Xbox Series X");
+                var next = await SteamAuth.BeginAsync("Xbox Series X");
+                if (!isActive || generation != signInGeneration) return;
+                challenge = next;
             }
             catch (Exception error)
             {
+                if (!isActive || generation != signInGeneration) return;
                 StatusText.Text = Texts.Get("signin.failed", error.Message);
                 return;
             }
 
             ShowQr(challenge.ChallengeUrl);
             StatusText.Text = Texts.Get("signin.waiting");
-            await PollLoopAsync();
+            await PollLoopAsync(challenge, generation);
         }
 
         /// <summary>
         /// Steam rotates the challenge while nobody has approved, so the code on
         /// screen has to follow it or the scan stops working.
         /// </summary>
-        private async Task PollLoopAsync()
+        private async Task PollLoopAsync(QrSession current, int generation)
         {
-            if (polling) return;
-            polling = true;
-            try
+            var deadline = DateTime.UtcNow.AddMinutes(10);
+            while (isActive && generation == signInGeneration && DateTime.UtcNow < deadline)
             {
-                var deadline = DateTime.UtcNow.AddMinutes(10);
-                while (DateTime.UtcNow < deadline)
+                await Task.Delay(TimeSpan.FromSeconds(Math.Max(2, current.Interval)));
+                if (!isActive || generation != signInGeneration) return;
+
+                LoginResult login;
+                try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Max(2, challenge.Interval)));
-
-                    LoginResult login;
-                    try
-                    {
-                        login = await SteamAuth.PollAsync(challenge);
-                    }
-                    catch (Exception error)
-                    {
-                        StatusText.Text = Texts.Get("signin.retry", error.Message);
-                        continue;
-                    }
-
-                    if (login != null)
-                    {
-                        await SignedInAsync(login);
-                        return;
-                    }
-
-                    if (challenge.ChallengeUrl != shownUrl) ShowQr(challenge.ChallengeUrl);
+                    login = await SteamAuth.PollAsync(current);
                 }
+                catch (Exception error)
+                {
+                    if (!isActive || generation != signInGeneration) return;
+                    StatusText.Text = Texts.Get("signin.retry", error.Message);
+                    continue;
+                }
+
+                if (!isActive || generation != signInGeneration) return;
+                if (login != null)
+                {
+                    await SignedInAsync(login);
+                    return;
+                }
+
+                if (current.ChallengeUrl != shownUrl) ShowQr(current.ChallengeUrl);
+            }
+            if (isActive && generation == signInGeneration)
                 StatusText.Text = Texts.Get("signin.expired");
-            }
-            finally
-            {
-                polling = false;
-            }
         }
 
         private async Task SignedInAsync(LoginResult login)
@@ -210,6 +222,9 @@ namespace Kiosk
 
             try
             {
+                // A saved refresh token can outlive its Steam session. Check it
+                // before treating an empty library response as an empty account.
+                await session.EnsureAccessTokenAsync(force: true);
                 await LoadTestedAsync();
 
                 // His own games plus what the family shares: the client shows
@@ -232,6 +247,14 @@ namespace Kiosk
 
                 await BuildShelvesAsync();
                 ApplyFilter();
+            }
+            catch (SteamSignInRequiredException)
+            {
+                await session.ClearAsync();
+                allGames.Clear();
+                Games.Clear();
+                Shelves.Clear();
+                await StartSignInAsync();
             }
             catch (Exception error)
             {
@@ -404,6 +427,7 @@ namespace Kiosk
                 case Windows.System.VirtualKey.GamepadY:
                 case Windows.System.VirtualKey.F5:
                     if (session.IsSignedIn) await ShowLibraryAsync();
+                    else await StartSignInAsync();
                     e.Handled = true;
                     break;
 

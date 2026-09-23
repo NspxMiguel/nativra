@@ -47,6 +47,9 @@ test("host input survives a disconnected pad and handles key release", () => {
   expect(pointer).toContain("GamepadButtons.DPadUp");
   expect(mainPage).toContain("new KeyEventHandler(OnGameKeyUp), true");
   expect(mainPage).toContain("Native.PointerBridge.ReleaseHostKeys();");
+  expect(mainPage).toContain("HostKey((int)e.OriginalKey, true)");
+  expect(mainPage).toContain("HostKey((int)e.OriginalKey, false)");
+  expect(mainPage).not.toContain("HostKey((int)e.Key,");
 });
 
 test("Unity native plugins are mapped and initialized with extensionless lookup", () => {

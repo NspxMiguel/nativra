@@ -164,13 +164,15 @@ namespace Kiosk
         private void OnGameKeyDown(object sender, KeyRoutedEventArgs e)
         {
             if (!Native.NativeProbe.GameRunning) return;
-            Native.PointerBridge.HostKey((int)e.Key, true);
+            // XAML maps GamepadA to Space and GamepadB to Escape for UI controls.
+            // Hosted games need the original button so A remains a mouse click.
+            Native.PointerBridge.HostKey((int)e.OriginalKey, true);
             e.Handled = true;
         }
 
         private void OnGameKeyUp(object sender, KeyRoutedEventArgs e)
         {
-            Native.PointerBridge.HostKey((int)e.Key, false);
+            Native.PointerBridge.HostKey((int)e.OriginalKey, false);
             if (Native.NativeProbe.GameRunning) e.Handled = true;
         }
 

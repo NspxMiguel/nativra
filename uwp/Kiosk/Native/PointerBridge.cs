@@ -31,8 +31,35 @@ namespace Kiosk.Native
 
         /// <summary>Where the pointer is, in screen coordinates.</summary>
         private static readonly PointerPosition position = new PointerPosition(Width / 2, Height / 2);
-        public static int X => position.X;
-        public static int Y => position.Y;
+        private static readonly object cursorGate = new object();
+        public static int X { get { lock (cursorGate) return position.X; } }
+        public static int Y { get { lock (cursorGate) return position.Y; } }
+        public static long Warps;
+        public static int LastWarpX;
+        public static int LastWarpY;
+
+        public static void ReadPosition(out int x, out int y)
+        {
+            lock (cursorGate) { x = position.X; y = position.Y; }
+        }
+
+        public static void Warp(int x, int y)
+        {
+            lock (cursorGate)
+            {
+                System.Threading.Interlocked.Increment(ref Warps);
+                LastWarpX = x;
+                LastWarpY = y;
+                var previousX = position.X;
+                var previousY = position.Y;
+                position.Set(x, y, Width, Height);
+                // An application warp is not physical/raw mouse movement.
+                // Legacy consumers still need the resulting cursor position.
+                if ((position.X != previousX || position.Y != previousY) &&
+                    !RawInputBridge.SuppressesLegacy(0))
+                    Post(WM_MOUSEMOVE, (Left ? 1 : 0) | (Right ? 2 : 0), Packed());
+            }
+        }
 
         /// <summary>Whether each button is held, in the order Windows numbers them.</summary>
         public static bool Left;
@@ -222,17 +249,20 @@ namespace Kiosk.Native
                 var dy = Lean(reading.RightThumbstickY) + (padHost[0xD7] ? 1 : 0) - (padHost[0xD8] ? 1 : 0);
                 if (dx != 0.0 || dy != 0.0)
                 {
-                    var wasX = X;
-                    var wasY = Y;
-                    // Screen coordinates grow downwards; a stick pushed up
-                    // should move the pointer up.
-                    var distance = Speed * Settings.PointerSensitivity * seconds;
-                    position.Move(dx * distance, -dy * distance, Width, Height);
-                    if (X != wasX || Y != wasY)
+                    lock (cursorGate)
                     {
-                        Moves++;
-                        RawInputBridge.Mouse(X - wasX, Y - wasY, 0);
-                        if (!RawInputBridge.SuppressesLegacy(0)) Post(WM_MOUSEMOVE, Left ? 1 : 0, Packed());
+                        var wasX = X;
+                        var wasY = Y;
+                        // Screen coordinates grow downwards; a stick pushed up
+                        // should move the pointer up.
+                        var distance = Speed * Settings.PointerSensitivity * seconds;
+                        position.Move(dx * distance, -dy * distance, Width, Height);
+                        if (X != wasX || Y != wasY)
+                        {
+                            Moves++;
+                            RawInputBridge.Mouse(X - wasX, Y - wasY, 0);
+                            if (!RawInputBridge.SuppressesLegacy(0)) Post(WM_MOUSEMOVE, Left ? 1 : 0, Packed());
+                        }
                     }
                 }
 

@@ -474,6 +474,8 @@ namespace Kiosk.Native
                                         "keys=" + PointerBridge.Keys,
                                         "pointer=" + PointerBridge.Moves
                                             + " at " + PointerBridge.X + "," + PointerBridge.Y,
+                                        "pointer.warps=" + System.Threading.Interlocked.Read(ref PointerBridge.Warps)
+                                            + " requested=" + PointerBridge.LastWarpX + "," + PointerBridge.LastWarpY,
                                         "stubs=" + imports.Shim.Called.Count,
                                     };
                                     beat.AddRange(FaultWatch.Faults());

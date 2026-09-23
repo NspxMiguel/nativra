@@ -144,7 +144,13 @@ namespace Kiosk
 
             var payload = root.GetNamedObject("response", new JsonObject());
             var games = new List<OwnedGame>();
-            if (!payload.ContainsKey("games")) return games;
+            if (!payload.ContainsKey("games"))
+            {
+                // Only an explicit zero count proves the library is empty.
+                // An empty response must not hide a refused access token.
+                return payload.ContainsKey("game_count") &&
+                    payload.GetNamedNumber("game_count", -1) == 0 ? games : null;
+            }
 
             foreach (var value in payload.GetNamedArray("games"))
             {

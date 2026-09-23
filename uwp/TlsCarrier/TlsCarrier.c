@@ -23,6 +23,8 @@ BOOL WINAPI NativraTlsEntry(HINSTANCE instance, DWORD reason, LPVOID reserved) {
   (void)instance;
   (void)reason;
   (void)reserved;
+  // Keep a real import dependency: the Windows runner left the static TLS
+  // index uninitialized for an otherwise identical import-free image.
   return GetCurrentThreadId() != 0;
 }
 

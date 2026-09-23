@@ -59,6 +59,15 @@ namespace Kiosk.Native
 
         private static SystemImports imports;
 
+        [DllImport("api-ms-win-core-errorhandling-l1-1-0.dll")]
+        private static extern void SetLastError(uint error);
+
+        private static IntPtr MissingProcedure()
+        {
+            SetLastError(127); // ERROR_PROC_NOT_FOUND
+            return IntPtr.Zero;
+        }
+
         [DllImport("api-ms-win-core-processthreads-l1-1-0.dll", SetLastError = true)]
         private static extern IntPtr CreateThread(
             IntPtr security, IntPtr stack, IntPtr start, IntPtr argument,
@@ -251,20 +260,24 @@ namespace Kiosk.Native
                     if (mine != null)
                     {
                         var own = mine.Export(wanted);
-                        if (own != IntPtr.Zero) return own;
+                        // An optional plugin export is a capability probe, not
+                        // an import to fill. A fabricated pointer makes Unity
+                        // register rendering callbacks the plugin never had.
+                        return own != IntPtr.Zero ? own : MissingProcedure();
                     }
                 }
 
-                var real = GetProcAddress(module, wanted);
+                var invented = from != null && Invented.TryGetValue(from, out var fake)
+                    && fake == module;
+                var real = invented ? IntPtr.Zero : GetProcAddress(module, wanted);
                 if (real != IntPtr.Zero) return real;
                 if (from == null) return IntPtr.Zero;
 
-                // Missing here means missing in the import table too, and the
-                // same stand-in is the right answer: it records what was
-                // wanted. Cached, because a game that looks a function up in a
-                // loop would otherwise get a new stand-in every time and use
-                // up the page they are written into.
+                // Only explicitly implemented bridge answers can stand in for
+                // an absent export. Generic import stubs must not advertise
+                // optional features that the platform does not implement.
                 var key = from + "!" + wanted;
+                if (!imports.Answers.ContainsKey(key)) return MissingProcedure();
                 lock (made)
                 {
                     if (made.TryGetValue(key, out var already)) return already;

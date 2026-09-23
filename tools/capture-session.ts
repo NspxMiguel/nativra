@@ -37,6 +37,7 @@ async function save(name: string, data: string | Uint8Array) {
 const samples: unknown[] = [];
 const failures: string[] = [];
 const started = performance.now();
+let nextProcessSample = 0;
 const revision = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
   cwd: resolve(import.meta.dir, ".."),
 })
@@ -56,6 +57,33 @@ for (const [name, read] of [
 }
 while (performance.now() - started < seconds * 1000) {
   const at = new Date().toISOString();
+  // A shared console can launch another title during a test. Record process
+  // identity without usernames so disappearance is not mislabeled as a crash.
+  if (performance.now() >= nextProcessSample) {
+    nextProcessSample = performance.now() + 10000;
+    try {
+      const response = await portal.request(
+        "GET",
+        "/api/resourcemanager/processes",
+      );
+      if (!response.ok) throw new Error("Process list unavailable");
+      const data = (await response.json()) as {
+        Processes: Array<{ ImageName: string; ProcessId: number }>;
+      };
+      if (!Array.isArray(data.Processes))
+        throw new Error("Invalid process list");
+      samples.push({
+        at: new Date().toISOString(),
+        elapsedMs: Math.round(performance.now() - started),
+        processes: data.Processes.map(({ ImageName, ProcessId }) => ({
+          ImageName,
+          ProcessId,
+        })),
+      });
+    } catch {
+      failures.push(`processes:${at}`);
+    }
+  }
   try {
     samples.push({
       at,
@@ -117,6 +145,12 @@ try {
       FileSize: number;
     }>;
   };
+  // Metadata only: a different title's dump can explain a contaminated run.
+  // Never download unrelated dumps or treat their failures as this app's.
+  await save(
+    "console-crash-index.json",
+    JSON.stringify(data.CrashDumps ?? [], null, 2),
+  );
   await save(
     "crash-index.json",
     JSON.stringify(

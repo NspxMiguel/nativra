@@ -41,6 +41,14 @@ sources are recorded rather than treated as successful measurements. GPU engine
 indexes are left as reported: no invented labels such as “3D” or “copy”. System
 metrics include other console processes and must not be called game-only usage.
 
+Process names and IDs are sampled every ten seconds using the Device Portal
+[process-list API](https://learn.microsoft.com/en-us/windows/uwp/debug-test-perf/device-portal-api-core).
+Usernames and other process fields are discarded. The final console-wide crash
+index is stored separately from the app-filtered index; these are metadata, not
+dump downloads. On a shared console, another title launching can interrupt a
+test. A frozen pulse or return to Dev Home alone does not prove a Nativra crash.
+Compare process samples and dump package identities before assigning a cause.
+
 Directories use owner-only permissions and files use mode 0600. Logs and system
 metadata can contain private information even though credentials are excluded.
 Never publish these directories or raw dumps. Review and redact selected evidence

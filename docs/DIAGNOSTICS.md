@@ -15,8 +15,9 @@ volumes and engine internals cannot be inferred from these measurements.
 - Present and XAML rates are not physical display FPS or frame-pacing proof.
 - DXGI memory fields are reported adapter properties, not an unlocked VRAM cap.
 - The application memory limit is read separately from Windows MemoryManager.
-- UWP gamepad enumeration, XInput calls and host key events describe different
-  input paths. Zero XInput calls does not establish that no input was delivered.
+- UWP gamepad enumeration, successful XInput readings and host key events describe
+  different input paths. Zero successful readings does not establish that no
+  input was delivered through another path.
 - Audio activation is machine-observable; audible output requires an output
   capture or a person listening. The owner confirmed menu audio in build 194.
 - GPU identity is captured before optional compatibility naming overrides.

@@ -551,7 +551,7 @@ namespace Kiosk.Native
         /// mov rax, gs:[0x30] ; ret — the thread environment block's own
         /// address, which no managed call exposes.
         /// </summary>
-        private static IntPtr CurrentTeb()
+        internal static IntPtr CurrentTeb()
         {
             if (tebReader == IntPtr.Zero)
             {

@@ -4,6 +4,12 @@ const probe = await Bun.file("uwp/Kiosk/Native/NativeProbe.cs").text();
 const tls = await Bun.file("uwp/Kiosk/Native/ThreadTls.cs").text();
 const loader = await Bun.file("uwp/Kiosk/Native/LoaderStubs.cs").text();
 
+test("thread TLS uses the proven PE reader and reports adoption failures", () => {
+  expect(tls).toContain("PeImage.CurrentTeb()");
+  expect(tls).not.toContain("VirtualAllocFromApp");
+  expect(probe).toContain('"exe.tls.failures="');
+});
+
 test("thread hooks share the managed function-pointer delegate type", () => {
   expect(loader).toContain("ThreadTls.CreateThreadDelegate makeThread");
   expect(tls).toContain("internal delegate IntPtr CreateThreadDelegate");

@@ -140,6 +140,7 @@ namespace Kiosk
         private bool portalReady;
         private uint requestedGame;
         private bool gameLaunchPending;
+        private int shownControllerMode = -1;
 
         protected override void OnNavigatedTo(Windows.UI.Xaml.Navigation.NavigationEventArgs e)
         {
@@ -312,6 +313,14 @@ namespace Kiosk
                 GameLoadingRing.IsActive = false;
                 GamePointerTransform.X = Native.PointerBridge.X;
                 GamePointerTransform.Y = Native.PointerBridge.Y;
+                GamePointer.Visibility = Native.ControllerMode.Desktop ? Visibility.Visible : Visibility.Collapsed;
+                if (shownControllerMode != Native.ControllerMode.Changes)
+                {
+                    shownControllerMode = Native.ControllerMode.Changes;
+                    GameInputHint.Text = Texts.Get(Native.ControllerMode.Desktop ? "game.mode.pc" : "game.mode.controller");
+                    if (Native.ControllerMode.Desktop)
+                        GameInputHint.Text += "\n" + Texts.Get("game.input.hint");
+                }
             };
             Native.GraphicsBridge.OnUi = Dispatcher;
             Native.ThreadRank.RaiseThisThread();

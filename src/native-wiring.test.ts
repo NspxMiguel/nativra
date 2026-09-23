@@ -62,7 +62,8 @@ test("input and callback ownership last until the native game exits", () => {
 
 test("host input survives a disconnected pad and handles key release", () => {
   expect(pointer).not.toContain("if (pads.Count == 0) return;");
-  expect(pointer).toContain("host[0xD9] ? 1 : 0");
+  expect(pointer).toContain("ControllerMode.Desktop ? host : emptyHost");
+  expect(pointer).toContain("padHost[0xD9] ? 1 : 0");
   expect(pointer).toContain("GamepadButtons.DPadUp");
   expect(mainPage).toContain("new KeyEventHandler(OnGameKeyUp), true");
   expect(mainPage).toContain("Native.PointerBridge.ReleaseHostKeys();");

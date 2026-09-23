@@ -928,6 +928,7 @@ namespace Kiosk
 
         private async void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
+            if (setupOpen) return;
             // A game on screen has the controller. Ours is still behind it and
             // still focused, and without this the player would be walking
             // through a menu they cannot see while they play.
@@ -943,14 +944,17 @@ namespace Kiosk
             if (e.Key == Windows.System.VirtualKey.GamepadDPadDown ||
                 e.Key == Windows.System.VirtualKey.Down)
             {
-                DockLibrary.Focus(FocusState.Programmatic);
+                if (FocusManager.GetFocusedElement() == SetupButton) FocusShelf();
+                else DockLibrary.Focus(FocusState.Programmatic);
                 e.Handled = true;
                 return;
             }
             if (e.Key == Windows.System.VirtualKey.GamepadDPadUp ||
                 e.Key == Windows.System.VirtualKey.Up)
             {
-                FocusShelf();
+                if ((FocusManager.GetFocusedElement() as FrameworkElement)?.Tag is Tile)
+                    SetupButton.Focus(FocusState.Programmatic);
+                else FocusShelf();
                 e.Handled = true;
                 return;
             }

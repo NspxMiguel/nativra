@@ -193,30 +193,30 @@ namespace Kiosk.Native
                 }
                 else
                 {
-                // Taken once. With the flip model the runtime rotates its own
-                // buffers and buffer zero stays valid, so asking for it sixty
-                // times a second is sixty interface calls that answer the same.
-                var handle = Marshal.AllocHGlobal(IntPtr.Size);
-                var id = Marshal.AllocHGlobal(16);
-                try
-                {
-                    Marshal.StructureToPtr(
-                        new Guid("6f15aaf2-d208-4e89-9ab4-489535d34f9c"), id, false);
-                    Marshal.WriteIntPtr(handle, IntPtr.Zero);
-                    var get = Marshal.GetDelegateForFunctionPointer<BufferDelegate>(
-                        ComProxy.Method(chain, GetBufferSlot));
-                    if (get(chain, 0, id, handle) != S_OK)
+                    // Taken once. With the flip model the runtime rotates its own
+                    // buffers and buffer zero stays valid, so asking for it sixty
+                    // times a second is sixty interface calls that answer the same.
+                    var handle = Marshal.AllocHGlobal(IntPtr.Size);
+                    var id = Marshal.AllocHGlobal(16);
+                    try
                     {
-                        Note = "no back buffer";
-                        return false;
+                        Marshal.StructureToPtr(
+                            new Guid("6f15aaf2-d208-4e89-9ab4-489535d34f9c"), id, false);
+                        Marshal.WriteIntPtr(handle, IntPtr.Zero);
+                        var get = Marshal.GetDelegateForFunctionPointer<BufferDelegate>(
+                            ComProxy.Method(chain, GetBufferSlot));
+                        if (get(chain, 0, id, handle) != S_OK)
+                        {
+                            Note = "no back buffer";
+                            return false;
+                        }
+                        back = Marshal.ReadIntPtr(handle);
                     }
-                    back = Marshal.ReadIntPtr(handle);
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(handle);
-                    Marshal.FreeHGlobal(id);
-                }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(handle);
+                        Marshal.FreeHGlobal(id);
+                    }
                 }
 
                 scratch = new[]

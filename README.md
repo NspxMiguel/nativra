@@ -80,6 +80,14 @@ See [the full product brief](docs/DESIGN-BRIEF.md), [emulator setup](docs/EMULAT
 Those documents also contain design targets and historical investigations;
 their presence is not a compatibility guarantee.
 
+## Inside the app
+
+![Nativra home library captured on Xbox Series X](docs/progress/nativra-library-build179.png)
+
+Home library and controller navigation, captured on the console in build 179.
+This is the current pre-alpha UI, not a design mockup. The Steam sign-in shortcut
+is still shown even with a saved session; it is not a reliable account-status indicator.
+
 ### On the Xbox itself
 
 ![Xbox Guide open over Seraph's Last Stand, with Nativra listed as the running app](docs/progress/seraph-xbox-guide-build179.png)

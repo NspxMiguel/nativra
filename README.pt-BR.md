@@ -31,6 +31,14 @@
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
 [Como contribuir](docs/CONTRIBUTING.md) · [Licença](LICENSE)
 
+## Dentro do app
+
+![Biblioteca inicial do Nativra capturada no Xbox Series X](docs/progress/nativra-library-build179.png)
+
+Biblioteca inicial e navegação pelo controle, capturadas no console no build 179.
+É a interface pré-alpha atual, não um mockup. O atalho de login Steam ainda aparece
+mesmo com uma sessão salva; ele não indica corretamente o estado da conta.
+
 ### No próprio Xbox
 
 ![Painel do Xbox aberto sobre Seraph's Last Stand, com Nativra na lista de aplicativos](docs/progress/seraph-xbox-guide-build179.png)

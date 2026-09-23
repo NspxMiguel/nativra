@@ -88,6 +88,7 @@ namespace Kiosk.Steam
                 if (depots.Count == 0) throw new Exception("this app has no Windows depot");
 
                 var folder = await TargetAsync(root, appId);
+                var pending = await folder.CreateFileAsync(".downloading", CreationCollisionOption.ReplaceExisting);
 
                 foreach (var depot in depots)
                 {
@@ -146,6 +147,8 @@ namespace Kiosk.Steam
                         }
                     }
                 }
+                await folder.CreateFileAsync(".downloaded", CreationCollisionOption.ReplaceExisting);
+                await pending.DeleteAsync();
             }
         }
 

@@ -71,7 +71,6 @@ namespace Kiosk.Native
         private delegate int PropertyDelegate(IntPtr self, IntPtr key, IntPtr value);
 
         // Held so the collector cannot take what native code is holding.
-        private static CompletedDelegate completed;
         private static EndpointDelegate endpoint;
         private static ActivateDelegate activate;
         private static OneOutDelegate identity;
@@ -198,7 +197,7 @@ namespace Kiosk.Native
                     return IntPtr.Zero;
                 }
 
-                completed = (self, operation) =>
+                CompletedDelegate completed = (self, operation) =>
                 {
                     var code = Marshal.AllocHGlobal(4);
                     var slot = Marshal.AllocHGlobal(IntPtr.Size);
@@ -231,9 +230,17 @@ namespace Kiosk.Native
                     return S_OK;
                 };
 
+                // Completion runs on an MTA worker and may arrive after a
+                // timeout. Keep each callback alive independently and expose
+                // IAgileObject so the platform can invoke it across apartments.
+                Proxy.Keep(completed);
                 var handler = Proxy.Create(
                     new[] { Marshal.GetFunctionPointerForDelegate(completed) },
-                    new[] { "41d949ab-9862-444a-80f6-c261334da5eb" });
+                    new[]
+                    {
+                        "41d949ab-9862-444a-80f6-c261334da5eb",
+                        "94ea2b94-e9cc-49e0-c0ff-ee64ca8f5b90", // IAgileObject
+                    });
 
                 var code2 = ActivateAudioInterfaceAsync(
                     path, ref wanted, IntPtr.Zero, handler, out _);

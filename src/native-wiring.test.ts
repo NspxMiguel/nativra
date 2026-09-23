@@ -12,6 +12,15 @@ const mainPage = await Bun.file("uwp/Kiosk/MainPage.xaml.cs").text();
 const messages = await Bun.file("uwp/Kiosk/Native/WindowMessages.cs").text();
 const raw = await Bun.file("uwp/Kiosk/Native/RawInputBridge.cs").text();
 
+test("game discovery is engine-independent and rejects unsupported architecture before mapping", () => {
+  const discovery = probe.slice(probe.indexOf("private static async Task<StorageFolder> GameIn"));
+  expect(discovery).not.toContain('TryGetItemAsync("UnityPlayer.dll")');
+  expect(discovery).toContain('file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)');
+  expect(probe.indexOf("BitConverter.ToUInt16(executableBytes, peOffset + 4) != 0x8664")).toBeLessThan(probe.indexOf("PeImage.Load("));
+  expect(probe).toContain("done.TrySetException(error);");
+  expect(mainPage).toContain('Texts.Get("game.architecture")');
+});
+
 test("raw input is registered, bounded, delivered and released through window dispatch", () => {
   expect(probe).toContain("RawInputBridge.Install(imports);");
   expect(raw).toContain("packetOrder.Count >= 256");

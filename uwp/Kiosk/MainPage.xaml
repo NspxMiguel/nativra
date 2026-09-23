@@ -43,6 +43,7 @@
             <!-- Owned but not on the console yet. -->
             <TextBlock Text="&#xE753;" FontFamily="Segoe MDL2 Assets" FontSize="28" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,14,0" Visibility="{x:Bind CloudShown}"/>
             <TextBlock Text="&#x2605;" FontSize="22" Foreground="{StaticResource Favourite}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,12,14,0" Visibility="{x:Bind StarShown}"/>
+            <Border x:Name="SelectionOutline" BorderBrush="{StaticResource TextPrimary}" BorderThickness="2" CornerRadius="12" Visibility="Collapsed" IsHitTestVisible="False"/>
           </Grid>
           <TextBlock Text="{x:Bind Title}" Width="{x:Bind TileWidth}" Margin="0,16,0,0" FontSize="{StaticResource BodySize}" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
         </StackPanel>

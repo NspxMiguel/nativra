@@ -154,8 +154,10 @@ namespace Kiosk.Native
                     var procedure = GetLong(window, -4);
                     if (procedure == IntPtr.Zero) return IntPtr.Zero;
                     Dispatched++;
-                    return Call(procedure, window, (uint)Marshal.ReadInt32(message, 8),
-                        Marshal.ReadIntPtr(message, 16), Marshal.ReadIntPtr(message, 24));
+                    var kind = (uint)Marshal.ReadInt32(message, 8);
+                    var extra = Marshal.ReadIntPtr(message, 24);
+                    try { return Call(procedure, window, kind, Marshal.ReadIntPtr(message, 16), extra); }
+                    finally { if (kind == 0xFF) RawInputBridge.Release(extra.ToInt64()); }
                 }));
                 Bind("SendMessage" + suffix, new ProcedureDelegate((window, message, word, extra) =>
                     Call(GetLong(window, -4), window, message, word, extra)));

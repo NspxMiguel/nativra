@@ -202,6 +202,7 @@ namespace Kiosk.Native
                 ProcessStubs.Install(imports);
                 WindowStubs.Install(imports);
                 WindowMessages.Install(imports);
+                RawInputBridge.Install(imports);
                 GraphicsBridge.Install(imports);
                 LoaderStubs.Install(imports);
                 // Wrap the loader's priority hook rather than letting it
@@ -443,6 +444,7 @@ namespace Kiosk.Native
                                         "pumped=" + WindowStubs.Pumped,
                                         "dispatched=" + WindowMessages.Dispatched + " " + WindowMessages.Note,
                                         "pad=" + PadBridge.Reads,
+                                        "raw=" + RawInputBridge.Posted + " read=" + RawInputBridge.Read + " registered=" + RawInputBridge.Registered,
                                         "calmed=" + LoaderStubs.Calmed,
                                         "exit=" + ProcessStubs.Attempted,
                                         "buffers=" + GraphicsBridge.Buffers,

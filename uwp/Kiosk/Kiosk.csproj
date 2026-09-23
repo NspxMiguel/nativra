@@ -106,6 +106,7 @@
     <Compile Include="Native\SurfaceBridge.cs" />
     <Compile Include="Native\GraphicsBridge.cs" />
     <Compile Include="Native\NativeProbe.cs" />
+    <Compile Include="Native\RawInputBridge.cs" />
     <Compile Include="Texts.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

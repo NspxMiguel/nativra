@@ -145,6 +145,26 @@ namespace Kiosk
             ApplyStaticText();
             StartClock();
             Loaded += async (s, e) => await LoadAppsAsync();
+            AddHandler(KeyDownEvent, new KeyEventHandler(OnGameKeyDown), true);
+            AddHandler(KeyUpEvent, new KeyEventHandler(OnGameKeyUp), true);
+            Window.Current.Activated += (s, e) =>
+            {
+                if (e.WindowActivationState == Windows.UI.Core.CoreWindowActivationState.Deactivated)
+                    Native.PointerBridge.ReleaseHostKeys();
+            };
+        }
+
+        private void OnGameKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (!Native.NativeProbe.GameRunning) return;
+            Native.PointerBridge.HostKey((int)e.Key, true);
+            e.Handled = true;
+        }
+
+        private void OnGameKeyUp(object sender, KeyRoutedEventArgs e)
+        {
+            Native.PointerBridge.HostKey((int)e.Key, false);
+            if (Native.NativeProbe.GameRunning) e.Handled = true;
         }
 
         private void ApplyStaticText()

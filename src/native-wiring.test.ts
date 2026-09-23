@@ -7,6 +7,16 @@ const pe = await Bun.file("uwp/Kiosk/Native/PeImage.cs").text();
 const graphics = await Bun.file("uwp/Kiosk/Native/GraphicsBridge.cs").text();
 const chain = await Bun.file("uwp/Kiosk/Native/FakeSwapChain.cs").text();
 const mirror = await Bun.file("uwp/Kiosk/Native/FrameMirror.cs").text();
+const pointer = await Bun.file("uwp/Kiosk/Native/PointerBridge.cs").text();
+const mainPage = await Bun.file("uwp/Kiosk/MainPage.xaml.cs").text();
+
+test("host input survives a disconnected pad and handles key release", () => {
+  expect(pointer).not.toContain("if (pads.Count == 0) return;");
+  expect(pointer).toContain("host[0xD9] ? 1 : 0");
+  expect(pointer).toContain("GamepadButtons.DPadUp");
+  expect(mainPage).toContain("new KeyEventHandler(OnGameKeyUp), true");
+  expect(mainPage).toContain("Native.PointerBridge.ReleaseHostKeys();");
+});
 
 test("Unity native plugins are mapped and initialized with extensionless lookup", () => {
   expect(probe).toContain('TryGetItemAsync("Plugins")');

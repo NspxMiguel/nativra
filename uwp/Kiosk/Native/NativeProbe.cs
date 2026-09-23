@@ -31,8 +31,12 @@ namespace Kiosk.Native
         /// storage rewrites state that belongs to the thread doing it, and the
         /// interface thread is the last one that should be experimented on.
         /// </summary>
-        public static Task RunAsync()
+        private static int hosting;
+
+        public static Task RunAsync(uint appId = 0)
         {
+            if (System.Threading.Interlocked.CompareExchange(ref hosting, 1, 0) != 0)
+                throw new InvalidOperationException("A native game has already been loaded. Restart Nativra before loading another game.");
             var done = new TaskCompletionSource<bool>();
             var thread = new System.Threading.Thread(() =>
             {
@@ -41,7 +45,7 @@ namespace Kiosk.Native
                     // Waited on here rather than awaited: an async lambda would
                     // return at the first await and leave this thread empty,
                     // which is the opposite of the point.
-                    WorkAsync().GetAwaiter().GetResult();
+                    WorkAsync(appId).GetAwaiter().GetResult();
                 }
                 catch
                 {
@@ -57,7 +61,7 @@ namespace Kiosk.Native
             return done.Task;
         }
 
-        private static async Task WorkAsync()
+        private static async Task WorkAsync(uint appId)
         {
             var lines = new List<string> { "at=" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") };
             try
@@ -72,12 +76,12 @@ namespace Kiosk.Native
                 // own storage does not, and a reinstall is every single build.
                 // So the game is looked for there first, and a copy that is
                 // still only in local storage is moved there once.
-                folder = await GameIn(await DevelopmentFiles());
+                folder = await GameIn(await DevelopmentFiles(), appId);
 
                 var games = await local.TryGetItemAsync("games") as StorageFolder;
                 if (folder == null && games != null)
                 {
-                    var here = await GameIn(games);
+                    var here = await GameIn(games, appId);
                     if (here != null)
                     {
                         lines.Add("mirror=" + here.Name);
@@ -86,7 +90,8 @@ namespace Kiosk.Native
                         lines[lines.Count - 1] = "mirror=" + here.Name + " -> " + folder.Path;
                     }
                 }
-                folder = folder ?? await local.TryGetItemAsync(Folder) as StorageFolder;
+                if (appId == 0)
+                    folder = folder ?? await local.TryGetItemAsync(Folder) as StorageFolder;
                 lines.AddRange(ShareNotes);
                 lines.Add("local=" + local.Path);
                 if (folder == null)
@@ -391,8 +396,16 @@ namespace Kiosk.Native
                         var pointer = new System.Threading.Thread(() =>
                         {
                             var last = Environment.TickCount;
+                            var announced = false;
                             while (beating)
                             {
+                                // A size message before the renderer exists dereferences
+                                // Unity's null graphics device during window dispatch.
+                                if (!announced && GraphicsBridge.Frames > 0)
+                                {
+                                    PointerBridge.Announce();
+                                    announced = true;
+                                }
                                 var now = Environment.TickCount;
                                 PointerBridge.Step(Math.Max(0, now - last) / 1000.0);
                                 last = now;
@@ -402,7 +415,6 @@ namespace Kiosk.Native
                         pointer.IsBackground = true;
                         pointer.Start();
                         SuspendWatch.ThisThreadIsOurs();
-                        PointerBridge.Announce();
                         GameRunning = true;
 
                         var pulse = new System.Threading.Thread(() =>
@@ -682,13 +694,14 @@ namespace Kiosk.Native
         }
 
         /// <summary>A folder under this one that holds a Unity game.</summary>
-        private static async Task<StorageFolder> GameIn(StorageFolder parent)
+        private static async Task<StorageFolder> GameIn(StorageFolder parent, uint appId = 0)
         {
             if (parent == null) return null;
             try
             {
                 foreach (var candidate in await parent.GetFoldersAsync())
                 {
+                    if (appId != 0 && candidate.Name != appId.ToString()) continue;
                     if (await candidate.TryGetItemAsync("UnityPlayer.dll") != null)
                     {
                         return candidate;

@@ -138,6 +138,13 @@ namespace Kiosk
         private DispatcherTimer clock;
         private ConsolePortal portal;
         private bool portalReady;
+        private uint requestedGame;
+
+        protected override void OnNavigatedTo(Windows.UI.Xaml.Navigation.NavigationEventArgs e)
+        {
+            base.OnNavigatedTo(e);
+            requestedGame = e.Parameter is uint appId ? appId : 0;
+        }
 
         public MainPage()
         {
@@ -290,7 +297,22 @@ namespace Kiosk
                 // Without it the bridge says so rather than guessing.
             }
 
-            await Native.NativeProbe.RunAsync();
+            if (requestedGame != 0)
+                await StartGameAsync(requestedGame);
+            else if (await ApplicationData.Current.LocalFolder.TryGetItemAsync("autoplay.txt") != null)
+                await Native.NativeProbe.RunAsync();
+        }
+
+        private async Task StartGameAsync(uint appId)
+        {
+            try
+            {
+                await Native.NativeProbe.RunAsync(appId);
+            }
+            catch (Exception)
+            {
+                StatusText.Text = Texts.Get("game.restart");
+            }
         }
 
         /// <summary>
@@ -810,7 +832,8 @@ namespace Kiosk
             }
             if (tile.Route != null && tile.Route.StartsWith("game:", StringComparison.Ordinal))
             {
-                StatusText.Text = Texts.Get("status.gamenotyet", tile.Title);
+                if (uint.TryParse(tile.Route.Substring(5), out var appId))
+                    await StartGameAsync(appId);
                 return;
             }
             StatusText.Text = Texts.Get("status.opening", tile.Title);

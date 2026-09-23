@@ -303,7 +303,7 @@ namespace Kiosk.Native
             // Reserve the CPU buffer before writing it, including while the
             // dispatcher is still consuming the previous frame.
             var now = Environment.TickCount;
-            if (unchecked(now - lastShown) < 50) return;
+            if (unchecked(now - lastShown) < 16) return;
             if (System.Threading.Interlocked.Exchange(ref busy, 1) == 1) return;
             var mapped = IntPtr.Zero;
             var isMapped = false;
@@ -378,11 +378,8 @@ namespace Kiosk.Native
                     Note = "mirroring " + width + "x" + height + " format=" + pixelFormat + " sampledRgbPeak=" + peak;
                 }
 
-                // One update in flight at a time, and no more than thirty a
-                // second. The interface thread has its own frame to draw, and
-                // a thread given a screen-sized write sixty times a second
-                // never draws it — which is how an application ends up alive,
-                // busy, and absent from the screen.
+                // Keep one update in flight; drop frames while the UI is busy
+                // instead of accumulating latency behind the current picture.
                 lastShown = now;
                 var showing = into;
                 var showingPicture = picture;

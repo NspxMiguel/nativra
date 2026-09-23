@@ -6,21 +6,15 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Background="{StaticResource Background}">
+    Background="{StaticResource GameDetailBackground}">
 
     <Grid>
-        <!-- The game's own art fills the screen, the way its store page does. -->
-        <Image x:Name="HeroImage" Stretch="UniformToFill" Opacity="0.55"
-               HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-        <Rectangle>
-            <Rectangle.Fill>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#00000000" Offset="0" />
-                    <GradientStop Color="#CC000000" Offset="0.55" />
-                    <GradientStop Color="#FF000000" Offset="1" />
-                </LinearGradientBrush>
-            </Rectangle.Fill>
-        </Rectangle>
+        <!-- Preserve panoramic hero composition instead of cropping it to 16:9. -->
+        <Grid VerticalAlignment="Top">
+            <Image x:Name="HeroImage" Stretch="Uniform"
+                   HorizontalAlignment="Stretch" VerticalAlignment="Top" />
+            <Rectangle Fill="{StaticResource GameHeroScrim}" IsHitTestVisible="False" />
+        </Grid>
 
         <Grid>
             <Grid.RowDefinitions>

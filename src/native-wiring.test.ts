@@ -54,7 +54,9 @@ test("resizing rebinds the mirror and queued UI frames retain their own bitmap",
 });
 
 test("the back buffer preserves the game's requested pixel format", () => {
-  expect(graphics).toContain("Marshal.WriteInt32(desc, 8, format == 0 ? 87 : format);");
+  expect(graphics).toContain(
+    "Marshal.WriteInt32(desc, 8, format == 0 ? 87 : format);",
+  );
   expect(mirror).toContain("pixelFormat == 28 || pixelFormat == 29");
 });
 

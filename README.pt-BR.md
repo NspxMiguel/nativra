@@ -145,6 +145,9 @@ também registram metas e investigações anteriores; não são garantias de com
 - Caminho de download dos arquivos pelos servidores da Steam.
 - Carregamento dos binários e inicialização de um jogo Unity comercial.
 - Menu real de **Seraph's Last Stand**, Steam 1919460, na tela do Xbox Series X.
+- Partidas curtas com movimento, salto e tiro por comandos remotos. No build 194,
+  o dono confirmou som audível no menu; sessões longas e controle físico completo
+  ainda precisam de validação.
 - Ferramentas de controle remoto e coleta de evidências no console para testes.
 
 O [registro do marco](docs/progress/2026-09-23.md) separa medições, correções e
@@ -158,7 +161,9 @@ hipóteses. O pacote mais recente pode conter mudanças ainda não validadas no 
 - Corrigir e medir a fluidez: o espelhamento tinha um teto de 20 FPS, independente
   do contador de renderização do jogo. Retirar o teto não garante 60 FPS.
 - Validar o filtro Baixados e o lançamento pelo botão Jogar em todos os caminhos.
-- Fazer o áudio funcionar: o FMOD caiu para saída silenciosa no teste registrado.
+- Validar o áudio em sessões prolongadas e trocas de dispositivo. O build 194
+  passou a obter o cliente real de áudio, sem a falha anterior do FMOD, e o dono
+  confirmou som audível no menu.
 - Resolver a integração SteamAPI; online, conquistas, amigos e convites não estão validados.
 - Testar LEGO Jurassic World e outros jogos. Não há garantia de compatibilidade.
 - Substituir a arte provisória de abertura, rejeitada após avaliação na TV.

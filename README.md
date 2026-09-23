@@ -88,6 +88,21 @@ Home library and controller navigation, captured on the console in build 179.
 This is the current pre-alpha UI, not a design mockup. The Steam sign-in shortcut
 is still shown even with a saved session; it is not a reliable account-status indicator.
 
+### Emulator shelf
+
+![Nativra emulator shelf with Open and Add to library actions](docs/progress/nativra-emulators-build179.png)
+
+Real build 179 console capture: installed-system entries and library shortcuts.
+Listing an emulator here does not establish game compatibility or complete setup.
+
+### Steam game details
+
+![Steam game details in Nativra with artwork, play time and installation state](docs/progress/nativra-steam-details-build179.png)
+
+Real build 179 console capture: a Steam library detail page, **not GTA V running**.
+The play time comes from Steam account history, not time played through Nativra.
+GTA V is not installed in this capture and has not been validated as compatible.
+
 ### On the Xbox itself
 
 ![Xbox Guide open over Seraph's Last Stand, with Nativra listed as the running app](docs/progress/seraph-xbox-guide-build179.png)

@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../uwp/Kiosk/Native/ControllerMode.cs" Link="ControllerMode.cs" />
+    <Compile Include="../../uwp/Kiosk/Native/DxgiDescriptions.cs" Link="DxgiDescriptions.cs" />
   </ItemGroup>
 </Project>

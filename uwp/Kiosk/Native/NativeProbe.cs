@@ -461,6 +461,12 @@ namespace Kiosk.Native
                                         "buffers=" + GraphicsBridge.Buffers,
                                         "mirrored=" + FrameMirror.Copied + " shown=" + FrameMirror.Shown,
                                         "mirror=" + FrameMirror.Note + " chain=" + FakeSwapChain.Note,
+                                        "fullscreen=set:" + FakeSwapChain.FullscreenSets
+                                            + " last:" + FakeSwapChain.LastFullscreenRequest
+                                            + " get:" + FakeSwapChain.FullscreenGets
+                                            + " desc:" + FakeSwapChain.FullscreenDescriptions
+                                            + " target:" + FakeSwapChain.TargetResizes
+                                            + " output:" + FakeSwapChain.ContainingOutputQueries,
                                         "frame.capture=" + FrameMirror.CaptureNote,
                                         "mirror.timing=" + FrameMirror.Timing,
                                         "frames=" + GraphicsBridge.Frames

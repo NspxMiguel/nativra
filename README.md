@@ -1,4 +1,18 @@
+<div align="center">
+
 # Nativra
+
+**PC games on Xbox. Native execution. No streaming.**
+
+**[Português (Brasil)](README.pt-BR.md) · English**
+
+![Stage](https://img.shields.io/badge/stage-pre--alpha_proof_of_concept-f0a020)
+![Platform](https://img.shields.io/badge/platform-Xbox_Dev_Mode-107c10)
+![License](https://img.shields.io/badge/license-PolyForm_Noncommercial-lightgrey)
+
+**IN DEVELOPMENT · BY NSPXMIGUEL**
+
+</div>
 
 > [!WARNING]
 > **AINDA NÃO ESTÁ PRONTO PARA UTILIZAÇÃO. EM FASE DE TESTES E DESENVOLVIMENTO.**

@@ -1,56 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Package
-  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
-  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
-  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
-  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap mp rescap">
-
-  <Identity Name="NSPX.Kiosk" Publisher="CN=NSPX" Version="1.0.0.0" ProcessorArchitecture="x64" />
-  <mp:PhoneIdentity PhoneProductId="6f3a1c28-7d54-4b1e-9f2a-51c0d8e4b7a3" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
-
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" IgnorableNamespaces="uap mp rescap">
+  <Identity Name="NSPX.Kiosk" Publisher="CN=NSPX" Version="1.0.0.0" ProcessorArchitecture="x64"/>
+  <mp:PhoneIdentity PhoneProductId="6f3a1c28-7d54-4b1e-9f2a-51c0d8e4b7a3" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
   <Properties>
     <DisplayName>Nativra</DisplayName>
     <PublisherDisplayName>NSPX</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
-
   <Dependencies>
-    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0"/>
   </Dependencies>
-
   <Resources>
-    <Resource Language="en-US" />
-    <Resource Language="pt-BR" />
+    <Resource Language="en-US"/>
+    <Resource Language="pt-BR"/>
   </Resources>
-
   <Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="Kiosk.App">
-      <uap:VisualElements
-        DisplayName="Nativra"
-        Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png"
-        Description="Every native app installed on this console, in one place."
-        BackgroundColor="#000000">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
-        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#000000" />
+      <uap:VisualElements DisplayName="Nativra" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="Every native app installed on this console, in one place." BackgroundColor="#000000">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"/>
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#000000"/>
       </uap:VisualElements>
     </Application>
   </Applications>
-
   <Capabilities>
     <!-- Required to enumerate and launch the other sideloaded apps. Restricted,
          which sideloading allows and the Store would not. -->
-    <rescap:Capability Name="packageQuery" />
+    <rescap:Capability Name="packageQuery"/>
     <!-- Generating code at runtime. Measured as available on this console with
          JitProbe, and without it a page can be written but never executed —
          which is what took the app down every time it tried. -->
-    <rescap:Capability Name="codeGeneration" />
+    <rescap:Capability Name="codeGeneration"/>
     <!-- Steam sign-in and the library both talk to api.steampowered.com. -->
-    <Capability Name="internetClient" />
+    <Capability Name="internetClient"/>
     <!-- The console's own Device Portal answers on a private address, and
          internetClient alone does not reach one. -->
-    <Capability Name="privateNetworkClientServer" />
-    <Capability Name="internetClientServer" />
+    <Capability Name="privateNetworkClientServer"/>
+    <Capability Name="internetClientServer"/>
   </Capabilities>
 </Package>

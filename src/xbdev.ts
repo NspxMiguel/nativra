@@ -2,7 +2,12 @@
 // xbdev — drives an Xbox Series X|S in Developer Mode from this Mac.
 // Finds the console, installs native packages, flips apps into game mode.
 
-import { DevicePortal, probe, PortalError, type InstalledPackage } from "./portal";
+import {
+  DevicePortal,
+  probe,
+  PortalError,
+  type InstalledPackage,
+} from "./portal";
 import { t } from "./i18n";
 import { $ } from "bun";
 import {
@@ -41,7 +46,12 @@ type CatalogEntry = {
   protocol?: string;
 };
 
-type StoredConfig = { host: string; port: number; user?: string; pass?: string };
+type StoredConfig = {
+  host: string;
+  port: number;
+  user?: string;
+  pass?: string;
+};
 
 // ---------------------------------------------------------------- config
 
@@ -59,7 +69,9 @@ async function loadConfig(): Promise<StoredConfig | null> {
   }
   try {
     const raw =
-      await $`security find-generic-password -s ${KEYCHAIN_SERVICE} -w`.quiet().text();
+      await $`security find-generic-password -s ${KEYCHAIN_SERVICE} -w`
+        .quiet()
+        .text();
     return JSON.parse(raw.trim());
   } catch {
     return null;
@@ -92,7 +104,8 @@ async function findPackageFiles(dir: string): Promise<string[]> {
     for (const entry of await readdir(current, { withFileTypes: true })) {
       const full = join(current, entry.name);
       if (entry.isDirectory()) await walk(full);
-      else if (isPackageFile(entry.name) && isForThisConsole(full)) found.push(full);
+      else if (isPackageFile(entry.name) && isForThisConsole(full))
+        found.push(full);
     }
   };
   await walk(dir);
@@ -116,9 +129,10 @@ async function download(entry: CatalogEntry): Promise<string[]> {
       // Our own builds live in a private repo, so the gh CLI carries the auth.
       const repo = entry.url.split("/").slice(3, 5).join("/");
       const asset = entry.url.split("/").pop()!;
-      const result = await $`gh release download --repo ${repo} --pattern ${asset} --dir ${dirname(target)} --clobber`
-        .nothrow()
-        .quiet();
+      const result =
+        await $`gh release download --repo ${repo} --pattern ${asset} --dir ${dirname(target)} --clobber`
+          .nothrow()
+          .quiet();
       if (result.exitCode !== 0) {
         throw new Error(`gh release download exit ${result.exitCode}`);
       }
@@ -154,11 +168,19 @@ async function download(entry: CatalogEntry): Promise<string[]> {
 // ---------------------------------------------------------------- commands
 
 async function cmdFind(): Promise<void> {
-  const selfAddress = (await $`ipconfig getifaddr en0`.quiet().text().catch(() => "")).trim();
+  const selfAddress = (
+    await $`ipconfig getifaddr en0`
+      .quiet()
+      .text()
+      .catch(() => "")
+  ).trim();
   const network = selfAddress.split(".").slice(0, 3).join(".") || "10.0.0";
   console.log(t("find.scanning", { net: `${network}.0/24` }));
 
-  const candidates = Array.from({ length: 254 }, (_, i) => `${network}.${i + 1}`);
+  const candidates = Array.from(
+    { length: 254 },
+    (_, i) => `${network}.${i + 1}`,
+  );
   const hits: string[] = [];
   await Promise.all(
     candidates.map(async (host) => {
@@ -199,7 +221,8 @@ async function cmdStatus(): Promise<void> {
       const info = (await portal.xboxInfo()) as Record<string, string>;
       if (info.OsVersion) console.log(`${t("status.os")}: ${info.OsVersion}`);
       if (info.DevMode) console.log(`dev mode: ${info.DevMode}`);
-      if (info.ConsoleType) console.log(`${t("status.type")}: ${info.ConsoleType}`);
+      if (info.ConsoleType)
+        console.log(`${t("status.type")}: ${info.ConsoleType}`);
     } catch {
       // /ext/xbox/info is Xbox-only and may be absent on older builds.
     }
@@ -253,7 +276,8 @@ async function cmdGet(args: string[]): Promise<void> {
   for (const entry of wanted) {
     try {
       const files = await download(entry);
-      for (const file of files) console.log(`   ${file.replace(ROOT + "/", "")}`);
+      for (const file of files)
+        console.log(`   ${file.replace(ROOT + "/", "")}`);
     } catch (error) {
       console.error(
         t("get.failed", { name: entry.name, error: String(error) }),
@@ -350,7 +374,9 @@ async function cmdKit(): Promise<void> {
       const installed = await installFiles(portal, entry.name, files);
       installed ? ok++ : fail++;
     } catch (error) {
-      console.error(t("get.failed", { name: entry.name, error: String(error) }));
+      console.error(
+        t("get.failed", { name: entry.name, error: String(error) }),
+      );
       fail++;
     }
   }
@@ -366,8 +392,10 @@ async function findPackage(
   const lower = needle.toLowerCase();
   return (
     packages.find((pkg) => pkg.Name.toLowerCase() === lower) ??
-    packages.find((pkg) =>
-      pkg.PackageFamilyName.split("_")[0]?.toLowerCase().split(".").pop() === lower,
+    packages.find(
+      (pkg) =>
+        pkg.PackageFamilyName.split("_")[0]?.toLowerCase().split(".").pop() ===
+        lower,
     ) ??
     packages.find((pkg) => pkg.Name.toLowerCase().includes(lower))
   );
@@ -420,7 +448,6 @@ async function cmdSettings(args: string[]): Promise<void> {
   await portal.setSetting(args[0], args[1]);
   console.log(`${args[0]} = ${args[1]}`);
 }
-
 
 async function cmdPush(args: string[]): Promise<void> {
   const [appName, localPath, remoteDir = ""] = args;
@@ -492,7 +519,9 @@ async function cmdEmulators(args: string[]): Promise<void> {
   if (!action || action === "list") {
     for (const entry of shelf.emulators) {
       const needs = entry.bios?.needed ? " (needs your own BIOS)" : "";
-      console.log(`  ${entry.id.padEnd(16)} ${entry.system.padEnd(18)} ${entry.name}${needs}`);
+      console.log(
+        `  ${entry.id.padEnd(16)} ${entry.system.padEnd(18)} ${entry.name}${needs}`,
+      );
     }
     return;
   }
@@ -564,11 +593,17 @@ async function cmdLs(args: string[]): Promise<void> {
     console.error(`? ${appName}`);
     process.exit(1);
   }
-  for (const item of await portal.listFiles(pkg.PackageFullName, remoteDir, known)) {
+  for (const item of await portal.listFiles(
+    pkg.PackageFullName,
+    remoteDir,
+    known,
+  )) {
     const name = String(item.Name ?? item.Id ?? "?");
     const size = Number(item.SizeInBytes ?? 0);
     const isFolder = Number(item.Type ?? 0) === 16 || size === 0;
-    console.log(`${isFolder ? "d" : "-"} ${name.padEnd(40)} ${size ? human(size) : ""}`);
+    console.log(
+      `${isFolder ? "d" : "-"} ${name.padEnd(40)} ${size ? human(size) : ""}`,
+    );
   }
 }
 
@@ -589,7 +624,6 @@ async function cmdSetupRetroarch(): Promise<void> {
   console.log("retroarch.cfg sent — directories now point at E:\\");
 }
 
-
 /**
  * Read every downloaded package's manifest and report what the console would
  * make of it. Catches a truncated download or a wrong-architecture build here
@@ -603,12 +637,16 @@ async function cmdVerify(): Promise<void> {
   for (const entry of [...catalog.dependencies, ...catalog.packages]) {
     const dir = join(PACKAGE_DIR, entry.slug);
     if (!(await Bun.file(join(dir)).exists()) && !(await pathExists(dir))) {
-      console.log(`${"-".padEnd(2)} ${entry.name.padEnd(22)} ${t("verify.missing")}`);
+      console.log(
+        `${"-".padEnd(2)} ${entry.name.padEnd(22)} ${t("verify.missing")}`,
+      );
       continue;
     }
     let files: string[] = [];
     try {
-      files = (await findPackageFiles(dir)).filter((file) => !file.endsWith(".cer"));
+      files = (await findPackageFiles(dir)).filter(
+        (file) => !file.endsWith(".cer"),
+      );
     } catch {
       files = [];
     }
@@ -651,12 +689,14 @@ async function pathExists(path: string): Promise<boolean> {
 /** Bundles nest a package inside; both are zips, so unzip reaches either. */
 async function readManifest(file: string): Promise<string | null> {
   const direct = await $`unzip -p ${file} AppxManifest.xml`.nothrow().quiet();
-  if (direct.exitCode === 0 && direct.stdout.length > 0) return direct.stdout.toString();
+  if (direct.exitCode === 0 && direct.stdout.length > 0)
+    return direct.stdout.toString();
 
   const bundle = await $`unzip -p ${file} AppxMetadata/AppxBundleManifest.xml`
     .nothrow()
     .quiet();
-  if (bundle.exitCode === 0 && bundle.stdout.length > 0) return bundle.stdout.toString();
+  if (bundle.exitCode === 0 && bundle.stdout.length > 0)
+    return bundle.stdout.toString();
 
   return null;
 }
@@ -690,7 +730,6 @@ async function cmdUninstall(args: string[]): Promise<void> {
   await portal.uninstall(pkg);
   console.log(t("uninstall.done", { name: pkg.Name }));
 }
-
 
 /**
  * The console refuses to let a sideloaded app enumerate other packages, so the
@@ -808,7 +847,9 @@ async function cmdSyncKiosk(): Promise<void> {
   // beside the emulators.
   let downloaded: Array<{ appid: number; name: string }> = [];
   try {
-    downloaded = (await Bun.file(join(PACKAGE_DIR, "downloaded.json")).json()) as typeof downloaded;
+    downloaded = (await Bun.file(
+      join(PACKAGE_DIR, "downloaded.json"),
+    ).json()) as typeof downloaded;
   } catch {
     // Nothing downloaded yet is the normal case.
   }
@@ -826,8 +867,9 @@ async function cmdSyncKiosk(): Promise<void> {
   // The portal refuses to overwrite a file that is already there, so only the
   // missing ones go up; a changed icon is handled by deleting it first.
   const present = new Set(
-    (await portal.listFiles(kiosk.PackageFullName, "LocalState"))
-      .map((item) => String(item.Id ?? item.Name ?? "")),
+    (await portal.listFiles(kiosk.PackageFullName, "LocalState")).map((item) =>
+      String(item.Id ?? item.Name ?? ""),
+    ),
   );
 
   let pushedIcons = 0;
@@ -852,7 +894,10 @@ async function cmdSyncKiosk(): Promise<void> {
  * scheme is what lets the app open it, and reading it here stops the
  * catalogue's hand-written copy from drifting.
  */
-const packageFacts = new Map<string, { icon: boolean; protocol: string | null }>();
+const packageFacts = new Map<
+  string,
+  { icon: boolean; protocol: string | null }
+>();
 
 async function factsFor(
   slug: string,
@@ -881,7 +926,9 @@ async function factsFor(
   const result = await extractIcon(slug, join(dir, pkg), outDir, scratch);
   if (result.reason) console.log(`  ${slug}: ${result.reason}`);
   const facts = {
-    icon: Boolean(result.file) || (await Bun.file(join(outDir, `${slug}.png`)).exists()),
+    icon:
+      Boolean(result.file) ||
+      (await Bun.file(join(outDir, `${slug}.png`)).exists()),
     protocol: result.protocol ?? null,
   };
   packageFacts.set(slug, facts);
@@ -1006,7 +1053,12 @@ async function cmdPushGame(args: string[]): Promise<void> {
     for (const entry of entries) {
       const localPath = join(localDir, entry.name);
       if (entry.isDirectory()) {
-        await portal.makeFolder(kiosk.PackageFullName, remoteDir, entry.name, known);
+        await portal.makeFolder(
+          kiosk.PackageFullName,
+          remoteDir,
+          entry.name,
+          known,
+        );
         await walk(localPath, `${remoteDir}/${entry.name}`);
         continue;
       }
@@ -1030,7 +1082,10 @@ async function cmdType(args: string[]): Promise<void> {
     process.exit(2);
   }
   const remote = new ConsoleRemote({
-    host: config.host, port: config.port ?? 11443, user: config.user, pass: config.pass,
+    host: config.host,
+    port: config.port ?? 11443,
+    user: config.user,
+    pass: config.pass,
   });
   await remote.open();
   try {
@@ -1073,8 +1128,13 @@ async function cmdMarkers(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const wanted = args.length > 0 ? args : ["tls.txt=6", "call.txt=1", "trace.txt=1"];
-  const games = await portal.listFiles(kiosk.PackageFullName, "games", "DevelopmentFiles");
+  const wanted =
+    args.length > 0 ? args : ["tls.txt=6", "call.txt=1", "trace.txt=1"];
+  const games = await portal.listFiles(
+    kiosk.PackageFullName,
+    "games",
+    "DevelopmentFiles",
+  );
   const folders = games
     .map((entry) => String(entry.Name ?? ""))
     .filter((name) => name.length > 0);
@@ -1111,7 +1171,12 @@ async function cmdPress(args: string[]): Promise<void> {
     console.log(Object.keys(BUTTONS).join(" "));
     return;
   }
-  const remote = new ConsoleRemote({ host: config.host, port: config.port ?? 11443, user: config.user, pass: config.pass });
+  const remote = new ConsoleRemote({
+    host: config.host,
+    port: config.port ?? 11443,
+    user: config.user,
+    pass: config.pass,
+  });
   await remote.open();
   try {
     for (const arg of args) {

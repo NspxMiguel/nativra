@@ -63,7 +63,7 @@ namespace Kiosk
                 var audio = Native.AudioBridge.ClientAcquired
                     ? Texts.Get("debug.audio.client")
                     : Texts.Get("debug.audio.pending", Native.AudioBridge.LastActivationResult.ToString("X8"));
-                GameDiagnosticsText.Text = string.Join("\n", new[]
+                GameDiagnosticsText.Text = WrapDiagnosticLines(string.Join("\n", new[]
                 {
                     Texts.Get("debug.title", $"{v.Major}.{v.Minor}.{v.Build}.{v.Revision}", package.Architecture),
                     diagnosticSystem,
@@ -80,12 +80,32 @@ namespace Kiosk
                         Native.PointerBridge.Keys),
                     audio,
                     Texts.Get("debug.sample", DateTime.Now.ToString("HH:mm:ss")),
-                });
+                }));
             }
             catch
             {
                 GameDiagnosticsText.Text = Texts.Get("debug.unavailable");
             }
+        }
+
+        private static string WrapDiagnosticLines(string text)
+        {
+            // The console's fallback font can draw wider than XAML measures.
+            // Explicit short lines keep real diagnostic values inside the HUD.
+            var lines = new System.Collections.Generic.List<string>();
+            foreach (var source in text.Split('\n'))
+            {
+                var line = source;
+                while (line.Length > 46)
+                {
+                    var split = line.LastIndexOf(' ', 45, 46);
+                    if (split <= 0) split = 46;
+                    lines.Add(line.Substring(0, split));
+                    line = line.Substring(split).TrimStart();
+                }
+                lines.Add(line);
+            }
+            return string.Join("\n", lines);
         }
     }
 }

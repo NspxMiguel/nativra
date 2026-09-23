@@ -33,6 +33,14 @@
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
 [Como contribuir](docs/CONTRIBUTING.md) · [Licença](LICENSE)
 
+### No próprio Xbox
+
+![Painel do Xbox aberto sobre Seraph's Last Stand, com Nativra na lista de aplicativos](docs/progress/seraph-xbox-guide-build179.png)
+
+Captura real do console, build 179: painel do Xbox sobre o jogo, mostrando o Nativra.
+
+### O jogo em tela cheia
+
 ![Menu real de Seraph's Last Stand no Xbox Series X](docs/progress/seraph-menu-build174.png)
 
 Captura real do console, build 174. O menu foi exibido; partida estável e recursos

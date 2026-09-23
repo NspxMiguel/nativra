@@ -45,6 +45,14 @@ Created by **NSPXMIGUEL**.
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
 [Contributing](docs/CONTRIBUTING.md) · [License](LICENSE)
 
+### On the Xbox itself
+
+![Xbox Guide open over Seraph's Last Stand, with Nativra listed as the running app](docs/progress/seraph-xbox-guide-build179.png)
+
+Real console capture, build 179: Xbox Guide open over the game, showing Nativra.
+
+### The game in full screen
+
 ![Seraph's Last Stand menu running on Xbox Series X](docs/progress/seraph-menu-build174.png)
 
 Real console capture, build 174. Menu rendering is confirmed; stable gameplay

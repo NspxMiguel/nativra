@@ -2,7 +2,7 @@
 
 An **experimental pre-alpha proof of concept**, before alpha or beta testing.
 This is **not a stable release** and not a claim of general
-PC-game compatibility. Made by NSPXMIGUEL for official Xbox Developer Mode.
+PC-game compatibility. Built for official Xbox Developer Mode.
 
 ## The milestone
 

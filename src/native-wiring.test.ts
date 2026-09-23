@@ -6,7 +6,9 @@ const loader = await Bun.file("uwp/Kiosk/Native/LoaderStubs.cs").text();
 const pe = await Bun.file("uwp/Kiosk/Native/PeImage.cs").text();
 
 test("only the selected game executable is mapped alongside its libraries", () => {
-  expect(probe).toContain('!file.Name.Equals(exeName, StringComparison.OrdinalIgnoreCase)');
+  expect(probe).toContain(
+    "!file.Name.Equals(exeName, StringComparison.OrdinalIgnoreCase)",
+  );
 });
 
 test("game TLS owns a private vector instead of writing past the system table", () => {

@@ -1,6 +1,7 @@
-# Nativra v0.1.0-alpha.1 — first native game-menu milestone
+# Nativra v0.0.1-prealpha.1 — first native game-menu milestone
 
-An experimental milestone, **not a stable release** and not a claim of general
+An **experimental pre-alpha proof of concept**, before alpha or beta testing.
+This is **not a stable release** and not a claim of general
 PC-game compatibility. Made by NSPXMIGUEL for official Xbox Developer Mode.
 
 ## The milestone

@@ -42,7 +42,7 @@ namespace Kiosk.Native
         private delegate IntPtr TebDelegate();
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate IntPtr CreateThreadDelegate(
+        internal delegate IntPtr CreateThreadDelegate(
             IntPtr attributes, IntPtr stackSize, IntPtr start, IntPtr parameter,
             uint flags, IntPtr threadId);
 

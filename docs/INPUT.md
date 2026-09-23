@@ -32,8 +32,8 @@ and legacy window messages. Legacy key releases set both the previous-state
 and transition-state bits; arrow keys carry the extended-key bit, following
 the [Win32 keyboard-message contract](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-keyup).
 This does not implement typematic repeats, text/IME input or additional physical
-keyboard keys. Local behavioral tests cover this encoding; Xbox regression
-validation of the metadata change is pending.
+keyboard keys. Local behavioral tests cover this encoding; build 208 also
+passed the bounded remote-input gameplay check described below.
 
 ## Validation
 
@@ -84,3 +84,14 @@ same build 207 process, Reset followed by Start successfully opened another
 match at 25/25 HP. The scoreboard failure must not be described as an inability
 to start another match. The exceptions and physical-controller validation remain
 open; this is not a fully playable certification.
+
+Build 208 reached 600 presented frames in 16.8 seconds after the library launch
+input, with the menu confirmed in a screenshot. Remote movement, jumping and
+firing responded in combat. Reset followed by Start opened a second match.
+For a separate release check, Right was held for 500 ms and released. Two
+screenshots 800 ms apart showed the character at the same horizontal position;
+a subsequent 500 ms Left input moved it back. This checks observed movement
+and release behavior, not which Windows input API the game consumed.
+A 30-second diagnostic capture produced 33 records with no unavailable sources.
+No physical UWP gamepads were detected during these tests. Physical controller
+coverage, long-session stability and Steam services remain unverified or incomplete.

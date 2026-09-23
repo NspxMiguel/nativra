@@ -63,3 +63,11 @@ In build 202, hiding diagnostics survived an app restart while keeping the
 cursor and mode hint visible. Reinstallation into build 203 also restored the
 backed-up preference file. These were Device Portal input tests, not physical
 controller certification. Native XInput gameplay remains unverified.
+
+Build 207 was tested through combat, an upgrade selection and the second wave.
+Remote movement, jump, firing and the upgrade click responded. After defeat,
+the Retry button did not respond even though frames and raw-input reads kept
+advancing. Unity logged two `NullReferenceException` messages without call
+stacks after Game Over. Cursor-warp requests remained at zero throughout this
+test, so the SetCursorPos correction does not explain the Retry failure.
+This remains an incomplete gameplay flow, not a fully playable certification.

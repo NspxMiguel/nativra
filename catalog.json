@@ -4,17 +4,17 @@
   "packages": [
     {
       "slug": "kiosk",
-      "name": "Kiosk",
+      "name": "Nativra",
       "kind": "front-end",
       "runs": "Our own front-end: every installed app on one screen, opened with the gamepad",
-      "url": "https://github.com/NspxMiguel/xboxdev/releases/latest/download/kiosk-uwp.zip",
+      "url": "https://github.com/NspxMiguel/nativra/releases/download/v0.1.0-alpha.1/kiosk-uwp.zip",
       "via": "gh",
       "console": [
         "series"
       ],
       "priority": 0,
       "gameMode": false,
-      "note": "Built by .github/workflows/build-uwp.yml. Private repo, so it is fetched with the gh CLI."
+      "note": "Experimental milestone build. See the release notes for measured compatibility and known limitations."
     },
     {
       "slug": "retroarch",

@@ -1,6 +1,17 @@
 # Nativra
 
-An Xbox Series X|S in developer mode, running PC games natively.
+An experimental native PC-game host for Xbox Series X|S in official Developer Mode.
+
+**Early alpha — not ready for everyday play.** Created by **NSPXMIGUEL**.
+
+[First milestone](docs/progress/2026-09-23.md) ·
+[Releases](https://github.com/NspxMiguel/nativra/releases) ·
+[Contributing](docs/CONTRIBUTING.md) · [License](LICENSE)
+
+![Seraph's Last Stand menu running on Xbox Series X](docs/progress/seraph-menu-build174.png)
+
+Real console capture, build 174. Menu rendering is confirmed; stable gameplay
+and online features are not. The screenshot is not generated artwork.
 
 Not streaming. Not a remote desktop. The game is downloaded by the console
 itself, from the player's own Steam account, and executed on the console's own
@@ -59,6 +70,11 @@ a lot of it needs no console.
     bun src/xbdev.ts launch kiosk
 
 Builds happen on a hosted Windows runner; no Windows machine is needed locally.
+
+Use official Xbox Developer Mode and your own licensed games. No game files,
+BIOS, keys or Steam sessions are supplied. Download the alpha package from
+Releases; its notes explain installation and limitations. Internal folder names
+and the package identity still use `Kiosk` to preserve compatibility.
 
 ## Licence
 

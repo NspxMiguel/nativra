@@ -4,7 +4,7 @@
 # that decision is his, not this script's.
 set -euo pipefail
 cd "$(dirname "$0")"
-REPO="NspxMiguel/xboxdev"
+REPO="NspxMiguel/nativra"
 
 if [ "${1:-}" != "--yes" ]; then
   echo "This makes $REPO public and opens issues. Re-run with --yes."

@@ -1,4 +1,4 @@
-name: build-uwp
+name: Build Nativra for Xbox
 
 # Builds the Kiosk UWP package for Xbox. No Windows machine needed locally:
 # the hosted runner carries the Universal Windows Platform workload.
@@ -102,6 +102,7 @@ jobs:
         run: |
           tag="kiosk-build-${GITHUB_RUN_NUMBER}"
           gh release create "$tag" kiosk-uwp.zip \
-            --title "Kiosk build ${GITHUB_RUN_NUMBER}" \
-            --notes "UWP package for Xbox Dev Mode. Install with: bun src/xbdev.ts install <files>" \
+            --title "Nativra development build ${GITHUB_RUN_NUMBER}" \
+            --prerelease --latest=false \
+            --notes "Experimental automated build for Xbox Dev Mode. Not a stable release or a compatibility guarantee. Read README.md and docs/progress before installing. Back up app data before uninstalling. Install with: bun src/xbdev.ts install <files>" \
             --repo "$GITHUB_REPOSITORY"

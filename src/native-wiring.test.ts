@@ -15,7 +15,9 @@ test("window dispatch invokes the registered procedure and writes keyboard state
   expect(probe).toContain("WindowMessages.Install(imports);");
   expect(messages).toContain("state.Values[-4] = entry.Procedure;");
   expect(messages).toContain("return Call(procedure, window,");
-  expect(messages).toContain("Marshal.WriteByte(keys, key, down ? (byte)0x80 : (byte)0);");
+  expect(messages).toContain(
+    "Marshal.WriteByte(keys, key, down ? (byte)0x80 : (byte)0);",
+  );
   expect(pointer).toContain("WindowMessages.InputWindow");
   expect(pointer).not.toContain("Post(WM_WINDOWPOSCHANGED, 0, 0)");
 });

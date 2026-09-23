@@ -55,7 +55,12 @@ export async function plan(
   const depots: DepotPlan[] = [];
   for (const depot of wanted) {
     const key = await cm.depotKey(appId, depot.id);
-    const code = await manifestRequestCode(cm, appId, depot.id, depot.manifestId);
+    const code = await manifestRequestCode(
+      cm,
+      appId,
+      depot.id,
+      depot.manifestId,
+    );
     const manifest = parseManifest(
       await fetchManifest(servers, depot.id, depot.manifestId, code),
     );
@@ -64,7 +69,9 @@ export async function plan(
     for (const file of manifest.files) {
       names.set(
         file,
-        manifest.filenamesEncrypted ? decryptFilename(file.name, key) : file.name,
+        manifest.filenamesEncrypted
+          ? decryptFilename(file.name, key)
+          : file.name,
       );
     }
     depots.push({ depot, manifest, key, names });
@@ -102,7 +109,13 @@ export async function downloadDepot(
     if (existing && existing.size === Number(file.size)) {
       doneBytes += Number(file.size);
       filesDone++;
-      onProgress?.({ file: relative, doneBytes, totalBytes, filesDone, filesTotal: files.length });
+      onProgress?.({
+        file: relative,
+        doneBytes,
+        totalBytes,
+        filesDone,
+        filesTotal: files.length,
+      });
       continue;
     }
 
@@ -137,7 +150,10 @@ export async function downloadDepot(
   return doneBytes;
 }
 
-export async function connect(steamId: string, refreshToken: string): Promise<CmClient> {
+export async function connect(
+  steamId: string,
+  refreshToken: string,
+): Promise<CmClient> {
   const endpoints = await CmClient.endpoints();
   let lastError: unknown = null;
   // One endpoint refusing is normal; the list exists to be tried in order.
@@ -150,7 +166,10 @@ export async function connect(steamId: string, refreshToken: string): Promise<Cm
     } catch (error) {
       lastError = error;
       cm.close();
-      if (error instanceof SteamError && [5, 15, 84].includes(error.eresult ?? 0)) {
+      if (
+        error instanceof SteamError &&
+        [5, 15, 84].includes(error.eresult ?? 0)
+      ) {
         throw error;
       }
     }

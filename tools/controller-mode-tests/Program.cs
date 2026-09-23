@@ -7,6 +7,20 @@ static void Check(bool condition, string message)
 }
 
 Check(ControllerMode.Desktop, "The pre-alpha keeps its existing desktop default");
+Check(KeyboardMessages.TransitionData(0x57, true) == 0x00110001L, "W down includes scan code and repeat count");
+Check(KeyboardMessages.TransitionData(0x57, false) == 0xC0110001L, "W up includes previous and transition state");
+Check(KeyboardMessages.TransitionData(0x25, true) == 0x014B0001L, "Left arrow has the extended-key bit");
+Check(KeyboardMessages.TransitionData(0x25, false) == 0xC14B0001L, "Extended key-up preserves every flag");
+Check(KeyboardMessages.TransitionData(0x0D, true) == 0x001C0001L, "Main Enter is not keypad Enter");
+foreach (var key in new[] { 0x57, 0x41, 0x53, 0x44, 0x25, 0x26, 0x27, 0x28, 0x20, 0x0D, 0x1B, 0x08 })
+{
+    var press = KeyboardMessages.TransitionData(key, true);
+    var release = KeyboardMessages.TransitionData(key, false);
+    Check(KeyboardMessages.ScanCode(key) != 0, "Every controller-mapped key has a scan code");
+    Check((press & 0xFFFF) == 1 && (release & 0xFFFF) == 1, "Each transition has repeat count one");
+    Check((release ^ press) == 0xC0000000L, "Release changes only the two state bits");
+}
+Console.WriteLine("Keyboard transition behavioral checks passed.");
 var forward = new PointerPosition(960, 540);
 var backward = new PointerPosition(960, 540);
 for (var sample = 0; sample < 100; sample++)

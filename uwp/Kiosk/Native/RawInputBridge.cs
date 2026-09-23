@@ -87,24 +87,9 @@ namespace Kiosk.Native
         public static void Keyboard(int key, bool down)
         {
             var data = new byte[40]; // RAWINPUTHEADER (24) + RAWKEYBOARD (16).
-            int scan;
-            switch (key)
-            {
-                case 0x57: scan = 0x11; break;
-                case 0x41: scan = 0x1E; break;
-                case 0x53: scan = 0x1F; break;
-                case 0x44: scan = 0x20; break;
-                case 0x25: scan = 0x4B; break;
-                case 0x26: scan = 0x48; break;
-                case 0x27: scan = 0x4D; break;
-                case 0x28: scan = 0x50; break;
-                case 0x20: scan = 0x39; break;
-                case 0x0D: scan = 0x1C; break;
-                case 0x1B: scan = 1; break;
-                case 0x08: scan = 0x0E; break;
-                default: return;
-            }
-            var flags = (down ? 0 : 1) | (key >= 0x25 && key <= 0x28 ? 2 : 0);
+            var scan = KeyboardMessages.ScanCode(key);
+            if (scan == 0) return;
+            var flags = (down ? 0 : 1) | (KeyboardMessages.IsExtended(key) ? 2 : 0);
             Put(data, 24, scan | (flags << 16));
             Put(data, 28, key << 16);
             Put(data, 32, down ? 0x100 : 0x101);

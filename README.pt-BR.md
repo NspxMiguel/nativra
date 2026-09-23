@@ -10,8 +10,6 @@
 ![Plataforma](https://img.shields.io/badge/plataforma-Xbox_Dev_Mode-107c10)
 ![Licença](https://img.shields.io/badge/licença-PolyForm_Noncommercial-lightgrey)
 
-**EM DESENVOLVIMENTO · POR NSPXMIGUEL**
-
 </div>
 
 > [!WARNING]
@@ -112,4 +110,4 @@ Gratuito para usar, estudar, modificar e compartilhar, **não para vender**.
 Consulte [LICENSE](LICENSE) e [NOTICE.md](NOTICE.md): PolyForm Noncommercial 1.0.0.
 
 Sem jogos, BIOS ou chaves incluídos. Sem bypass de licença. Sem afiliação com
-Microsoft, Xbox ou Valve. Desenvolvido por **NSPXMIGUEL**, por hobby.
+Microsoft, Xbox ou Valve.

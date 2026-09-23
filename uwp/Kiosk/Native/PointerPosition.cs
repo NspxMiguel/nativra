@@ -17,6 +17,13 @@ namespace Kiosk.Native
         public int X => (int)Math.Round(x, MidpointRounding.AwayFromZero);
         public int Y => (int)Math.Round(y, MidpointRounding.AwayFromZero);
 
+        public void Set(int targetX, int targetY, int width, int height)
+        {
+            if (width < 1 || height < 1) return;
+            x = Math.Max(0, Math.Min(width - 1, targetX));
+            y = Math.Max(0, Math.Min(height - 1, targetY));
+        }
+
         public void Move(double deltaX, double deltaY, int width, int height)
         {
             if (width < 1 || height < 1) return;

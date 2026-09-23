@@ -93,7 +93,6 @@ namespace Kiosk.Native
                 { "LoadIconW", FakeCursor },
                 { "LoadIconA", FakeCursor },
                 { "ClipCursor", 1 },
-                { "SetCursorPos", 1 },
                 { "MessageBoxW", 1 },
                 { "MessageBoxA", 1 },
                 { "MonitorFromWindow", FakeMonitor },
@@ -194,6 +193,9 @@ namespace Kiosk.Native
         private delegate int PointDelegate(IntPtr point);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int SetPointDelegate(int x, int y);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int SizesDelegate(uint flags, IntPtr paths, IntPtr modes);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -221,6 +223,7 @@ namespace Kiosk.Native
         private static PeekDelegate peek;
         private static GetMessageDelegate getMessage;
         private static PointDelegate cursorPos;
+        private static SetPointDelegate setCursorPos;
         private static MetricDelegate keyState;
         private static SizesDelegate displaySizes;
         private static RawListDelegate rawList;
@@ -365,8 +368,15 @@ namespace Kiosk.Native
             cursorPos = point =>
             {
                 if (point == IntPtr.Zero) return 0;
-                Marshal.WriteInt32(point, 0, PointerBridge.X);
-                Marshal.WriteInt32(point, 4, PointerBridge.Y);
+                PointerBridge.ReadPosition(out var x, out var y);
+                Marshal.WriteInt32(point, 0, x);
+                Marshal.WriteInt32(point, 4, y);
+                return 1;
+            };
+
+            setCursorPos = (x, y) =>
+            {
+                PointerBridge.Warp(x, y);
                 return 1;
             };
 
@@ -467,6 +477,7 @@ namespace Kiosk.Native
                 { "GetMessageW", Marshal.GetFunctionPointerForDelegate(getMessage) },
                 { "GetMessageA", Marshal.GetFunctionPointerForDelegate(getMessage) },
                 { "GetCursorPos", Marshal.GetFunctionPointerForDelegate(cursorPos) },
+                { "SetCursorPos", Marshal.GetFunctionPointerForDelegate(setCursorPos) },
                 { "GetAsyncKeyState", Marshal.GetFunctionPointerForDelegate(keyState) },
                 { "GetKeyState", Marshal.GetFunctionPointerForDelegate(keyState) },
                 { "GetMonitorInfoW", Marshal.GetFunctionPointerForDelegate(monitorInfo) },

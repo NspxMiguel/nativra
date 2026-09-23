@@ -5,6 +5,25 @@ const tls = await Bun.file("uwp/Kiosk/Native/ThreadTls.cs").text();
 const loader = await Bun.file("uwp/Kiosk/Native/LoaderStubs.cs").text();
 const pe = await Bun.file("uwp/Kiosk/Native/PeImage.cs").text();
 const graphics = await Bun.file("uwp/Kiosk/Native/GraphicsBridge.cs").text();
+const chain = await Bun.file("uwp/Kiosk/Native/FakeSwapChain.cs").text();
+const mirror = await Bun.file("uwp/Kiosk/Native/FrameMirror.cs").text();
+
+test("swap-chain interface getters preserve the IID and return owned references", () => {
+  expect(chain).toContain("private static TwoOut device;");
+  expect(chain).toContain("private static TwoOut coreWindow;");
+  expect(chain).toContain("Query(ownerDevice, riid, result)");
+  expect(chain).toContain("return Query(held, riid, surface);");
+  expect(chain).not.toContain("Marshal.WriteIntPtr(surface, held)");
+});
+
+test("mirror reserves its frame buffer before copying and ignores window alpha", () => {
+  const take = mirror.slice(mirror.indexOf("public static void Take()"));
+  expect(take.indexOf("Interlocked.Exchange(ref busy, 1)")).toBeLessThan(
+    take.indexOf("Marshal.Copy("),
+  );
+  expect(take).toContain("into[alpha] = 255;");
+  expect(take).toContain("if (!queued)");
+});
 
 test("swap-chain description is only freed by the finally block after entering try", () => {
   const method = graphics.slice(

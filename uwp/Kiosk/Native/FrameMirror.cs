@@ -189,6 +189,7 @@ namespace Kiosk.Native
                 if (given != IntPtr.Zero)
                 {
                     back = given;
+                    Marshal.AddRef(back);
                 }
                 else
                 {
@@ -272,7 +273,14 @@ namespace Kiosk.Native
         public static void Take()
         {
             if (!Running) return;
+            // Reserve the CPU buffer before writing it, including while the
+            // dispatcher is still consuming the previous frame.
+            var now = Environment.TickCount;
+            if (unchecked(now - lastShown) < 50) return;
+            if (System.Threading.Interlocked.Exchange(ref busy, 1) == 1) return;
             var mapped = IntPtr.Zero;
+            var isMapped = false;
+            var queued = false;
             try
             {
                 var copy = Marshal.GetDelegateForFunctionPointer<CopyDelegate>(
@@ -283,6 +291,7 @@ namespace Kiosk.Native
                 var map = Marshal.GetDelegateForFunctionPointer<MapDelegate>(
                     ComProxy.Method(context, MapSlot));
                 if (map(context, staging, 0, 1, 0, mapped) != S_OK) return;
+                isMapped = true;
 
                 var from = Marshal.ReadIntPtr(mapped, 0);
                 var pitch = Marshal.ReadInt32(mapped, 8);
@@ -291,11 +300,17 @@ namespace Kiosk.Native
                 {
                     Marshal.Copy(from + row * pitch, into, row * width * 4, width * 4);
                 }
+                // The window back buffer uses IGNORE alpha; WriteableBitmap
+                // instead composites alpha, so an otherwise valid frame can
+                // disappear entirely unless we make it opaque here.
+                for (var alpha = 3; alpha < into.Length; alpha += 4)
+                    into[alpha] = 255;
                 filling = 1 - filling;
 
                 var unmap = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(
                     ComProxy.Method(context, UnmapSlot));
                 unmap(context, staging, 0);
+                isMapped = false;
 
                 Copied++;
 
@@ -304,9 +319,6 @@ namespace Kiosk.Native
                 // a thread given a screen-sized write sixty times a second
                 // never draws it — which is how an application ends up alive,
                 // busy, and absent from the screen.
-                var now = Environment.TickCount;
-                if (now - lastShown < 50) return;
-                if (System.Threading.Interlocked.Exchange(ref busy, 1) == 1) return;
                 lastShown = now;
                 var showing = into;
                 var __ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
@@ -334,6 +346,7 @@ namespace Kiosk.Native
                         System.Threading.Interlocked.Exchange(ref busy, 0);
                     }
                 });
+                queued = true;
             }
             catch (Exception error)
             {
@@ -342,7 +355,14 @@ namespace Kiosk.Native
             }
             finally
             {
+                if (isMapped)
+                {
+                    var unmap = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(
+                        ComProxy.Method(context, UnmapSlot));
+                    unmap(context, staging, 0);
+                }
                 if (mapped != IntPtr.Zero) Marshal.FreeHGlobal(mapped);
+                if (!queued) System.Threading.Interlocked.Exchange(ref busy, 0);
             }
         }
     }

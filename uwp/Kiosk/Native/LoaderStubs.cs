@@ -59,11 +59,6 @@ namespace Kiosk.Native
 
         private static SystemImports imports;
 
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate IntPtr ThreadDelegate(
-            IntPtr security, IntPtr stack, IntPtr start, IntPtr argument,
-            uint flags, IntPtr id);
-
         [DllImport("api-ms-win-core-processthreads-l1-1-0.dll", SetLastError = true)]
         private static extern IntPtr CreateThread(
             IntPtr security, IntPtr stack, IntPtr start, IntPtr argument,
@@ -72,7 +67,9 @@ namespace Kiosk.Native
         [DllImport("api-ms-win-core-processthreads-l1-1-0.dll", SetLastError = true)]
         private static extern bool SetThreadPriority(IntPtr thread, int priority);
 
-        private static ThreadDelegate makeThread;
+        // A managed function pointer round-trip preserves its delegate type.
+        // The TLS wrapper must recover this exact type, not a look-alike.
+        private static ThreadTls.CreateThreadDelegate makeThread;
 
         /// <summary>How many of the game's threads were told to stand back.</summary>
         public static long Calmed;

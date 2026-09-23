@@ -2,6 +2,12 @@ import { expect, test } from "bun:test";
 
 const probe = await Bun.file("uwp/Kiosk/Native/NativeProbe.cs").text();
 const tls = await Bun.file("uwp/Kiosk/Native/ThreadTls.cs").text();
+const loader = await Bun.file("uwp/Kiosk/Native/LoaderStubs.cs").text();
+
+test("thread hooks share the managed function-pointer delegate type", () => {
+  expect(loader).toContain("ThreadTls.CreateThreadDelegate makeThread");
+  expect(tls).toContain("internal delegate IntPtr CreateThreadDelegate");
+});
 
 test("TLS wraps the loader thread hook after installation", () => {
   const loader = probe.indexOf("LoaderStubs.Install(imports);");

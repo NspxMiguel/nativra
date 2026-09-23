@@ -73,7 +73,7 @@ namespace Kiosk
         // always the thing the controller is pointing at — which is the whole
         // job of the large tile, and position cannot do it.
         public double TileWidth => 220;
-        public double TileHeight => 300;
+        public double TileHeight => 330;
 
         public bool Installed { get; set; } = true;
         public bool Favourite { get; set; }
@@ -599,7 +599,7 @@ namespace Kiosk
                 DockFriends, DockMods, DockDownloads,
             };
             var at = Array.FindIndex(
-                icons, icon => icon.Background == Application.Current.Resources["Accent"]);
+                icons, icon => (icon.Tag as string) == activeDestination);
             if (at < 0) at = 0;
             var next = icons[((at + by) % icons.Length + icons.Length) % icons.Length];
             next.Focus(FocusState.Programmatic);
@@ -745,11 +745,13 @@ namespace Kiosk
             return null;
         }
 
+        private string activeDestination = "library";
+
         private void Light(string where)
         {
-            var lit = (Brush)Application.Current.Resources["Accent"];
+            activeDestination = where;
             var dim = (Brush)Application.Current.Resources["Surface2"];
-            var onLit = (Brush)Application.Current.Resources["OnAccent"];
+            var onLit = (Brush)Application.Current.Resources["TextPrimary"];
             var onDim = (Brush)Application.Current.Resources["TextTertiary"];
 
             foreach (var icon in new[]
@@ -759,7 +761,8 @@ namespace Kiosk
                      })
             {
                 var active = (icon.Tag as string) == where;
-                icon.Background = active ? lit : dim;
+                // Selection is not a held press. Only focus/hover lights the circle.
+                icon.Background = dim;
                 icon.Foreground = active ? onLit : onDim;
             }
         }
@@ -787,11 +790,6 @@ namespace Kiosk
         private void OnDockLeave(object sender, PointerRoutedEventArgs e)
         {
             NameText.Text = string.Empty;
-        }
-
-        private async void OnAvatarClicked(object sender, RoutedEventArgs e)
-        {
-            await LaunchAsync(new Tile { Route = "steam", Title = Texts.Get("tile.steam") });
         }
 
         private async void OnSignInClicked(object sender, RoutedEventArgs e)

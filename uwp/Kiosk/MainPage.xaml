@@ -20,7 +20,7 @@
             <Rectangle RadiusX="12" RadiusY="12" Fill="{x:Bind Art}" Visibility="{x:Bind ArtShown}"/>
             <Rectangle RadiusX="12" RadiusY="12" Visibility="{x:Bind IconShown}">
               <Rectangle.Fill>
-                <ImageBrush ImageSource="{x:Bind Icon}" Stretch="Uniform" AlignmentX="Center" AlignmentY="Center"/>
+                <ImageBrush ImageSource="{x:Bind Icon}" Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"/>
               </Rectangle.Fill>
             </Rectangle>
             <!-- The tile that opens everything. -->
@@ -84,13 +84,6 @@
         <Rectangle Grid.Row="0" Grid.RowSpan="3" Width="1400" Height="900" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="644,-288,0,0" Fill="{StaticResource ScreenGlow}" IsHitTestVisible="False"/>
         <!-- ================================================ status bar -->
         <Grid Grid.Row="0" Padding="56,0,56,0">
-          <TextBlock Text="Nativra" Margin="64,0,0,0" FontSize="{StaticResource BodySize}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" IsHitTestVisible="False"/>
-          <Button x:Name="AvatarButton" Style="{StaticResource DockIconStyle}" Width="44" Height="44" HorizontalAlignment="Left" VerticalAlignment="Center" Background="Transparent" Click="OnAvatarClicked">
-            <Grid>
-              <Ellipse Width="44" Height="44" Fill="{StaticResource AvatarFill}"/>
-              <TextBlock x:Name="AvatarText" Text="NS" FontSize="18" FontWeight="ExtraBold" Foreground="{StaticResource OnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Grid>
-          </Button>
           <!-- Saying out loud what this console is running. It is the
                          quietest text on the screen on purpose: useful to know,
                          never the thing being read. -->
@@ -192,7 +185,7 @@
                          icons never move when it appears or empties. -->
           <TextBlock x:Name="NameText" Grid.Row="0" Margin="0,18,0,0" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center"/>
           <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="30" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <Button x:Name="DockLibrary" Style="{StaticResource DockIconStyle}" Background="{StaticResource Accent}" Foreground="{StaticResource OnAccent}" Tag="library" Click="OnDockClicked" PointerEntered="OnDockHover" GotFocus="OnDockHover" PointerExited="OnDockLeave" LostFocus="OnDockLeave">
+            <Button x:Name="DockLibrary" Style="{StaticResource DockIconStyle}" Foreground="{StaticResource TextTertiary}" Tag="library" Click="OnDockClicked" PointerEntered="OnDockHover" GotFocus="OnDockHover" PointerExited="OnDockLeave" LostFocus="OnDockLeave">
               <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets" FontSize="22"/>
             </Button>
             <Button x:Name="DockShop" Style="{StaticResource DockIconStyle}" Foreground="{StaticResource TextTertiary}" Tag="shop" Click="OnDockClicked" PointerEntered="OnDockHover" GotFocus="OnDockHover" PointerExited="OnDockLeave" LostFocus="OnDockLeave">

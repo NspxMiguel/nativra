@@ -1,7 +1,9 @@
 # Draft app identity
 
-Status: approved by Miguel on 2026-09-23 for application display name, launch
-artwork and package icons. The internal NSPX.Kiosk identity remains unchanged.
+Status: applied after Miguel's initial instruction on 2026-09-23, then rejected
+by him after seeing the splash on the TV: artificial-looking and insufficiently
+sharp. The artwork is not a final approved identity. Replacement is pending.
+The internal NSPX.Kiosk identity remains unchanged.
 Generated with the built-in ImageGen tool.
 
 ## Recommendation: Nativra

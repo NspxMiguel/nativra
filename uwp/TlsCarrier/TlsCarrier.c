@@ -23,7 +23,7 @@ BOOL WINAPI NativraTlsEntry(HINSTANCE instance, DWORD reason, LPVOID reserved) {
   (void)instance;
   (void)reason;
   (void)reserved;
-  return TRUE;
+  return GetCurrentThreadId() != 0;
 }
 
 __declspec(dllexport) int NativraTlsConfigure(const unsigned char *source,

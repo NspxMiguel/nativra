@@ -10,6 +10,19 @@ const mirror = await Bun.file("uwp/Kiosk/Native/FrameMirror.cs").text();
 const pointer = await Bun.file("uwp/Kiosk/Native/PointerBridge.cs").text();
 const mainPage = await Bun.file("uwp/Kiosk/MainPage.xaml.cs").text();
 const messages = await Bun.file("uwp/Kiosk/Native/WindowMessages.cs").text();
+const raw = await Bun.file("uwp/Kiosk/Native/RawInputBridge.cs").text();
+
+test("raw input is registered, bounded, delivered and released through window dispatch", () => {
+  expect(probe).toContain("RawInputBridge.Install(imports);");
+  expect(raw).toContain("packetOrder.Count >= 256");
+  expect(raw).toContain("PointerBridge.PostRaw(target, handle);");
+  expect(raw).toContain("Marshal.WriteInt32(size, required);");
+  expect(raw).toContain("if (capacity < required) return Fail(122);");
+  expect(raw).toContain("(registration.Flags & 0x30) == 0x30");
+  expect(pointer).toContain("RawInputBridge.SuppressesLegacy(1)");
+  expect(pointer).toContain("RawInputBridge.SuppressesLegacy(0)");
+  expect(messages).toContain("RawInputBridge.Release(extra.ToInt64())");
+});
 
 test("window dispatch invokes the registered procedure and writes keyboard state", () => {
   expect(probe).toContain("WindowMessages.Install(imports);");

@@ -100,14 +100,16 @@ namespace Kiosk.Native
             if (held[code] == down) return;
             held[code] = down;
             if (down) Keys++;
+            RawInputBridge.Keyboard(code, down);
             // lParam carries the repeat count and the scan code; a game that
             // reads only the key itself is the common case, and the rest being
             // zero is what a synthesised key looks like anywhere.
-            Post(down ? WM_KEYDOWN : WM_KEYUP, code, 1);
+            if (!RawInputBridge.SuppressesLegacy(1)) Post(down ? WM_KEYDOWN : WM_KEYUP, code, 1);
         }
 
         private sealed class Waiting
         {
+            public IntPtr Window;
             public int Message;
             public long Word;
             public long Long;
@@ -115,14 +117,20 @@ namespace Kiosk.Native
 
         private static readonly Queue<Waiting> pending = new Queue<Waiting>();
 
-        private static void Post(int message, long word, long extra)
+        internal static void PostRaw(IntPtr window, long handle) => Post(0xFF, 0, handle, window);
+
+        private static void Post(int message, long word, long extra, IntPtr window = default(IntPtr))
         {
             lock (pending)
             {
                 // A game that stops reading should not be allowed to grow this
                 // without limit; the oldest movement is the least interesting.
-                while (pending.Count > 128) pending.Dequeue();
-                pending.Enqueue(new Waiting { Message = message, Word = word, Long = extra });
+                while (pending.Count > 128)
+                {
+                    var dropped = pending.Dequeue();
+                    if (dropped.Message == 0xFF) RawInputBridge.Release(dropped.Long);
+                }
+                pending.Enqueue(new Waiting { Window = window, Message = message, Word = word, Long = extra });
             }
         }
 
@@ -139,7 +147,7 @@ namespace Kiosk.Native
             }
             if (target == IntPtr.Zero) return true;
 
-            Marshal.WriteIntPtr(target, 0, WindowMessages.InputWindow);
+            Marshal.WriteIntPtr(target, 0, next.Window == IntPtr.Zero ? WindowMessages.InputWindow : next.Window);
             Marshal.WriteInt32(target, 8, next.Message);
             Marshal.WriteInt32(target, 12, 0);
             Marshal.WriteInt64(target, 16, next.Word);
@@ -211,7 +219,8 @@ namespace Kiosk.Native
                     if (X != wasX || Y != wasY)
                     {
                         Moves++;
-                        Post(WM_MOUSEMOVE, Left ? 1 : 0, Packed());
+                        RawInputBridge.Mouse(X - wasX, Y - wasY, 0);
+                        if (!RawInputBridge.SuppressesLegacy(0)) Post(WM_MOUSEMOVE, Left ? 1 : 0, Packed());
                     }
                 }
 
@@ -238,14 +247,16 @@ namespace Kiosk.Native
                 if (a != Left)
                 {
                     Left = a;
-                    Post(a ? WM_LBUTTONDOWN : WM_LBUTTONUP, a ? 1 : 0, Packed());
+                    RawInputBridge.Mouse(0, 0, a ? 1 : 2);
+                    if (!RawInputBridge.SuppressesLegacy(0)) Post(a ? WM_LBUTTONDOWN : WM_LBUTTONUP, a ? 1 : 0, Packed());
                 }
 
                 var x = (buttons & GamepadButtons.X) != 0 || host[0xC5];
                 if (x != Right)
                 {
                     Right = x;
-                    Post(x ? WM_RBUTTONDOWN : WM_RBUTTONUP, x ? 2 : 0, Packed());
+                    RawInputBridge.Mouse(0, 0, x ? 4 : 8);
+                    if (!RawInputBridge.SuppressesLegacy(0)) Post(x ? WM_RBUTTONDOWN : WM_RBUTTONUP, x ? 2 : 0, Packed());
                 }
             }
             catch

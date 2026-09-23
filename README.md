@@ -32,6 +32,13 @@ Mode. Native PC-game execution is its main technical focus, not its whole purpos
 
 **Experimental pre-alpha · proof of concept — not ready for everyday play.**
 
+> [!IMPORTANT]
+> **Current priority: running PC games on the Xbox itself.** Development is
+> focused on getting a game to launch from the app and remain playable, stable
+> and responsive. Other parts of Nativra are unfinished, partially connected or
+> not working yet while this core functionality takes priority. Their presence
+> in the interface or roadmap does not mean they are ready to use.
+
 [First milestone](docs/progress/2026-09-23.md) ·
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
 [Contributing](docs/CONTRIBUTING.md) · [License](LICENSE)
@@ -102,6 +109,10 @@ Listing an emulator here does not establish game compatibility or complete setup
 Real build 179 console capture: a Steam library detail page, **not GTA V running**.
 The play time comes from Steam account history, not time played through Nativra.
 GTA V is not installed in this capture and has not been validated as compatible.
+This detail screen is an unfinished Nativra interface, not Steam's own game page.
+It currently exposes only artwork, play time and installation state. Layout and
+image sizing still need work; achievements, last-played information and the full
+set of game-management actions are not implemented here yet.
 
 ### On the Xbox itself
 

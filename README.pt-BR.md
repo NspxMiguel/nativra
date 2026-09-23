@@ -31,6 +31,13 @@
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
 [Como contribuir](docs/CONTRIBUTING.md) · [Licença](LICENSE)
 
+> [!IMPORTANT]
+> **Prioridade atual: rodar jogos de PC no próprio Xbox.** Neste momento, estou
+> focado em fazer o jogo abrir pelo app e ficar jogável, estável e fluido.
+> Por isso, outras partes do Nativra ainda estão incompletas, parcialmente
+> conectadas ou sem funcionar enquanto essa função principal recebe prioridade.
+> Aparecer na interface ou nos planos não significa estar pronto para uso.
+
 ## Dentro do app
 
 ![Biblioteca inicial do Nativra capturada no Xbox Series X](docs/progress/nativra-library-build179.png)
@@ -53,6 +60,10 @@ A presença de um emulador aqui não comprova compatibilidade nem configuração
 Captura real do build 179: página da biblioteca Steam, **não é o GTA V rodando**.
 O tempo de jogo vem do histórico da Steam, não de partidas no Nativra.
 O GTA V não está instalado nessa captura e não foi validado como compatível.
+Essa página é uma interface incompleta do Nativra, não a página original da Steam.
+Por enquanto, mostra apenas arte, tempo de jogo e estado de instalação. O layout
+e o dimensionamento da imagem ainda precisam de ajustes; conquistas, última vez
+jogado e o conjunto completo de ações de gerenciamento ainda não estão implementados nela.
 
 ### No próprio Xbox
 

@@ -33,6 +33,12 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate uint StartDelegate(IntPtr parameter);
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void ExitDelegate(uint code);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void FreeAndExitDelegate(IntPtr module, uint code);
+
         /// <summary>One library's thread-local template and the slot it uses.</summary>
         private struct Block
         {
@@ -59,6 +65,10 @@ namespace Kiosk.Native
         private static CreateThreadDelegate createThread;
         private static CreateThreadDelegate realCreateThread;
         private static StartDelegate trampoline;
+        private static ExitDelegate exitThread;
+        private static ExitDelegate realExitThread;
+        private static FreeAndExitDelegate freeAndExitThread;
+        private static FreeAndExitDelegate realFreeAndExitThread;
 
         /// <summary>Threads that were given their own copies.</summary>
         public static long Adopted;
@@ -184,6 +194,30 @@ namespace Kiosk.Native
             if (real == IntPtr.Zero) return;
             realCreateThread = Marshal.GetDelegateForFunctionPointer<CreateThreadDelegate>(real);
 
+            // Native CRT thread wrappers can call ExitThread without returning
+            // through our trampoline. Windows must see its original vector
+            // before running thread detach callbacks and freeing loader data.
+            var exitAddress = imports.SystemAddress("kernel32.dll", "ExitThread");
+            if (exitAddress != IntPtr.Zero)
+            {
+                realExitThread = Marshal.GetDelegateForFunctionPointer<ExitDelegate>(exitAddress);
+                exitThread = code =>
+                {
+                    try { Release(); }
+                    finally { realExitThread(code); }
+                };
+            }
+            var freeExitAddress = imports.SystemAddress("kernel32.dll", "FreeLibraryAndExitThread");
+            if (freeExitAddress != IntPtr.Zero)
+            {
+                realFreeAndExitThread = Marshal.GetDelegateForFunctionPointer<FreeAndExitDelegate>(freeExitAddress);
+                freeAndExitThread = (module, code) =>
+                {
+                    try { Release(); }
+                    finally { realFreeAndExitThread(module, code); }
+                };
+            }
+
             // The thread starts in here, takes its copies, and only then goes
             // where it was asked to go. Doing it any later means the thread's
             // own start-up code reads a slot nobody has filled.
@@ -237,6 +271,10 @@ namespace Kiosk.Native
             {
                 imports.Overrides[module + "!CreateThread"] =
                     Marshal.GetFunctionPointerForDelegate(createThread);
+                if (exitThread != null)
+                    imports.Overrides[module + "!ExitThread"] = Marshal.GetFunctionPointerForDelegate(exitThread);
+                if (freeAndExitThread != null)
+                    imports.Overrides[module + "!FreeLibraryAndExitThread"] = Marshal.GetFunctionPointerForDelegate(freeAndExitThread);
             }
         }
     }

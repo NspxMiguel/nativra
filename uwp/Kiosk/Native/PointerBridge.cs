@@ -30,8 +30,9 @@ namespace Kiosk.Native
         private const int WM_RBUTTONUP = 0x0205;
 
         /// <summary>Where the pointer is, in screen coordinates.</summary>
-        public static int X = Width / 2;
-        public static int Y = Height / 2;
+        private static readonly PointerPosition position = new PointerPosition(Width / 2, Height / 2);
+        public static int X => position.X;
+        public static int Y => position.Y;
 
         /// <summary>Whether each button is held, in the order Windows numbers them.</summary>
         public static bool Left;
@@ -223,10 +224,10 @@ namespace Kiosk.Native
                 {
                     var wasX = X;
                     var wasY = Y;
-                    X = (int)Math.Max(0, Math.Min(Width - 1, X + dx * Speed * Settings.PointerSensitivity * seconds));
                     // Screen coordinates grow downwards; a stick pushed up
                     // should move the pointer up.
-                    Y = (int)Math.Max(0, Math.Min(Height - 1, Y - dy * Speed * Settings.PointerSensitivity * seconds));
+                    var distance = Speed * Settings.PointerSensitivity * seconds;
+                    position.Move(dx * distance, -dy * distance, Width, Height);
                     if (X != wasX || Y != wasY)
                     {
                         Moves++;

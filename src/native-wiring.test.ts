@@ -4,6 +4,14 @@ const probe = await Bun.file("uwp/Kiosk/Native/NativeProbe.cs").text();
 const tls = await Bun.file("uwp/Kiosk/Native/ThreadTls.cs").text();
 const loader = await Bun.file("uwp/Kiosk/Native/LoaderStubs.cs").text();
 const pe = await Bun.file("uwp/Kiosk/Native/PeImage.cs").text();
+const graphics = await Bun.file("uwp/Kiosk/Native/GraphicsBridge.cs").text();
+
+test("swap-chain description is only freed by the finally block after entering try", () => {
+  const method = graphics.slice(graphics.indexOf("private static int MakeChainOn("), graphics.indexOf("private static bool Show("));
+  const guarded = method.slice(method.indexOf("try\n"));
+  expect(guarded.match(/Marshal\.FreeHGlobal\(desc\);/g)).toHaveLength(1);
+  expect(guarded).toMatch(/finally\s*\{\s*Marshal\.FreeHGlobal\(desc\);/);
+});
 
 test("only the selected game executable is mapped alongside its libraries", () => {
   expect(probe).toContain(

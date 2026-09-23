@@ -462,11 +462,10 @@ namespace Kiosk.Native
             var desc = Marshal.AllocHGlobal(48);
             Marshal.WriteInt32(desc, 0, width);
             Marshal.WriteInt32(desc, 4, height);
-            // Blue first. Nothing here presents directly to a screen — the
-            // frames are copied and shown as a picture — and a picture on this
-            // framework is laid out blue, green, red, alpha. Matching it costs
-            // nothing and saves two million byte swaps a frame.
-            Marshal.WriteInt32(desc, 8, 87);
+            // The game's render-target view must be compatible with the
+            // actual resource format. Silently replacing RGBA with BGRA can
+            // invalidate that view; convert channels only during readback.
+            Marshal.WriteInt32(desc, 8, format == 0 ? 87 : format);
             Marshal.WriteInt32(desc, 12, 0);        // Stereo
             Marshal.WriteInt32(desc, 16, 1);        // SampleDesc.Count
             Marshal.WriteInt32(desc, 20, 0);        // SampleDesc.Quality

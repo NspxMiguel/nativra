@@ -68,15 +68,16 @@ QR sign-in, your owned and family-shared library, collections, search and game d
 
 ### Steam game details
 
-![Steam game details in Nativra with artwork, play time and installation state](docs/progress/nativra-steam-details-build179.png)
+![Steam game details in Nativra with panoramic artwork, play time and installation state](docs/progress/nativra-steam-details-build189.png)
 
-Real build 179 console capture: a Steam library detail page, **not GTA V running**.
+Real build 189 console capture: a Steam library detail page, **not GTA V running**.
 The play time comes from Steam account history, not time played through Nativra.
 GTA V is not installed in this capture and has not been validated as compatible.
 This detail screen is an unfinished Nativra interface, not Steam's own game page.
-It currently exposes only artwork, play time and installation state. Layout and
-image sizing still need work; achievements, last-played information and the full
-set of game-management actions are not implemented here yet.
+It currently exposes only artwork, play time and installation state. The panoramic
+artwork is now shown without the earlier side crop; layout still needs work,
+including the partially clipped Back footer. Achievements, last-played information
+and the full set of game-management actions are not implemented here yet.
 
 ## Inside the app
 

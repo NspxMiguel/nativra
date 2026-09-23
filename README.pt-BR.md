@@ -59,15 +59,16 @@ Login por QR, biblioteca própria e compartilhada, coleções, busca e download 
 
 ### Detalhes de um jogo da Steam
 
-![Detalhes de um jogo Steam no Nativra com arte, tempo de jogo e estado de instalação](docs/progress/nativra-steam-details-build179.png)
+![Detalhes de um jogo Steam no Nativra com arte panorâmica, tempo de jogo e estado de instalação](docs/progress/nativra-steam-details-build189.png)
 
-Captura real do build 179: página da biblioteca Steam, **não é o GTA V rodando**.
+Captura real do build 189: página da biblioteca Steam, **não é o GTA V rodando**.
 O tempo de jogo vem do histórico da Steam, não de partidas no Nativra.
 O GTA V não está instalado nessa captura e não foi validado como compatível.
 Essa página é uma interface incompleta do Nativra, não a página original da Steam.
-Por enquanto, mostra apenas arte, tempo de jogo e estado de instalação. O layout
-e o dimensionamento da imagem ainda precisam de ajustes; conquistas, última vez
-jogado e o conjunto completo de ações de gerenciamento ainda não estão implementados nela.
+Por enquanto, mostra apenas arte, tempo de jogo e estado de instalação. A arte
+panorâmica agora aparece sem o recorte lateral anterior; o layout ainda precisa
+de ajustes, incluindo o rodapé de voltar parcialmente cortado. Conquistas, última
+vez jogado e o conjunto completo de ações de gerenciamento ainda não estão implementados nela.
 
 ## Dentro do app
 

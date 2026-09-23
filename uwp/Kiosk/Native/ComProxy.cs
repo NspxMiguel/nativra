@@ -221,8 +221,8 @@ namespace Kiosk.Native
                         }
                         lock (admits)
                         {
-                            if (interfacesByObject.TryGetValue(self.ToInt64(), out var interfaces)
-                                && interfaces.TryGetValue(wanted, out var target))
+                            if (interfacesByObject.TryGetValue(self.ToInt64(), out var interfaceMap)
+                                && interfaceMap.TryGetValue(wanted, out var target))
                             {
                                 Marshal.WriteIntPtr(result, target);
                                 return 0;

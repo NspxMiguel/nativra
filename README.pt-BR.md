@@ -71,11 +71,13 @@ jogado e o conjunto completo de ações de gerenciamento ainda não estão imple
 
 ## Dentro do app
 
-![Biblioteca inicial do Nativra capturada no Xbox Series X](docs/progress/nativra-library-build179.png)
+![Biblioteca do Nativra com capas verticais e contorno branco na seleção no Xbox Series X](docs/progress/nativra-library-build188.png)
 
-Biblioteca inicial e navegação pelo controle, capturadas no console no build 179.
-É a interface pré-alpha atual, não um mockup. O atalho de login Steam ainda aparece
-mesmo com uma sessão salva; ele não indica corretamente o estado da conta.
+Captura real do build 188 no console: capas verticais e contorno branco no jogo
+selecionado. Aparecer na biblioteca não comprova compatibilidade; WAVESHAPER
+ainda não é jogável pelo carregador atual. É uma interface pré-alpha, não um
+mockup. O atalho de login Steam ainda aparece mesmo com uma sessão salva;
+ele não indica corretamente o estado da conta.
 
 ### Prateleira de emuladores
 

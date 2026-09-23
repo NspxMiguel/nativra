@@ -80,11 +80,13 @@ set of game-management actions are not implemented here yet.
 
 ## Inside the app
 
-![Nativra home library captured on Xbox Series X](docs/progress/nativra-library-build179.png)
+![Nativra home library with portrait covers and a white selection outline on Xbox Series X](docs/progress/nativra-library-build188.png)
 
-Home library and controller navigation, captured on the console in build 179.
-This is the current pre-alpha UI, not a design mockup. The Steam sign-in shortcut
-is still shown even with a saved session; it is not a reliable account-status indicator.
+Real build 188 console capture: portrait covers and a white outline around the
+selected game. A game appearing in the library does not establish compatibility;
+WAVESHAPER is not playable through the current loader. This is pre-alpha UI,
+not a design mockup. The Steam sign-in shortcut is still shown even with a saved
+session; it is not a reliable account-status indicator.
 
 ### Emulator shelf
 

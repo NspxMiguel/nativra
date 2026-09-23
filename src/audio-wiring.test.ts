@@ -1,6 +1,20 @@
 import { expect, test } from "bun:test";
 
 const audio = await Bun.file("uwp/Kiosk/Native/AudioBridge.cs").text();
+const proxy = await Bun.file("uwp/Kiosk/Native/ComProxy.cs").text();
+
+test("audio endpoint data flow uses its own vtable and a shared COM identity", () => {
+  expect(audio).toContain(
+    'EndpointInterface = "1be09788-6894-4089-8586-9a2a6c265ac5"',
+  );
+  expect(audio).toContain(
+    "Proxy.LinkInterfacePair(device, DeviceInterface, endpointView, EndpointInterface)",
+  );
+  expect(audio).toContain("Marshal.WriteInt32(result, 0); // eRender");
+  expect(proxy).toContain('["00000000-0000-0000-c000-000000000046"] = first');
+  expect(proxy).toContain("Marshal.WriteIntPtr(result, target);");
+  expect(proxy).toContain("Marshal.WriteIntPtr(result, IntPtr.Zero);");
+});
 
 test("endpoint properties expose the device description before client activation", () => {
   expect(audio).toContain(

@@ -230,7 +230,7 @@ namespace Kiosk.Native
                 foreach (var file in files)
                 {
                     if (!file.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) &&
-                        !file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                        !file.Name.Equals(exeName, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }

@@ -150,6 +150,7 @@ namespace Kiosk
         {
             InitializeComponent();
             InitializeGameHost();
+            InitializeDiagnostics();
             ApplyStaticText();
             StartClock();
             Loaded += async (s, e) => await LoadAppsAsync();

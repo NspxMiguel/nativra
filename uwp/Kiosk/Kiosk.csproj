@@ -64,6 +64,7 @@
       <DependentUpon>SteamPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="EvenWrapPanel.cs" />
+    <Compile Include="MainPage.Diagnostics.cs" />
     <Compile Include="ConsolePortal.cs" />
     <Compile Include="SteamAuth.cs" />
     <Compile Include="SteamSession.cs" />

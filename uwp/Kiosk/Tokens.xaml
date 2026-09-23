@@ -10,6 +10,10 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!-- ============================================================ surface -->
   <SolidColorBrush x:Key="GameDetailBackground" Color="#FF000000"/>
+  <SolidColorBrush x:Key="DiagnosticBackground" Color="#EB000000"/>
+  <SolidColorBrush x:Key="DiagnosticForeground" Color="#FFF2F5F4"/>
+  <x:String x:Key="DiagnosticFontFamily">Consolas, Courier New</x:String>
+  <x:Double x:Key="DiagnosticTextSize">22</x:Double>
   <LinearGradientBrush x:Key="GameHeroScrim" StartPoint="0,0" EndPoint="0,1">
     <GradientStop Color="#00000000" Offset="0"/>
     <GradientStop Color="#00000000" Offset="0.5"/>

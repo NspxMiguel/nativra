@@ -215,6 +215,12 @@ namespace Kiosk.Native
         /// them; only the three fields that name the part are answered.
         /// </summary>
         public static bool NameTheCard;
+        // Captured from the real DXGI response before compatibility overrides.
+        public static string ReportedAdapter;
+        public static uint ReportedVendor;
+        public static uint ReportedDevice;
+        public static ulong ReportedVideoMemory;
+        public static int ReportedFeatureLevel;
 
         /// <summary>
         /// Leave the frames where they are. The copy runs on the engine's own
@@ -1212,6 +1218,13 @@ namespace Kiosk.Native
                     var call = Marshal.GetDelegateForFunctionPointer<OneOutDelegate>(
                         ComProxy.Method(original, slot));
                     var code = call(original, desc);
+                    if (code == S_OK)
+                    {
+                        ReportedAdapter = Marshal.PtrToStringUni(desc, 128).TrimEnd('\0');
+                        ReportedVendor = unchecked((uint)Marshal.ReadInt32(desc, 256));
+                        ReportedDevice = unchecked((uint)Marshal.ReadInt32(desc, 260));
+                        ReportedVideoMemory = unchecked((ulong)Marshal.ReadInt64(desc, 272));
+                    }
                     if (code != S_OK || !NameTheCard) return code;
 
                     var name = "AMD Radeon RX 6800 XT";
@@ -1390,6 +1403,8 @@ namespace Kiosk.Native
                     var code = make(adapter, driverType, software, flags, levels,
                         levelCount, sdk, ownDevice, resultLevel, resultContext);
                     Note("D3D11CreateDevice: 0x" + code.ToString("X8"));
+                    if (code == S_OK && resultLevel != IntPtr.Zero)
+                        ReportedFeatureLevel = Marshal.ReadInt32(resultLevel);
                     if (code != S_OK || resultChain == IntPtr.Zero || chainDesc == IntPtr.Zero)
                     {
                         return code;
@@ -1479,6 +1494,7 @@ namespace Kiosk.Native
 
                     if (code == S_OK && resultLevel != IntPtr.Zero)
                     {
+                        ReportedFeatureLevel = Marshal.ReadInt32(resultLevel);
                         Note("feature level 0x" + Marshal.ReadInt32(resultLevel).ToString("X"));
                     }
 

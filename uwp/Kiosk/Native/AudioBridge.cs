@@ -97,6 +97,8 @@ namespace Kiosk.Native
         /// disappoints it half way through stops where it stands.
         /// </summary>
         public static bool Enabled = true;
+        public static bool ClientAcquired;
+        public static int LastActivationResult;
 
         private static readonly ComProxy Proxy = new ComProxy();
         private static IntPtr enumerator;
@@ -208,9 +210,11 @@ namespace Kiosk.Native
                         var read = Marshal.GetDelegateForFunctionPointer<ResultDelegate>(
                             ComProxy.Method(operation, 3));
                         read(operation, code, slot);
+                        LastActivationResult = Marshal.ReadInt32(code);
                         if (Marshal.ReadInt32(code) == S_OK)
                         {
                             got = Marshal.ReadIntPtr(slot);
+                            ClientAcquired = got != IntPtr.Zero;
                         }
                         else
                         {
@@ -246,6 +250,7 @@ namespace Kiosk.Native
                     path, ref wanted, IntPtr.Zero, handler, out _);
                 if (code2 != S_OK)
                 {
+                    LastActivationResult = code2;
                     Note("activate call: 0x" + code2.ToString("X8"));
                     return IntPtr.Zero;
                 }

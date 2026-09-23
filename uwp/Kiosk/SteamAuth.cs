@@ -163,12 +163,20 @@ namespace Kiosk
             {
                 foreach (var v in values)
                 {
+                    // A refused token renewal needs a new phone approval;
+                    // transient service failures must keep the saved session.
+                    if (method == "GenerateAccessTokenForApp" &&
+                        (v == "15" || v == "21" || v == "26" || v == "27"))
+                        throw new SteamSignInRequiredException();
                     if (v != "1") throw new Exception($"Steam eresult {v}");
                     break;
                 }
             }
             if (!response.IsSuccessStatusCode)
             {
+                if (method == "GenerateAccessTokenForApp" &&
+                    ((int)response.StatusCode == 401 || (int)response.StatusCode == 403))
+                    throw new SteamSignInRequiredException();
                 throw new Exception($"HTTP {(int)response.StatusCode}");
             }
             return Proto.Read(bytes);

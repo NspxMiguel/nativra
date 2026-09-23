@@ -39,6 +39,21 @@ Biblioteca inicial e navegação pelo controle, capturadas no console no build 1
 É a interface pré-alpha atual, não um mockup. O atalho de login Steam ainda aparece
 mesmo com uma sessão salva; ele não indica corretamente o estado da conta.
 
+### Prateleira de emuladores
+
+![Tela de emuladores do Nativra com ações de abrir e adicionar à biblioteca](docs/progress/nativra-emulators-build179.png)
+
+Captura real do build 179 no console: sistemas listados e atalhos para a biblioteca.
+A presença de um emulador aqui não comprova compatibilidade nem configuração completa.
+
+### Detalhes de um jogo da Steam
+
+![Detalhes de um jogo Steam no Nativra com arte, tempo de jogo e estado de instalação](docs/progress/nativra-steam-details-build179.png)
+
+Captura real do build 179: página da biblioteca Steam, **não é o GTA V rodando**.
+O tempo de jogo vem do histórico da Steam, não de partidas no Nativra.
+O GTA V não está instalado nessa captura e não foi validado como compatível.
+
 ### No próprio Xbox
 
 ![Painel do Xbox aberto sobre Seraph's Last Stand, com Nativra na lista de aplicativos](docs/progress/seraph-xbox-guide-build179.png)

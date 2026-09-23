@@ -168,6 +168,8 @@ namespace Kiosk.Native
         {
             if (string.IsNullOrEmpty(requested)) return IntPtr.Zero;
             var name = BaseName(requested);
+            // LoadLibrary appends .dll when the caller supplies no extension.
+            if (name.IndexOf('.') < 0) name += ".dll";
             Remember(name);
 
             // One the loader mapped itself. Handing back its base address is

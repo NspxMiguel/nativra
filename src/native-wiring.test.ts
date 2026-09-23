@@ -8,6 +8,13 @@ const graphics = await Bun.file("uwp/Kiosk/Native/GraphicsBridge.cs").text();
 const chain = await Bun.file("uwp/Kiosk/Native/FakeSwapChain.cs").text();
 const mirror = await Bun.file("uwp/Kiosk/Native/FrameMirror.cs").text();
 
+test("Unity native plugins are mapped and initialized with extensionless lookup", () => {
+  expect(probe).toContain('TryGetItemAsync("Plugins")');
+  expect(probe).toContain('TryGetItemAsync("x86_64")');
+  expect(probe).toContain("foreach (var name in initializedModules)");
+  expect(loader).toContain("if (name.IndexOf('.') < 0) name += \".dll\";");
+});
+
 test("swap-chain interface getters preserve the IID and return owned references", () => {
   expect(chain).toContain("private static TwoOut device;");
   expect(chain).toContain("private static TwoOut coreWindow;");

@@ -213,6 +213,25 @@ namespace Kiosk.Native
                 // its imports resolve against nothing. Unity's order is fixed.
                 var order = new List<string> { "baselib.dll", "unityplayer.dll", "gameassembly.dll" };
                 var files = new List<StorageFile>(await folder.GetFilesAsync());
+                // Unity resolves native plugins at runtime, but the packaged
+                // Windows loader cannot load them from the game's data folder.
+                // Map their original binaries through the same PE loader first.
+                var dataFolder = await folder.TryGetItemAsync(
+                    System.IO.Path.GetFileNameWithoutExtension(exeName) + "_Data") as StorageFolder;
+                var plugins = dataFolder == null ? null :
+                    await dataFolder.TryGetItemAsync("Plugins") as StorageFolder;
+                if (plugins != null)
+                {
+                    foreach (var plugin in await plugins.GetFilesAsync())
+                        if (plugin.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                            files.Add(plugin);
+                    var x64 = await plugins.TryGetItemAsync("x86_64") as StorageFolder;
+                    if (x64 != null)
+                        foreach (var plugin in await x64.GetFilesAsync())
+                            if (plugin.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                                files.Add(plugin);
+                }
+                var initializedModules = new List<string>();
                 files.Sort((a, b) =>
                 {
                     int Rank(StorageFile f)
@@ -245,6 +264,8 @@ namespace Kiosk.Native
                     {
                         var image = PeImage.Load(file.Name, bytes, imports.Resolve);
                         imports.Add(image);
+                        if (file.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                            initializedModules.Add(file.Name);
                         lines.Add(
                             $"{file.Name}: mapped at 0x{image.BaseAddress.ToInt64():X} " +
                             $"exports={image.ExportCount} unresolved={image.Unresolved.Count} " +
@@ -273,7 +294,7 @@ namespace Kiosk.Native
                 {
                     // Each step is written down before it is taken: if the
                     // process dies inside one, the file still says which.
-                    foreach (var name in new[] { "baselib.dll", "UnityPlayer.dll", "GameAssembly.dll" })
+                    foreach (var name in initializedModules)
                     {
                         var image = imports.Find(name);
                         if (image == null || image.EntryPoint == IntPtr.Zero) continue;

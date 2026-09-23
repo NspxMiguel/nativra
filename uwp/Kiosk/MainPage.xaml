@@ -239,6 +239,13 @@
              frames are copied back and shown as a picture, which is the one
              route that asks the platform for nothing. -->
     <Image x:Name="GameImage" Stretch="Fill" Visibility="Collapsed" IsHitTestVisible="False" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+    <Border x:Name="GameLoading" Visibility="Collapsed" Background="{StaticResource DiagnosticBackground}">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="700" Spacing="20">
+        <ProgressRing x:Name="GameLoadingRing" Width="48" Height="48" IsActive="False" Foreground="{StaticResource Accent}"/>
+        <TextBlock x:Name="GameLoadingText" FontSize="{StaticResource SectionSize}" Foreground="{StaticResource DiagnosticForeground}" TextAlignment="Center"/>
+        <TextBlock x:Name="GameLoadingHint" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource DiagnosticForeground}" TextWrapping="Wrap" TextAlignment="Center"/>
+      </StackPanel>
+    </Border>
     <!-- The credit, over the game as well as over the menu. It sits after
              the game's own image in the tree so the frames cannot cover it. -->
     <Border x:Name="GameCredit" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,26,0,0" Padding="26,10,26,10" CornerRadius="{StaticResource RadiusPill}" Background="#99000000" IsHitTestVisible="False">
@@ -246,6 +253,14 @@
     </Border>
     <Viewbox x:Name="GameDiagnostics" Visibility="Collapsed" Stretch="Uniform" IsHitTestVisible="False" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
       <Grid Width="1920" Height="1080">
+        <Path HorizontalAlignment="Left" VerticalAlignment="Top" Data="M 0,0 L 0,30 L 8,23 L 14,36 L 20,33 L 14,21 L 25,21 Z" Fill="{StaticResource DiagnosticForeground}" Stroke="{StaticResource GameDetailBackground}" StrokeThickness="2">
+          <Path.RenderTransform>
+            <TranslateTransform x:Name="GamePointerTransform"/>
+          </Path.RenderTransform>
+        </Path>
+        <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="40,0,40,32" Padding="18,10" Background="{StaticResource DiagnosticBackground}" CornerRadius="{StaticResource RadiusCard}">
+          <TextBlock x:Name="GameInputHint" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource DiagnosticForeground}"/>
+        </Border>
         <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,100,40,0" Padding="18,12" CornerRadius="{StaticResource RadiusCard}" Background="{StaticResource DiagnosticBackground}" MaxWidth="720">
           <TextBlock x:Name="GameDiagnosticsText" Width="640" FontFamily="{StaticResource DiagnosticFontFamily}" FontSize="{StaticResource DiagnosticTextSize}" Foreground="{StaticResource DiagnosticForeground}" TextWrapping="Wrap"/>
         </Border>

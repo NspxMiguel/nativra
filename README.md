@@ -2,7 +2,8 @@
 
 An experimental native PC-game host for Xbox Series X|S in official Developer Mode.
 
-**Early alpha — not ready for everyday play.** Created by **NSPXMIGUEL**.
+**Experimental pre-alpha · proof of concept — not ready for everyday play.**
+Created by **NSPXMIGUEL**.
 
 [First milestone](docs/progress/2026-09-23.md) ·
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
@@ -72,7 +73,7 @@ a lot of it needs no console.
 Builds happen on a hosted Windows runner; no Windows machine is needed locally.
 
 Use official Xbox Developer Mode and your own licensed games. No game files,
-BIOS, keys or Steam sessions are supplied. Download the alpha package from
+BIOS, keys or Steam sessions are supplied. Download the pre-alpha package from
 Releases; its notes explain installation and limitations. Internal folder names
 and the package identity still use `Kiosk` to preserve compatibility.
 

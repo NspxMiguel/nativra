@@ -7,7 +7,7 @@
       "name": "Nativra",
       "kind": "front-end",
       "runs": "Our own front-end: every installed app on one screen, opened with the gamepad",
-      "url": "https://github.com/NspxMiguel/nativra/releases/download/v0.1.0-alpha.1/kiosk-uwp.zip",
+      "url": "https://github.com/NspxMiguel/nativra/releases/download/v0.0.1-prealpha.1/kiosk-uwp.zip",
       "via": "gh",
       "console": [
         "series"

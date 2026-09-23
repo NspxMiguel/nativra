@@ -102,7 +102,7 @@ jobs:
         run: |
           tag="kiosk-build-${GITHUB_RUN_NUMBER}"
           gh release create "$tag" kiosk-uwp.zip \
-            --title "Nativra development build ${GITHUB_RUN_NUMBER}" \
+            --title "Nativra pre-alpha · development build ${GITHUB_RUN_NUMBER}" \
             --prerelease --latest=false \
             --notes "Experimental automated build for Xbox Dev Mode. Not a stable release or a compatibility guarantee. Read README.md and docs/progress before installing. Back up app data before uninstalling. Install with: bun src/xbdev.ts install <files>" \
             --repo "$GITHUB_REPOSITORY"

@@ -23,4 +23,6 @@ test("portrait covers fill a two-to-three tile without colored side bands", () =
   expect(page).toContain("public double TileWidth => 220;");
   expect(page).toContain("public double TileHeight => 330;");
   expect(view).toContain('ImageSource="{x:Bind Icon}" Stretch="UniformToFill"');
+  expect(view).toContain('x:Name="SelectionOutline" BorderBrush="{StaticResource TextPrimary}"');
+  expect(page).toContain("outline.Visibility = focused ? Visibility.Visible : Visibility.Collapsed;");
 });

@@ -311,9 +311,21 @@ namespace Kiosk
             {
                 await Native.NativeProbe.RunAsync(appId);
             }
-            catch (Exception)
+            catch (PlatformNotSupportedException)
+            {
+                StatusText.Text = Texts.Get("game.architecture");
+            }
+            catch (System.IO.FileNotFoundException)
+            {
+                StatusText.Text = Texts.Get("game.missing");
+            }
+            catch (InvalidOperationException)
             {
                 StatusText.Text = Texts.Get("game.restart");
+            }
+            catch (Exception)
+            {
+                StatusText.Text = Texts.Get("game.launchfailed");
             }
         }
 
@@ -513,6 +525,10 @@ namespace Kiosk
 
         private static void ScaleTile(Button button, bool focused)
         {
+            var content = button?.Content as FrameworkElement;
+            var outline = content?.FindName("SelectionOutline") as Border;
+            if (outline != null)
+                outline.Visibility = focused ? Visibility.Visible : Visibility.Collapsed;
             if (!(button?.RenderTransform is ScaleTransform scale)) return;
             var target = focused ? (double)Application.Current.Resources["TileFocusScale"] : 1;
             if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)

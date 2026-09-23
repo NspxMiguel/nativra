@@ -46,14 +46,11 @@ namespace Kiosk.Native
                     // return at the first await and leave this thread empty,
                     // which is the opposite of the point.
                     WorkAsync(appId).GetAwaiter().GetResult();
-                }
-                catch
-                {
-                    // The report on disk is the record; nothing to raise to.
-                }
-                finally
-                {
                     done.TrySetResult(true);
+                }
+                catch (Exception error)
+                {
+                    done.TrySetException(error);
                 }
             }, 8 * 1024 * 1024);
             thread.IsBackground = true;
@@ -98,7 +95,7 @@ namespace Kiosk.Native
                 {
                     lines.Add("state=no win32 folder");
                     await WriteAsync(lines);
-                    return;
+                    throw new System.IO.FileNotFoundException("No installed game executable was found.");
                 }
 
                 // The dangerous half of the loader only runs when asked.
@@ -165,6 +162,19 @@ namespace Kiosk.Native
                         break;
                     }
                 }
+                // Reject unsupported architecture before mapping any dependency.
+                // A 32-bit image needs a separate execution/ABI path, not x64 thunks.
+                var executable = await folder.GetFileAsync(exeName);
+                var executableBytes = (await FileIO.ReadBufferAsync(executable)).ToArray();
+                if (executableBytes.Length < 64)
+                    throw new BadImageFormatException("The executable header is incomplete.");
+                var peOffset = BitConverter.ToInt32(executableBytes, 0x3C);
+                if (peOffset < 0 || peOffset > executableBytes.Length - 26 ||
+                    BitConverter.ToUInt32(executableBytes, peOffset) != 0x00004550)
+                    throw new BadImageFormatException("The executable has no valid PE header.");
+                if (BitConverter.ToUInt16(executableBytes, peOffset + 4) != 0x8664 ||
+                    BitConverter.ToUInt16(executableBytes, peOffset + 24) != 0x20B)
+                    throw new PlatformNotSupportedException("The native loader currently requires an AMD64 PE32+ executable.");
                 ModuleFileName.Install(imports, folder.Path + "\\" + exeName);
 
                 // The switches only reach the game if the game can read them,
@@ -282,6 +292,7 @@ namespace Kiosk.Native
                     catch (Exception error)
                     {
                         lines.Add($"{file.Name}: FAILED {error.GetType().Name}: {error.Message}");
+                        if (file.Name.Equals(exeName, StringComparison.OrdinalIgnoreCase)) throw;
                     }
                     await WriteAsync(lines);
                 }
@@ -648,6 +659,8 @@ namespace Kiosk.Native
             catch (Exception error)
             {
                 lines.Add("probe failed: " + error.GetType().Name + ": " + error.Message);
+                await WriteAsync(lines);
+                throw;
             }
             await WriteAsync(lines);
         }
@@ -705,9 +718,11 @@ namespace Kiosk.Native
                 foreach (var candidate in await parent.GetFoldersAsync())
                 {
                     if (appId != 0 && candidate.Name != appId.ToString()) continue;
-                    if (await candidate.TryGetItemAsync("UnityPlayer.dll") != null)
+                    foreach (var file in await candidate.GetFilesAsync())
                     {
-                        return candidate;
+                        if (file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                            !file.Name.StartsWith("Unity", StringComparison.OrdinalIgnoreCase))
+                            return candidate;
                     }
                 }
             }

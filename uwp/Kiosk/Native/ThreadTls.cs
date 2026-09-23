@@ -43,6 +43,18 @@ namespace Kiosk.Native
 
         private static readonly List<Block> Blocks = new List<Block>();
         private static readonly object Gate = new object();
+        // Dynamic TlsAlloc indexes do not reserve entries in gs:[0x58]. Keep
+        // game indexes in a private vector tail, beyond the native prefix.
+        private const int NativeSlots = 4096;
+        private const int GameSlots = 64;
+        private sealed class ThreadState
+        {
+            public IntPtr Original;
+            public IntPtr Table;
+            public readonly Dictionary<int, IntPtr> Copies = new Dictionary<int, IntPtr>();
+        }
+        private static readonly Dictionary<long, ThreadState> Threads =
+            new Dictionary<long, ThreadState>();
 
         private static CreateThreadDelegate createThread;
         private static CreateThreadDelegate realCreateThread;
@@ -58,20 +70,47 @@ namespace Kiosk.Native
         /// Records a library's template so every thread made after this gets a
         /// copy of it. Called once per mapped library that has one.
         /// </summary>
-        public static void Remember(int slot, byte[] template, int size)
+        public static int Remember(byte[] template, int size)
         {
             lock (Gate)
             {
+                if (Blocks.Count >= GameSlots) throw new InvalidOperationException("Game TLS capacity exceeded");
+                var slot = NativeSlots + Blocks.Count;
                 Blocks.Add(new Block { Slot = slot, Template = template, Size = size });
+                return slot;
+            }
+        }
+
+        public static void Restore()
+        {
+            var teb = PeImage.CurrentTeb();
+            lock (Gate)
+            {
+                if (Threads.TryGetValue(teb.ToInt64(), out var state) &&
+                    Marshal.ReadIntPtr(teb + 0x58) == state.Table)
+                    Marshal.WriteIntPtr(teb + 0x58, state.Original);
+            }
+        }
+
+        public static void Release()
+        {
+            Restore();
+            var key = PeImage.CurrentTeb().ToInt64();
+            lock (Gate)
+            {
+                if (!Threads.TryGetValue(key, out var state)) return;
+                Threads.Remove(key);
+                foreach (var block in state.Copies.Values) Marshal.FreeHGlobal(block);
+                Marshal.FreeHGlobal(state.Table);
             }
         }
 
         /// <summary>
         /// Gives the calling thread its own copies. Safe to call more than
-        /// once: a slot that already holds something is left alone, because
-        /// overwriting it would throw away whatever the thread had put there.
+        /// once: only copies owned by this bridge count as initialized. A
+        /// nonzero value in the system heap is not evidence of a TLS block.
         /// </summary>
-        public static void Adopt()
+        public static bool Adopt()
         {
             try
             {
@@ -85,9 +124,28 @@ namespace Kiosk.Native
 
                 lock (Gate)
                 {
+                    if (!Threads.TryGetValue(teb.ToInt64(), out var state))
+                    {
+                        state = new ThreadState
+                        {
+                            Table = Marshal.AllocHGlobal((NativeSlots + GameSlots) * IntPtr.Size),
+                        };
+                        var empty = new byte[(NativeSlots + GameSlots) * IntPtr.Size];
+                        Marshal.Copy(empty, 0, state.Table, empty.Length);
+                        Threads.Add(teb.ToInt64(), state);
+                    }
+                    if (table != state.Table)
+                    {
+                        var readable = PeImage.ReadableBytes(table);
+                        if (readable < IntPtr.Size) throw new InvalidOperationException("Unreadable native TLS vector");
+                        var prefix = new byte[Math.Min(readable, NativeSlots * IntPtr.Size)];
+                        Marshal.Copy(table, prefix, 0, prefix.Length);
+                        Marshal.Copy(prefix, 0, state.Table, prefix.Length);
+                        state.Original = table;
+                    }
                     foreach (var one in Blocks)
                     {
-                        if (Marshal.ReadIntPtr(table, one.Slot * 8) != IntPtr.Zero) continue;
+                        if (state.Copies.ContainsKey(one.Slot)) continue;
 
                         var block = Marshal.AllocHGlobal(Math.Max(one.Size, 8));
                         for (var i = 0; i < one.Size; i++) Marshal.WriteByte(block, i, 0);
@@ -95,16 +153,20 @@ namespace Kiosk.Native
                         {
                             Marshal.Copy(one.Template, 0, block, one.Template.Length);
                         }
-                        Marshal.WriteIntPtr(table, one.Slot * 8, block);
+                        Marshal.WriteIntPtr(state.Table, one.Slot * IntPtr.Size, block);
+                        state.Copies.Add(one.Slot, block);
                         System.Threading.Interlocked.Increment(ref CopiedBlocks);
                     }
+                    Marshal.WriteIntPtr(teb + 0x58, state.Table);
                 }
                 System.Threading.Interlocked.Increment(ref Adopted);
+                return true;
             }
             catch (Exception error)
             {
                 System.Threading.Interlocked.Increment(ref Failures);
                 LastError = error.GetType().Name + ": " + error.Message;
+                return false;
             }
         }
 
@@ -131,9 +193,16 @@ namespace Kiosk.Native
                 var given = Marshal.ReadIntPtr(parameter, IntPtr.Size);
                 Marshal.FreeHGlobal(parameter);
 
-                Adopt();
+                if (!Adopt()) return 8;
 
-                return Marshal.GetDelegateForFunctionPointer<StartDelegate>(start)(given);
+                try
+                {
+                    return Marshal.GetDelegateForFunctionPointer<StartDelegate>(start)(given);
+                }
+                finally
+                {
+                    Release();
+                }
             };
             var trampolineAddress = Marshal.GetFunctionPointerForDelegate(trampoline);
 

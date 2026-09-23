@@ -282,7 +282,9 @@ namespace Kiosk.Native
                         await WriteAsync(lines);
 
                         ThreadTls.Adopt();
-                        var result = StartModule(image);
+                        string result;
+                        try { result = StartModule(image); }
+                        finally { ThreadTls.Restore(); }
                         lines[lines.Count - 1] = "entry." + name + "=" + result;
                         lines.Add("stubs.called=" + imports.Shim.Called.Count);
                         foreach (var called in imports.Shim.Called) lines.Add("  called " + called);
@@ -484,6 +486,10 @@ namespace Kiosk.Native
                             catch
                             {
                                 // Whatever it did is in the list of stubs it reached.
+                            }
+                            finally
+                            {
+                                ThreadTls.Release();
                             }
                         }, 16 * 1024 * 1024);
                         runner.IsBackground = true;

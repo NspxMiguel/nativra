@@ -43,9 +43,6 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate void TlsCallback(IntPtr instance, uint reason, IntPtr reserved);
 
-        [DllImport("api-ms-win-core-processthreads-l1-1-0.dll", SetLastError = true)]
-        private static extern uint TlsAlloc();
-
         [StructLayout(LayoutKind.Sequential)]
         private struct MemoryBasicInformation
         {
@@ -122,7 +119,8 @@ namespace Kiosk.Native
             image.Protect(file);
             image.ReadExports();
             image.RegisterExceptions();
-            image.SetUpTls();
+            try { image.SetUpTls(); }
+            finally { ThreadTls.Restore(); }
             return image;
         }
 
@@ -465,46 +463,27 @@ namespace Kiosk.Native
                 Step?.Invoke(TlsNote);
                 if (TlsLevel < 4) return;
 
-                var slot = (int)TlsAlloc();
+                var templateSize = checked((int)(end - start));
+                var total = checked(templateSize + (int)zeroFill);
+                var template = new byte[Math.Max(templateSize, 0)];
+                if (templateSize > 0) Marshal.Copy((IntPtr)start, template, 0, templateSize);
+                var slot = ThreadTls.Remember(template, total);
                 TlsNote += $" slot={slot} of {existingSlots}";
                 Step?.Invoke(TlsNote);
-                if (slot < 0 || slot > 1000) return;
 
                 Marshal.WriteInt32((IntPtr)indexAddress, slot);
                 TlsNote += " index written";
                 Step?.Invoke(TlsNote);
                 if (TlsLevel < 5) return;
 
-                var templateSize = (int)(end - start);
-                var total = templateSize + (int)zeroFill;
-                var block = Marshal.AllocHGlobal(Math.Max(total, 8));
-                for (var i = 0; i < total; i++) Marshal.WriteByte(block, i, 0);
-                var template = new byte[Math.Max(templateSize, 0)];
-                if (templateSize > 0)
-                {
-                    Marshal.Copy((IntPtr)start, template, 0, templateSize);
-                    Marshal.Copy(template, 0, block, templateSize);
-                }
-                TlsNote += " block ready";
-                Step?.Invoke(TlsNote);
-
-                if (existingSlots > slot)
-                {
-                    Marshal.WriteIntPtr(existing, slot * 8, block);
-                    TlsNote += " wrote in place";
-                }
-                else
-                {
-                    TlsNote += " table too short";
-                    return;
-                }
+                if (!ThreadTls.Adopt()) throw new InvalidOperationException(ThreadTls.LastError);
+                TlsNote += " private vector installed";
                 TlsSlot = slot;
 
                 // And the same copy for every thread made after this one. The
                 // loader used to fill in only the thread that did the loading,
                 // so the main thread had its variables and the thirty the game
                 // starts afterwards had whatever was at that address.
-                ThreadTls.Remember(slot, template, total);
                 Step?.Invoke(TlsNote);
                 if (TlsLevel < 6 || callbacks == 0) return;
 
@@ -546,6 +525,15 @@ namespace Kiosk.Native
         public int TlsSlot { get; private set; } = -1;
 
         private static IntPtr tebReader;
+
+        internal static int ReadableBytes(IntPtr address)
+        {
+            var size = (UIntPtr)(uint)Marshal.SizeOf<MemoryBasicInformation>();
+            if (QueryMemory(address, out var info, size) == UIntPtr.Zero ||
+                (info.Protect & 0x101) != 0) return 0;
+            var remaining = info.RegionSize.ToInt64() - (address.ToInt64() - info.BaseAddress.ToInt64());
+            return (int)Math.Max(0, Math.Min(remaining, 32768));
+        }
 
         /// <summary>
         /// mov rax, gs:[0x30] ; ret — the thread environment block's own

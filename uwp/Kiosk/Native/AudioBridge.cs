@@ -31,6 +31,7 @@ namespace Kiosk.Native
         private const string EnumeratorClass = "bcde0395-e52f-467c-8e3d-c4579291692e";
         private const string EnumeratorInterface = "a95664d2-9614-4f35-a746-de8db63617e6";
         private const string DeviceInterface = "d666063f-1587-4e43-81f1-b948e807363f";
+        private const string EndpointInterface = "1be09788-6894-4089-8586-9a2a6c265ac5";
         private const string CollectionInterface = "0bd7a1be-7a1a-44db-8397-cc5392387b5e";
 
         [DllImport("Mmdevapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -75,6 +76,7 @@ namespace Kiosk.Native
         private static ActivateDelegate activate;
         private static OneOutDelegate identity;
         private static OneOutDelegate condition;
+        private static OneOutDelegate dataFlow;
         private static StoreDelegate store;
         private static OneOutDelegate propertyCount;
         private static ItemDelegate propertyAt;
@@ -444,6 +446,20 @@ namespace Kiosk.Native
                     Marshal.GetFunctionPointerForDelegate(condition),
                 },
                 new[] { DeviceInterface });
+
+            // IMMEndpoint has a different vtable from IMMDevice: its first
+            // method writes an EDataFlow, rather than activating a client.
+            dataFlow = (self, result) =>
+            {
+                if (result == IntPtr.Zero) return unchecked((int)0x80004003);
+                Marshal.WriteInt32(result, 0); // eRender: this is an output endpoint.
+                Note("endpoint render flow handed over");
+                return S_OK;
+            };
+            var endpointView = Proxy.Create(
+                new[] { Marshal.GetFunctionPointerForDelegate(dataFlow) },
+                new[] { EndpointInterface });
+            Proxy.LinkInterfacePair(device, DeviceInterface, endpointView, EndpointInterface);
 
             endpoint = (self, flow, role, result) =>
             {

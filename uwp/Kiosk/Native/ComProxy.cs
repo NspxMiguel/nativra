@@ -175,6 +175,25 @@ namespace Kiosk.Native
         private static readonly Dictionary<long, HashSet<string>> admits =
             new Dictionary<long, HashSet<string>>();
 
+        private static readonly Dictionary<long, Dictionary<string, IntPtr>> interfacesByObject =
+            new Dictionary<long, Dictionary<string, IntPtr>>();
+
+        /// <summary>Joins two vtables under one canonical IUnknown identity.</summary>
+        public void LinkInterfacePair(IntPtr first, string firstId, IntPtr second, string secondId)
+        {
+            var interfaces = new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["00000000-0000-0000-c000-000000000046"] = first,
+                [firstId] = first,
+                [secondId] = second,
+            };
+            lock (admits)
+            {
+                interfacesByObject[first.ToInt64()] = interfaces;
+                interfacesByObject[second.ToInt64()] = interfaces;
+            }
+        }
+
         public IntPtr Create(IntPtr[] methods, string[] interfaces = null)
         {
             if (ask == null)
@@ -182,6 +201,7 @@ namespace Kiosk.Native
                 ask = (self, riid, result) =>
                 {
                     if (result == IntPtr.Zero) return unchecked((int)0x80004003);
+                    Marshal.WriteIntPtr(result, IntPtr.Zero);
 
                     // Claiming to be every interface asked for is how a made
                     // object gets called through a table it does not have.
@@ -198,6 +218,15 @@ namespace Kiosk.Native
                         catch
                         {
                             return unchecked((int)0x80004002);
+                        }
+                        lock (admits)
+                        {
+                            if (interfacesByObject.TryGetValue(self.ToInt64(), out var interfaces)
+                                && interfaces.TryGetValue(wanted, out var target))
+                            {
+                                Marshal.WriteIntPtr(result, target);
+                                return 0;
+                            }
                         }
                         if (!known.Contains(wanted)) return unchecked((int)0x80004002);
                     }

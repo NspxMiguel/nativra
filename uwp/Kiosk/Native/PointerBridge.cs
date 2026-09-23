@@ -71,6 +71,26 @@ namespace Kiosk.Native
         };
 
         private static readonly bool[] held = new bool[256];
+        private static volatile bool[] hostKeys = new bool[256];
+        private static readonly object hostGate = new object();
+
+        /// <summary>Keyboard and portal gamepad events delivered to the host window.</summary>
+        public static void HostKey(int key, bool down)
+        {
+            if (key < 0 || key >= 256) return;
+            lock (hostGate)
+            {
+                if (hostKeys[key] == down) return;
+                var next = (bool[])hostKeys.Clone();
+                next[key] = down;
+                hostKeys = next;
+            }
+        }
+
+        public static void ReleaseHostKeys()
+        {
+            lock (hostGate) hostKeys = new bool[256];
+        }
 
         /// <summary>Whether a key is down, for a game that polls instead of reading.</summary>
         public static bool Down(int key) => key >= 0 && key < 256 && held[key];
@@ -174,11 +194,14 @@ namespace Kiosk.Native
             try
             {
                 var pads = Gamepad.Gamepads;
-                if (pads.Count == 0) return;
-                var reading = pads[0].GetCurrentReading();
+                var reading = pads.Count == 0 ? default(GamepadReading) : pads[0].GetCurrentReading();
+                var host = hostKeys;
+                var buttons = reading.Buttons;
 
-                var dx = Lean(reading.RightThumbstickX);
-                var dy = Lean(reading.RightThumbstickY);
+                // VirtualKey gamepad events are also how Device Portal sends
+                // input. They need not appear in Gamepad.Gamepads readings.
+                var dx = Lean(reading.RightThumbstickX) + (host[0xD9] ? 1 : 0) - (host[0xDA] ? 1 : 0);
+                var dy = Lean(reading.RightThumbstickY) + (host[0xD7] ? 1 : 0) - (host[0xD8] ? 1 : 0);
                 if (dx != 0.0 || dy != 0.0)
                 {
                     var wasX = X;
@@ -199,24 +222,28 @@ namespace Kiosk.Native
                 // wrong costs the player the game.
                 var lx = Lean(reading.LeftThumbstickX);
                 var ly = Lean(reading.LeftThumbstickY);
-                Key(0x57, ly > 0.4);  Key(VK_UP, ly > 0.4);
-                Key(0x53, ly < -0.4); Key(VK_DOWN, ly < -0.4);
-                Key(0x41, lx < -0.4); Key(VK_LEFT, lx < -0.4);
-                Key(0x44, lx > 0.4);  Key(VK_RIGHT, lx > 0.4);
+                var up = ly > 0.4 || (buttons & GamepadButtons.DPadUp) != 0 || host[0xCB] || host[0xD3];
+                var down = ly < -0.4 || (buttons & GamepadButtons.DPadDown) != 0 || host[0xCC] || host[0xD4];
+                var left = lx < -0.4 || (buttons & GamepadButtons.DPadLeft) != 0 || host[0xCD] || host[0xD6];
+                var right = lx > 0.4 || (buttons & GamepadButtons.DPadRight) != 0 || host[0xCE] || host[0xD5];
+                Key(0x57, up || host[0x57]); Key(VK_UP, up || host[VK_UP]);
+                Key(0x53, down || host[0x53]); Key(VK_DOWN, down || host[VK_DOWN]);
+                Key(0x41, left || host[0x41]); Key(VK_LEFT, left || host[VK_LEFT]);
+                Key(0x44, right || host[0x44]); Key(VK_RIGHT, right || host[VK_RIGHT]);
 
-                Key(VK_SPACE, (reading.Buttons & GamepadButtons.Y) != 0);
-                Key(VK_RETURN, (reading.Buttons & GamepadButtons.Menu) != 0);
-                Key(VK_ESCAPE, (reading.Buttons & GamepadButtons.View) != 0);
-                Key(VK_BACK, (reading.Buttons & GamepadButtons.B) != 0);
+                Key(VK_SPACE, (buttons & GamepadButtons.Y) != 0 || host[0xC6] || host[VK_SPACE]);
+                Key(VK_RETURN, (buttons & GamepadButtons.Menu) != 0 || host[0xCF] || host[VK_RETURN]);
+                Key(VK_ESCAPE, (buttons & GamepadButtons.View) != 0 || host[0xD0] || host[VK_ESCAPE]);
+                Key(VK_BACK, (buttons & GamepadButtons.B) != 0 || host[0xC4] || host[VK_BACK]);
 
-                var a = (reading.Buttons & GamepadButtons.A) != 0;
+                var a = (buttons & GamepadButtons.A) != 0 || host[0xC3];
                 if (a != Left)
                 {
                     Left = a;
                     Post(a ? WM_LBUTTONDOWN : WM_LBUTTONUP, a ? 1 : 0, Packed());
                 }
 
-                var x = (reading.Buttons & GamepadButtons.X) != 0;
+                var x = (buttons & GamepadButtons.X) != 0 || host[0xC5];
                 if (x != Right)
                 {
                     Right = x;

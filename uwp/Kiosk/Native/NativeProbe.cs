@@ -490,7 +490,7 @@ namespace Kiosk.Native
                                 {
                                     // A missed beat is a missed beat.
                                 }
-                                System.Threading.Thread.Sleep(25);
+                                System.Threading.Thread.Sleep(250);
                             }
                         });
                         pulse.IsBackground = true;
@@ -536,12 +536,14 @@ namespace Kiosk.Native
                         var handedBack = false;
 
                         var seen = 0L;
-                        // Long enough for a game to load a scene and show a
-                        // splash, not just to start. A first frame that arrives
-                        // after the watch ended looks exactly like no frame.
-                        for (var tick = 0; tick < 500; tick++)
+                        // The observation window must not become the game's
+                        // lifetime: stopping after 500 samples also stopped
+                        // input and released ownership of the native callbacks.
+                        // Keep hosting until UnityMain actually returns, while
+                        // reducing diagnostic I/O after initial startup.
+                        for (var tick = 0; runner.IsAlive; tick = Math.Min(tick + 1, 500))
                         {
-                            await Task.Delay(tick == 0 ? 2 : (tick < 40 ? 50 : 500));
+                            await Task.Delay(tick == 0 ? 2 : (tick < 40 ? 50 : (tick < 500 ? 500 : 2000)));
                             if (!handedBack && tick > 12 && previousBase != IntPtr.Zero)
                             {
                                 PeImage.SetProcessImageBase(previousBase);
@@ -599,6 +601,8 @@ namespace Kiosk.Native
                         }
                         beating = false;
                         GameRunning = false;
+                        PointerBridge.ReleaseHostKeys();
+                        GC.KeepAlive(imports);
                         GraphicsBridge.RestoreInterface();
                         lines.Add("exe.finished");
 

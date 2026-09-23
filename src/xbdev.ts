@@ -366,6 +366,9 @@ async function findPackage(
   const lower = needle.toLowerCase();
   return (
     packages.find((pkg) => pkg.Name.toLowerCase() === lower) ??
+    packages.find((pkg) =>
+      pkg.PackageFamilyName.split("_")[0]?.toLowerCase().split(".").pop() === lower,
+    ) ??
     packages.find((pkg) => pkg.Name.toLowerCase().includes(lower))
   );
 }

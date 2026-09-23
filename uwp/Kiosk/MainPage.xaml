@@ -216,12 +216,14 @@
                              pad, because with two the count is the useful
                              thing and there is no room for both. -->
             <StackPanel x:Name="BatteryBox" Visibility="Collapsed" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-              <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                <Border Width="62" Height="28" CornerRadius="5" BorderBrush="{StaticResource TextSecondary}" BorderThickness="2" Padding="3">
-                  <Border x:Name="BatteryFill" Width="0" Height="16" HorizontalAlignment="Left" CornerRadius="2" Background="{StaticResource Accent}"/>
-                </Border>
-                <Border Width="5" Height="13" CornerRadius="0,2,2,0" VerticalAlignment="Center" Background="{StaticResource TextSecondary}"/>
-              </StackPanel>
+              <Viewbox Width="{StaticResource BatteryIconWidth}" Height="{StaticResource BatteryIconHeight}" Stretch="Uniform" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                  <Border Width="62" Height="28" CornerRadius="5" BorderBrush="{StaticResource TextSecondary}" BorderThickness="2" Padding="3">
+                    <Border x:Name="BatteryFill" Width="0" Height="16" HorizontalAlignment="Left" CornerRadius="2" Background="{StaticResource Accent}"/>
+                  </Border>
+                  <Border Width="5" Height="13" CornerRadius="0,2,2,0" VerticalAlignment="Center" Background="{StaticResource TextSecondary}"/>
+                </StackPanel>
+              </Viewbox>
               <TextBlock x:Name="BatteryText" FontSize="{StaticResource BodySize}" FontWeight="Bold" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
             </StackPanel>
           </StackPanel>

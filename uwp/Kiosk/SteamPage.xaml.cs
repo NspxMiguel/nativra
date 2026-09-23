@@ -222,9 +222,6 @@ namespace Kiosk
 
             try
             {
-                // A saved refresh token can outlive its Steam session. Check it
-                // before treating an empty library response as an empty account.
-                await session.EnsureAccessTokenAsync(force: true);
                 await LoadTestedAsync();
 
                 // His own games plus what the family shares: the client shows

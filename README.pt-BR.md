@@ -2,7 +2,7 @@
 
 # Nativra
 
-**Jogos de PC no Xbox. Execução nativa. Sem streaming.**
+**Uma central de jogos no Xbox. PC nativo, emulação e menos configuração.**
 
 **Português (Brasil) · [English](README.md)**
 
@@ -46,14 +46,54 @@ online ainda não foram validados. Não é uma montagem nem uma imagem gerada po
 
 ## A ideia
 
-Transformar um Xbox Series X|S no Dev Mode oficial em um aplicativo único para
-acessar sua biblioteca e executar jogos de PC no próprio console. Sem streaming,
-sem um PC remoto e sem fornecer arquivos de jogos.
+Transformar um Xbox Series X|S no Dev Mode oficial em uma central de jogos única,
+feita para usar do sofá, só com o controle. Executar jogos de PC nativamente é
+o foco técnico principal, **não tudo que o Nativra pretende fazer**.
+
+A experiência desejada combina a conveniência de um SteamOS com a automação de
+configuração de um EmuDeck: conectar o disco, encontrar o jogo e jogar pelo mesmo
+app. São referências de experiência, não afiliação nem recursos já concluídos.
+
+- **Jogos de PC e lojas.** Execução no próprio Xbox, sem streaming. Steam é a
+  primeira integração; Epic e GOG estão planejadas.
+- **Biblioteca única.** Jogos de PC, jogos de emuladores e títulos da conta ainda
+  não instalados, com capas, busca, coleções, favoritos e itens ocultos.
+- **Facilitador de emulação.** Instalar e configurar emuladores, controles e
+  pastas; importar os arquivos do usuário e identificar o sistema. A ideia é
+  “colocar os jogos e jogar”, sem configurar cada emulador à mão. Executar os
+  emuladores dentro do app é uma meta, não uma substituição já pronta dos pacotes UWP.
+- **Arquivos e downloads no mesmo lugar.** Reconhecer e organizar arquivos do
+  usuário. A entrada por magnet, `.torrent` e Telegram deve seguir o mesmo fluxo,
+  perguntando o console quando houver dúvida. Não fornecemos fontes de jogos,
+  trackers, BIOS proprietárias ou chaves.
+- **Mods e saves.** Central de mods para jogos de PC e emulados, com integração
+  planejada ao SwitchSaveSync para levar os saves do dono entre aparelhos.
+- **Tudo pelo app.** Fontes comunitárias de apps/emuladores na linha do Cydia,
+  instalação e atualização, configuração inicial, escolha de armazenamento,
+  múltiplas contas e relatos de compatibilidade por modelo fazem parte do plano.
+  Conquistas, amigos, convites e logout da Steam também são requisitos.
 
 O processador executa instruções x86-64 nativamente. O trabalho está no carregador
 de executáveis PE e nas pontes para as funções de sistema, gráficos e entrada que
 um jogo de Windows espera encontrar. A mesma arquitetura de CPU não torna todos
 os jogos automaticamente compatíveis.
+
+## Escopo e estado real
+
+| Área | Estado atual |
+| --- | --- |
+| Jogos de PC nativos | Menu do Seraph exibido no Series X; partida estável ainda não validada. |
+| Steam | Login QR, biblioteca e código de download existem; SteamAPI e integração social/dentro dos jogos estão incompletas. |
+| Biblioteca e emuladores | Telas e atalhos na prateleira existem; importação unificada por jogo ainda está incompleta. |
+| Configuração de emuladores | Catálogo, ferramentas de instalação/configuração pela CLI e arquivos de configuração existem. Nem todos foram validados, e o fluxo completo ainda não funciona dentro do app. |
+| Reconhecimento de BIOS e arquivos | Módulos locais de identificação/organização e guias de extração do próprio hardware existem; falta concluir o fluxo pelo controle. |
+| Torrent e Telegram | Existem fila e identificação de arquivos; os dois transportes de download ainda não foram implementados. |
+| Epic/GOG, mods, sincronização de saves, fontes comunitárias, multicontas e site de compatibilidade | Planejados; não entregues como funções completas. |
+
+Detalhes no [briefing completo](docs/DESIGN-BRIEF.md), na
+[configuração de emuladores](docs/EMULATORS.md), na [entrada de arquivos](docs/INTAKE.md)
+e no [tratamento de BIOS do usuário](docs/BIOS.md). Esses documentos em inglês
+também registram metas e investigações anteriores; não são garantias de compatibilidade.
 
 ## O que já foi demonstrado
 

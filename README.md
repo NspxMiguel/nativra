@@ -13,26 +13,19 @@
 </div>
 
 > [!WARNING]
-> **AINDA NÃO ESTÁ PRONTO PARA UTILIZAÇÃO. EM FASE DE TESTES E DESENVOLVIMENTO.**
+> **NOT READY FOR USE. CURRENTLY IN TESTING AND DEVELOPMENT.**
 >
-> O Nativra é feito por **uma pessoa só**, que também tem outros compromissos.
-> É um projeto de hobby, disponibilizado de graça, sem uma equipe por trás.
-> Estou investindo meu próprio dinheiro em diversas ferramentas de IA, meu
-> tempo e muito esforço para tirar essa ideia do papel — quebrando a cabeça,
-> errando, testando e tentando de novo.
+> Nativra is built by **one person**, who also has other commitments.
+> This is a hobby project, shared for free, with no team behind it.
+> I am investing my own money in several AI tools, my time, and a substantial
+> amount of effort to bring this idea to life — figuring things out, making
+> mistakes, testing, and trying again.
 >
-> Ver um jogo abrir pela primeira vez é uma conquista, **não significa que o
-> app esteja pronto**. Não há prazo prometido, garantia de compatibilidade ou
-> suporte imediato. Peço paciência e respeito por esse trabalho.
+> Seeing a game open for the first time is a milestone, **not a sign that the
+> app is ready**. There is no promised deadline, compatibility guarantee, or
+> immediate support. Please be patient and respectful of this work.
 >
 > — **NSPXMIGUEL**
-
-> **Not ready for use — testing and development only.** This is a one-person,
-> self-funded hobby project, shared for free alongside other commitments.
-> AI tools cost real money; implementation and console testing take substantial
-> personal time and effort. The first game opening is a milestone, not a
-> finished product. There is no promised deadline, compatibility guarantee or
-> immediate support. Please be patient and respectful.
 
 An experimental native PC-game host for Xbox Series X|S in official Developer Mode.
 

@@ -451,6 +451,7 @@ namespace Kiosk.Native
                                         "mirrored=" + FrameMirror.Copied + " shown=" + FrameMirror.Shown,
                                         "mirror=" + FrameMirror.Note + " chain=" + FakeSwapChain.Note,
                                         "frame.capture=" + FrameMirror.CaptureNote,
+                                        "mirror.timing=" + FrameMirror.Timing,
                                         "frames=" + GraphicsBridge.Frames
                                             + " at " + rate.ToString("0.0") + " a second",
                                         "keys=" + PointerBridge.Keys,

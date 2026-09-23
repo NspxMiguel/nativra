@@ -74,6 +74,9 @@ test("mirror reserves its frame buffer before copying and ignores window alpha",
   );
   expect(take).toContain("into[alpha] = 255;");
   expect(take).toContain("if (!queued)");
+  expect(take).not.toContain("now - lastShown");
+  expect(take).toContain("if (pitch == width * 4)");
+  expect(take).toContain("Marshal.Copy(from, into, 0, into.Length);");
 });
 
 test("resizing rebinds the mirror and queued UI frames retain their own bitmap", () => {

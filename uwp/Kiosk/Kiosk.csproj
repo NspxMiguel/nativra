@@ -65,6 +65,7 @@
     </Compile>
     <Compile Include="EvenWrapPanel.cs" />
     <Compile Include="MainPage.Diagnostics.cs" />
+    <Compile Include="MainPage.Setup.cs" />
     <Content Include="Shaders\bin\*.cso" />
     <Content Include="Shaders\Fsr1\LICENSE.txt" />
     <Compile Include="ConsolePortal.cs" />

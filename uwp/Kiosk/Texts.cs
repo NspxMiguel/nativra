@@ -12,6 +12,19 @@ namespace Kiosk
     {
         private static readonly Dictionary<string, string> Pt = new Dictionary<string, string>
         {
+            { "setup.title", "Configurar" },
+            { "setup.input", "Modo de entrada ao abrir um jogo" },
+            { "setup.pc", "PC — controle como mouse e teclado" },
+            { "setup.controller", "Controle nativo — exige suporte do jogo" },
+            { "setup.sensitivity", "Velocidade do ponteiro (0,25× a 2×)" },
+            { "setup.diagnostics", "Mostrar diagnóstico sobre o jogo" },
+            { "setup.on", "Ligado" },
+            { "setup.off", "Desligado" },
+            { "setup.save", "Aplicar" },
+            { "setup.cancel", "Cancelar" },
+            { "setup.applied", "Configuração aplicada." },
+            { "setup.failed", "Não foi possível abrir a configuração. Tente novamente pela tela inicial." },
+            { "setup.hint", "No modo PC, use o analógico direito para apontar e A para clicar. Segure View + Menu para trocar de modo durante o jogo. A compatibilidade ainda está em testes." },
             { "game.loading", "Iniciando o jogo…" },
             { "game.mode.pc", "Modo PC · Segure View + Menu para usar o controle nativo" },
             { "game.mode.controller", "Modo controle · Segure View + Menu para usar mouse e teclado" },
@@ -119,6 +132,19 @@ namespace Kiosk
 
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
+            { "setup.title", "Setup" },
+            { "setup.input", "Input mode when opening a game" },
+            { "setup.pc", "PC — controller as mouse and keyboard" },
+            { "setup.controller", "Native controller — requires game support" },
+            { "setup.sensitivity", "Pointer speed (0.25× to 2×)" },
+            { "setup.diagnostics", "Show diagnostics over the game" },
+            { "setup.on", "On" },
+            { "setup.off", "Off" },
+            { "setup.save", "Apply" },
+            { "setup.cancel", "Cancel" },
+            { "setup.applied", "Settings applied." },
+            { "setup.failed", "Setup could not open. Try again from the home screen." },
+            { "setup.hint", "In PC mode, use the right stick to point and A to click. Hold View + Menu to switch modes during a game. Compatibility is still being tested." },
             { "game.loading", "Starting the game…" },
             { "game.mode.pc", "PC mode · Hold View + Menu for native controller input" },
             { "game.mode.controller", "Controller mode · Hold View + Menu for mouse and keyboard" },

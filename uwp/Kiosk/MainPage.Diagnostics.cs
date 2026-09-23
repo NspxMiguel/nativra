@@ -44,6 +44,8 @@ namespace Kiosk
             GameDiagnostics.Visibility = Native.NativeProbe.GameRunning &&
                 GameImage.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
             if (GameDiagnostics.Visibility != Visibility.Visible) return;
+            GameDiagnosticsPanel.Visibility = Settings.ShowDiagnostics ? Visibility.Visible : Visibility.Collapsed;
+            if (!Settings.ShowDiagnostics) return;
 
             try
             {

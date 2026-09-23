@@ -85,6 +85,7 @@
         <Rectangle Grid.Row="0" Grid.RowSpan="3" Width="1400" Height="900" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="644,-288,0,0" Fill="{StaticResource ScreenGlow}" IsHitTestVisible="False"/>
         <!-- ================================================ status bar -->
         <Grid Grid.Row="0" Padding="56,0,56,0">
+          <Button x:Name="SetupButton" HorizontalAlignment="Left" VerticalAlignment="Center" Style="{StaticResource ChipStyle}" Click="OnSetupClicked"/>
           <!-- Saying out loud what this console is running. It is the
                          quietest text on the screen on purpose: useful to know,
                          never the thing being read. -->
@@ -261,7 +262,7 @@
         <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="40,0,40,32" Padding="18,10" Background="{StaticResource DiagnosticBackground}" CornerRadius="{StaticResource RadiusCard}">
           <TextBlock x:Name="GameInputHint" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource DiagnosticForeground}"/>
         </Border>
-        <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,100,40,0" Padding="18,12" CornerRadius="{StaticResource RadiusCard}" Background="{StaticResource DiagnosticBackground}" MaxWidth="720">
+        <Border x:Name="GameDiagnosticsPanel" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,100,40,0" Padding="18,12" CornerRadius="{StaticResource RadiusCard}" Background="{StaticResource DiagnosticBackground}" MaxWidth="720">
           <TextBlock x:Name="GameDiagnosticsText" Width="640" FontFamily="{StaticResource DiagnosticFontFamily}" FontSize="{StaticResource DiagnosticTextSize}" Foreground="{StaticResource DiagnosticForeground}" TextWrapping="Wrap"/>
         </Border>
       </Grid>

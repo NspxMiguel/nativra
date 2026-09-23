@@ -15,6 +15,9 @@ namespace Kiosk
         private const string FileName = "settings.json";
 
         public static string DownloadRoot { get; private set; } = "local";
+        public static bool DesktopInput { get; private set; } = true;
+        public static double PointerSensitivity { get; private set; } = 1;
+        public static bool ShowDiagnostics { get; private set; } = true;
 
         public static async Task LoadAsync()
         {
@@ -26,6 +29,11 @@ namespace Kiosk
                 var text = await FileIO.ReadTextAsync(file);
                 if (!JsonObject.TryParse(text, out var root)) return;
                 DownloadRoot = root.GetNamedString("downloadRoot", "local");
+                DesktopInput = root.GetNamedBoolean("desktopInput", true);
+                var sensitivity = root.GetNamedNumber("pointerSensitivity", 1);
+                PointerSensitivity = double.IsNaN(sensitivity) || double.IsInfinity(sensitivity)
+                    ? 1 : Math.Max(0.25, Math.Min(2, sensitivity));
+                ShowDiagnostics = root.GetNamedBoolean("showDiagnostics", true);
             }
             catch
             {
@@ -36,11 +44,27 @@ namespace Kiosk
         public static async Task SetDownloadRootAsync(string value)
         {
             DownloadRoot = value;
+            await SaveAsync();
+        }
+
+        public static async Task SetInputAsync(bool desktop, double sensitivity, bool diagnostics)
+        {
+            DesktopInput = desktop;
+            PointerSensitivity = Math.Max(0.25, Math.Min(2, sensitivity));
+            ShowDiagnostics = diagnostics;
+            await SaveAsync();
+        }
+
+        private static async Task SaveAsync()
+        {
             try
             {
                 var root = new JsonObject
                 {
-                    { "downloadRoot", JsonValue.CreateStringValue(value) },
+                    { "downloadRoot", JsonValue.CreateStringValue(DownloadRoot) },
+                    { "desktopInput", JsonValue.CreateBooleanValue(DesktopInput) },
+                    { "pointerSensitivity", JsonValue.CreateNumberValue(PointerSensitivity) },
+                    { "showDiagnostics", JsonValue.CreateBooleanValue(ShowDiagnostics) },
                 };
                 var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
                     FileName, CreationCollisionOption.ReplaceExisting);

@@ -196,6 +196,7 @@ namespace Kiosk
                 GameLoadingText.Text = Texts.Get("game.loading");
                 GameLoadingHint.Text = Texts.Get("game.loading.hint");
                 GameInputHint.Text = Texts.Get("game.input.hint");
+                SetupButton.Content = Texts.Get("setup.title");
             }
             catch
             {
@@ -223,6 +224,7 @@ namespace Kiosk
         {
             StatusText.Text = Texts.Get("status.reading");
             await Settings.LoadAsync();
+            Native.ControllerMode.Desktop = Settings.DesktopInput;
             Tiles.Clear();
 
             // The store is not a game. It has its own place in the menu,
@@ -341,6 +343,9 @@ namespace Kiosk
         private async Task StartGameAsync(uint appId)
         {
             if (gameLaunchPending || Native.NativeProbe.GameRunning) return;
+            if (setupOpen) return;
+            Native.ControllerMode.Desktop = Settings.DesktopInput;
+            Native.ControllerMode.Changes++;
             gameLaunchPending = true;
             GameLoading.Visibility = Visibility.Visible;
             GameLoadingRing.IsActive = true;

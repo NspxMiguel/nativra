@@ -223,10 +223,10 @@ namespace Kiosk.Native
                 {
                     var wasX = X;
                     var wasY = Y;
-                    X = (int)Math.Max(0, Math.Min(Width - 1, X + dx * Speed * seconds));
+                    X = (int)Math.Max(0, Math.Min(Width - 1, X + dx * Speed * Settings.PointerSensitivity * seconds));
                     // Screen coordinates grow downwards; a stick pushed up
                     // should move the pointer up.
-                    Y = (int)Math.Max(0, Math.Min(Height - 1, Y - dy * Speed * seconds));
+                    Y = (int)Math.Max(0, Math.Min(Height - 1, Y - dy * Speed * Settings.PointerSensitivity * seconds));
                     if (X != wasX || Y != wasY)
                     {
                         Moves++;

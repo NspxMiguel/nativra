@@ -2,7 +2,7 @@
 
 # Nativra
 
-**PC games on Xbox. Native execution. No streaming.**
+**One Xbox game hub. Native PC games, emulation, and less setup.**
 
 **[Português (Brasil)](README.pt-BR.md) · English**
 
@@ -27,13 +27,58 @@
 >
 > — **NSPXMIGUEL**
 
-An experimental native PC-game host for Xbox Series X|S in official Developer Mode.
+An experimental all-in-one gaming hub for Xbox Series X|S in official Developer
+Mode. Native PC-game execution is its main technical focus, not its whole purpose.
 
 **Experimental pre-alpha · proof of concept — not ready for everyday play.**
 
 [First milestone](docs/progress/2026-09-23.md) ·
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
 [Contributing](docs/CONTRIBUTING.md) · [License](LICENSE)
+
+## More than a PC-game loader
+
+The goal is a controller-first gaming environment with the convenience of
+SteamOS and the setup automation of EmuDeck: sit on the sofa, connect your drive,
+find a game, and play from one app. These are design references, not affiliations
+or claims that Nativra already matches either project.
+
+- **Native PC games and stores.** Run the games on the Xbox itself, without
+  streaming. Steam is the first integration; Epic and GOG are planned.
+- **One library.** Bring PC games, emulator games and owned-but-not-installed
+  titles together, with artwork, search, collections, favorites and hidden items.
+- **An emulation setup assistant.** Install and configure emulators, controller
+  mappings and storage paths; import the user's game files and identify the
+  target system. The intended experience is “add your games and play,” not
+  manually configuring each emulator. Hosting emulators inside the app is a goal,
+  not a completed replacement for installed UWP emulator packages.
+- **Files and downloads in one place.** Recognize and organize user-supplied
+  files from storage. Planned magnet, `.torrent` and Telegram intake feeds the
+  same workflow, asking which system a file belongs to when detection is unsure.
+  No game sources, trackers, proprietary BIOS or keys are supplied.
+- **Mods and saves.** A shared mod hub for PC and emulated games, with a planned
+  connection to SwitchSaveSync for moving the owner's saves between devices.
+- **A self-contained ecosystem.** Community app/emulator sources inspired by
+  Cydia, installation and updates, first-run setup, storage choices, multiple
+  accounts and model-specific compatibility reports are part of the roadmap.
+  Steam achievements, friends, invitations and logout are requirements too.
+
+## Scope versus current implementation
+
+| Area | Current state |
+| --- | --- |
+| Native PC execution | Seraph's main menu displayed on Series X; stable gameplay remains unverified. |
+| Steam | QR login, library and download code exist; SteamAPI and social/game integration remain unfinished. |
+| Library and emulator shelf | In-app screens and shelf shortcuts exist; unified game-level import is incomplete. |
+| Emulator setup | Package catalog, CLI installation/configuration tools and configuration files exist. Not every emulator is verified, and the whole flow is not available inside the app. |
+| BIOS/file recognition | Local recognition/filing modules and owner-dump guidance exist; the controller-driven onboarding flow is unfinished. |
+| Torrent and Telegram | Queue and detection plumbing exist; both transfer implementations are explicitly unimplemented. |
+| Epic/GOG, mod hub, save sync, community sources, multi-account and compatibility site | Planned; not shipped as working end-to-end features. |
+
+See [the full product brief](docs/DESIGN-BRIEF.md), [emulator setup](docs/EMULATORS.md),
+[file intake](docs/INTAKE.md) and [user-supplied BIOS handling](docs/BIOS.md).
+Those documents also contain design targets and historical investigations;
+their presence is not a compatibility guarantee.
 
 ### On the Xbox itself
 

@@ -132,7 +132,7 @@ namespace Kiosk.Native
                         Marshal.WriteIntPtr(table, one.Slot * 8, block);
                     }
                 }
-                Adopted++;
+                System.Threading.Interlocked.Increment(ref Adopted);
             }
             catch
             {
@@ -146,7 +146,11 @@ namespace Kiosk.Native
         /// </summary>
         public static void Install(SystemImports imports)
         {
-            var real = imports.SystemAddress("kernel32.dll", "CreateThread");
+            // Preserve the existing priority hook. Resolving the system export
+            // here would silently bypass it when installing the TLS wrapper.
+            var real = imports.Overrides.TryGetValue("kernel32.dll!CreateThread", out var previous)
+                ? previous
+                : imports.SystemAddress("kernel32.dll", "CreateThread");
             if (real == IntPtr.Zero) return;
             realCreateThread = Marshal.GetDelegateForFunctionPointer<CreateThreadDelegate>(real);
 
@@ -187,7 +191,7 @@ namespace Kiosk.Native
 
             foreach (var module in new[]
                      {
-                         "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll",
+                        "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "kernelbase.dll",
                          "api-ms-win-core-processthreads-l1-1-0.dll",
                          "api-ms-win-core-processthreads-l1-1-1.dll",
                          "api-ms-win-core-processthreads-l1-1-2.dll",

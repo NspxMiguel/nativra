@@ -196,6 +196,7 @@ namespace Kiosk.Native
                 SuspendWatch.Install(imports);
                 ProcessStubs.Install(imports);
                 WindowStubs.Install(imports);
+                WindowMessages.Install(imports);
                 GraphicsBridge.Install(imports);
                 LoaderStubs.Install(imports);
                 // Wrap the loader's priority hook rather than letting it
@@ -428,12 +429,14 @@ namespace Kiosk.Native
                                         "at=" + DateTime.Now.ToString("HH:mm:ss.fff"),
                                         "calls=" + imports.Shim.Total,
                                         "pumped=" + WindowStubs.Pumped,
+                                        "dispatched=" + WindowMessages.Dispatched + " " + WindowMessages.Note,
                                         "pad=" + PadBridge.Reads,
                                         "calmed=" + LoaderStubs.Calmed,
                                         "exit=" + ProcessStubs.Attempted,
                                         "buffers=" + GraphicsBridge.Buffers,
                                         "mirrored=" + FrameMirror.Copied + " shown=" + FrameMirror.Shown,
                                         "mirror=" + FrameMirror.Note + " chain=" + FakeSwapChain.Note,
+                                        "frame.capture=" + FrameMirror.CaptureNote,
                                         "frames=" + GraphicsBridge.Frames
                                             + " at " + rate.ToString("0.0") + " a second",
                                         "keys=" + PointerBridge.Keys,

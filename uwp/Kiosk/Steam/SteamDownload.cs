@@ -112,7 +112,9 @@ namespace Kiosk.Steam
                             done += file.Size;
                             onProgress?.Invoke(new DownloadProgress
                             {
-                                File = name, Done = done, Total = manifest.TotalBytes,
+                                File = name,
+                                Done = done,
+                                Total = manifest.TotalBytes,
                             });
                             continue;
                         }
@@ -136,7 +138,9 @@ namespace Kiosk.Steam
                                 }
                                 onProgress?.Invoke(new DownloadProgress
                                 {
-                                    File = name, Done = done, Total = manifest.TotalBytes,
+                                    File = name,
+                                    Done = done,
+                                    Total = manifest.TotalBytes,
                                 });
                             }
                         }

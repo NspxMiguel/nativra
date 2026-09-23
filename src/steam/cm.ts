@@ -29,7 +29,10 @@ const EMSG = {
 const PROTO_MASK = 0x80000000;
 
 export class SteamError extends Error {
-  constructor(message: string, readonly eresult?: number) {
+  constructor(
+    message: string,
+    readonly eresult?: number,
+  ) {
     super(message);
     this.name = "SteamError";
   }
@@ -58,7 +61,9 @@ export class CmClient {
       response?: { serverlist?: Array<{ endpoint?: string }> };
     };
     const servers = data.response?.serverlist ?? [];
-    return servers.map((s) => s.endpoint).filter((e): e is string => Boolean(e));
+    return servers
+      .map((s) => s.endpoint)
+      .filter((e): e is string => Boolean(e));
   }
 
   async connect(endpoint: string): Promise<void> {
@@ -107,7 +112,11 @@ export class CmClient {
 
   private onPacket(packet: Uint8Array): void {
     if (packet.length < 8) return;
-    const view = new DataView(packet.buffer, packet.byteOffset, packet.byteLength);
+    const view = new DataView(
+      packet.buffer,
+      packet.byteOffset,
+      packet.byteLength,
+    );
     const rawEmsg = view.getUint32(0, true);
     const emsg = rawEmsg & ~PROTO_MASK;
     if ((rawEmsg & PROTO_MASK) === 0) return; // pre-protobuf messages are not used here
@@ -157,7 +166,11 @@ export class CmClient {
     if (unzippedSize > 0) payload = new Uint8Array(gunzipSync(payload));
 
     let at = 0;
-    const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+    const view = new DataView(
+      payload.buffer,
+      payload.byteOffset,
+      payload.byteLength,
+    );
     while (at + 4 <= payload.length) {
       const size = view.getUint32(at, true);
       at += 4;
@@ -167,7 +180,10 @@ export class CmClient {
     }
   }
 
-  private await_(key: string, timeoutMs = 30000): Promise<{ header: Message; body: Message }> {
+  private await_(
+    key: string,
+    timeoutMs = 30000,
+  ): Promise<{ header: Message; body: Message }> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(key);
@@ -217,14 +233,17 @@ export class CmClient {
 
     this.steamId = num(response, 20) || steamId;
     const seconds = Number(num(response, 3, 9n));
-    this.heartbeat = setInterval(() => {
-      if (this.closed) return;
-      try {
-        this.send(EMSG.heartbeat, new Writer().finish(), this.baseHeader());
-      } catch {
-        // A dead socket is discovered by the next real call, not here.
-      }
-    }, Math.max(5, seconds) * 1000);
+    this.heartbeat = setInterval(
+      () => {
+        if (this.closed) return;
+        try {
+          this.send(EMSG.heartbeat, new Writer().finish(), this.baseHeader());
+        } catch {
+          // A dead socket is discovered by the next real call, not here.
+        }
+      },
+      Math.max(5, seconds) * 1000,
+    );
   }
 
   // ------------------------------------------------------------- calls

@@ -28,3 +28,7 @@ native-probe.txt
 native-pulse.txt
 xbox-*.png
 unity.log
+Player.log
+portal-probe.txt
+native-frame.bgra
+HANDOFF.md

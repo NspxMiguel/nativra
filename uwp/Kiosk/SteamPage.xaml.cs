@@ -33,13 +33,14 @@ namespace Kiosk
 
         private readonly HashSet<uint> tested = new HashSet<uint>();
         private readonly HashSet<uint> hidden = new HashSet<uint>();
+        private readonly HashSet<uint> downloaded = new HashSet<uint>();
         private int filter;
         private string query = string.Empty;
         private bool showHidden;
 
         private static readonly string[] FilterKeys =
         {
-            "steam.filter.all", "steam.filter.played", "steam.filter.never", "steam.filter.tested",
+            "steam.filter.all", "steam.filter.downloaded", "steam.filter.played", "steam.filter.never", "steam.filter.tested",
         };
 
         private SteamSession session = new SteamSession();
@@ -223,6 +224,7 @@ namespace Kiosk
             try
             {
                 await LoadTestedAsync();
+                await LoadDownloadedAsync();
 
                 // His own games plus what the family shares: the client shows
                 // both, so a list with only the owned ones reads as missing.
@@ -364,9 +366,10 @@ namespace Kiosk
                 }
                 switch (filter)
                 {
-                    case 1: return game.MinutesPlayed > 0;
-                    case 2: return game.MinutesPlayed == 0;
-                    case 3: return game.Tested;
+                    case 1: return downloaded.Contains(game.AppId);
+                    case 2: return game.MinutesPlayed > 0;
+                    case 3: return game.MinutesPlayed == 0;
+                    case 4: return game.Tested;
                     default: return true;
                 }
             }).ToList();
@@ -377,12 +380,54 @@ namespace Kiosk
             HeaderText.Text = Current?.Name ?? Texts.Get("steam.header");
             StatusText.Text = allGames.Count == 0
                 ? Texts.Get("steam.empty")
+                : filter == 1 && Games.Count == 0
+                ? Texts.Get("steam.downloaded.empty")
                 : Texts.Get("steam.showing", Games.Count, allGames.Count);
 
             if (Games.Count > 0)
             {
                 GameGrid.UpdateLayout();
                 GameGrid.SelectedIndex = 0;
+            }
+        }
+
+        private async Task LoadDownloadedAsync()
+        {
+            downloaded.Clear();
+            await ReadDownloadedAsync(ApplicationData.Current.LocalFolder);
+            try
+            {
+                await ReadDownloadedAsync(await StorageFolder.GetFolderFromPathAsync(@"D:\DevelopmentFiles"));
+            }
+            catch (Exception)
+            {
+                // The developer drive is optional and may not be accessible.
+            }
+        }
+
+        private async Task ReadDownloadedAsync(StorageFolder root)
+        {
+            var folder = await root.TryGetItemAsync(Steam.SteamDownload.DefaultFolder) as StorageFolder;
+            if (folder == null) return;
+            foreach (var gameFolder in await folder.GetFoldersAsync())
+            {
+                uint appId;
+                if (!uint.TryParse(gameFolder.Name, out appId)) continue;
+                // Empty folders and interrupted downloads are not installed games.
+                if (await gameFolder.TryGetItemAsync(".downloading") != null) continue;
+                if (await gameFolder.TryGetItemAsync(".downloaded") != null)
+                {
+                    downloaded.Add(appId);
+                    continue;
+                }
+                // Older installations predate completion markers, including imports.
+                foreach (var file in await gameFolder.GetFilesAsync())
+                {
+                    if (!file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) continue;
+                    if ((await file.GetBasicPropertiesAsync()).Size == 0) continue;
+                    downloaded.Add(appId);
+                    break;
+                }
             }
         }
 

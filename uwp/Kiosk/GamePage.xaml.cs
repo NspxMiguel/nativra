@@ -106,10 +106,7 @@ namespace Kiosk
             if (busy) return;
             if (installed)
             {
-                ShowError(
-                    Texts.Get("game.cannotrun.title"),
-                    Texts.Get("game.cannotrun.body", game.Name),
-                    Texts.Get("game.cannotrun.hint"));
+                Frame.Navigate(typeof(MainPage), game.AppId);
                 return;
             }
 

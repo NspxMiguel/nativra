@@ -163,20 +163,12 @@ namespace Kiosk
             {
                 foreach (var v in values)
                 {
-                    // A refused token renewal needs a new phone approval;
-                    // transient service failures must keep the saved session.
-                    if (method == "GenerateAccessTokenForApp" &&
-                        (v == "15" || v == "21" || v == "26" || v == "27"))
-                        throw new SteamSignInRequiredException();
                     if (v != "1") throw new Exception($"Steam eresult {v}");
                     break;
                 }
             }
             if (!response.IsSuccessStatusCode)
             {
-                if (method == "GenerateAccessTokenForApp" &&
-                    ((int)response.StatusCode == 401 || (int)response.StatusCode == 403))
-                    throw new SteamSignInRequiredException();
                 throw new Exception($"HTTP {(int)response.StatusCode}");
             }
             return Proto.Read(bytes);
@@ -250,12 +242,28 @@ namespace Kiosk
         /// </summary>
         public static async Task<string> RenewAccessTokenAsync(string refreshToken, ulong steamId)
         {
-            using (var ms = new MemoryStream())
+            // SteamClient tokens must be renewed over an authenticated CM
+            // connection. The public HTTP endpoint can reject a valid session.
+            var endpoints = await Steam.SteamCm.EndpointsAsync();
+            if (endpoints.Count == 0) throw new Exception("Steam listed no connection managers");
+            using (var cm = new Steam.SteamCm())
             {
-                Proto.WriteString(ms, 1, refreshToken);
-                Proto.WriteFixed64(ms, 2, steamId);
-                var fields = await CallAsync("GenerateAccessTokenForApp", ms.ToArray());
-                return fields.TryGetValue(1, out var at) ? Proto.AsString(at) : null;
+                await cm.ConnectAsync(endpoints[0]);
+                try
+                {
+                    await cm.LogOnAsync(steamId, refreshToken);
+                }
+                catch (Steam.SteamLogOnException error) when
+                    (error.Result == 5 || error.Result == 15 || error.Result == 21 ||
+                     error.Result == 26 || error.Result == 27)
+                {
+                    throw new SteamSignInRequiredException();
+                }
+                var request = new Steam.ProtoWriter()
+                    .String(1, refreshToken).Fixed64(2, steamId).Finish();
+                var response = await cm.ServiceAsync(
+                    "Authentication.GenerateAccessTokenForApp#1", request);
+                return response.Str(1);
             }
         }
     }

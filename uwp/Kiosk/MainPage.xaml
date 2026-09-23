@@ -22,9 +22,14 @@
             <Button Style="{StaticResource TileStyle}"
                     Click="OnTileClicked"
                     GotFocus="OnTileFocused"
+                    LostFocus="OnTileUnfocused"
                     Tag="{x:Bind}"
-                    Margin="0,0,28,0" Padding="0,110,0,0"
+                    Margin="12,28,24,20" Padding="0"
+                    RenderTransformOrigin="0.5,0.5"
                     VerticalAlignment="Bottom">
+                <Button.RenderTransform>
+                    <ScaleTransform />
+                </Button.RenderTransform>
                 <StackPanel>
                     <Grid Width="{x:Bind TileWidth}" Height="{x:Bind TileHeight}"
                           Opacity="{x:Bind Dimmed}">
@@ -40,7 +45,7 @@
                                    Visibility="{x:Bind IconShown}">
                             <Rectangle.Fill>
                                 <ImageBrush ImageSource="{x:Bind Icon}"
-                                            Stretch="UniformToFill"
+                                            Stretch="Uniform"
                                             AlignmentX="Center" AlignmentY="Center" />
                             </Rectangle.Fill>
                         </Rectangle>
@@ -141,6 +146,10 @@
                 <!-- ================================================ status bar -->
 
                 <Grid Grid.Row="0" Padding="56,0,56,0">
+                    <TextBlock Text="Nativra" Margin="64,0,0,0"
+                               FontSize="{StaticResource BodySize}" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimary}"
+                               VerticalAlignment="Center" IsHitTestVisible="False" />
                     <Button x:Name="AvatarButton" Style="{StaticResource DockIconStyle}"
                             Width="44" Height="44"
                             HorizontalAlignment="Left" VerticalAlignment="Center"

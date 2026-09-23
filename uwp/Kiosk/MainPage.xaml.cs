@@ -457,8 +457,40 @@ namespace Kiosk
         /// </summary>
         private void OnTileFocused(object sender, RoutedEventArgs e)
         {
+            ScaleTile(sender as Button, true);
             var tile = (sender as FrameworkElement)?.Tag as Tile;
             if (tile != null) NameText.Text = tile.Title;
+        }
+
+        private void OnTileUnfocused(object sender, RoutedEventArgs e)
+        {
+            ScaleTile(sender as Button, false);
+        }
+
+        private static void ScaleTile(Button button, bool focused)
+        {
+            if (!(button?.RenderTransform is ScaleTransform scale)) return;
+            var target = focused ? (double)Application.Current.Resources["TileFocusScale"] : 1;
+            if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+            {
+                scale.ScaleX = scale.ScaleY = target;
+                return;
+            }
+            var storyboard = new Storyboard();
+            foreach (var property in new[] { "ScaleX", "ScaleY" })
+            {
+                var animation = new DoubleAnimation
+                {
+                    To = target,
+                    Duration = TimeSpan.FromMilliseconds(
+                        (double)Application.Current.Resources["TileFocusDuration"]),
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                };
+                Storyboard.SetTarget(animation, scale);
+                Storyboard.SetTargetProperty(animation, property);
+                storyboard.Children.Add(animation);
+            }
+            storyboard.Begin();
         }
 
         /// <summary>

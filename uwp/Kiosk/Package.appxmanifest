@@ -10,7 +10,7 @@
   <mp:PhoneIdentity PhoneProductId="6f3a1c28-7d54-4b1e-9f2a-51c0d8e4b7a3" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
 
   <Properties>
-    <DisplayName>Kiosk</DisplayName>
+    <DisplayName>Nativra</DisplayName>
     <PublisherDisplayName>NSPX</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -27,11 +27,12 @@
   <Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="Kiosk.App">
       <uap:VisualElements
-        DisplayName="Kiosk"
+        DisplayName="Nativra"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png"
         Description="Every native app installed on this console, in one place."
         BackgroundColor="#000000">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#000000" />
       </uap:VisualElements>
     </Application>

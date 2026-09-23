@@ -24,6 +24,7 @@ namespace Kiosk.Native
     {
         private const int S_OK = 0;
         private const int E_FAIL = unchecked((int)0x80004005);
+        private const int E_NOINTERFACE = unchecked((int)0x80004002);
 
         // ID3D11Device
         private const int CreateTexture2DSlot = 5;
@@ -71,7 +72,8 @@ namespace Kiosk.Native
 
         // Held in fields so the collector cannot take them while the game holds
         // their addresses.
-        private static OneOut device;
+        private static TwoOut device;
+        private static TwoOut parent;
         private static PresentDelegate present;
         private static BufferDelegate buffer;
         private static FullscreenDelegate setFullscreen;
@@ -85,7 +87,7 @@ namespace Kiosk.Native
         private static OneOut describe1;
         private static OneOut fullscreenDesc;
         private static OneOut hwnd;
-        private static OneOut coreWindow;
+        private static TwoOut coreWindow;
         private static Present1Delegate present1;
         private static OneOut mono;
         private static OneOut restrict;
@@ -131,6 +133,9 @@ namespace Kiosk.Native
                     return IntPtr.Zero;
                 }
 
+                // The chain retains the device independently of its caller.
+                Marshal.AddRef(ownerDevice);
+
                 Fill();
 
                 var made = proxy.Create(
@@ -140,7 +145,7 @@ namespace Kiosk.Native
                         Marshal.GetFunctionPointerForDelegate(privateData),   // SetPrivateData
                         Marshal.GetFunctionPointerForDelegate(privateData),   // …Interface
                         Marshal.GetFunctionPointerForDelegate(privateData),   // GetPrivateData
-                        Marshal.GetFunctionPointerForDelegate(getFullscreen), // GetParent
+                        Marshal.GetFunctionPointerForDelegate(parent),        // GetParent
                         // IDXGIDeviceSubObject
                         Marshal.GetFunctionPointerForDelegate(device),        // GetDevice
                         // IDXGISwapChain
@@ -226,21 +231,25 @@ namespace Kiosk.Native
         {
             privateData = (self, a, b, c) => S_OK;
 
-            device = (self, result) =>
+            parent = (self, riid, result) =>
             {
                 if (result == IntPtr.Zero) return E_FAIL;
-                Marshal.WriteIntPtr(result, ownerDevice);
-                return S_OK;
+                Marshal.WriteIntPtr(result, IntPtr.Zero);
+                return E_NOINTERFACE;
             };
+            coreWindow = parent;
+            device = (self, riid, result) => Query(ownerDevice, riid, result);
 
             buffer = (self, index, riid, surface) =>
             {
                 if (surface == IntPtr.Zero) return E_FAIL;
+                Marshal.WriteIntPtr(surface, IntPtr.Zero);
                 // Only buffer zero exists, which is all the flip model ever
                 // hands out anyway.
                 if (index != 0) return E_FAIL;
-                Marshal.WriteIntPtr(surface, held);
-                return S_OK;
+                // QueryInterface both validates the requested interface and
+                // gives the caller its own reference to the texture.
+                return Query(held, riid, surface);
             };
 
             present = (self, interval, flags) =>
@@ -333,7 +342,6 @@ namespace Kiosk.Native
                 if (result != IntPtr.Zero) Marshal.WriteInt64(result, 0x00BA5E11);
                 return S_OK;
             };
-            coreWindow = (self, result) => E_FAIL;
             mono = (self, result) => 0;
             restrict = (self, result) =>
             {
@@ -348,6 +356,16 @@ namespace Kiosk.Native
                 if (result != IntPtr.Zero) Marshal.WriteInt32(result, 0);
                 return S_OK;
             };
+        }
+
+        private static int Query(IntPtr instance, IntPtr riid, IntPtr result)
+        {
+            if (result == IntPtr.Zero) return E_FAIL;
+            Marshal.WriteIntPtr(result, IntPtr.Zero);
+            if (instance == IntPtr.Zero || riid == IntPtr.Zero) return E_NOINTERFACE;
+            var query = Marshal.GetDelegateForFunctionPointer<TwoOut>(
+                ComProxy.Method(instance, 0));
+            return query(instance, riid, result);
         }
     }
 }

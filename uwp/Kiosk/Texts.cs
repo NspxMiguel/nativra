@@ -12,6 +12,19 @@ namespace Kiosk
     {
         private static readonly Dictionary<string, string> Pt = new Dictionary<string, string>
         {
+            { "debug.title", "Nativra {0} · {1} · pré-alpha" },
+            { "debug.system", "{0}\nSistema: {1} · {2}" },
+            { "debug.gpu", "GPU: {0} · PCI {1}:{2}" },
+            { "debug.vram", "VRAM reportada: {0} MiB (não é orçamento)\nD3D11 · feature level 0x{1}" },
+            { "debug.unknown", "não consultado" },
+            { "debug.render", "Quadro: {0}×{1} · D3D11 → CPU → XAML" },
+            { "debug.frames", "Present: {0}/s · XAML: {1}/s (não FPS da TV)" },
+            { "debug.memory", "Memória do app: {0} / {1} MiB de limite" },
+            { "debug.input", "Controles: {0} · leituras: {1} · teclas: {2}" },
+            { "debug.audio.client", "Áudio: cliente adquirido; saída não validada" },
+            { "debug.audio.pending", "Áudio: cliente indisponível · HRESULT 0x{0}" },
+            { "debug.sample", "Amostra: {0} · atualização 1 s" },
+            { "debug.unavailable", "Diagnóstico temporariamente indisponível" },
             { "app.eyebrow", "EM DESENVOLVIMENTO  \u00B7  POR NSPXMIGUEL" },
             { "tile.allgames", "Todos os jogos \u00B7 {0}" },
             { "status.notyet", "{0} ainda n\u00E3o foi constru\u00EDdo" },
@@ -101,6 +114,19 @@ namespace Kiosk
 
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
+            { "debug.title", "Nativra {0} · {1} · pre-alpha" },
+            { "debug.system", "{0}\nSystem: {1} · {2}" },
+            { "debug.gpu", "GPU: {0} · PCI {1}:{2}" },
+            { "debug.vram", "Reported VRAM: {0} MiB (not a budget)\nD3D11 · feature level 0x{1}" },
+            { "debug.unknown", "not queried" },
+            { "debug.render", "Frame: {0}×{1} · D3D11 → CPU → XAML" },
+            { "debug.frames", "Present: {0}/s · XAML: {1}/s (not TV FPS)" },
+            { "debug.memory", "App memory: {0} / {1} MiB limit" },
+            { "debug.input", "Controllers: {0} · reads: {1} · keys: {2}" },
+            { "debug.audio.client", "Audio: client acquired; output unverified" },
+            { "debug.audio.pending", "Audio: client unavailable · HRESULT 0x{0}" },
+            { "debug.sample", "Sample: {0} · 1 s refresh" },
+            { "debug.unavailable", "Diagnostics temporarily unavailable" },
             { "app.eyebrow", "IN DEVELOPMENT  \u00B7  BY NSPXMIGUEL" },
             { "tile.allgames", "All games \u00B7 {0}" },
             { "status.notyet", "{0} is not built yet" },

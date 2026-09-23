@@ -69,6 +69,8 @@ namespace Kiosk.Native
         private static IntPtr chain;
         private static int width;
         private static int height;
+        public static int PixelWidth => width;
+        public static int PixelHeight => height;
         private static int pixelFormat;
         private static readonly object frameGate = new object();
         private static int generation;

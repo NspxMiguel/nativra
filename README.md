@@ -1,5 +1,27 @@
 # Nativra
 
+> [!WARNING]
+> **AINDA NÃO ESTÁ PRONTO PARA UTILIZAÇÃO. EM FASE DE TESTES E DESENVOLVIMENTO.**
+>
+> O Nativra é feito por **uma pessoa só**, que também tem outros compromissos.
+> É um projeto de hobby, disponibilizado de graça, sem uma equipe por trás.
+> Estou investindo meu próprio dinheiro em diversas ferramentas de IA, meu
+> tempo e muito esforço para tirar essa ideia do papel — quebrando a cabeça,
+> errando, testando e tentando de novo.
+>
+> Ver um jogo abrir pela primeira vez é uma conquista, **não significa que o
+> app esteja pronto**. Não há prazo prometido, garantia de compatibilidade ou
+> suporte imediato. Peço paciência e respeito por esse trabalho.
+>
+> — **NSPXMIGUEL**
+
+> **Not ready for use — testing and development only.** This is a one-person,
+> self-funded hobby project, shared for free alongside other commitments.
+> AI tools cost real money; implementation and console testing take substantial
+> personal time and effort. The first game opening is a milestone, not a
+> finished product. There is no promised deadline, compatibility guarantee or
+> immediate support. Please be patient and respectful.
+
 An experimental native PC-game host for Xbox Series X|S in official Developer Mode.
 
 **Experimental pre-alpha · proof of concept — not ready for everyday play.**

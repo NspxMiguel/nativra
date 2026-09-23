@@ -65,6 +65,8 @@
     </Compile>
     <Compile Include="EvenWrapPanel.cs" />
     <Compile Include="MainPage.Diagnostics.cs" />
+    <Content Include="Shaders\bin\*.cso" />
+    <Content Include="Shaders\Fsr1\LICENSE.txt" />
     <Compile Include="ConsolePortal.cs" />
     <Compile Include="SteamAuth.cs" />
     <Compile Include="SteamSession.cs" />

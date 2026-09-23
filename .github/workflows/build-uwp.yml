@@ -57,6 +57,10 @@ jobs:
       - name: Restore
         run: msbuild uwp\Kiosk.sln /t:Restore /p:Configuration=Release /p:Platform=x64
 
+      - name: Compile spatial upscaling shaders
+        shell: cmd
+        run: uwp\Kiosk\Shaders\build.cmd
+
       - name: Build package
         run: >
           msbuild uwp\Kiosk.sln

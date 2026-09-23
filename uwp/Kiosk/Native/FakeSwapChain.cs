@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Kiosk.Native
 {
@@ -105,6 +106,12 @@ namespace Kiosk.Native
 
         /// <summary>What happened while building it, for the report.</summary>
         public static string Note = "not built";
+        public static long FullscreenSets;
+        public static long FullscreenGets;
+        public static long FullscreenDescriptions;
+        public static long TargetResizes;
+        public static long ContainingOutputQueries;
+        public static int LastFullscreenRequest;
 
         /// <summary>The back buffer the game draws into.</summary>
         public static IntPtr BackBuffer => held;
@@ -264,9 +271,15 @@ namespace Kiosk.Native
                 return S_OK;
             };
 
-            setFullscreen = (self, on, target) => S_OK;
+            setFullscreen = (self, on, target) =>
+            {
+                Interlocked.Increment(ref FullscreenSets);
+                LastFullscreenRequest = on;
+                return S_OK;
+            };
             getFullscreen = (self, first, second) =>
             {
+                Interlocked.Increment(ref FullscreenGets);
                 if (first != IntPtr.Zero) Marshal.WriteInt32(first, 0);
                 if (second != IntPtr.Zero) Marshal.WriteIntPtr(second, IntPtr.Zero);
                 return S_OK;
@@ -330,15 +343,28 @@ namespace Kiosk.Native
                 return S_OK;
             };
 
-            resizeTarget = (self, mode) => S_OK;
-            containing = (self, result) => E_FAIL;
+            resizeTarget = (self, mode) =>
+            {
+                Interlocked.Increment(ref TargetResizes);
+                return S_OK;
+            };
+            containing = (self, result) =>
+            {
+                Interlocked.Increment(ref ContainingOutputQueries);
+                if (result != IntPtr.Zero) Marshal.WriteIntPtr(result, IntPtr.Zero);
+                return E_FAIL;
+            };
             statistics = (self, result) => E_FAIL;
             lastPresent = (self, result) =>
             {
                 if (result != IntPtr.Zero) Marshal.WriteInt32(result, 0);
                 return S_OK;
             };
-            fullscreenDesc = (self, result) => S_OK;
+            fullscreenDesc = (self, result) =>
+            {
+                Interlocked.Increment(ref FullscreenDescriptions);
+                return DxgiDescriptions.WriteWindowedFullscreenDescription(result);
+            };
             hwnd = (self, result) =>
             {
                 if (result != IntPtr.Zero) Marshal.WriteInt64(result, 0x00BA5E11);

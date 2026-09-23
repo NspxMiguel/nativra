@@ -1,4 +1,5 @@
 using Kiosk.Native;
+using System.Runtime.InteropServices;
 
 static void Check(bool condition, string message)
 {
@@ -34,3 +35,20 @@ Check(ControllerMode.SystemButtons == 0x20, "A held individual View button remai
 ControllerMode.Update(false, false, 0.01);
 Check(ControllerMode.SystemButtons == 0, "A held individual button must release immediately");
 Console.WriteLine("Controller mode behavioral checks passed.");
+
+var allocation = Marshal.AllocHGlobal(28);
+try
+{
+    for (var offset = 0; offset < 28; offset++) Marshal.WriteByte(allocation, offset, 0xCD);
+    var description = IntPtr.Add(allocation, 4);
+    Check(DxgiDescriptions.WriteWindowedFullscreenDescription(description) == 0, "Description must succeed");
+    var expected = new[] { 60, 1, 0, 0, 1 };
+    for (var field = 0; field < expected.Length; field++)
+        Check(Marshal.ReadInt32(description, field * 4) == expected[field], "Every description field must be initialized");
+    Check(Marshal.ReadInt32(allocation) == unchecked((int)0xCDCDCDCD), "Leading guard must remain intact");
+    Check(Marshal.ReadInt32(allocation, 24) == unchecked((int)0xCDCDCDCD), "Trailing guard must remain intact");
+    Check(DxgiDescriptions.WriteWindowedFullscreenDescription(IntPtr.Zero) == unchecked((int)0x80070057),
+        "A null destination must fail, not claim success");
+}
+finally { Marshal.FreeHGlobal(allocation); }
+Console.WriteLine("DXGI description behavioral checks passed.");

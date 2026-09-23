@@ -8,10 +8,11 @@
 #pragma section(".rdata$T", read)
 __declspec(allocate(".tls")) unsigned char tls_template[TLS_CAPACITY + 16];
 unsigned long _tls_index;
+PIMAGE_TLS_CALLBACK tls_callbacks[] = { 0 };
 __declspec(allocate(".rdata$T")) const IMAGE_TLS_DIRECTORY64 _tls_used = {
     (ULONGLONG)tls_template,
     (ULONGLONG)(tls_template + sizeof(tls_template)),
-    (ULONGLONG)&_tls_index, 0, 0, IMAGE_SCN_ALIGN_16BYTES
+    (ULONGLONG)&_tls_index, (ULONGLONG)tls_callbacks, 0, IMAGE_SCN_ALIGN_16BYTES
 };
 
 __declspec(dllexport) int NativraTlsConfigure(const unsigned char *source,

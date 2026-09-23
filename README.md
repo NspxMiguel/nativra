@@ -165,6 +165,9 @@ has no windows.
   asks where to put it.
 - **Loading a game's binaries** — the engine of a commercial Unity game maps,
   relocates, resolves and runs inside the app.
+- **Seraph gameplay tests** with movement, jumping and shooting through remote
+  input. In build 194, the owner also confirmed audible menu sound on the Xbox.
+  This is not yet a full physical-controller or long-session certification.
 - **Remote control of the console** from a terminal, for testing.
 
 ## What does not work yet
@@ -174,11 +177,13 @@ Stand's actual main menu has rendered on Xbox Series X. This is not yet proof
 of a stable, playable match. See the [console milestone and original
 screenshot](docs/progress/2026-09-23.md).
 
-The measured presentation path was capped at 20 updates per second, independently
-of the game's render loop. Removing that cap and launching a selected Steam
-game from the app are implemented but awaiting console validation. Native window
-message dispatch still needs stability testing. Sound is not working in the
-measured run (FMOD falls back to silent output); SteamAPI initialization fails.
+The earlier 20-update/s mirror cap has been removed. Subsequent console tests
+reached roughly 59 frame submissions and XAML updates per second; these counters
+are not a measurement of physical TV refresh or frame pacing. Launching Seraph
+from its library tile and short gameplay sessions have been tested. Long-session
+stability, focus consistency and complete physical-controller play still need
+validation. Build 194 acquired the real audio client without the earlier FMOD
+initialization errors, and the owner confirmed audible menu sound. SteamAPI initialization fails.
 Multiplayer, achievements, friend invitations and LEGO Jurassic World are not
 validated. No license or authentication checks are bypassed.
 

@@ -8,5 +8,6 @@
     <Compile Include="../../uwp/Kiosk/Native/ControllerMode.cs" Link="ControllerMode.cs" />
     <Compile Include="../../uwp/Kiosk/Native/DxgiDescriptions.cs" Link="DxgiDescriptions.cs" />
     <Compile Include="../../uwp/Kiosk/Native/PointerPosition.cs" Link="PointerPosition.cs" />
+    <Compile Include="../../uwp/Kiosk/Native/KeyboardMessages.cs" Link="KeyboardMessages.cs" />
   </ItemGroup>
 </Project>

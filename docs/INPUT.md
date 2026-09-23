@@ -27,6 +27,14 @@ Keyboard input already delivered to the host remains separate from gamepad
 mapping. Full physical mouse/keyboard coverage, native gamepad hot-plug behavior,
 multiple-controller shortcuts and per-game remapping are not yet validated.
 
+The twelve controller-mapped keyboard keys share scan codes between raw input
+and legacy window messages. Legacy key releases set both the previous-state
+and transition-state bits; arrow keys carry the extended-key bit, following
+the [Win32 keyboard-message contract](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-keyup).
+This does not implement typematic repeats, text/IME input or additional physical
+keyboard keys. Local behavioral tests cover this encoding; Xbox regression
+validation of the metadata change is pending.
+
 ## Validation
 
 Run the platform-independent chord behavior checks on a machine with .NET 8:
@@ -70,4 +78,9 @@ the Retry button did not respond even though frames and raw-input reads kept
 advancing. Unity logged two `NullReferenceException` messages without call
 stacks after Game Over. Cursor-warp requests remained at zero throughout this
 test, so the SetCursorPos correction does not explain the Retry failure.
-This remains an incomplete gameplay flow, not a fully playable certification.
+Follow-up testing distinguished the two defeat-screen actions: Retry belongs
+to the unavailable scoreboard, while Reset returns to the main menu. In the
+same build 207 process, Reset followed by Start successfully opened another
+match at 25/25 HP. The scoreboard failure must not be described as an inability
+to start another match. The exceptions and physical-controller validation remain
+open; this is not a fully playable certification.

@@ -102,6 +102,7 @@
     <Compile Include="Native\AudioBridge.cs" />
     <Compile Include="Native\PointerBridge.cs" />
     <Compile Include="Native\PointerPosition.cs" />
+    <Compile Include="Native\KeyboardMessages.cs" />
     <Compile Include="Native\DisplayStubs.cs" />
     <Compile Include="Native\FrameMirror.cs" />
     <Compile Include="Native\ThreadRank.cs" />

@@ -130,10 +130,8 @@ namespace Kiosk.Native
             held[code] = down;
             if (down) Keys++;
             RawInputBridge.Keyboard(code, down);
-            // lParam carries the repeat count and the scan code; a game that
-            // reads only the key itself is the common case, and the rest being
-            // zero is what a synthesised key looks like anywhere.
-            if (!RawInputBridge.SuppressesLegacy(1)) Post(down ? WM_KEYDOWN : WM_KEYUP, code, 1);
+            if (!RawInputBridge.SuppressesLegacy(1))
+                Post(down ? WM_KEYDOWN : WM_KEYUP, code, KeyboardMessages.TransitionData(code, down));
         }
 
         private sealed class Waiting

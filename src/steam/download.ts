@@ -4,7 +4,7 @@
 
 import { mkdir, open, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { CmClient } from "./cm";
+import { CmClient, SteamError } from "./cm";
 import {
   contentServers,
   decompressChunk,
@@ -150,6 +150,9 @@ export async function connect(steamId: string, refreshToken: string): Promise<Cm
     } catch (error) {
       lastError = error;
       cm.close();
+      if (error instanceof SteamError && [5, 15, 84].includes(error.eresult ?? 0)) {
+        throw error;
+      }
     }
   }
   throw lastError instanceof Error ? lastError : new Error("no CM answered");

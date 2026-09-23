@@ -199,7 +199,7 @@ export class CmClient {
       .uint(5, 1771) // client_package_version
       .string(6, "english")
       .uint(7, 20) // client_os_type: Windows 10
-      .bool(8, false)
+      .bool(8, true) // Persistent QR refresh-token session.
       .bytes(30, new Uint8Array(0)) // machine_id
       .string(96, "Xbox Series X")
       .uint(100, 0) // client_instance_id

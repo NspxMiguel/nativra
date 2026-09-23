@@ -12,6 +12,9 @@ namespace Kiosk
     {
         private static readonly Dictionary<string, string> Pt = new Dictionary<string, string>
         {
+            { "game.loading", "Iniciando o jogo…" },
+            { "game.loading.hint", "Preparando a camada de compatibilidade. Não é preciso apertar novamente." },
+            { "game.input.hint", "Analógico direito: mouse · A: clicar/atirar · Esquerdo: mover · Y: pular" },
             { "debug.title", "Nativra {0} · {1} · pré-alpha" },
             { "debug.system", "{0}\nSistema: {1} · {2}" },
             { "debug.gpu", "GPU: {0} · PCI {1}:{2}" },
@@ -114,6 +117,9 @@ namespace Kiosk
 
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
+            { "game.loading", "Starting the game…" },
+            { "game.loading.hint", "Preparing the compatibility layer. You do not need to press again." },
+            { "game.input.hint", "Right stick: mouse · A: click/fire · Left stick: move · Y: jump" },
             { "debug.title", "Nativra {0} · {1} · pre-alpha" },
             { "debug.system", "{0}\nSystem: {1} · {2}" },
             { "debug.gpu", "GPU: {0} · PCI {1}:{2}" },

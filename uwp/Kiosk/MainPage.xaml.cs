@@ -139,6 +139,7 @@ namespace Kiosk
         private ConsolePortal portal;
         private bool portalReady;
         private uint requestedGame;
+        private bool gameLaunchPending;
 
         protected override void OnNavigatedTo(Windows.UI.Xaml.Navigation.NavigationEventArgs e)
         {
@@ -165,6 +166,11 @@ namespace Kiosk
 
         private void OnGameKeyDown(object sender, KeyRoutedEventArgs e)
         {
+            if (gameLaunchPending && !Native.NativeProbe.GameRunning)
+            {
+                e.Handled = true;
+                return;
+            }
             if (!Native.NativeProbe.GameRunning) return;
             // XAML maps GamepadA to Space and GamepadB to Escape for UI controls.
             // Hosted games need the original button so A remains a mouse click.
@@ -186,6 +192,9 @@ namespace Kiosk
             {
                 MachineText.Text = Texts.Get("app.eyebrow");
                 GameCreditText.Text = MachineText.Text;
+                GameLoadingText.Text = Texts.Get("game.loading");
+                GameLoadingHint.Text = Texts.Get("game.loading.hint");
+                GameInputHint.Text = Texts.Get("game.input.hint");
             }
             catch
             {
@@ -297,6 +306,13 @@ namespace Kiosk
             // failure is the worst kind to look for.
             Native.GraphicsBridge.Mirror = GameImage;
             Native.FrameMirror.Credit = GameCredit;
+            Native.FrameMirror.Presented = () =>
+            {
+                GameLoading.Visibility = Visibility.Collapsed;
+                GameLoadingRing.IsActive = false;
+                GamePointerTransform.X = Native.PointerBridge.X;
+                GamePointerTransform.Y = Native.PointerBridge.Y;
+            };
             Native.GraphicsBridge.OnUi = Dispatcher;
             Native.ThreadRank.RaiseThisThread();
 
@@ -315,6 +331,10 @@ namespace Kiosk
 
         private async Task StartGameAsync(uint appId)
         {
+            if (gameLaunchPending || Native.NativeProbe.GameRunning) return;
+            gameLaunchPending = true;
+            GameLoading.Visibility = Visibility.Visible;
+            GameLoadingRing.IsActive = true;
             try
             {
                 await Native.NativeProbe.RunAsync(appId);
@@ -334,6 +354,12 @@ namespace Kiosk
             catch (Exception)
             {
                 StatusText.Text = Texts.Get("game.launchfailed");
+            }
+            finally
+            {
+                gameLaunchPending = false;
+                GameLoading.Visibility = Visibility.Collapsed;
+                GameLoadingRing.IsActive = false;
             }
         }
 
@@ -579,6 +605,7 @@ namespace Kiosk
         /// </summary>
         private void OnDockClicked(object sender, RoutedEventArgs e)
         {
+            if (gameLaunchPending || Native.NativeProbe.GameRunning) return;
             var where = (sender as FrameworkElement)?.Tag as string;
             Light(where);
 
@@ -848,6 +875,7 @@ namespace Kiosk
         /// </summary>
         private async Task LaunchAsync(Tile tile)
         {
+            if (gameLaunchPending || Native.NativeProbe.GameRunning) return;
             if (tile == null) return;
             if (tile.Route == "steam")
             {

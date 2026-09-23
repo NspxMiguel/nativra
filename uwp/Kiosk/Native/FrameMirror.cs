@@ -106,6 +106,7 @@ namespace Kiosk.Native
 
         /// <summary>Shown alongside the game's own picture, never under it.</summary>
         public static Windows.UI.Xaml.UIElement Credit;
+        public static Action Presented;
 
         /// <summary>Frames copied to the screen, which is the proof it works.</summary>
         public static long Copied;
@@ -430,6 +431,7 @@ namespace Kiosk.Native
                         System.Threading.Interlocked.Add(ref uiTicks,
                             System.Diagnostics.Stopwatch.GetTimestamp() - queuedAt);
                         Shown++;
+                        Presented?.Invoke();
                     }
                     catch
                     {

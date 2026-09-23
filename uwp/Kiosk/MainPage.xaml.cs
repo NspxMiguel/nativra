@@ -149,6 +149,7 @@ namespace Kiosk
         public MainPage()
         {
             InitializeComponent();
+            InitializeGameHost();
             ApplyStaticText();
             StartClock();
             Loaded += async (s, e) => await LoadAppsAsync();
@@ -274,6 +275,16 @@ namespace Kiosk
             portal = await ConsolePortal.LoadAsync();
             portalReady = portal != null && await portal.ProbeAsync() != null;
             await RecordProbeAsync();
+            if (requestedGame != 0)
+                await StartGameAsync(requestedGame);
+            else if (await ApplicationData.Current.LocalFolder.TryGetItemAsync("autoplay.txt") != null)
+                await Native.NativeProbe.RunAsync();
+        }
+
+        private void InitializeGameHost()
+        {
+            // Bind the host before the shelf accepts input, never after network
+            // probes: a fast launch must not fall into the native DXGI fallback.
             // Taken here because it cannot be taken anywhere else: a CoreWindow
             // belongs to the thread that owns it, and the game runs on another.
             // It is the surface a PC game's frames will end up on.
@@ -299,10 +310,6 @@ namespace Kiosk
                 // Without it the bridge says so rather than guessing.
             }
 
-            if (requestedGame != 0)
-                await StartGameAsync(requestedGame);
-            else if (await ApplicationData.Current.LocalFolder.TryGetItemAsync("autoplay.txt") != null)
-                await Native.NativeProbe.RunAsync();
         }
 
         private async Task StartGameAsync(uint appId)

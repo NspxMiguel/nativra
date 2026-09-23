@@ -12,6 +12,16 @@ const mainPage = await Bun.file("uwp/Kiosk/MainPage.xaml.cs").text();
 const messages = await Bun.file("uwp/Kiosk/Native/WindowMessages.cs").text();
 const raw = await Bun.file("uwp/Kiosk/Native/RawInputBridge.cs").text();
 
+test("the game host is bound before asynchronous home loading or user input", () => {
+  const constructor = mainPage.slice(mainPage.indexOf("public MainPage()"), mainPage.indexOf("private void OnGameKeyDown"));
+  expect(constructor.indexOf("InitializeGameHost();")).toBeLessThan(constructor.indexOf("Loaded +="));
+  const initialize = mainPage.slice(mainPage.indexOf("private void InitializeGameHost()"), mainPage.indexOf("private async Task StartGameAsync"));
+  expect(initialize).toContain("Native.GraphicsBridge.Mirror = GameImage;");
+  expect(initialize).toContain("Native.GraphicsBridge.OnUi = Dispatcher;");
+  expect(initialize).not.toContain("await ");
+  expect(graphics).toContain("if (!NoMirror && (Mirror == null || OnUi == null))");
+});
+
 test("game discovery is engine-independent and rejects unsupported architecture before mapping", () => {
   const discovery = probe.slice(probe.indexOf("private static async Task<StorageFolder> GameIn"));
   expect(discovery).not.toContain('TryGetItemAsync("UnityPlayer.dll")');

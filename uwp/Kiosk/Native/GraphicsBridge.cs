@@ -523,6 +523,12 @@ namespace Kiosk.Native
             var renderDevice = IntPtr.Zero;
             try
             {
+                if (!NoMirror && (Mirror == null || OnUi == null))
+                {
+                    Note("swap-chain host is not ready; refusing native display fallback");
+                    if (result != IntPtr.Zero) Marshal.WriteIntPtr(result, IntPtr.Zero);
+                    return E_FAIL;
+                }
                 // The console's own window first. It is the shortest path
                 // there is — the frames go straight to the screen, with no
                 // surface to attach and nothing to keep in step — and if this

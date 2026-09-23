@@ -38,6 +38,37 @@
 > conectadas ou sem funcionar enquanto essa função principal recebe prioridade.
 > Aparecer na interface ou nos planos não significa estar pronto para uso.
 
+## Jogos de PC rodando no Xbox
+
+### No próprio Xbox
+
+![Painel do Xbox aberto sobre Seraph's Last Stand, com Nativra na lista de aplicativos](docs/progress/seraph-xbox-guide-build179.png)
+
+Captura real do console, build 179: painel do Xbox sobre o jogo, mostrando o Nativra.
+
+### O jogo em tela cheia
+
+![Menu real de Seraph's Last Stand no Xbox Series X](docs/progress/seraph-menu-build174.png)
+
+Captura real do console, build 174. O menu foi exibido; partida estável e recursos
+online ainda não foram validados. Não é uma montagem nem uma imagem gerada por IA.
+
+## Integração com a Steam
+
+Login por QR, biblioteca própria e compartilhada, coleções, busca e download de jogos — pelo Nativra. SteamAPI e recursos sociais ainda estão incompletos.
+
+### Detalhes de um jogo da Steam
+
+![Detalhes de um jogo Steam no Nativra com arte, tempo de jogo e estado de instalação](docs/progress/nativra-steam-details-build179.png)
+
+Captura real do build 179: página da biblioteca Steam, **não é o GTA V rodando**.
+O tempo de jogo vem do histórico da Steam, não de partidas no Nativra.
+O GTA V não está instalado nessa captura e não foi validado como compatível.
+Essa página é uma interface incompleta do Nativra, não a página original da Steam.
+Por enquanto, mostra apenas arte, tempo de jogo e estado de instalação. O layout
+e o dimensionamento da imagem ainda precisam de ajustes; conquistas, última vez
+jogado e o conjunto completo de ações de gerenciamento ainda não estão implementados nela.
+
 ## Dentro do app
 
 ![Biblioteca inicial do Nativra capturada no Xbox Series X](docs/progress/nativra-library-build179.png)
@@ -52,31 +83,6 @@ mesmo com uma sessão salva; ele não indica corretamente o estado da conta.
 
 Captura real do build 179 no console: sistemas listados e atalhos para a biblioteca.
 A presença de um emulador aqui não comprova compatibilidade nem configuração completa.
-
-### Detalhes de um jogo da Steam
-
-![Detalhes de um jogo Steam no Nativra com arte, tempo de jogo e estado de instalação](docs/progress/nativra-steam-details-build179.png)
-
-Captura real do build 179: página da biblioteca Steam, **não é o GTA V rodando**.
-O tempo de jogo vem do histórico da Steam, não de partidas no Nativra.
-O GTA V não está instalado nessa captura e não foi validado como compatível.
-Essa página é uma interface incompleta do Nativra, não a página original da Steam.
-Por enquanto, mostra apenas arte, tempo de jogo e estado de instalação. O layout
-e o dimensionamento da imagem ainda precisam de ajustes; conquistas, última vez
-jogado e o conjunto completo de ações de gerenciamento ainda não estão implementados nela.
-
-### No próprio Xbox
-
-![Painel do Xbox aberto sobre Seraph's Last Stand, com Nativra na lista de aplicativos](docs/progress/seraph-xbox-guide-build179.png)
-
-Captura real do console, build 179: painel do Xbox sobre o jogo, mostrando o Nativra.
-
-### O jogo em tela cheia
-
-![Menu real de Seraph's Last Stand no Xbox Series X](docs/progress/seraph-menu-build174.png)
-
-Captura real do console, build 174. O menu foi exibido; partida estável e recursos
-online ainda não foram validados. Não é uma montagem nem uma imagem gerada por IA.
 
 ## A ideia
 

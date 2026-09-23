@@ -43,6 +43,56 @@ Mode. Native PC-game execution is its main technical focus, not its whole purpos
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
 [Contributing](docs/CONTRIBUTING.md) · [License](LICENSE)
 
+## PC games running on Xbox
+
+### On the Xbox itself
+
+![Xbox Guide open over Seraph's Last Stand, with Nativra listed as the running app](docs/progress/seraph-xbox-guide-build179.png)
+
+Real console capture, build 179: Xbox Guide open over the game, showing Nativra.
+
+### The game in full screen
+
+![Seraph's Last Stand menu running on Xbox Series X](docs/progress/seraph-menu-build174.png)
+
+Real console capture, build 174. Menu rendering is confirmed; stable gameplay
+and online features are not. The screenshot is not generated artwork.
+
+Not streaming. Not a remote desktop. The game is downloaded by the console
+itself, from the player's own Steam account, and executed on the console's own
+processor — which is an x86-64 running Windows NT, and has been all along.
+
+## Steam integration
+
+QR sign-in, your owned and family-shared library, collections, search and game downloads — directly from Nativra. SteamAPI and social features remain unfinished.
+
+### Steam game details
+
+![Steam game details in Nativra with artwork, play time and installation state](docs/progress/nativra-steam-details-build179.png)
+
+Real build 179 console capture: a Steam library detail page, **not GTA V running**.
+The play time comes from Steam account history, not time played through Nativra.
+GTA V is not installed in this capture and has not been validated as compatible.
+This detail screen is an unfinished Nativra interface, not Steam's own game page.
+It currently exposes only artwork, play time and installation state. Layout and
+image sizing still need work; achievements, last-played information and the full
+set of game-management actions are not implemented here yet.
+
+## Inside the app
+
+![Nativra home library captured on Xbox Series X](docs/progress/nativra-library-build179.png)
+
+Home library and controller navigation, captured on the console in build 179.
+This is the current pre-alpha UI, not a design mockup. The Steam sign-in shortcut
+is still shown even with a saved session; it is not a reliable account-status indicator.
+
+### Emulator shelf
+
+![Nativra emulator shelf with Open and Add to library actions](docs/progress/nativra-emulators-build179.png)
+
+Real build 179 console capture: installed-system entries and library shortcuts.
+Listing an emulator here does not establish game compatibility or complete setup.
+
 ## More than a PC-game loader
 
 The goal is a controller-first gaming environment with the convenience of
@@ -86,50 +136,6 @@ See [the full product brief](docs/DESIGN-BRIEF.md), [emulator setup](docs/EMULAT
 [file intake](docs/INTAKE.md) and [user-supplied BIOS handling](docs/BIOS.md).
 Those documents also contain design targets and historical investigations;
 their presence is not a compatibility guarantee.
-
-## Inside the app
-
-![Nativra home library captured on Xbox Series X](docs/progress/nativra-library-build179.png)
-
-Home library and controller navigation, captured on the console in build 179.
-This is the current pre-alpha UI, not a design mockup. The Steam sign-in shortcut
-is still shown even with a saved session; it is not a reliable account-status indicator.
-
-### Emulator shelf
-
-![Nativra emulator shelf with Open and Add to library actions](docs/progress/nativra-emulators-build179.png)
-
-Real build 179 console capture: installed-system entries and library shortcuts.
-Listing an emulator here does not establish game compatibility or complete setup.
-
-### Steam game details
-
-![Steam game details in Nativra with artwork, play time and installation state](docs/progress/nativra-steam-details-build179.png)
-
-Real build 179 console capture: a Steam library detail page, **not GTA V running**.
-The play time comes from Steam account history, not time played through Nativra.
-GTA V is not installed in this capture and has not been validated as compatible.
-This detail screen is an unfinished Nativra interface, not Steam's own game page.
-It currently exposes only artwork, play time and installation state. Layout and
-image sizing still need work; achievements, last-played information and the full
-set of game-management actions are not implemented here yet.
-
-### On the Xbox itself
-
-![Xbox Guide open over Seraph's Last Stand, with Nativra listed as the running app](docs/progress/seraph-xbox-guide-build179.png)
-
-Real console capture, build 179: Xbox Guide open over the game, showing Nativra.
-
-### The game in full screen
-
-![Seraph's Last Stand menu running on Xbox Series X](docs/progress/seraph-menu-build174.png)
-
-Real console capture, build 174. Menu rendering is confirmed; stable gameplay
-and online features are not. The screenshot is not generated artwork.
-
-Not streaming. Not a remote desktop. The game is downloaded by the console
-itself, from the player's own Steam account, and executed on the console's own
-processor — which is an x86-64 running Windows NT, and has been all along.
 
 ## Why this is possible at all
 

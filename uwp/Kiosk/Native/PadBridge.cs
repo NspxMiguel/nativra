@@ -55,8 +55,7 @@ namespace Kiosk.Native
             if ((pressed & GamepadButtons.DPadDown) != 0) bits |= 0x0002;
             if ((pressed & GamepadButtons.DPadLeft) != 0) bits |= 0x0004;
             if ((pressed & GamepadButtons.DPadRight) != 0) bits |= 0x0008;
-            if ((pressed & GamepadButtons.Menu) != 0) bits |= 0x0010;
-            if ((pressed & GamepadButtons.View) != 0) bits |= 0x0020;
+            bits |= (ushort)ControllerMode.SystemButtons;
             if ((pressed & GamepadButtons.LeftThumbstick) != 0) bits |= 0x0040;
             if ((pressed & GamepadButtons.RightThumbstick) != 0) bits |= 0x0080;
             if ((pressed & GamepadButtons.LeftShoulder) != 0) bits |= 0x0100;
@@ -80,6 +79,7 @@ namespace Kiosk.Native
         {
             state = (index, target) =>
             {
+                if (ControllerMode.Desktop) return ERROR_DEVICE_NOT_CONNECTED;
                 if (target == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;
                 try
                 {
@@ -109,6 +109,7 @@ namespace Kiosk.Native
 
             vibration = (index, source) =>
             {
+                if (ControllerMode.Desktop) return ERROR_DEVICE_NOT_CONNECTED;
                 try
                 {
                     var pads = Gamepad.Gamepads;
@@ -134,6 +135,7 @@ namespace Kiosk.Native
 
             capabilities = (index, flags, target) =>
             {
+                if (ControllerMode.Desktop) return ERROR_DEVICE_NOT_CONNECTED;
                 if (target == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;
                 try
                 {
@@ -167,6 +169,7 @@ namespace Kiosk.Native
 
             battery = (index, type, information) =>
             {
+                if (ControllerMode.Desktop || index >= (uint)Gamepad.Gamepads.Count) return ERROR_DEVICE_NOT_CONNECTED;
                 if (information == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;
                 Marshal.WriteByte(information, 0, 1); // wired
                 Marshal.WriteByte(information, 1, 3); // full

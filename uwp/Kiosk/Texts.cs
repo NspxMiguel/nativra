@@ -13,6 +13,8 @@ namespace Kiosk
         private static readonly Dictionary<string, string> Pt = new Dictionary<string, string>
         {
             { "game.loading", "Iniciando o jogo…" },
+            { "game.mode.pc", "Modo PC · Segure View + Menu para usar o controle nativo" },
+            { "game.mode.controller", "Modo controle · Segure View + Menu para usar mouse e teclado" },
             { "game.loading.hint", "Preparando a camada de compatibilidade. Não é preciso apertar novamente." },
             { "game.input.hint", "Analógico direito: mouse · A: clicar/atirar · Esquerdo: mover · Y: pular" },
             { "debug.title", "Nativra {0} · {1} · pré-alpha" },
@@ -118,6 +120,8 @@ namespace Kiosk
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
             { "game.loading", "Starting the game…" },
+            { "game.mode.pc", "PC mode · Hold View + Menu for native controller input" },
+            { "game.mode.controller", "Controller mode · Hold View + Menu for mouse and keyboard" },
             { "game.loading.hint", "Preparing the compatibility layer. You do not need to press again." },
             { "game.input.hint", "Right stick: mouse · A: click/fire · Left stick: move · Y: jump" },
             { "debug.title", "Nativra {0} · {1} · pre-alpha" },

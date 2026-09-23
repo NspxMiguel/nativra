@@ -131,8 +131,6 @@
     <Content Include="Assets\store-steam.png" />
     <Content Include="Assets\store-gog.png" />
     <Content Include="Assets\store-epic.png" />
-    <Content Include="Assets\SplashScreen.png" />
-    <Content Include="Assets\NativraCover.png" />
     <Content Include="Assets\Wide310x150Logo.png" />
     <Content Include="Assets\Square150x150Logo.png" />
     <Content Include="Assets\Square44x44Logo.png" />

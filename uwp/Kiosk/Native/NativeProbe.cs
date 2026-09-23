@@ -194,11 +194,13 @@ namespace Kiosk.Native
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));
                 FileWatch.Install(imports);
                 SuspendWatch.Install(imports);
-                ThreadTls.Install(imports);
                 ProcessStubs.Install(imports);
                 WindowStubs.Install(imports);
                 GraphicsBridge.Install(imports);
                 LoaderStubs.Install(imports);
+                // Wrap the loader's priority hook rather than letting it
+                // replace TLS initialization on every game-created thread.
+                ThreadTls.Install(imports);
                 PadBridge.Install(imports);
                 FaultWatch.Install();
                 TimerStubs.Install(imports);
@@ -279,6 +281,7 @@ namespace Kiosk.Native
                         lines.Add("entry." + name + "=attempting");
                         await WriteAsync(lines);
 
+                        ThreadTls.Adopt();
                         var result = StartModule(image);
                         lines[lines.Count - 1] = "entry." + name + "=" + result;
                         lines.Add("stubs.called=" + imports.Shim.Called.Count);
@@ -470,6 +473,7 @@ namespace Kiosk.Native
                         {
                             try
                             {
+                                ThreadTls.Adopt();
                                 var main = Marshal.GetDelegateForFunctionPointer<UnityMainDelegate>(
                                     entry);
                                 // An empty string, not nothing: a program that

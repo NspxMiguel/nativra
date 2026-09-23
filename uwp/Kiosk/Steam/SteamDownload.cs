@@ -67,6 +67,12 @@ namespace Kiosk.Steam
                         connected = true;
                         break;
                     }
+                    catch (SteamLogOnException error) when
+                        (error.Result == 5 || error.Result == 15 || error.Result == 84)
+                    {
+                        // Credentials and rate limits do not improve on another CM.
+                        throw;
+                    }
                     catch (Exception error)
                     {
                         last = error;

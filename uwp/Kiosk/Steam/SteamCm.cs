@@ -13,6 +13,17 @@ using Windows.Storage.Streams;
 
 namespace Kiosk.Steam
 {
+    public sealed class SteamLogOnException : Exception
+    {
+        public int Result { get; }
+
+        public SteamLogOnException(int result)
+            : base($"Steam refused the logon (eresult {result})")
+        {
+            Result = result;
+        }
+    }
+
     /// <summary>
     /// The Steam client connection, spoken from the console itself.
     ///
@@ -229,7 +240,7 @@ namespace Kiosk.Steam
                 .Uint(5, 1771)
                 .String(6, "english")
                 .Uint(7, 20)
-                .Bool(8, false)
+                .Bool(8, true) // Persistent QR refresh-token session.
                 .Bytes(30, new byte[0])
                 .String(96, "Xbox Series X")
                 .Uint(100, 0)
@@ -243,7 +254,7 @@ namespace Kiosk.Steam
 
             var response = await waiting;
             var eresult = (int)response.Num(1, 2);
-            if (eresult != 1) throw new Exception($"Steam refused the logon (eresult {eresult})");
+            if (eresult != 1) throw new SteamLogOnException(eresult);
 
             steamId = response.Num(20) != 0 ? response.Num(20) : accountId;
             var seconds = Math.Max(5, (int)response.Num(3, 9));

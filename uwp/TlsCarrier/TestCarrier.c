@@ -53,7 +53,13 @@ int main(void) {
     slots[i] = configure(&value, 1, 32);
     printf("Carrier %d slot=%d table=%p ensure=%p\n", i, slots[i],
            (void *)__readgsqword(0x58), ensure[i]);
-    if (slots[i] < 0 || ensure[i]() != 1 || ensure[i]() != 0)
+    IMAGE_TLS_DIRECTORY64 *directory = (IMAGE_TLS_DIRECTORY64 *)((unsigned char *)module + tlsRva);
+    unsigned char **currentTable = (unsigned char **)__readgsqword(0x58);
+    int firstEnsure = ensure[i]();
+    printf("Carrier %d raw=%p indexAddress=%p block=%p ensured=%d first=%u\n", i,
+           (void *)directory->StartAddressOfRawData, (void *)directory->AddressOfIndex,
+           currentTable[slots[i]], firstEnsure, currentTable[slots[i]][0]);
+    if (slots[i] < 0 || firstEnsure < 0 || ensure[i]() != 0 || currentTable[slots[i]][0] != value)
       return 12;
     if (configure(&value, 1, 32) != -1)
       return 13;

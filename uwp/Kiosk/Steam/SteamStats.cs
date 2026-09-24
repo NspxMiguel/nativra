@@ -19,6 +19,89 @@ namespace Kiosk.Steam
         private const int EMsgGamesPlayed = 742;
         private const int EMsgGetUserStats = 818;
         private const int EMsgStoreUserStats2 = 5466;
+        private const int EMsgChangeStatus = 716;
+        private const int EMsgPersonaState = 766;
+        private const int EMsgFriendsList = 767;
+        private const int EMsgRequestFriendData = 815;
+        // Name, presence, source and the game being played.
+        private const uint PersonaFlags = 1106;
+
+        public sealed class Friend
+        {
+            public ulong Id;
+            public string Name = string.Empty;
+            public int State;
+            public uint AppId;
+            public string Game = string.Empty;
+        }
+
+        private static readonly Dictionary<ulong, Friend> friends = new Dictionary<ulong, Friend>();
+
+        /// <summary>His own display name, once Steam has said it.</summary>
+        public static string PersonaName;
+
+        /// <summary>Friends as Steam last described them.</summary>
+        public static List<Friend> Friends()
+        {
+            lock (friends)
+            {
+                var list = new List<Friend>();
+                foreach (var friend in friends.Values)
+                    if (friend.Id != account?.SteamId) list.Add(friend);
+                return list;
+            }
+        }
+
+        public static Friend FindFriend(ulong id)
+        {
+            lock (friends) return friends.TryGetValue(id, out var friend) ? friend : null;
+        }
+
+        private static void Heard(SteamCm cm, int emsg, ProtoMessage body)
+        {
+            if (emsg == EMsgFriendsList)
+            {
+                var ids = new List<ulong>();
+                lock (friends)
+                {
+                    foreach (var entry in body.List(2))
+                    {
+                        var id = entry.Num(1);
+                        if (entry.Num(2) != 3) // k_EFriendRelationshipFriend
+                        {
+                            friends.Remove(id);
+                            continue;
+                        }
+                        if (!friends.ContainsKey(id)) friends[id] = new Friend { Id = id };
+                        ids.Add(id);
+                    }
+                }
+                if (ids.Count == 0) return;
+                var request = new ProtoWriter().Uint(1, PersonaFlags);
+                foreach (var id in ids) request.Fixed64(2, id);
+                var _ = cm.NotifyAsync(EMsgRequestFriendData, request.Finish());
+            }
+            else if (emsg == EMsgPersonaState)
+            {
+                lock (friends)
+                {
+                    foreach (var entry in body.List(2))
+                    {
+                        var id = entry.Num(1);
+                        if (!friends.TryGetValue(id, out var friend))
+                        {
+                            if (id != account?.SteamId) continue;
+                            friends[id] = friend = new Friend { Id = id };
+                        }
+                        if (entry.Has(2)) friend.State = (int)entry.Num(2);
+                        if (entry.Has(3)) friend.AppId = (uint)entry.Num(3);
+                        if (entry.Has(15)) friend.Name = entry.Str(15) ?? friend.Name;
+                        if (entry.Has(55)) friend.Game = entry.Str(55) ?? string.Empty;
+                        if (id == account?.SteamId && !string.IsNullOrEmpty(friend.Name)) PersonaName = friend.Name;
+                    }
+                }
+            }
+        }
         private const string TypeInt = "1";
         private const string TypeAchievements = "4";
 
@@ -39,10 +122,16 @@ namespace Kiosk.Steam
             var endpoints = await SteamCm.EndpointsAsync();
             if (endpoints.Count == 0) throw new Exception("Steam listed no connection managers");
             var cm = new SteamCm();
+            cm.Unsolicited += (emsg, body) => Heard(cm, emsg, body);
             try
             {
                 await cm.ConnectAsync(endpoints[0]);
                 await cm.LogOnAsync(account.SteamId, account.RefreshToken);
+                // Online, the way the client announces itself; Steam answers
+                // with the friends list and everyone's state.
+                await cm.NotifyAsync(EMsgChangeStatus, new ProtoWriter().Uint(1, 1).Finish());
+                var self = new ProtoWriter().Uint(1, PersonaFlags).Fixed64(2, account.SteamId).Finish();
+                await cm.NotifyAsync(EMsgRequestFriendData, self);
             }
             catch
             {

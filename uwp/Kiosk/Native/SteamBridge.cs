@@ -232,7 +232,35 @@ namespace Kiosk.Native
             Answer("SteamAPI_ISteamUser_BLoggedOn", (a, b, c, d) => True);
             Answer("SteamAPI_ISteamUser_GetHSteamUser", (a, b, c, d) => True);
             Answer("SteamAPI_ISteamUser_GetPlayerSteamLevel", (a, b, c, d) => IntPtr.Zero);
-            Answer("SteamAPI_ISteamFriends_GetPersonaName", (a, b, c, d) => Utf8(PersonaName));
+            Answer("SteamAPI_ISteamFriends_GetPersonaName", (a, b, c, d) =>
+                Utf8(Steam.SteamStats.PersonaName ?? PersonaName));
+
+            // His friends, as the session heard them from Steam.
+            Answer("SteamAPI_ISteamFriends_GetFriendCount", (self, flags, c, d) =>
+                new IntPtr(Steam.SteamStats.Friends().Count));
+            Answer("SteamAPI_ISteamFriends_GetFriendByIndex", (self, index, flags, d) =>
+            {
+                var list = Steam.SteamStats.Friends();
+                var at = (int)index.ToInt64();
+                return at >= 0 && at < list.Count ? new IntPtr((long)list[at].Id) : IntPtr.Zero;
+            });
+            Answer("SteamAPI_ISteamFriends_GetFriendPersonaName", (self, id, c, d) =>
+                Utf8(Steam.SteamStats.FindFriend((ulong)id.ToInt64())?.Name ?? string.Empty));
+            Answer("SteamAPI_ISteamFriends_GetFriendPersonaState", (self, id, c, d) =>
+                new IntPtr(Steam.SteamStats.FindFriend((ulong)id.ToInt64())?.State ?? 0));
+            Answer("SteamAPI_ISteamFriends_GetFriendRelationship", (self, id, c, d) =>
+                Steam.SteamStats.FindFriend((ulong)id.ToInt64()) != null ? new IntPtr(3) : IntPtr.Zero);
+            Answer("SteamAPI_ISteamFriends_HasFriend", (self, id, flags, d) =>
+                Steam.SteamStats.FindFriend((ulong)id.ToInt64()) != null ? True : IntPtr.Zero);
+            Answer("SteamAPI_ISteamFriends_GetFriendGamePlayed", (self, id, info, d) =>
+            {
+                var friend = Steam.SteamStats.FindFriend((ulong)id.ToInt64());
+                if (friend == null || friend.AppId == 0 || info == IntPtr.Zero) return IntPtr.Zero;
+                // FriendGameInfo_t: game id, server address and ports, lobby.
+                for (var i = 0; i < 24; i += 8) Marshal.WriteInt64(info, i, 0);
+                Marshal.WriteInt64(info, 0, friend.AppId);
+                return True;
+            });
             Answer("SteamAPI_ISteamFriends_GetPersonaState", (a, b, c, d) => True); // online
 
             // Which game, and that he owns it: the download already proved it.

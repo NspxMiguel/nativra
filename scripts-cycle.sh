@@ -103,6 +103,10 @@ if ! bun src/xbdev.ts install $FILES $DEPS || ! bun src/xbdev.ts apps 2>/dev/nul
 fi
 # A freshly installed package has no local storage until it has run once, and
 # every push into it fails until then — silently, if the output is thrown away.
+# Reports from an earlier run look exactly like this one's; clear both copies
+# so a stale file can never pass for a result.
+rm -f native-probe.txt native-pulse.txt Player.log
+bun src/xbdev.ts rm kiosk native-probe.txt native-pulse.txt --dir LocalState >/dev/null 2>&1 || true
 bun src/xbdev.ts launch kiosk >/dev/null
 sleep 12
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true

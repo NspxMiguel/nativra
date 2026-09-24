@@ -23,7 +23,7 @@ echo "== build $SHA"
 
 RUN=""
 for _ in $(seq 1 40); do
-  RUN="$(gh run list --workflow build-uwp --limit 5 \
+  RUN="$(gh run list --workflow build-uwp.yml --limit 5 \
         --json databaseId,headSha,status,conclusion \
         -q ".[] | select(.headSha==\"$SHA\") | \"\(.databaseId) \(.status) \(.conclusion)\"" | head -1)"
   [ -n "$RUN" ] && break
@@ -35,10 +35,10 @@ done
 # exist is how a cycle burns a quarter of an hour doing nothing.
 if [ -z "$RUN" ]; then
   echo "   no build for this commit yet; asking for one"
-  gh workflow run build-uwp >/dev/null 2>&1 || true
+  gh workflow run build-uwp.yml >/dev/null 2>&1 || true
   for _ in $(seq 1 24); do
     sleep 5
-    RUN="$(gh run list --workflow build-uwp --limit 5 \
+    RUN="$(gh run list --workflow build-uwp.yml --limit 5 \
           --json databaseId,headSha,status,conclusion \
           -q ".[] | select(.headSha==\"$SHA\") | \"\(.databaseId) \(.status) \(.conclusion)\"" | head -1)"
     [ -n "$RUN" ] && break

@@ -1,0 +1,636 @@
+[eden-uwp] BootView::Run entered
+[eden-uwp] resolved NRO path: S:\Program Files\WindowsApps\NSPX.NXbox_0.1.2.0_x64__xb0tjvbn8pcrt\boot.nro
+[eden-uwp] calling RunHeadlessBoot
+[eden-uwp] RunHeadlessBoot returned 0
+[eden-uwp] boot worker joined; exiting
+[eden-uwp] BootView::Run entered
+[eden-uwp] resolved NRO path: S:\Program Files\WindowsApps\NSPX.NXbox_0.1.2.0_x64__xb0tjvbn8pcrt\boot.nro
+[eden-uwp] calling RunHeadlessBoot
+[eden-uwp] RunHeadlessBoot returned 0
+[eden-uwp] boot worker joined; exiting
+[eden-uwp] BootView::Run entered
+[eden-uwp] resolved NRO path: S:\Program Files\WindowsApps\NSPX.NXbox_0.1.2.0_x64__xb0tjvbn8pcrt\boot.nro
+[eden-uwp] calling RunHeadlessBoot
+[eden-uwp] RunHeadlessBoot returned 0
+[eden-uwp] boot worker joined; exiting
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+GAME_PRESENT frames=0 seconds=5.005817 fps=0.000000 memory=1051332608
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038905344
+GAME_PRESENT frames=0 seconds=5.002989 fps=0.000000 memory=1038905344
+GAME_PRESENT frames=0 seconds=5.004012 fps=0.000000 memory=1038921728
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038921728
+GAME_PRESENT frames=0 seconds=5.004016 fps=0.000000 memory=1038741504
+GAME_PRESENT frames=0 seconds=5.003984 fps=0.000000 memory=1038741504
+GAME_PRESENT frames=0 seconds=5.003011 fps=0.000000 memory=1038741504
+GAME_PRESENT frames=0 seconds=5.003988 fps=0.000000 memory=1038741504
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038741504
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038741504
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.003988 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.003000 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038569472
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038491648
+GAME_PRESENT frames=0 seconds=5.003001 fps=0.000000 memory=1038491648
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038323712
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038323712
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038323712
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038323712
+GAME_PRESENT frames=0 seconds=5.003995 fps=0.000000 memory=1038323712
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038323712
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038323712
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038323712
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038323712
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038229504
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003015 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.002986 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003988 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004012 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.001988 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003011 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038299136
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038266368
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038266368
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038266368
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038266368
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038266368
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038266368
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003979 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004020 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004005 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003994 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003992 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003997 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003001 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003985 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.002999 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.002987 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003015 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004007 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003993 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003000 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.004003 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.002988 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.003002 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.004008 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.002005 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.003996 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.003980 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.004020 fps=0.000000 memory=1038340096
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003000 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004014 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003985 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003993 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.004003 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.003996 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.002986 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.000013 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.003995 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.004005 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.003009 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.003001 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038430208
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.003994 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.004012 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.004003 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038278656
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003981 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003988 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003002 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.002990 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003011 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038258176
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003988 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004012 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.001999 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003002 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.002990 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003009 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.002998 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004013 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004013 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.002998 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.002995 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004006 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.002000 fps=0.000000 memory=1038274560
+GAME_PRESENT frames=0 seconds=5.002989 fps=0.000000 memory=1038274560
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038274560
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038274560
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038274560
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038274560
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038274560
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038274560
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003986 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003985 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003013 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.002998 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003987 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003992 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004007 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004006 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.002992 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003988 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003013 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.002990 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003997 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003010 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038352384
+GAME_PRESENT frames=0 seconds=5.003001 fps=0.000000 memory=1038270464
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038270464
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038270464
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004007 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003004 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003996 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004008 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004003 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004006 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003994 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.002997 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038348288
+GAME_PRESENT frames=0 seconds=5.002998 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.003992 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.002990 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.004016 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.003994 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.002997 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.003003 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.003988 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.004012 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.003010 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038344192
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038249984
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.002987 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003015 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003996 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.004008 fps=0.000000 memory=1038159872
+GAME_PRESENT frames=0 seconds=5.003993 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.004005 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.003994 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.004003 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.003997 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038262272
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038262272
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+GAME_PRESENT frames=0 seconds=5.002404 fps=0.000000 memory=1051328512
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038831616
+GAME_PRESENT frames=0 seconds=5.002991 fps=0.000000 memory=1038831616
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038835712
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038835712
+GAME_PRESENT frames=0 seconds=5.004014 fps=0.000000 memory=1038618624
+GAME_PRESENT frames=0 seconds=5.003986 fps=0.000000 memory=1038618624
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038618624
+GAME_PRESENT frames=0 seconds=5.003987 fps=0.000000 memory=1038618624
+GAME_PRESENT frames=0 seconds=5.004012 fps=0.000000 memory=1038618624
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038618624
+GAME_PRESENT frames=0 seconds=5.003009 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.003993 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.004007 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.004003 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.003001 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.004005 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.003995 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.004006 fps=0.000000 memory=1038442496
+GAME_PRESENT frames=0 seconds=5.002994 fps=0.000000 memory=1038360576
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038360576
+GAME_PRESENT frames=0 seconds=5.002991 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.003017 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.002993 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038102528
+GAME_PRESENT frames=0 seconds=5.003011 fps=0.000000 memory=1038102528
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038102528
+GAME_PRESENT frames=0 seconds=5.003995 fps=0.000000 memory=1038102528
+GAME_PRESENT frames=0 seconds=5.082924 fps=0.000000 memory=1038196736
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+GAME_PRESENT frames=0 seconds=5.005333 fps=0.000000 memory=1051119616
+GAME_PRESENT frames=0 seconds=5.004012 fps=0.000000 memory=1038819328
+GAME_PRESENT frames=0 seconds=5.002998 fps=0.000000 memory=1038819328
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038827520
+GAME_PRESENT frames=0 seconds=5.004007 fps=0.000000 memory=1038827520
+GAME_PRESENT frames=0 seconds=5.003994 fps=0.000000 memory=1038630912
+GAME_PRESENT frames=0 seconds=5.003997 fps=0.000000 memory=1038630912
+GAME_PRESENT frames=0 seconds=5.003000 fps=0.000000 memory=1038630912
+GAME_PRESENT frames=0 seconds=5.004006 fps=0.000000 memory=1038630912
+GAME_PRESENT frames=0 seconds=5.003994 fps=0.000000 memory=1038630912
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038630912
+GAME_PRESENT frames=0 seconds=5.002999 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.003001 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.004003 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.004003 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.004007 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.003993 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.003988 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038454784
+GAME_PRESENT frames=0 seconds=5.003984 fps=0.000000 memory=1038376960
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038376960
+GAME_PRESENT frames=0 seconds=5.004004 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.002986 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.002990 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.004008 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.003004 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.003996 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.003989 fps=0.000000 memory=1038200832
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038307328
+GAME_PRESENT frames=0 seconds=5.003000 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.003995 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.004003 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.003001 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.002998 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.003987 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.004011 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038213120
+GAME_PRESENT frames=0 seconds=5.003991 fps=0.000000 memory=1038192640
+GAME_PRESENT frames=0 seconds=5.004010 fps=0.000000 memory=1038118912
+GAME_PRESENT frames=0 seconds=5.002992 fps=0.000000 memory=1038118912
+GAME_PRESENT frames=0 seconds=5.004009 fps=0.000000 memory=1038118912
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038118912
+GAME_PRESENT frames=0 seconds=5.002999 fps=0.000000 memory=1038118912
+GAME_PRESENT frames=0 seconds=5.004002 fps=0.000000 memory=1038118912
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.003998 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.003999 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.004000 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.002999 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.004001 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.003990 fps=0.000000 memory=1038204928
+GAME_PRESENT frames=0 seconds=5.004030 fps=0.000000 memory=1038221312
+GAME_PRESENT frames=0 seconds=5.002980 fps=0.000000 memory=1038204928
+GAME_SUSPENDED
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+GAME_PRESENT frames=12 seconds=5.484 fps=2.19 game_fps=1.19 system_fps=2.19 frametime_ms=56.81 speed=100.0% memory=1076101120
+GAME_SUSPENDED
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+GAME_PRESENT frames=12 seconds=5.491 fps=2.19 game_fps=1.18 system_fps=2.18 frametime_ms=58.35 speed=100.0% memory=1092907008
+GAME_SUSPENDED
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+[eden-uwp] Graphics startup failed: LoadPackagedLibrary failed: 126
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+GAME_PRESENT frames=12 seconds=7.968 fps=1.51 game_fps=0.82 system_fps=1.51 frametime_ms=60.72 speed=100.0% memory=1092702208
+GAME_SUSPENDED
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+GAME_PRESENT frames=12 seconds=10.682 fps=1.12 game_fps=0.61 system_fps=1.12 frametime_ms=59.75 speed=100.0% memory=1148194816
+GAME_SUSPENDED

@@ -545,7 +545,7 @@ namespace Kiosk.Native
                 // second later, measured with every other cause ruled out. The
                 // game is given one that owns no display: it draws into a
                 // texture, and handing the frame over copies it to the screen.
-                if (!NoMirror && Mirror != null && OnUi != null)
+                if (!Direct && !NoMirror && Mirror != null && OnUi != null)
                 {
                     // DXGI accepts IUnknown here, not an ID3D11Device vtable.
                     // Query the interface before calling device-specific slots.
@@ -593,7 +593,7 @@ namespace Kiosk.Native
                     Note(from + ": refused on purpose");
                     return E_FAIL;
                 }
-                if (ConsoleWindow != IntPtr.Zero)
+                if (!Direct && ConsoleWindow != IntPtr.Zero)
                 {
                     var direct = Marshal.GetDelegateForFunctionPointer<
                         CreateForCoreWindowDelegate>(
@@ -723,6 +723,11 @@ namespace Kiosk.Native
                         // Both direct routes were measured refused on this
                         // console, every shape, with and without the app
                         // holding its own screen. So the frames are copied.
+                        if (Direct && ShowNative(chain))
+                        {
+                            Note("direct: frames go straight to the screen");
+                            return code;
+                        }
                         var going = NoMirror ? false : FrameMirror.Start(
                             device, chain,
                             Marshal.ReadInt32(desc, 0), Marshal.ReadInt32(desc, 4),
@@ -840,6 +845,102 @@ namespace Kiosk.Native
 
             // Waited on, because what happens next depends on the answer and
             // the answer arrives on another thread.
+            settled.Wait(3000);
+            return attached;
+        }
+
+        [DllImport("api-ms-win-core-winrt-l1-1-0.dll")]
+        private static extern int RoActivateInstance(IntPtr classId, out IntPtr instance);
+
+        [DllImport("api-ms-win-core-winrt-string-l1-1-0.dll", CharSet = CharSet.Unicode)]
+        private static extern int WindowsCreateString(string text, int length, out IntPtr hstring);
+
+        [DllImport("api-ms-win-core-winrt-string-l1-1-0.dll")]
+        private static extern int WindowsDeleteString(IntPtr hstring);
+
+        /// <summary>Opt-in: present the game's own chain instead of copying it.</summary>
+        public static bool Direct;
+
+        /// <summary>
+        /// Puts a composed chain on screen through a panel made natively.
+        ///
+        /// The earlier refusal was measured on the pointer the managed runtime
+        /// handed back for a panel it created, and that pointer answering
+        /// IInspectable does not prove it is the panel: a runtime wrapper
+        /// answers that too. A panel activated through the Windows Runtime
+        /// directly is the native object by construction, so its answer to
+        /// ISwapChainPanelNative is the console's answer.
+        /// </summary>
+        private static bool ShowNative(IntPtr chain)
+        {
+            var image = Mirror;
+            var ui = OnUi;
+            if (image == null || ui == null || chain == IntPtr.Zero) return false;
+
+            var settled = new System.Threading.ManualResetEventSlim(false);
+            var attached = false;
+            var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High, () =>
+            {
+                var name = IntPtr.Zero;
+                var instance = IntPtr.Zero;
+                var riid = Marshal.AllocHGlobal(16);
+                var slot = Marshal.AllocHGlobal(IntPtr.Size);
+                try
+                {
+                    const string ClassName = "Windows.UI.Xaml.Controls.SwapChainPanel";
+                    WindowsCreateString(ClassName, ClassName.Length, out name);
+                    var made = RoActivateInstance(name, out instance);
+                    Note("direct: activate 0x" + made.ToString("X8"));
+                    if (made != S_OK || instance == IntPtr.Zero) return;
+
+                    Marshal.StructureToPtr(new Guid("63aad0b8-7c24-40ff-85a8-640d944cc325"), riid, false);
+                    Marshal.WriteIntPtr(slot, IntPtr.Zero);
+                    var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(
+                        ComProxy.Method(instance, 0));
+                    var code = ask(instance, riid, slot);
+                    Note("direct: panel native 0x" + code.ToString("X8"));
+                    if (code != S_OK) return;
+
+                    var native = Marshal.ReadIntPtr(slot);
+                    var set = Marshal.GetDelegateForFunctionPointer<SetSwapChainDelegate>(
+                        ComProxy.Method(native, 3));
+                    var hr = set(native, chain);
+                    Marshal.Release(native);
+                    Note("direct: set chain 0x" + hr.ToString("X8"));
+                    if (hr != S_OK) return;
+
+                    var panel = (Windows.UI.Xaml.Controls.SwapChainPanel)Marshal.GetObjectForIUnknown(instance);
+                    var parent = Windows.UI.Xaml.Media.VisualTreeHelper.GetParent(image)
+                        as Windows.UI.Xaml.Controls.Panel;
+                    if (parent == null)
+                    {
+                        Note("direct: mirror has no panel parent");
+                        return;
+                    }
+                    Windows.UI.Xaml.Controls.Grid.SetRow(panel, Windows.UI.Xaml.Controls.Grid.GetRow(image));
+                    Windows.UI.Xaml.Controls.Grid.SetColumn(panel, Windows.UI.Xaml.Controls.Grid.GetColumn(image));
+                    Windows.UI.Xaml.Controls.Grid.SetRowSpan(panel, Windows.UI.Xaml.Controls.Grid.GetRowSpan(image));
+                    Windows.UI.Xaml.Controls.Grid.SetColumnSpan(panel, Windows.UI.Xaml.Controls.Grid.GetColumnSpan(image));
+                    panel.HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Stretch;
+                    panel.VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Stretch;
+                    parent.Children.Insert(parent.Children.IndexOf(image) + 1, panel);
+                    image.Visibility = Windows.UI.Xaml.Visibility.Collapsed;
+                    attached = true;
+                    Note("direct: on screen");
+                }
+                catch (Exception error)
+                {
+                    Note("direct: " + error.GetType().Name + " " + error.Message);
+                }
+                finally
+                {
+                    if (instance != IntPtr.Zero) Marshal.Release(instance);
+                    if (name != IntPtr.Zero) WindowsDeleteString(name);
+                    Marshal.FreeHGlobal(riid);
+                    Marshal.FreeHGlobal(slot);
+                    settled.Set();
+                }
+            });
             settled.Wait(3000);
             return attached;
         }

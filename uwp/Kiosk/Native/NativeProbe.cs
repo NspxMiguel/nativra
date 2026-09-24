@@ -123,15 +123,15 @@ namespace Kiosk.Native
                 };
 
                 // Tracing costs a managed call on every function the engine
-                // uses, which is millions a second — worth it while the answer
-                // is still "where did it stop", and turned off by dropping a
-                // file once the answer is "how fast does it run".
+                // uses, which is millions a second. It is opt-in: a player
+                // gets the fast path, and trace.txt turns the recording on
+                // when the question is "where did it stop".
                 var imports = new SystemImports
                 {
                     // Read from the app's own folder, not the game's: the game
                     // folder is created by a download that races this, and a
                     // switch that only sometimes exists is worse than none.
-                    Trace = await local.TryGetItemAsync("notrace.txt") == null,
+                    Trace = await local.TryGetItemAsync("trace.txt") != null,
                 };
                 AudioBridge.Enabled = await local.TryGetItemAsync("noaudio.txt") == null;
                 GraphicsBridge.Smaller = await local.TryGetItemAsync("small.txt") != null;
@@ -140,6 +140,7 @@ namespace Kiosk.Native
                     await local.TryGetItemAsync("nodevice.txt") != null;
                 GraphicsBridge.NameTheCard = await local.TryGetItemAsync("gpu.txt") != null;
                 GraphicsBridge.NoMirror = await local.TryGetItemAsync("nomirror.txt") != null;
+                GraphicsBridge.Direct = await local.TryGetItemAsync("direct.txt") != null;
                 // Sixty by default. The frame is shown by this application
                 // rather than handed to the display, so nothing paces the game
                 // any more — and a game with nothing pacing it runs as fast as

@@ -97,6 +97,19 @@ export class ConsoleRemote {
     await Bun.sleep(140);
   }
 
+  /** Several buttons held together, then released together. */
+  async chord(buttons: string[], ms: number): Promise<void> {
+    const codes = buttons.map((button) => {
+      const keycode = BUTTONS[button.toLowerCase()];
+      if (keycode === undefined) throw new RemoteError(`unknown button: ${button}`);
+      return keycode;
+    });
+    for (const code of codes) this.send(code, DOWN);
+    await Bun.sleep(ms);
+    for (const code of codes) this.send(code, UP);
+    await Bun.sleep(140);
+  }
+
   async hold(button: string, ms: number): Promise<void> {
     const keycode = BUTTONS[button.toLowerCase()];
     if (keycode === undefined) throw new RemoteError(`unknown button: ${button}`);

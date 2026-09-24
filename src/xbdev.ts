@@ -1193,6 +1193,13 @@ async function cmdPress(args: string[]): Promise<void> {
   await remote.open();
   try {
     for (const arg of args) {
+      // "view+menu:600" holds both for 600 ms; "a:1000" holds one.
+      const held = arg.match(/^([a-z0-9+-]+):(\d+)$/i);
+      if (held) {
+        await remote.chord(held[1].split("+"), Number(held[2]));
+        console.log(arg);
+        continue;
+      }
       const [button, repeat] = arg.split("*");
       const times = Number(repeat ?? 1);
       for (let i = 0; i < Math.max(1, times); i++) {

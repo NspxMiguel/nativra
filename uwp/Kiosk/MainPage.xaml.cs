@@ -479,6 +479,13 @@ namespace Kiosk
                 });
                 StatusText.Text = Texts.Get("steam.downloaded", text);
             }
+            catch (Exception error) when (SteamAuth.MeansSignedOut(error))
+            {
+                // A session Steam no longer accepts is not a download error:
+                // drop it so the app asks for the phone instead of retrying.
+                try { await (await SteamSession.LoadAsync()).ClearAsync(); } catch { }
+                StatusText.Text = Texts.Get("steam.signinagain");
+            }
             catch (Exception error)
             {
                 StatusText.Text = Texts.Get("steam.downloadfailed", "auto", error.Message);

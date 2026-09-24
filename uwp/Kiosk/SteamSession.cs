@@ -130,10 +130,12 @@ namespace Kiosk
             if (string.IsNullOrEmpty(RefreshToken) || SteamId == 0)
                 throw new SteamSignInRequiredException();
 
-            var fresh = await SteamAuth.RenewAccessTokenAsync(RefreshToken, SteamId);
+            var tokens = await SteamAuth.RenewTokensAsync(RefreshToken, SteamId);
+            var fresh = tokens.Item1;
             if (string.IsNullOrEmpty(fresh)) throw new SteamSignInRequiredException();
 
             AccessToken = fresh;
+            if (!string.IsNullOrEmpty(tokens.Item2)) RefreshToken = tokens.Item2;
             await SaveAsync();
             return fresh;
         }

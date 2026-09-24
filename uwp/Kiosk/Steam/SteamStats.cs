@@ -119,13 +119,10 @@ namespace Kiosk.Steam
         private static async Task<SteamCm> ConnectedAsync()
         {
             if (connection != null) return connection;
-            var endpoints = await SteamCm.EndpointsAsync();
-            if (endpoints.Count == 0) throw new Exception("Steam listed no connection managers");
-            var cm = new SteamCm();
+            var cm = await SteamCm.ConnectAnyAsync();
             cm.Unsolicited += (emsg, body) => Heard(cm, emsg, body);
             try
             {
-                await cm.ConnectAsync(endpoints[0]);
                 await cm.LogOnAsync(account.SteamId, account.RefreshToken);
                 // Online, the way the client announces itself; Steam answers
                 // with the friends list and everyone's state.

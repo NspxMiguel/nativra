@@ -147,6 +147,14 @@ fi
 if [ "${STEAM:-off}" = "on" ]; then
   bun src/xbdev.ts push kiosk .markers/steambridge.txt LocalState
 fi
+# RENDER=on lets Unity keep its render thread; WORKERS=n sizes its job pool.
+if [ "${RENDER:-off}" = "on" ]; then
+  bun src/xbdev.ts push kiosk .markers/renderthread.txt LocalState
+fi
+if [ -n "${WORKERS:-}" ]; then
+  printf '%s\n' "$WORKERS" > .markers/workers.txt
+  bun src/xbdev.ts push kiosk .markers/workers.txt LocalState
+fi
 # DIRECT=on hands the game a real chain on a native panel instead of the mirror.
 if [ "${DIRECT:-off}" = "on" ]; then
   bun src/xbdev.ts push kiosk .markers/direct.txt LocalState
@@ -193,6 +201,6 @@ cat native-pulse.txt 2>/dev/null | head -40
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
 # Measuring switches must not outlive the measurement: a trace left behind
 # slows every game he opens afterwards.
-bun src/xbdev.ts rm kiosk trace.txt direct.txt steambridge.txt --dir LocalState >/dev/null 2>&1 || true
+bun src/xbdev.ts rm kiosk trace.txt direct.txt steambridge.txt renderthread.txt workers.txt --dir LocalState >/dev/null 2>&1 || true
 exit
 }

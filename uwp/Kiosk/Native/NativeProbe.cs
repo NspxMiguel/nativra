@@ -508,7 +508,8 @@ namespace Kiosk.Native
                                         "frame.capture=" + FrameMirror.CaptureNote,
                                         "mirror.timing=" + FrameMirror.Timing,
                                         "frames=" + GraphicsBridge.Frames
-                                            + " at " + rate.ToString("0.0") + " a second",
+                                            + " at " + rate.ToString("0.0") + " a second"
+                                            + " work=" + GraphicsBridge.Work,
                                         "keys=" + PointerBridge.Keys,
                                         "pointer=" + PointerBridge.Moves
                                             + " at " + PointerBridge.X + "," + PointerBridge.Y,

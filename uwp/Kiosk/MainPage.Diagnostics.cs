@@ -79,7 +79,7 @@ namespace Kiosk
                     Texts.Get("debug.memory", (MemoryManager.AppMemoryUsage / 1048576.0).ToString("F0"),
                         (MemoryManager.AppMemoryUsageLimit / 1048576.0).ToString("F0")),
                     Texts.Get("debug.input", Gamepad.Gamepads.Count, Interlocked.Read(ref Native.PadBridge.Reads),
-                        Native.PointerBridge.Keys),
+                        Native.PointerBridge.Keys, Interlocked.Read(ref Native.PadBridge.Probes)),
                     audio,
                     Texts.Get("debug.sample", DateTime.Now.ToString("HH:mm:ss")),
                 }));

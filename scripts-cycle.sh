@@ -18,8 +18,12 @@ if ! ./tools/xaml-check.sh || ! ./tools/resource-check.sh || ! ./tools/preflight
   exit 1
 fi
 
-git add -A
-git commit -q -m "$MSG" || true
+# Only what was committed on purpose is built. Committing the whole folder
+# published another session's log file under the message "wip".
+if [ -n "$(git status --porcelain -- uwp .github)" ]; then
+  echo "uncommitted changes under uwp/ or .github/; commit them first"
+  exit 1
+fi
 git push -q
 # The build belongs to the last commit that touched what the workflow builds;
 # a commit to scripts or notes alone starts no run.

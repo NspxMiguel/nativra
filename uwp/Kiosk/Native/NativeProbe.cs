@@ -238,6 +238,7 @@ namespace Kiosk.Native
                 WindowStubs.Install(imports);
                 WindowMessages.Install(imports);
                 RawInputBridge.Install(imports);
+                HidBridge.Install(imports);
                 GraphicsBridge.Install(imports);
                 LoaderStubs.Install(imports);
                 // Wrap the loader's priority hook rather than letting it
@@ -550,7 +551,8 @@ namespace Kiosk.Native
                                         }
                                     }
                                     beat.Add("pad probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads
-                                        + " desktop=" + ControllerMode.Desktop);
+                                        + " desktop=" + ControllerMode.Desktop
+                                        + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);
                                     foreach (var name in imports.Shim.Recent())
                                     {
                                         beat.Add("recent " + name);

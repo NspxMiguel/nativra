@@ -234,6 +234,7 @@ namespace Kiosk
                 foreach (var game in games)
                 {
                     game.Tested = tested.Contains(game.AppId);
+                    game.Downloaded = downloaded.Contains(game.AppId);
                     seen.Add(game.AppId);
                     allGames.Add(game);
                 }
@@ -241,6 +242,7 @@ namespace Kiosk
                 {
                     if (!seen.Add(game.AppId)) continue;
                     game.Tested = tested.Contains(game.AppId);
+                    game.Downloaded = downloaded.Contains(game.AppId);
                     allGames.Add(game);
                 }
 
@@ -312,6 +314,20 @@ namespace Kiosk
                 IsAll = true,
                 Count = allGames.Count(g => !hidden.Contains(g.AppId)),
             });
+
+            // What is on this console, right under everything: the list he
+            // reaches for most, instead of a filter behind LB/RB.
+            var here = new HashSet<uint>(allGames.Where(g => g.Downloaded).Select(g => g.AppId));
+            if (here.Count > 0)
+            {
+                Shelves.Add(new Shelf
+                {
+                    Id = "downloaded",
+                    Name = Texts.Get("steam.shelf.downloaded"),
+                    Ids = here,
+                    Count = here.Count,
+                });
+            }
 
             foreach (var shelf in loaded)
             {

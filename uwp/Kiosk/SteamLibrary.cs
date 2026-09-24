@@ -35,9 +35,13 @@ namespace Kiosk
         public Windows.UI.Xaml.Visibility TitleShown =>
             ShowTitles ? Windows.UI.Xaml.Visibility.Visible : Windows.UI.Xaml.Visibility.Collapsed;
 
+        /// <summary>Its files are on this console.</summary>
+        public bool Downloaded { get; set; }
+
+        /// <summary>Green when the game is on the console, grey when it is not.</summary>
         public Windows.UI.Xaml.Media.Brush BadgeBrush =>
             new Windows.UI.Xaml.Media.SolidColorBrush(
-                Tested
+                Downloaded
                     ? Windows.UI.Color.FromArgb(255, 59, 224, 129)
                     : Windows.UI.Color.FromArgb(90, 245, 245, 247));
 

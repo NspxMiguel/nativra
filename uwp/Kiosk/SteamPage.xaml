@@ -79,7 +79,7 @@
                     <TextBlock Text="{x:Bind Name}" FontSize="11" Margin="0,0,14,0"
                                MaxLines="1" TextTrimming="CharacterEllipsis"
                                Foreground="{StaticResource TextPrimary}" />
-                    <!-- Whether this game has been seen running on a console. -->
+                    <!-- Green when the game is downloaded on this console. -->
                     <Ellipse Width="7" Height="7" HorizontalAlignment="Right"
                              VerticalAlignment="Center" Fill="{x:Bind BadgeBrush}" />
                 </Grid>

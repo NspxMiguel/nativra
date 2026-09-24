@@ -42,10 +42,6 @@ namespace Kiosk.Native
         private delegate uint MaxDataDelegate(int type, IntPtr preparsed);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int AnyDelegate(IntPtr a, IntPtr b, IntPtr c, IntPtr d);
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate IntPtr CreateFileDelegate(
-            IntPtr name, uint access, uint share, IntPtr security,
-            uint disposition, uint flags, IntPtr template);
 
         [DllImport("api-ms-win-core-errorhandling-l1-1-0.dll")]
         private static extern void SetLastError(uint error);
@@ -63,7 +59,6 @@ namespace Kiosk.Native
         private static readonly IntPtr DeviceSet = new IntPtr(0x4E1D0000);
         private static readonly IntPtr DeviceHandle = new IntPtr(0x4E1D0100);
         private static IntPtr preparsed;
-        private static CreateFileDelegate previousCreate;
         private static readonly List<Delegate> roots = new List<Delegate>();
 
         /// <summary>Times the game walked the device list, and opened the pad.</summary>
@@ -223,34 +218,17 @@ namespace Kiosk.Native
             }
 
             // Opening the listed path hands back our handle; every other
-            // open goes where it went before.
-            imports.Overrides.TryGetValue("kernel32.dll!CreateFileW", out var before);
-            if (before == IntPtr.Zero) before = imports.SystemAddress("kernel32.dll", "CreateFileW");
-            if (before == IntPtr.Zero) return;
-            previousCreate = Marshal.GetDelegateForFunctionPointer<CreateFileDelegate>(before);
-            var create = Keep(new CreateFileDelegate((name, access, share, security, disposition, flags, template) =>
+            // open goes where it went before. Chained through FileWatch
+            // rather than by converting its function pointer back into a
+            // delegate, which the native runtime refuses with a cast error.
+            FileWatch.Intercept = name =>
             {
-                if (name != IntPtr.Zero && Marshal.ReadInt16(name) == '\\')
-                {
-                    var path = Marshal.PtrToStringUni(name);
-                    if (string.Equals(path, DevicePath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        System.Threading.Interlocked.Increment(ref Opened);
-                        return DeviceHandle;
-                    }
-                }
-                return previousCreate(name, access, share, security, disposition, flags, template);
-            }));
-            foreach (var module in new[]
-                     {
-                         "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll",
-                         "api-ms-win-core-file-l1-1-0.dll",
-                         "api-ms-win-core-file-l1-2-0.dll",
-                         "api-ms-win-core-file-l1-2-1.dll",
-                     })
-            {
-                imports.Overrides[module + "!CreateFileW"] = create;
-            }
+                if (name == IntPtr.Zero || Marshal.ReadInt16(name) != '\\') return IntPtr.Zero;
+                var path = Marshal.PtrToStringUni(name);
+                if (!string.Equals(path, DevicePath, StringComparison.OrdinalIgnoreCase)) return IntPtr.Zero;
+                System.Threading.Interlocked.Increment(ref Opened);
+                return DeviceHandle;
+            };
         }
     }
 }

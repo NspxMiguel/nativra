@@ -149,6 +149,18 @@ namespace Kiosk.Native
                 GraphicsBridge.Ceiling =
                     await local.TryGetItemAsync("slow.txt") != null ? 30 : 60;
                 lines.Add("audio.bridge=" + AudioBridge.Enabled);
+                // Steamworks answered with his account instead of a missing
+                // client. Opt-in while it is being proved.
+                if (await local.TryGetItemAsync("steambridge.txt") != null)
+                {
+                    var session = await SteamSession.LoadAsync();
+                    SteamBridge.Active = session.IsSignedIn;
+                    SteamBridge.SteamId = session.SteamId;
+                    SteamBridge.PersonaName = session.AccountName ?? string.Empty;
+                    SteamBridge.AppId = appId;
+                    SteamBridge.SavePath = System.IO.Path.Combine(local.Path, "steam-stats-" + appId + ".txt");
+                }
+                lines.Add("steam.bridge=" + SteamBridge.Active);
                 lines.Add("smaller=" + GraphicsBridge.Smaller);
                 lines.Add("threads=" + ThreadRank.Note);
 
@@ -515,6 +527,17 @@ namespace Kiosk.Native
                                             beat.Add("dxgi " + note);
                                         }
                                     }
+                                    if (SteamBridge.Active)
+                                    {
+                                        beat.Add("steam " + SteamBridge.Summary());
+                                        lock (SteamBridge.Calls)
+                                        {
+                                            foreach (var pair in SteamBridge.Calls)
+                                                beat.Add("steam " + pair.Value + "x " + pair.Key);
+                                        }
+                                    }
+                                    beat.Add("pad probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads
+                                        + " desktop=" + ControllerMode.Desktop);
                                     foreach (var name in imports.Shim.Recent())
                                     {
                                         beat.Add("recent " + name);

@@ -110,6 +110,7 @@
     <Compile Include="Native\FakeSwapChain.cs" />
     <Compile Include="Native\FakeOutput.cs" />
     <Compile Include="Native\FileWatch.cs" />
+    <Compile Include="Native\SteamBridge.cs" />
     <Compile Include="Native\SuspendWatch.cs" />
     <Compile Include="Native\ThreadTls.cs" />
     <Compile Include="Native\SurfaceBridge.cs" />

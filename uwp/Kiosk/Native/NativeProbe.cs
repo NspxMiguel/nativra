@@ -17,6 +17,8 @@ namespace Kiosk.Native
         private const string Folder = "win32";
         private const string ReportName = "native-probe.txt";
         private const string PulseName = "native-pulse.txt";
+        private static bool RenderThread;
+        private static int JobWorkers = 4;
 
         /// <summary>
         /// Whether a game has the screen. The console's own interface is still
@@ -141,6 +143,16 @@ namespace Kiosk.Native
                 GraphicsBridge.NameTheCard = await local.TryGetItemAsync("gpu.txt") != null;
                 GraphicsBridge.NoMirror = await local.TryGetItemAsync("nomirror.txt") != null;
                 GraphicsBridge.Direct = await local.TryGetItemAsync("direct.txt") != null;
+                // Measuring switches for speed: Unity's own render thread, and
+                // the size of its job pool.
+                RenderThread = await local.TryGetItemAsync("renderthread.txt") != null;
+                if (await local.TryGetItemAsync("workers.txt") is StorageFile workers &&
+                    int.TryParse((await FileIO.ReadTextAsync(workers)).Trim(), out var count) &&
+                    count >= 1 && count <= 14)
+                {
+                    JobWorkers = count;
+                }
+                lines.Add("render.thread=" + RenderThread + " job.workers=" + JobWorkers);
                 // Sixty by default. The frame is shown by this application
                 // rather than handed to the display, so nothing paces the game
                 // any more — and a game with nothing pacing it runs as fast as
@@ -221,14 +233,14 @@ namespace Kiosk.Native
                     // deadlock and nowhere for the work to hide: whatever the
                     // engine does to the device, it does on a thread this
                     // bridge watches, and every call shows up in the trace.
-                    + " -force-gfx-direct"
+                    + (RenderThread ? string.Empty : " -force-gfx-direct")
                     + " -screen-fullscreen 1 -screen-width 1920 -screen-height 1080"
                     // The engine sizes its worker pool to the machine and this
                     // machine has sixteen threads, so it takes thirty-four and
                     // leaves the thread that draws the screen with nothing.
                     // On a console the application is not competing with a
                     // desktop; it only has to leave room for itself.
-                    + " -job-worker-count=4";
+                    + " -job-worker-count=" + JobWorkers;
                 ModuleFileName.SetCommandLine(imports, started);
                 ImageLookup.Install(
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));

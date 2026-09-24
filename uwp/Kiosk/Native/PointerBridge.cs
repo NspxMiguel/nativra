@@ -226,7 +226,7 @@ namespace Kiosk.Native
         {
             try
             {
-                var pads = Gamepad.Gamepads;
+                var pads = PadBridge.Pads;
                 var reading = pads.Count == 0 ? default(GamepadReading) : pads[0].GetCurrentReading();
                 var host = hostKeys;
                 var previousMode = ControllerMode.Desktop;

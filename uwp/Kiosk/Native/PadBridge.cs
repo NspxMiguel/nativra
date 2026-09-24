@@ -47,6 +47,39 @@ namespace Kiosk.Native
         /// <summary>How many readings were taken, which proves input is live.</summary>
         public static long Reads;
 
+        private static readonly List<Gamepad> known = new List<Gamepad>();
+        private static bool watching;
+
+        /// <summary>
+        /// Starts following pads as they connect. A UWP app's Gamepad.Gamepads
+        /// can stay empty until GamepadAdded has a subscriber, which left the
+        /// controller mode reading nothing while desktop mode, fed by window
+        /// key events, still worked.
+        /// </summary>
+        public static void Watch()
+        {
+            if (watching) return;
+            watching = true;
+            Gamepad.GamepadAdded += (sender, pad) => { lock (known) if (!known.Contains(pad)) known.Add(pad); };
+            Gamepad.GamepadRemoved += (sender, pad) => { lock (known) known.Remove(pad); };
+            lock (known)
+                foreach (var pad in Gamepad.Gamepads)
+                    if (!known.Contains(pad)) known.Add(pad);
+        }
+
+        /// <summary>The connected pads, in the order they arrived.</summary>
+        public static IReadOnlyList<Gamepad> Pads
+        {
+            get
+            {
+                lock (known)
+                {
+                    if (known.Count > 0) return known.ToArray();
+                }
+                return Gamepad.Gamepads;
+            }
+        }
+
         /// <summary>How many times the game asked whether a pad exists.</summary>
         public static long Probes;
 
@@ -59,7 +92,7 @@ namespace Kiosk.Native
         /// </summary>
         private static bool Present(uint index, out IReadOnlyList<Gamepad> pads)
         {
-            pads = Gamepad.Gamepads;
+            pads = Pads;
             return index == 0 || index < (uint)pads.Count;
         }
 

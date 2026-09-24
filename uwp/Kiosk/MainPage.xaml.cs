@@ -151,6 +151,7 @@ namespace Kiosk
         public MainPage()
         {
             InitializeComponent();
+            Native.PadBridge.Watch();
             InitializeGameHost();
             InitializeDiagnostics();
             ApplyStaticText();
@@ -756,7 +757,7 @@ namespace Kiosk
         /// </summary>
         private void ShowPads()
         {
-            var pads = Windows.Gaming.Input.Gamepad.Gamepads;
+            var pads = Native.PadBridge.Pads;
             CountText.Text = pads.Count > 1 ? "\u00D7" + pads.Count : string.Empty;
 
             if (pads.Count != 1)

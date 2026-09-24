@@ -550,7 +550,7 @@ namespace Kiosk.Native
                                                 beat.Add("steam " + pair.Value + "x " + pair.Key);
                                         }
                                     }
-                                    beat.Add("pad probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads
+                                    beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads
                                         + " desktop=" + ControllerMode.Desktop
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);
                                     foreach (var name in imports.Shim.Recent())

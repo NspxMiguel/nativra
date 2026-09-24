@@ -116,6 +116,48 @@ namespace Kiosk.Native
             return bits;
         }
 
+        // Windows.System.VirtualKey values of the gamepad keys.
+        private const int KeyA = 195, KeyB = 196, KeyX = 197, KeyY = 198;
+        private const int KeyRightShoulder = 199, KeyLeftShoulder = 200;
+        private const int KeyLeftTrigger = 201, KeyRightTrigger = 202;
+        private const int KeyUp = 203, KeyDown = 204, KeyLeft = 205, KeyRight = 206;
+        private const int KeyLeftStick = 209, KeyRightStick = 210;
+        private const int KeyLeftStickUp = 211, KeyLeftStickDown = 212, KeyLeftStickRight = 213, KeyLeftStickLeft = 214;
+        private const int KeyRightStickUp = 215, KeyRightStickDown = 216, KeyRightStickRight = 217, KeyRightStickLeft = 218;
+
+        private static short Digital(bool[] keys, int positive, int negative) =>
+            (short)((keys[positive] ? 32767 : 0) - (keys[negative] ? 32767 : 0));
+
+        private static void WriteFromKeys(IntPtr target, bool[] keys)
+        {
+            ushort bits = 0;
+            if (keys[KeyUp]) bits |= 0x0001;
+            if (keys[KeyDown]) bits |= 0x0002;
+            if (keys[KeyLeft]) bits |= 0x0004;
+            if (keys[KeyRight]) bits |= 0x0008;
+            bits |= (ushort)ControllerMode.SystemButtons;
+            if (keys[KeyLeftStick]) bits |= 0x0040;
+            if (keys[KeyRightStick]) bits |= 0x0080;
+            if (keys[KeyLeftShoulder]) bits |= 0x0100;
+            if (keys[KeyRightShoulder]) bits |= 0x0200;
+            if (keys[KeyA]) bits |= 0x1000;
+            if (keys[KeyB]) bits |= 0x2000;
+            if (keys[KeyX]) bits |= 0x4000;
+            if (keys[KeyY]) bits |= 0x8000;
+            Marshal.WriteInt32(target, 0, (int)(++packet));
+            Marshal.WriteInt16(target, 4, (short)bits);
+            Marshal.WriteByte(target, 6, (byte)(keys[KeyLeftTrigger] ? 255 : 0));
+            Marshal.WriteByte(target, 7, (byte)(keys[KeyRightTrigger] ? 255 : 0));
+            Marshal.WriteInt16(target, 8, Digital(keys, KeyLeftStickRight, KeyLeftStickLeft));
+            Marshal.WriteInt16(target, 10, Digital(keys, KeyLeftStickUp, KeyLeftStickDown));
+            Marshal.WriteInt16(target, 12, Digital(keys, KeyRightStickRight, KeyRightStickLeft));
+            Marshal.WriteInt16(target, 14, Digital(keys, KeyRightStickUp, KeyRightStickDown));
+            System.Threading.Interlocked.Increment(ref KeyReads);
+        }
+
+        /// <summary>Readings built from window keys because no pad was listed.</summary>
+        public static long KeyReads;
+
         private static short Axis(double value)
         {
             var scaled = value * 32767.0;
@@ -133,6 +175,15 @@ namespace Kiosk.Native
                 {
                     if (!Present(index, out var pads)) return ERROR_DEVICE_NOT_CONNECTED;
                     System.Threading.Interlocked.Increment(ref Reads);
+
+                    if (!ControllerMode.Desktop && index == 0 && pads.Count == 0)
+                    {
+                        // No pad listed, yet the window receives the pad's
+                        // buttons as keys — the same channel desktop mode
+                        // runs on, and the one Device Portal input uses.
+                        WriteFromKeys(target, PointerBridge.HostKeys);
+                        return ERROR_SUCCESS;
+                    }
 
                     if (ControllerMode.Desktop || index >= (uint)pads.Count)
                     {

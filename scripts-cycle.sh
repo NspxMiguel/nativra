@@ -135,6 +135,10 @@ if [ "${PLAY:-on}" = "off" ]; then
   bun src/xbdev.ts push kiosk .markers/noplay.txt LocalState
 fi
 # CHAIN=off refuses the game a swap chain, to see who owns the screen.
+# STEAM=on answers the game's Steamworks calls with the signed-in account.
+if [ "${STEAM:-off}" = "on" ]; then
+  bun src/xbdev.ts push kiosk .markers/steambridge.txt LocalState
+fi
 # DIRECT=on hands the game a real chain on a native panel instead of the mirror.
 if [ "${DIRECT:-off}" = "on" ]; then
   bun src/xbdev.ts push kiosk .markers/direct.txt LocalState

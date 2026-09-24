@@ -248,6 +248,13 @@ namespace Kiosk.Native
                 {
                     Remember(from + "!" + wanted);
 
+                    // Steamworks, answered with the signed-in account.
+                    if (SteamBridge.Serves(from))
+                    {
+                        var bridged = SteamBridge.Resolve(wanted);
+                        if (bridged != IntPtr.Zero) return bridged;
+                    }
+
                     // The same answer the import table would have given, so a
                     // game that looks a function up at runtime and a game that
                     // links it end up in the same place.

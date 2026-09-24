@@ -125,6 +125,13 @@ export class DevicePortal {
     return this.json("/api/resourcemanager/systemperf");
   }
 
+  async processes(): Promise<Array<Record<string, unknown>>> {
+    const body = (await this.json("/api/resourcemanager/processes")) as {
+      Processes?: Array<Record<string, unknown>>;
+    };
+    return body.Processes ?? [];
+  }
+
   async packages(): Promise<InstalledPackage[]> {
     const data = await this.json<{ InstalledPackages: InstalledPackage[] }>(
       "/api/app/packagemanager/packages",

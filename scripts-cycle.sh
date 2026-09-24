@@ -71,6 +71,19 @@ DEPS=$(find .cycle/Kiosk_*_Test/Dependencies/x64 -type f -name '*.appx' | tr '\n
 # and the console spent most of each turn fetching it again from Steam — which
 # is most of the time a turn takes. FRESH=on forces the old behaviour when the
 # state itself is what is suspect.
+# The cycle closes the app when it is done, so an app still open means someone
+# is using the console. Replacing it under them froze a game and threw away
+# their Steam sign-in. FORCE=on overrides.
+if [ "${FORCE:-off}" != "on" ] && bun src/xbdev.ts running kiosk >/dev/null 2>&1; then
+  echo "Nativra is open on the console; not replacing it (FORCE=on to override)"
+  exit 3
+fi
+# Steam rotates the sign-in on the console, so the copy kept here goes stale.
+# Take the live one before the uninstall wipes it; the sync puts it back.
+if bun src/xbdev.ts pull kiosk steam.json LocalState >/dev/null 2>&1 \
+  && python3 -c 'import json,sys; d=json.load(open("steam.json")); sys.exit(0 if d else 1)' 2>/dev/null; then
+  echo "   steam session taken from the console"
+fi
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
 # Measured, and it cost the app: installing over the top reports success and
 # leaves nothing registered — the console lists no package afterwards and the
@@ -160,5 +173,7 @@ for MAKER in OddGiant "LEGO" .; do
 done
 echo "== pulse =="
 cat native-pulse.txt 2>/dev/null | head -40
+# Leave the console free: an open app is how the next cycle knows he is on it.
+bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
 exit
 }

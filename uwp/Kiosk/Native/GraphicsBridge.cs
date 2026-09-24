@@ -238,16 +238,98 @@ namespace Kiosk.Native
         /// </summary>
         public static int Ceiling;
 
-        private static int lastFrameAt;
+        private static readonly System.Diagnostics.Stopwatch paceClock =
+            System.Diagnostics.Stopwatch.StartNew();
+        private static double lastPresentDone;
+        private static double nextDue;
+        private static double workTotal;
+        private static long workSamples;
+        private static double workWorst;
 
-        /// <summary>Holds the render thread back to the ceiling, if there is one.</summary>
+        /// <summary>
+        /// What each frame cost the game before the wait, in milliseconds:
+        /// the headroom a rate at the ceiling hides.
+        /// </summary>
+        public static string Work
+        {
+            get
+            {
+                var samples = System.Threading.Interlocked.Read(ref workSamples);
+                if (samples == 0) return "none";
+                var average = workTotal / samples;
+                var worst = workWorst;
+                workWorst = 0;
+                return average.ToString("F2") + "ms avg, " + worst.ToString("F1") + "ms worst";
+            }
+        }
+
+        [DllImport("api-ms-win-core-synch-l1-2-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateWaitableTimerExW(IntPtr attributes, string name, uint flags, uint access);
+
+        [DllImport("api-ms-win-core-synch-l1-1-0.dll", SetLastError = true)]
+        private static extern bool SetWaitableTimer(
+            IntPtr timer, ref long due, int period, IntPtr routine, IntPtr argument, bool resume);
+
+        [DllImport("api-ms-win-core-synch-l1-1-0.dll")]
+        private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+        [ThreadStatic] private static IntPtr paceTimer;
+        [ThreadStatic] private static bool paceTimerTried;
+
+        /// <summary>
+        /// Sleeps for a fraction of a frame without the ~15.6 ms granularity
+        /// of Thread.Sleep. A high-resolution waitable timer does that without
+        /// spinning; where one cannot be made, the caller's spin covers it.
+        /// </summary>
+        private static void WaitPrecisely(double milliseconds)
+        {
+            if (!paceTimerTried)
+            {
+                paceTimerTried = true;
+                try
+                {
+                    // CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS.
+                    paceTimer = CreateWaitableTimerExW(IntPtr.Zero, null, 0x2, 0x1F0003);
+                }
+                catch
+                {
+                    paceTimer = IntPtr.Zero;
+                }
+            }
+            if (paceTimer == IntPtr.Zero) return;
+            var due = -(long)(milliseconds * 10000);
+            if (SetWaitableTimer(paceTimer, ref due, 0, IntPtr.Zero, IntPtr.Zero, false))
+                WaitForSingleObject(paceTimer, 100);
+        }
+
+        /// <summary>
+        /// Holds each frame to its slot on the ceiling's clock. Measured with
+        /// the high-resolution counter: TickCount moves in ~15.6 ms steps, so
+        /// pacing on it alternated short and long frames — judder, and a rate
+        /// that settled near 57 instead of 60.
+        /// </summary>
         private static void Pace()
         {
-            if (Ceiling <= 0) return;
-            var gap = 1000 / Ceiling;
-            var since = Environment.TickCount - lastFrameAt;
-            if (since < gap) System.Threading.Thread.Sleep(gap - since);
-            lastFrameAt = Environment.TickCount;
+            var now = paceClock.Elapsed.TotalMilliseconds;
+            if (lastPresentDone > 0)
+            {
+                var work = now - lastPresentDone;
+                workTotal += work;
+                workSamples++;
+                if (work > workWorst) workWorst = work;
+            }
+            if (Ceiling > 0)
+            {
+                var gap = 1000.0 / Ceiling;
+                // A frame that ran late starts a new schedule instead of
+                // racing to catch up on the ones it missed.
+                if (nextDue <= 0 || now - nextDue > gap) nextDue = now;
+                nextDue += gap;
+                var wait = nextDue - now;
+                if (wait > 1.5) WaitPrecisely(wait - 0.5);
+                while (paceClock.Elapsed.TotalMilliseconds < nextDue) System.Threading.Thread.SpinWait(64);
+            }
+            lastPresentDone = paceClock.Elapsed.TotalMilliseconds;
         }
         private static SetFullscreenDelegate setFullscreen;
 

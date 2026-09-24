@@ -265,6 +265,12 @@ namespace Kiosk.Native
             return made;
         }
 
+        /// <summary>The original behind a pointer, only when it is one of our proxies.</summary>
+        public bool TryUnwrap(IntPtr maybeProxy, out IntPtr original)
+        {
+            lock (gate) return Behind.TryGetValue(maybeProxy, out original);
+        }
+
         /// <summary>The object a proxy stands in for, from inside an override.</summary>
         public static IntPtr Original(IntPtr proxy) =>
             proxy == IntPtr.Zero ? IntPtr.Zero : Marshal.ReadIntPtr(proxy, IntPtr.Size);

@@ -700,7 +700,15 @@ namespace Kiosk.Native
                 if (code != S_OK)
                 {
                     composed = true;
-                    code = compose(original, device, desc, IntPtr.Zero, result);
+                    // The game's device is our stand-in. DXGI asks the device it
+                    // is given for its own interfaces, and asked through the
+                    // stand-in it never returned; the console's device is the
+                    // one that can answer it.
+                    var composeDevice = device;
+                    if (Direct && Proxy.TryUnwrap(device, out var consoleDevice) && consoleDevice != IntPtr.Zero)
+                        composeDevice = consoleDevice;
+                    Note(from + " composing with " + (composeDevice == device ? "the given device" : "the console's device"));
+                    code = compose(original, composeDevice, desc, IntPtr.Zero, result);
                     Note(from + " composition: 0x" + code.ToString("X8"));
                 }
 

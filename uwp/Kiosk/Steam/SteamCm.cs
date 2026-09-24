@@ -80,8 +80,42 @@ namespace Kiosk.Steam
             socket = new MessageWebSocket();
             socket.Control.MessageType = SocketMessageType.Binary;
             socket.MessageReceived += OnMessage;
-            await socket.ConnectAsync(new Uri($"wss://{endpoint}/cmsocket/"));
+            // A connection manager that does not answer holds a socket open
+            // for as long as the network lets it — measured at tens of
+            // minutes before the sign-in code appeared. Ten seconds, then the
+            // next one.
+            var connecting = socket.ConnectAsync(new Uri($"wss://{endpoint}/cmsocket/")).AsTask();
+            if (await Task.WhenAny(connecting, Task.Delay(10000)) != connecting)
+            {
+                try { socket.Dispose(); } catch { }
+                socket = null;
+                throw new TimeoutException("Steam server " + endpoint + " did not answer");
+            }
+            await connecting;
             writer = new DataWriter(socket.OutputStream);
+        }
+
+        /// <summary>A connection to the first server that answers, of the first few listed.</summary>
+        public static async Task<SteamCm> ConnectAnyAsync()
+        {
+            var endpoints = await EndpointsAsync();
+            if (endpoints.Count == 0) throw new Exception("Steam listed no connection managers");
+            Exception last = null;
+            for (var i = 0; i < Math.Min(4, endpoints.Count); i++)
+            {
+                var cm = new SteamCm();
+                try
+                {
+                    await cm.ConnectAsync(endpoints[i]);
+                    return cm;
+                }
+                catch (Exception error)
+                {
+                    last = error;
+                    cm.Dispose();
+                }
+            }
+            throw last ?? new Exception("no Steam server answered");
         }
 
         // ------------------------------------------------------------- framing
@@ -259,7 +293,7 @@ namespace Kiosk.Steam
                 .Finish();
 
             var header = new ProtoWriter().Fixed64(1, accountId).Uint(2, 0);
-            var waiting = Await("emsg:" + EMsgLogOnResponse, 45000);
+            var waiting = Await("emsg:" + EMsgLogOnResponse, 20000);
             await SendAsync(EMsgLogon, body, header);
 
             var response = await waiting;

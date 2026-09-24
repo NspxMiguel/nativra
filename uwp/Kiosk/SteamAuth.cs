@@ -253,20 +253,15 @@ namespace Kiosk
                 await Steam.SteamStats.StopAsync();
                 if (!string.IsNullOrEmpty(session.RefreshToken))
                 {
-                    var endpoints = await Steam.SteamCm.EndpointsAsync();
-                    if (endpoints.Count > 0)
+                    using (var cm = await Steam.SteamCm.ConnectAnyAsync())
                     {
-                        using (var cm = new Steam.SteamCm())
-                        {
-                            await cm.ConnectAsync(endpoints[0]);
-                            await cm.LogOnAsync(session.SteamId, session.RefreshToken);
-                            var request = new Steam.ProtoWriter()
-                                .String(1, session.RefreshToken)
-                                .Uint(2, 0) // k_EAuthTokenRevokeLogout
-                                .Finish();
-                            var revoke = cm.ServiceAsync("Authentication.RevokeToken#1", request);
-                            await Task.WhenAny(revoke, Task.Delay(10000));
-                        }
+                        await cm.LogOnAsync(session.SteamId, session.RefreshToken);
+                        var request = new Steam.ProtoWriter()
+                            .String(1, session.RefreshToken)
+                            .Uint(2, 0) // k_EAuthTokenRevokeLogout
+                            .Finish();
+                        var revoke = cm.ServiceAsync("Authentication.RevokeToken#1", request);
+                        await Task.WhenAny(revoke, Task.Delay(10000));
                     }
                 }
             }
@@ -286,15 +281,18 @@ namespace Kiosk
                  logOn.Result == 26 || logOn.Result == 27);
         }
 
-        public static async Task<string> RenewAccessTokenAsync(string refreshToken, ulong steamId)
+        /// <summary>
+        /// A fresh access token, and a fresh refresh token when Steam rotates
+        /// it. Asking for renewal is what keeps a console that is used signed
+        /// in for good: each renewal pushes the expiry forward, where a token
+        /// that is never renewed runs out after a few months.
+        /// </summary>
+        public static async Task<Tuple<string, string>> RenewTokensAsync(string refreshToken, ulong steamId)
         {
             // SteamClient tokens must be renewed over an authenticated CM
             // connection. The public HTTP endpoint can reject a valid session.
-            var endpoints = await Steam.SteamCm.EndpointsAsync();
-            if (endpoints.Count == 0) throw new Exception("Steam listed no connection managers");
-            using (var cm = new Steam.SteamCm())
+            using (var cm = await Steam.SteamCm.ConnectAnyAsync())
             {
-                await cm.ConnectAsync(endpoints[0]);
                 try
                 {
                     await cm.LogOnAsync(steamId, refreshToken);
@@ -304,10 +302,12 @@ namespace Kiosk
                     throw new SteamSignInRequiredException();
                 }
                 var request = new Steam.ProtoWriter()
-                    .String(1, refreshToken).Fixed64(2, steamId).Finish();
+                    .String(1, refreshToken).Fixed64(2, steamId)
+                    .Uint(3, 1) // k_ETokenRenewalType_Allow
+                    .Finish();
                 var response = await cm.ServiceAsync(
                     "Authentication.GenerateAccessTokenForApp#1", request);
-                return response.Str(1);
+                return Tuple.Create(response.Str(1), response.Str(2));
             }
         }
     }

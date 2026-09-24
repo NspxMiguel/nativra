@@ -60,6 +60,9 @@ namespace Kiosk.Native
                 || lower.EndsWith("boot.config");
         }
 
+        /// <summary>Answers an open by name, or zero to let it through.</summary>
+        public static Func<IntPtr, IntPtr> Intercept;
+
         public static void Install(SystemImports imports)
         {
             real = null;
@@ -71,6 +74,10 @@ namespace Kiosk.Native
 
             wide = (name, access, share, security, disposition, flags, template) =>
             {
+                // Paths that name something the bridge provides, such as the
+                // listed controller, are answered before the file system.
+                var ours = Intercept == null ? IntPtr.Zero : Intercept(name);
+                if (ours != IntPtr.Zero) return ours;
                 if (real == null) return InvalidHandle;
 
                 var handle = real(

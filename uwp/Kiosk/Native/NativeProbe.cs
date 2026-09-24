@@ -159,6 +159,18 @@ namespace Kiosk.Native
                     SteamBridge.PersonaName = session.AccountName ?? string.Empty;
                     SteamBridge.AppId = appId;
                     SteamBridge.SavePath = System.IO.Path.Combine(local.Path, "steam-stats-" + appId + ".txt");
+                    if (SteamBridge.Active)
+                    {
+                        // In game for his friends, and anything earned while
+                        // offline goes up as soon as the session is open.
+                        SteamBridge.Changed = () => Task.Run(() =>
+                            Steam.SteamStats.SyncAsync(SteamBridge.Achieved, SteamBridge.Numbers));
+                        var __ = Task.Run(async () =>
+                        {
+                            await Steam.SteamStats.PlayAsync(session, appId);
+                            await Steam.SteamStats.SyncAsync(SteamBridge.Achieved, SteamBridge.Numbers);
+                        });
+                    }
                 }
                 lines.Add("steam.bridge=" + SteamBridge.Active);
                 lines.Add("smaller=" + GraphicsBridge.Smaller);
@@ -530,6 +542,7 @@ namespace Kiosk.Native
                                     if (SteamBridge.Active)
                                     {
                                         beat.Add("steam " + SteamBridge.Summary());
+                                        beat.Add("steam sync " + Steam.SteamStats.Note + " stored=" + Steam.SteamStats.Stored);
                                         lock (SteamBridge.Calls)
                                         {
                                             foreach (var pair in SteamBridge.Calls)

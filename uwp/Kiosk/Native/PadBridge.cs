@@ -47,6 +47,22 @@ namespace Kiosk.Native
         /// <summary>How many readings were taken, which proves input is live.</summary>
         public static long Reads;
 
+        /// <summary>How many times the game asked whether a pad exists.</summary>
+        public static long Probes;
+
+        /// <summary>
+        /// Whether a slot answers as connected. Slot zero always does: engines
+        /// probe once at startup, often before the console has listed its pads
+        /// and while desktop mode is on, and a pad reported missing then is
+        /// never asked for again. Desktop mode mutes the pad, it does not
+        /// unplug it.
+        /// </summary>
+        private static bool Present(uint index, out IReadOnlyList<Gamepad> pads)
+        {
+            pads = Gamepad.Gamepads;
+            return index == 0 || index < (uint)pads.Count;
+        }
+
         /// <summary>XInput button bits, in the order the console reports them.</summary>
         private static ushort Buttons(GamepadButtons pressed)
         {
@@ -79,15 +95,21 @@ namespace Kiosk.Native
         {
             state = (index, target) =>
             {
-                if (ControllerMode.Desktop) return ERROR_DEVICE_NOT_CONNECTED;
                 if (target == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;
                 try
                 {
-                    var pads = Gamepad.Gamepads;
-                    if (index >= (uint)pads.Count) return ERROR_DEVICE_NOT_CONNECTED;
+                    if (!Present(index, out var pads)) return ERROR_DEVICE_NOT_CONNECTED;
+                    System.Threading.Interlocked.Increment(ref Reads);
+
+                    if (ControllerMode.Desktop || index >= (uint)pads.Count)
+                    {
+                        // A resting pad: same packet number, nothing pressed.
+                        Marshal.WriteInt32(target, 0, (int)packet);
+                        for (var offset = 4; offset < 16; offset += 4) Marshal.WriteInt32(target, offset, 0);
+                        return ERROR_SUCCESS;
+                    }
 
                     var reading = pads[(int)index].GetCurrentReading();
-                    Reads++;
 
                     // The packet number only has to change when the reading
                     // does; a game that compares it to skip work is right to.
@@ -109,14 +131,10 @@ namespace Kiosk.Native
 
             vibration = (index, source) =>
             {
-                if (ControllerMode.Desktop) return ERROR_DEVICE_NOT_CONNECTED;
                 try
                 {
-                    var pads = Gamepad.Gamepads;
-                    if (index >= (uint)pads.Count || source == IntPtr.Zero)
-                    {
-                        return ERROR_DEVICE_NOT_CONNECTED;
-                    }
+                    if (source == IntPtr.Zero || !Present(index, out var pads)) return ERROR_DEVICE_NOT_CONNECTED;
+                    if (ControllerMode.Desktop || index >= (uint)pads.Count) return ERROR_SUCCESS;
                     // XINPUT_VIBRATION is two words, left motor then right.
                     var left = (ushort)Marshal.ReadInt16(source, 0) / 65535.0;
                     var right = (ushort)Marshal.ReadInt16(source, 2) / 65535.0;
@@ -135,14 +153,11 @@ namespace Kiosk.Native
 
             capabilities = (index, flags, target) =>
             {
-                if (ControllerMode.Desktop) return ERROR_DEVICE_NOT_CONNECTED;
+                System.Threading.Interlocked.Increment(ref Probes);
                 if (target == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;
                 try
                 {
-                    if (index >= (uint)Gamepad.Gamepads.Count)
-                    {
-                        return ERROR_DEVICE_NOT_CONNECTED;
-                    }
+                    if (!Present(index, out _)) return ERROR_DEVICE_NOT_CONNECTED;
                     // XINPUT_CAPABILITIES: type, subtype, flags, then a state
                     // and a vibration block saying which fields are present.
                     Marshal.WriteByte(target, 0, 1);      // XINPUT_DEVTYPE_GAMEPAD
@@ -169,7 +184,7 @@ namespace Kiosk.Native
 
             battery = (index, type, information) =>
             {
-                if (ControllerMode.Desktop || index >= (uint)Gamepad.Gamepads.Count) return ERROR_DEVICE_NOT_CONNECTED;
+                if (!Present(index, out _)) return ERROR_DEVICE_NOT_CONNECTED;
                 if (information == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;
                 Marshal.WriteByte(information, 0, 1); // wired
                 Marshal.WriteByte(information, 1, 3); // full

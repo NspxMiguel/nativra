@@ -166,7 +166,17 @@ namespace Kiosk.Steam
                     pending.Remove(key);
                 }
             }
-            if (waiting == null) return;
+            if (waiting == null)
+            {
+                // Nobody asked: friends lists, persona updates and the like.
+                var listener = Unsolicited;
+                if (listener != null)
+                {
+                    try { listener(emsg, ProtoMessage.Read(packet, bodyStart, bodyLength)); }
+                    catch { }
+                }
+                return;
+            }
 
             var eresult = (int)header.Num(13, 0);
             if (eresult != 0 && eresult != 1)
@@ -272,6 +282,9 @@ namespace Kiosk.Steam
         }
 
         // --------------------------------------------------------------- calls
+
+        /// <summary>Messages Steam sends on its own, by EMsg.</summary>
+        public event Action<int, ProtoMessage> Unsolicited;
 
         /// <summary>A client message that expects an answer to its job.</summary>
         public async Task<ProtoMessage> RequestAsync(int emsg, byte[] body, int timeoutMs = 30000)

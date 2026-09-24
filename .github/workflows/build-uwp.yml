@@ -102,6 +102,10 @@ jobs:
         run: |
           Copy-Item uwp/Kiosk.cer out/ -ErrorAction SilentlyContinue
           Compress-Archive -Path out/* -DestinationPath kiosk-uwp.zip -Force
+          # The app updates itself from this one file: the bundle alone is a
+          # few MB, and its dependencies are already on any console running it.
+          $bundle = Get-ChildItem out -Recurse -Filter 'Kiosk_*_x64.msixbundle' | Select-Object -First 1
+          if ($bundle) { Copy-Item $bundle.FullName nativra-x64.msixbundle }
           Get-Item kiosk-uwp.zip | Select-Object Name, Length | Format-Table -AutoSize
 
       - name: Upload package
@@ -118,7 +122,9 @@ jobs:
         shell: bash
         run: |
           tag="kiosk-build-${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" kiosk-uwp.zip \
+          assets=(kiosk-uwp.zip)
+          [ -f nativra-x64.msixbundle ] && assets+=(nativra-x64.msixbundle)
+          gh release create "$tag" "${assets[@]}" \
             --title "Nativra pre-alpha · development build ${GITHUB_RUN_NUMBER}" \
             --prerelease --latest=false \
             --notes "Experimental automated build for Xbox Dev Mode. Not a stable release or a compatibility guarantee. Read README.md and docs/progress before installing. Back up app data before uninstalling. Install with: bun src/xbdev.ts install <files>" \

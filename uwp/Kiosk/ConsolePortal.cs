@@ -170,5 +170,54 @@ namespace Kiosk
                 return false;
             }
         }
+
+        /// <summary>
+        /// Installs a package file through the console's own Device Portal.
+        /// A package of the same identity with a higher version installs as
+        /// an update, which keeps this app's storage: games and sign-in.
+        /// </summary>
+        public async Task<bool> InstallAsync(StorageFile package)
+        {
+            try
+            {
+                if (csrf == null) await ProbeAsync();
+                for (var attempt = 0; attempt < 30; attempt++)
+                {
+                    var content = new HttpMultipartFormDataContent();
+                    var part = new HttpStreamContent(await package.OpenReadAsync());
+                    part.Headers.ContentType =
+                        new Windows.Web.Http.Headers.HttpMediaTypeHeaderValue("application/octet-stream");
+                    content.Add(part, package.Name, package.Name);
+
+                    var request = new HttpRequestMessage(
+                        HttpMethod.Post,
+                        new Uri(baseUrl + "/api/app/packagemanager/package?package="
+                            + Uri.EscapeDataString(package.Name)));
+                    request.Content = content;
+                    if (csrf != null)
+                    {
+                        request.Headers["X-CSRF-Token"] = csrf;
+                        request.Headers["Cookie"] = "CSRF-Token=" + csrf;
+                    }
+
+                    var response = await Client().SendRequestAsync(request);
+                    if (response.IsSuccessStatusCode) return true;
+                    // 409: another deployment is in flight; it is a queue.
+                    if ((int)response.StatusCode != 409)
+                    {
+                        LastError = "install " + (int)response.StatusCode;
+                        return false;
+                    }
+                    await Task.Delay(5000);
+                }
+                LastError = "console stayed busy";
+                return false;
+            }
+            catch (Exception error)
+            {
+                LastError = error.GetType().Name + ": " + error.Message;
+                return false;
+            }
+        }
     }
 }

@@ -71,6 +71,10 @@ DEPS=$(find .cycle/Kiosk_*_Test/Dependencies/x64 -type f -name '*.appx' | tr '\n
 # and the console spent most of each turn fetching it again from Steam — which
 # is most of the time a turn takes. FRESH=on forces the old behaviour when the
 # state itself is what is suspect.
+# Another session (the NXbox port) shares this console. Whoever holds the lock
+# owns it; the other waits instead of pulling its app off the screen.
+tools/console-lock.sh acquire nativra || exit 4
+trap 'tools/console-lock.sh release nativra' EXIT
 # The cycle closes the app when it is done, so an app still open means someone
 # is using the console. Replacing it under them froze a game and threw away
 # their Steam sign-in. FORCE=on overrides.

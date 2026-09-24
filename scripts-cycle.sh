@@ -89,11 +89,15 @@ bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
 # leaves nothing registered — the console lists no package afterwards and the
 # launch fails. So replacing is the default again, and the faster path has to
 # earn its way back with evidence rather than hope. KEEP=on tries it.
-if [ "${KEEP:-off}" != "on" ]; then
+# Builds now carry a rising version, so installing is an update that keeps
+# the storage (game and Steam sign-in). An install that reports success but
+# leaves no package registered, or that is refused, falls back to replacing.
+# FRESH=on replaces on purpose.
+if [ "${FRESH:-off}" = "on" ]; then
   bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
 fi
-if ! bun src/xbdev.ts install $FILES $DEPS; then
-  echo "   install over the top refused; replacing the package"
+if ! bun src/xbdev.ts install $FILES $DEPS || ! bun src/xbdev.ts apps 2>/dev/null | grep -q Nativra; then
+  echo "   update refused or left nothing registered; replacing the package"
   bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
   bun src/xbdev.ts install $FILES $DEPS
 fi

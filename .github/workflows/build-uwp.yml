@@ -61,6 +61,19 @@ jobs:
         shell: cmd
         run: uwp\Kiosk\Shaders\build.cmd
 
+      # Every build carries a higher version, so the console installs it as an
+      # update of the one already there. An update keeps the app's storage —
+      # downloaded games and the Steam sign-in — where a same-version package
+      # has to be uninstalled first and takes both with it.
+      - name: Stamp package version
+        shell: pwsh
+        run: |
+          $path = Resolve-Path "uwp/Kiosk/Package.appxmanifest"
+          $xml = [xml](Get-Content $path)
+          $xml.Package.Identity.Version = "1.0.$env:GITHUB_RUN_NUMBER.0"
+          $xml.Save($path)
+          Write-Host "version 1.0.$env:GITHUB_RUN_NUMBER.0"
+
       - name: Build package
         run: >
           msbuild uwp\Kiosk.sln

@@ -634,3 +634,44 @@ GAME_RUNNING
 NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
 GAME_PRESENT frames=12 seconds=10.682 fps=1.12 game_fps=0.61 system_fps=1.12 frametime_ms=59.75 speed=100.0% memory=1148194816
 GAME_SUSPENDED
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+[eden-uwp] BootView::Run entered
+loading packaged DXIL validator
+DXIL validator loaded
+loading packaged Mesa
+creating bootstrap context
+vendor=Microsoft Corporation
+renderer=D3D12 (SraKmd_arden)
+version=4.6 (Core Profile) Mesa 24.1.0-devel (git-15acdd7ea2)
+glsl=4.60
+GAME_BEGIN
+GAME_LOADING
+GAME_RUNNING
+NXBOX_PADDLE_READY: A starts; D-pad or left stick moves; Plus exits
+GAME_PRESENT frames=12 seconds=5.933 fps=2.02 game_fps=1.09 system_fps=2.02 frametime_ms=57.53 speed=100.0% memory=1149255680
+GAME_SUSPENDED

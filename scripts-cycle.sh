@@ -18,7 +18,9 @@ fi
 git add -A
 git commit -q -m "$MSG" || true
 git push -q
-SHA="$(git rev-parse HEAD)"
+# The build belongs to the last commit that touched what the workflow builds;
+# a commit to scripts or notes alone starts no run.
+SHA="$(git log -1 --format=%H -- uwp .github/workflows/build-uwp.yml)"
 echo "== build $SHA"
 
 RUN=""
@@ -113,6 +115,10 @@ if [ "${PLAY:-on}" = "off" ]; then
   bun src/xbdev.ts push kiosk .markers/noplay.txt LocalState
 fi
 # CHAIN=off refuses the game a swap chain, to see who owns the screen.
+# DIRECT=on hands the game a real chain on a native panel instead of the mirror.
+if [ "${DIRECT:-off}" = "on" ]; then
+  bun src/xbdev.ts push kiosk .markers/direct.txt LocalState
+fi
 if [ "${CHAIN:-on}" = "off" ]; then
   bun src/xbdev.ts push kiosk .markers/nochain.txt LocalState
 fi

@@ -285,6 +285,15 @@ namespace Kiosk
             // without a hundred megabytes crossing the network by hand.
             await AutoDownloadAsync();
 
+            // A newer build on GitHub installs itself as an update, which
+            // keeps the games and the Steam sign-in. Only here, on the home
+            // screen: never while a game is running.
+            var ___ = Updater.CheckAsync(text =>
+            {
+                var ____ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal,
+                    () => StatusText.Text = text);
+            });
+
             // The measurements run after the screen is usable, never before.
             portal = await ConsolePortal.LoadAsync();
             portalReady = portal != null && await portal.ProbeAsync() != null;

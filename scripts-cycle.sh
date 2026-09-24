@@ -121,6 +121,10 @@ sleep 12
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
 
 bun src/xbdev.ts sync >/dev/null 2>&1 || true
+# The app updates itself from GitHub on start; during a cycle the build under
+# test must stay the one that was installed.
+touch .markers/noupdate.txt
+bun src/xbdev.ts push kiosk .markers/noupdate.txt LocalState >/dev/null 2>&1 || true
 
 # The app cannot read the developer share (UnauthorizedAccessException on every
 # drive letter, measured), and its own storage goes with the uninstall. So the
@@ -219,6 +223,6 @@ cat native-pulse.txt 2>/dev/null | head -40
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
 # Measuring switches must not outlive the measurement: a trace left behind
 # slows every game he opens afterwards.
-bun src/xbdev.ts rm kiosk trace.txt direct.txt steambridge.txt renderthread.txt workers.txt --dir LocalState >/dev/null 2>&1 || true
+bun src/xbdev.ts rm kiosk trace.txt direct.txt steambridge.txt renderthread.txt workers.txt noupdate.txt --dir LocalState >/dev/null 2>&1 || true
 exit
 }

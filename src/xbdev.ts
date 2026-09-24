@@ -423,6 +423,18 @@ async function cmdStop(args: string[]): Promise<void> {
   console.log(`x ${pkg.Name}`);
 }
 
+/** Exit 0 when the app has a live process on the console, 1 when it does not. */
+async function cmdRunning(args: string[]): Promise<void> {
+  const portal = await portalOrExit();
+  const pkg = await findPackage(portal, args[0] ?? "");
+  if (!pkg) process.exit(1);
+  const live = (await portal.processes()).some(
+    (proc) => proc.PackageFullName === pkg.PackageFullName,
+  );
+  console.log(live ? "running" : "stopped");
+  process.exit(live ? 0 : 1);
+}
+
 async function cmdShot(args: string[]): Promise<void> {
   const portal = await portalOrExit();
   const data = await portal.screenshot();
@@ -989,6 +1001,7 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   launch: cmdLaunch,
   abrir: cmdLaunch,
   stop: cmdStop,
+  running: cmdRunning,
   fechar: cmdStop,
   shot: cmdShot,
   foto: cmdShot,

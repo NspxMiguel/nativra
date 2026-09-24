@@ -94,6 +94,7 @@
     <Compile Include="Native\WindowMessages.cs" />
     <Compile Include="Native\ComProxy.cs" />
     <Compile Include="Native\LoaderStubs.cs" />
+    <Compile Include="Native\HidBridge.cs" />
     <Compile Include="Native\PadBridge.cs" />
     <Compile Include="Native\ControllerMode.cs" />
     <Compile Include="Native\DxgiDescriptions.cs" />

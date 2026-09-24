@@ -240,6 +240,15 @@ namespace Kiosk
         /// lasts months and mints a new one. This is what keeps the console
         /// signed in without asking for the phone again.
         /// </summary>
+        /// <summary>Steam results that mean the saved sign-in is no longer valid.</summary>
+        public static bool MeansSignedOut(Exception error)
+        {
+            if (error is SteamSignInRequiredException) return true;
+            return error is Steam.SteamLogOnException logOn &&
+                (logOn.Result == 5 || logOn.Result == 15 || logOn.Result == 21 ||
+                 logOn.Result == 26 || logOn.Result == 27);
+        }
+
         public static async Task<string> RenewAccessTokenAsync(string refreshToken, ulong steamId)
         {
             // SteamClient tokens must be renewed over an authenticated CM
@@ -253,9 +262,7 @@ namespace Kiosk
                 {
                     await cm.LogOnAsync(steamId, refreshToken);
                 }
-                catch (Steam.SteamLogOnException error) when
-                    (error.Result == 5 || error.Result == 15 || error.Result == 21 ||
-                     error.Result == 26 || error.Result == 27)
+                catch (Steam.SteamLogOnException error) when (MeansSignedOut(error))
                 {
                     throw new SteamSignInRequiredException();
                 }

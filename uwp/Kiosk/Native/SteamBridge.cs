@@ -35,6 +35,12 @@ namespace Kiosk.Native
         public static string Language = "english";
         public static string SavePath;
 
+        /// <summary>Raised when the game stores stats, so they can reach Steam.</summary>
+        public static Action Changed;
+
+        internal static IDictionary<string, long> Achieved => achieved;
+        internal static IDictionary<string, int> Numbers => intStats;
+
         /// <summary>Calls the bridge answered, by export name, for the report.</summary>
         public static readonly Dictionary<string, long> Calls = new Dictionary<string, long>();
 
@@ -321,6 +327,7 @@ namespace Kiosk.Native
             Answer("SteamAPI_ISteamUserStats_StoreStats", (a, b, c, d) =>
             {
                 Save();
+                Changed?.Invoke();
                 Post(UserStatsStored, StatsStored());
                 return True;
             });

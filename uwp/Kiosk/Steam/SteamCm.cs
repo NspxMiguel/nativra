@@ -273,6 +273,18 @@ namespace Kiosk.Steam
 
         // --------------------------------------------------------------- calls
 
+        /// <summary>A client message that expects an answer to its job.</summary>
+        public async Task<ProtoMessage> RequestAsync(int emsg, byte[] body, int timeoutMs = 30000)
+        {
+            var header = JobHeader(out var key);
+            var waiting = Await(key, timeoutMs);
+            await SendAsync(emsg, body, header);
+            return await waiting;
+        }
+
+        /// <summary>A client message that expects no answer.</summary>
+        public Task NotifyAsync(int emsg, byte[] body) => SendAsync(emsg, body, BaseHeader());
+
         private ProtoWriter JobHeader(out string key)
         {
             var job = nextJob++;

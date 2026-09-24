@@ -157,6 +157,17 @@ namespace Kiosk.Native
         public static IntPtr Resolve(string export)
         {
             if (!Active || string.IsNullOrEmpty(export)) return IntPtr.Zero;
+            // Only Steam's own names. Unity asks every plugin for its render
+            // hooks (UnityRenderingExtEvent and the like); answering those
+            // makes the engine call into managed code hundreds of thousands
+            // of times, which is the fabricated-hook trap the loader avoids.
+            if (!export.StartsWith("SteamAPI_", StringComparison.Ordinal) &&
+                !export.StartsWith("SteamInternal_", StringComparison.Ordinal) &&
+                !export.StartsWith("SteamGameServer", StringComparison.Ordinal) &&
+                export != "SteamClient" && export != "SteamGameServerClient")
+            {
+                return IntPtr.Zero;
+            }
             lock (answers)
             {
                 if (answers.Count == 0) Build();

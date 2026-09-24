@@ -4,6 +4,9 @@
 # workflow is matched on the commit being built, because asking for the last
 # run right after a push answers with the previous one.
 set -euo pipefail
+# The whole body is one block: bash parses it before running any of it, so
+# editing this file while a cycle is in flight cannot change the running one.
+{
 cd "$(dirname "$0")"
 
 MSG="${1:-wip}"
@@ -157,3 +160,5 @@ for MAKER in OddGiant "LEGO" .; do
 done
 echo "== pulse =="
 cat native-pulse.txt 2>/dev/null | head -40
+exit
+}

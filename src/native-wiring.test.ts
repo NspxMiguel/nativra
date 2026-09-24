@@ -96,15 +96,21 @@ test("swap-chain creation queries a D3D11 device before using its vtable", () =>
 });
 
 test("mirror reserves its frame buffer before copying and ignores window alpha", () => {
-  const take = mirror.slice(mirror.indexOf("public static void Take()"));
+  const take = mirror.slice(mirror.indexOf("private static void TakeLocked()"));
   expect(take.indexOf("Interlocked.Exchange(ref busy, 1)")).toBeLessThan(
-    take.indexOf("Marshal.Copy("),
+    take.indexOf("CopyOpaque("),
   );
-  expect(take).toContain("into[alpha] = 255;");
+  expect(mirror).toContain("| 0xFF000000u");
   expect(take).toContain("if (!queued)");
   expect(take).not.toContain("now - lastShown");
-  expect(take).toContain("if (pitch == width * 4)");
-  expect(take).toContain("Marshal.Copy(from, into, 0, into.Length);");
+});
+
+test("mirror maps last frame's staging copy, not the one just queued", () => {
+  const take = mirror.slice(mirror.indexOf("private static void TakeLocked()"));
+  const copyAt = take.indexOf("copy(context, ring[ringNext], back);");
+  expect(copyAt).toBeGreaterThan(-1);
+  expect(take.indexOf("staging = ring[readable];")).toBeGreaterThan(copyAt);
+  expect(take.indexOf("map(context, staging,")).toBeGreaterThan(take.indexOf("staging = ring[readable];"));
 });
 
 test("resizing rebinds the mirror and queued UI frames retain their own bitmap", () => {

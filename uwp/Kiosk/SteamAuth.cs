@@ -240,6 +240,43 @@ namespace Kiosk
         /// lasts months and mints a new one. This is what keeps the console
         /// signed in without asking for the phone again.
         /// </summary>
+        /// <summary>
+        /// Signs out the way the Steam client does: the refresh token is
+        /// revoked on Steam's side, so the console's sign-in stops working
+        /// everywhere, and only then forgotten here. A revoke that cannot reach
+        /// Steam still clears the console.
+        /// </summary>
+        public static async Task SignOutAsync(SteamSession session)
+        {
+            try
+            {
+                await Steam.SteamStats.StopAsync();
+                if (!string.IsNullOrEmpty(session.RefreshToken))
+                {
+                    var endpoints = await Steam.SteamCm.EndpointsAsync();
+                    if (endpoints.Count > 0)
+                    {
+                        using (var cm = new Steam.SteamCm())
+                        {
+                            await cm.ConnectAsync(endpoints[0]);
+                            await cm.LogOnAsync(session.SteamId, session.RefreshToken);
+                            var request = new Steam.ProtoWriter()
+                                .String(1, session.RefreshToken)
+                                .Uint(2, 0) // k_EAuthTokenRevokeLogout
+                                .Finish();
+                            var revoke = cm.ServiceAsync("Authentication.RevokeToken#1", request);
+                            await Task.WhenAny(revoke, Task.Delay(10000));
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Signed out locally regardless.
+            }
+            await session.ClearAsync();
+        }
+
         /// <summary>Steam results that mean the saved sign-in is no longer valid.</summary>
         public static bool MeansSignedOut(Exception error)
         {

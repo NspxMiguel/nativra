@@ -516,7 +516,7 @@ namespace Kiosk
                 case Windows.System.VirtualKey.GamepadView:
                     if (session.IsSignedIn)
                     {
-                        await session.ClearAsync();
+                        await SteamAuth.SignOutAsync(session);
                         allGames.Clear();
                         Games.Clear();
                         HeaderText.Text = Texts.Get("steam.header");

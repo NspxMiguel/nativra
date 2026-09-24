@@ -183,5 +183,8 @@ echo "== pulse =="
 cat native-pulse.txt 2>/dev/null | head -40
 # Leave the console free: an open app is how the next cycle knows he is on it.
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
+# Measuring switches must not outlive the measurement: a trace left behind
+# slows every game he opens afterwards.
+bun src/xbdev.ts rm kiosk trace.txt direct.txt steambridge.txt --dir LocalState >/dev/null 2>&1 || true
 exit
 }

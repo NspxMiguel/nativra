@@ -107,10 +107,6 @@ if ! bun src/xbdev.ts install $FILES $DEPS || ! bun src/xbdev.ts apps 2>/dev/nul
 fi
 # A freshly installed package has no local storage until it has run once, and
 # every push into it fails until then — silently, if the output is thrown away.
-# Reports from an earlier run look exactly like this one's; clear both copies
-# so a stale file can never pass for a result.
-rm -f native-probe.txt native-pulse.txt Player.log
-bun src/xbdev.ts rm kiosk native-probe.txt native-pulse.txt --dir LocalState >/dev/null 2>&1 || true
 bun src/xbdev.ts launch kiosk >/dev/null
 sleep 12
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
@@ -166,7 +162,20 @@ fi
 if [ "${PEB:-on}" = "off" ]; then
   bun src/xbdev.ts push kiosk .markers/nopeb.txt LocalState
 fi
+# Reports from an earlier run look exactly like this one's; clear both copies
+# so a stale file can never pass for a result.
+rm -f native-probe.txt native-pulse.txt Player.log
+bun src/xbdev.ts rm kiosk native-probe.txt native-pulse.txt --dir LocalState >/dev/null 2>&1 || true
 bun src/xbdev.ts launch kiosk >/dev/null
+# The game opens from the library with A. Pressed until the game's own
+# report appears: after an update the library can take longer than any
+# fixed wait to be ready.
+for _ in 1 2 3 4; do
+  sleep 20
+  bun src/xbdev.ts press a >/dev/null 2>&1 || true
+  sleep 15
+  bun src/xbdev.ts pull kiosk native-probe.txt LocalState >/dev/null 2>&1 && break
+done
 
 echo "== downloading and running"
 for _ in $(seq 1 "$WAIT"); do

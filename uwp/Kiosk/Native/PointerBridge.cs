@@ -116,6 +116,9 @@ namespace Kiosk.Native
             }
         }
 
+        /// <summary>The host window's key state, including gamepad keys.</summary>
+        public static bool[] HostKeys => hostKeys;
+
         public static void ReleaseHostKeys()
         {
             lock (hostGate) hostKeys = new bool[256];

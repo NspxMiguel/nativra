@@ -64,6 +64,14 @@ namespace Kiosk.Native
 
         private static IntPtr context;
         private static IntPtr staging;
+        // Two staging textures, used in turn. The frame copied now is read on
+        // the next call, by which time the card has finished it: mapping the
+        // copy that was just queued makes the processor wait for the whole
+        // frame to render, every frame.
+        private const int RingDepth = 2;
+        private static readonly IntPtr[] ring = new IntPtr[RingDepth];
+        private static int ringNext;
+        private static int ringPrimed;
         private static IntPtr back;
         private static IntPtr given;
         private static IntPtr chain;
@@ -152,7 +160,12 @@ namespace Kiosk.Native
                 Running = false;
                 var version = ++generation;
                 if (back != IntPtr.Zero) Marshal.Release(back);
-                if (staging != IntPtr.Zero) Marshal.Release(staging);
+                for (var i = 0; i < RingDepth; i++)
+                {
+                    if (ring[i] != IntPtr.Zero) Marshal.Release(ring[i]);
+                    ring[i] = IntPtr.Zero;
+                }
+                ringNext = ringPrimed = 0;
                 if (context != IntPtr.Zero) Marshal.Release(context);
                 back = staging = context = IntPtr.Zero;
                 picture = null;
@@ -182,16 +195,20 @@ namespace Kiosk.Native
                     var slot = Marshal.AllocHGlobal(IntPtr.Size);
                     try
                     {
-                        Marshal.WriteIntPtr(slot, IntPtr.Zero);
                         var make = Marshal.GetDelegateForFunctionPointer<CreateTextureDelegate>(
                             ComProxy.Method(device, CreateTexture2DSlot));
-                        var code = make(device, desc, IntPtr.Zero, slot);
-                        if (code != S_OK)
+                        for (var i = 0; i < RingDepth; i++)
                         {
-                            Note = "no staging texture: 0x" + code.ToString("X8");
-                            return false;
+                            Marshal.WriteIntPtr(slot, IntPtr.Zero);
+                            var code = make(device, desc, IntPtr.Zero, slot);
+                            if (code != S_OK)
+                            {
+                                Note = "no staging texture: 0x" + code.ToString("X8");
+                                return false;
+                            }
+                            ring[i] = Marshal.ReadIntPtr(slot);
                         }
-                        staging = Marshal.ReadIntPtr(slot);
+                        staging = ring[0];
                     }
                     finally
                     {
@@ -310,6 +327,32 @@ namespace Kiosk.Native
         /// screen, because a flip-model chain rotates its buffers on the way
         /// out and what was just drawn is no longer where it was.
         /// </summary>
+        private static unsafe void CopyOpaque(
+            IntPtr from, int pitch, byte[] into, int wide, int high, bool swapRedBlue)
+        {
+            fixed (byte* start = into)
+            {
+                var target = (uint*)start;
+                for (var row = 0; row < high; row++)
+                {
+                    var source = (uint*)((byte*)from + (long)row * pitch);
+                    var line = target + (long)row * wide;
+                    if (swapRedBlue)
+                    {
+                        for (var x = 0; x < wide; x++)
+                        {
+                            var v = source[x];
+                            line[x] = (v & 0x0000FF00u) | ((v & 0xFFu) << 16) | ((v >> 16) & 0xFFu) | 0xFF000000u;
+                        }
+                    }
+                    else
+                    {
+                        for (var x = 0; x < wide; x++) line[x] = source[x] | 0xFF000000u;
+                    }
+                }
+            }
+        }
+
         public static void Take()
         {
             lock (frameGate) TakeLocked();
@@ -331,7 +374,15 @@ namespace Kiosk.Native
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var copy = Marshal.GetDelegateForFunctionPointer<CopyDelegate>(
                     ComProxy.Method(context, CopyResourceSlot));
-                copy(context, staging, back);
+                copy(context, ring[ringNext], back);
+                var readable = (ringNext + 1) % RingDepth;
+                ringNext = readable;
+                if (ringPrimed < RingDepth - 1)
+                {
+                    ringPrimed++;
+                    return;
+                }
+                staging = ring[readable];
 
                 mapped = Marshal.AllocHGlobal(16);
                 var map = Marshal.GetDelegateForFunctionPointer<MapDelegate>(
@@ -343,29 +394,11 @@ namespace Kiosk.Native
                 var from = Marshal.ReadIntPtr(mapped, 0);
                 var pitch = Marshal.ReadInt32(mapped, 8);
                 var into = scratch[filling];
-                if (pitch == width * 4)
-                {
-                    Marshal.Copy(from, into, 0, into.Length);
-                }
-                else
-                {
-                    for (var row = 0; row < height; row++)
-                        Marshal.Copy(from + row * pitch, into, row * width * 4, width * 4);
-                }
-                // The window back buffer uses IGNORE alpha; WriteableBitmap
-                // instead composites alpha, so an otherwise valid frame can
-                // disappear entirely unless we make it opaque here.
-                for (var alpha = 3; alpha < into.Length; alpha += 4)
-                {
-                    into[alpha] = 255;
-                    // WriteableBitmap is BGRA, while games may request RGBA.
-                    if (pixelFormat == 28 || pixelFormat == 29)
-                    {
-                        var red = into[alpha - 3];
-                        into[alpha - 3] = into[alpha - 1];
-                        into[alpha - 1] = red;
-                    }
-                }
+                // One pass from the mapped texture into the picture. The
+                // window back buffer uses IGNORE alpha, while WriteableBitmap
+                // composites it, so every pixel is made opaque; and the
+                // bitmap is BGRA while games may render RGBA.
+                CopyOpaque(from, pitch, into, width, height, pixelFormat == 28 || pixelFormat == 29);
                 filling = 1 - filling;
 
                 var unmap = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(

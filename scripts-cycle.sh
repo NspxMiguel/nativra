@@ -100,7 +100,12 @@ bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
 if [ "${FRESH:-off}" = "on" ]; then
   bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
 fi
-if ! bun src/xbdev.ts install $FILES $DEPS || ! bun src/xbdev.ts apps 2>/dev/null | grep -q Nativra; then
+# The same version again cannot be installed as an update; installing it would
+# fall through to replacing, and replacing wipes the game. Keep what is there.
+NEW_VERSION=$(printf '%s\n' $FILES | grep -oE '_[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+_' | head -1 | tr -d _)
+if [ "${FRESH:-off}" != "on" ] && bun src/xbdev.ts apps 2>/dev/null | grep Nativra | grep -q " $NEW_VERSION"; then
+  echo "   $NEW_VERSION is already installed; keeping it"
+elif ! bun src/xbdev.ts install $FILES $DEPS || ! bun src/xbdev.ts apps 2>/dev/null | grep -q Nativra; then
   echo "   update refused or left nothing registered; replacing the package"
   bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
   bun src/xbdev.ts install $FILES $DEPS

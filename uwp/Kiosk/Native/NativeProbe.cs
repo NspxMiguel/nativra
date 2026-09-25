@@ -262,6 +262,7 @@ namespace Kiosk.Native
                 TimerStubs.Install(imports);
                 ComStubs.Install(imports);
                 PlainAnswers.Install(imports);
+                ShellPath.Install(imports);
                 DisplayStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 

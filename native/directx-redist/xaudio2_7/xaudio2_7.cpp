@@ -88,9 +88,12 @@ namespace
             f.Format.nAvgBytesPerSec = f.Format.nSamplesPerSec * f.Format.nBlockAlign;
             f.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
             f.Samples.wValidBitsPerSample = 16;
-            f.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT | SPEAKER_FRONT_CENTER |
-                              SPEAKER_LOW_FREQUENCY | SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT;
-            f.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+            // 5.1 channel mask (FL FR FC LFE BL BR) and the PCM subformat, as
+            // literals to avoid pulling in <ksmedia.h>.
+            f.dwChannelMask = 0x3F;
+            static const GUID kPcm =
+                { 0x00000001, 0x0000, 0x0010, { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 } };
+            f.SubFormat = kPcm;
             return S_OK;
         }
 

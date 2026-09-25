@@ -142,6 +142,20 @@ namespace Kiosk.Native
                 "USER32.dll", "SETUPAPI.dll", "HID.DLL", "IMM32.dll", "dwmapi.dll",
             };
 
+        private static string AppRuntimeName(string name)
+        {
+            var lower = name.ToLowerInvariant();
+            if (!lower.EndsWith(".dll")) return null;
+            var stem = lower.Substring(0, lower.Length - 4);
+            if (stem.EndsWith("_app")) return null;
+            if (stem.StartsWith("msvcp140") || stem.StartsWith("vcruntime140") ||
+                stem.StartsWith("concrt140") || stem == "vccorlib140")
+            {
+                return stem + "_app.dll";
+            }
+            return null;
+        }
+
         /// <summary>Whether a library always answers from the bridge.</summary>
         public static bool IsShell(string name) => name != null && NeverFromSystem.Contains(name);
 
@@ -167,6 +181,20 @@ namespace Kiosk.Native
                 catch
                 {
                     handle = IntPtr.Zero;
+                }
+            }
+            if (handle == IntPtr.Zero)
+            {
+                // The desktop C++ runtime (msvcp140.dll and friends) is not on
+                // the console, but this package's framework carries the same
+                // library built for apps, under the same exports with an _app
+                // suffix on the file name. A game that does not ship its own
+                // copy gets that one.
+                var alias = AppRuntimeName(name);
+                if (alias != null)
+                {
+                    try { handle = LoadPackagedLibrary(alias, 0); }
+                    catch { handle = IntPtr.Zero; }
                 }
             }
             modules[name] = handle;

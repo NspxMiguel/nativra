@@ -583,6 +583,18 @@ namespace Kiosk.Native
                                                 beat.Add("steam " + pair.Value + "x " + pair.Key);
                                         }
                                     }
+                                    // Missing functions the game actually reached,
+                                    // latest last: without tracing these are only
+                                    // the stubs, which is the list worth reading.
+                                    if (!imports.Trace)
+                                    {
+                                        lock (imports.Shim.Called)
+                                        {
+                                            var from = Math.Max(0, imports.Shim.Called.Count - 80);
+                                            for (var i = from; i < imports.Shim.Called.Count; i++)
+                                                beat.Add("reached " + imports.Shim.Called[i]);
+                                        }
+                                    }
                                     beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " keyreads=" + PadBridge.KeyReads
                                         + " desktop=" + ControllerMode.Desktop
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);

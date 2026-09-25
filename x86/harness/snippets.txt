@@ -52,7 +52,7 @@ sar_imm          | C1 F8 05       | 810 |
 shl_cl           | D3 E0          | 810 | ecx=small
 shr_cl           | D3 E8          | 810 | ecx=small
 sar_cl           | D3 F8          | 810 | ecx=small
-shl_1            | D1 E0          | 0 |
+shl_1            | D1 E0          | 10 |
 rol_imm          | C1 C0 07       | 810 |
 ror_imm          | C1 C8 07       | 810 |
 rcl_1            | D1 D0          | 0 |

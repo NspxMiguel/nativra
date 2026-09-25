@@ -190,6 +190,12 @@ namespace Kiosk.Native
                 return mine.BaseAddress;
             }
 
+            // A library shipped with the game, asked for after startup: by
+            // full path (Adobe AIR's runtime lives in a subfolder) or by name
+            // from the game's folder, which Windows searches first.
+            var shipped = MapFromGame(requested, name);
+            if (shipped != IntPtr.Zero) return shipped;
+
             // A console shell library answers from the bridge even when
             // something else already loaded the real one into this process.
             if (SystemImports.IsShell(name)) return Invent(name);
@@ -222,6 +228,70 @@ namespace Kiosk.Native
             // A library every one of whose functions we already answer is a
             // library that exists, as far as the game has any way to tell.
             return Invent(name);
+        }
+
+        /// <summary>The game's folder, where a library it asks for by name is looked for first.</summary>
+        public static string GameFolder;
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ModuleMainDelegate(IntPtr instance, uint reason, IntPtr reserved);
+
+        private static readonly object mapping = new object();
+
+        /// <summary>
+        /// Maps a DLL from the game's own files the way the startup pass does,
+        /// runs its DllMain, and hands back its base as the module handle.
+        /// Zero when the file is not the game's or cannot be mapped (a 32-bit
+        /// image, for one), so the caller falls through to the system.
+        /// </summary>
+        private static IntPtr MapFromGame(string requested, string name)
+        {
+            string path = null;
+            try
+            {
+                if (requested.IndexOf('\\') >= 0 || requested.IndexOf('/') >= 0)
+                {
+                    var full = requested.Replace('/', '\\');
+                    if (GameFolder != null && full.StartsWith(GameFolder, StringComparison.OrdinalIgnoreCase)
+                        && System.IO.File.Exists(full))
+                        path = full;
+                }
+                else if (GameFolder != null)
+                {
+                    var local = System.IO.Path.Combine(GameFolder, name);
+                    if (System.IO.File.Exists(local)) path = local;
+                }
+            }
+            catch
+            {
+                return IntPtr.Zero;
+            }
+            if (path == null) return IntPtr.Zero;
+
+            lock (mapping)
+            {
+                var already = imports.Find(name);
+                if (already != null) return already.BaseAddress;
+                try
+                {
+                    var image = PeImage.Load(name, System.IO.File.ReadAllBytes(path), imports.Resolve);
+                    imports.Add(image);
+                    named[image.BaseAddress.ToInt64()] = name;
+                    Remember("mapped " + name);
+                    if (image.EntryPoint != IntPtr.Zero)
+                    {
+                        ThreadTls.Adopt();
+                        var main = Marshal.GetDelegateForFunctionPointer<ModuleMainDelegate>(image.EntryPoint);
+                        main(image.BaseAddress, 1, IntPtr.Zero);
+                    }
+                    return image.BaseAddress;
+                }
+                catch (Exception error)
+                {
+                    Remember("could not map " + name + ": " + error.GetType().Name);
+                    return IntPtr.Zero;
+                }
+            }
         }
 
         public static void Install(SystemImports system)

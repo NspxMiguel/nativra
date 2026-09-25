@@ -213,6 +213,7 @@ namespace Kiosk.Native
                     BitConverter.ToUInt16(executableBytes, peOffset + 24) != 0x20B)
                     throw new PlatformNotSupportedException("The native loader currently requires an AMD64 PE32+ executable.");
                 ModuleFileName.Install(imports, folder.Path + "\\" + exeName);
+                LoaderStubs.GameFolder = folder.Path;
 
                 // The switches only reach the game if the game can read them,
                 // and it reads them from here rather than from its entry point.

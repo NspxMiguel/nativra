@@ -1,0 +1,53 @@
+name: x86 translator harness
+
+# The 32-bit (x86) execution layer lives outside the UWP app so it can be
+# built and tested with the plain .NET SDK. This job compiles the hardware
+# oracle with MSVC's x86 toolchain, runs it under WoW64 on the windows runner
+# to capture the states a real processor reaches, and then checks the
+# interpreter and the x86-to-x64 JIT against them. It never touches the Xbox
+# package build (build-uwp.yml), which keeps its own green.
+
+on:
+  push:
+    paths:
+      - "x86/**"
+      - ".github/workflows/x86-harness.yml"
+  pull_request:
+    paths:
+      - "x86/**"
+      - ".github/workflows/x86-harness.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build the hardware oracle and capture vectors
+        shell: cmd
+        run: x86\harness\build-oracle.cmd
+
+      - name: Show vector summary
+        shell: pwsh
+        run: |
+          $v = "x86/harness/oracle-vectors.txt"
+          if (-not (Test-Path $v)) { Write-Error "no oracle vectors produced"; exit 1 }
+          $snippets = (Select-String -Path $v -Pattern '^T ' -AllMatches).Count
+          $cases = (Select-String -Path $v -Pattern '^I ' -AllMatches).Count
+          Write-Host "oracle: $snippets snippets, $cases cases from real silicon"
+
+      - name: Restore
+        run: dotnet restore x86/Nativra.X86.sln
+
+      - name: Build
+        run: dotnet build x86/Nativra.X86.sln -c Release --no-restore
+
+      - name: Test (interpreter and JIT vs. hardware)
+        run: dotnet test x86/Nativra.X86.sln -c Release --no-build --logger "console;verbosity=normal"

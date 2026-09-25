@@ -1,0 +1,7 @@
+# Build output
+**/bin/
+**/obj/
+# The oracle binary and its scratch; the vectors it emits are committed.
+harness/oracle
+harness/oracle.exe
+harness/*.obj

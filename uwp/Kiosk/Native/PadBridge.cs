@@ -128,6 +128,25 @@ namespace Kiosk.Native
         private static short Digital(bool[] keys, int positive, int negative) =>
             (short)((keys[positive] ? 32767 : 0) - (keys[negative] ? 32767 : 0));
 
+        /// <summary>The digital buttons the window's gamepad keys say are down.</summary>
+        private static ushort KeyButtons(bool[] keys)
+        {
+            ushort bits = 0;
+            if (keys[KeyUp]) bits |= 0x0001;
+            if (keys[KeyDown]) bits |= 0x0002;
+            if (keys[KeyLeft]) bits |= 0x0004;
+            if (keys[KeyRight]) bits |= 0x0008;
+            if (keys[KeyLeftStick]) bits |= 0x0040;
+            if (keys[KeyRightStick]) bits |= 0x0080;
+            if (keys[KeyLeftShoulder]) bits |= 0x0100;
+            if (keys[KeyRightShoulder]) bits |= 0x0200;
+            if (keys[KeyA]) bits |= 0x1000;
+            if (keys[KeyB]) bits |= 0x2000;
+            if (keys[KeyX]) bits |= 0x4000;
+            if (keys[KeyY]) bits |= 0x8000;
+            return bits;
+        }
+
         private static void WriteFromKeys(IntPtr target, bool[] keys)
         {
             ushort bits = 0;
@@ -198,7 +217,12 @@ namespace Kiosk.Native
                     // The packet number only has to change when the reading
                     // does; a game that compares it to skip work is right to.
                     Marshal.WriteInt32(target, 0, (int)(++packet));
-                    Marshal.WriteInt16(target, 4, (short)Buttons(reading.Buttons));
+                    // Buttons that reach the window as keys count too: Device
+                    // Portal input and any pad the list missed, merged with
+                    // the physical reading rather than hidden behind it.
+                    var pressed = Buttons(reading.Buttons);
+                    if (index == 0) pressed |= KeyButtons(PointerBridge.HostKeys);
+                    Marshal.WriteInt16(target, 4, (short)pressed);
                     Marshal.WriteByte(target, 6, (byte)(reading.LeftTrigger * 255.0));
                     Marshal.WriteByte(target, 7, (byte)(reading.RightTrigger * 255.0));
                     Marshal.WriteInt16(target, 8, Axis(reading.LeftThumbstickX));

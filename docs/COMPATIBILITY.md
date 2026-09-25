@@ -15,7 +15,7 @@ idea, with one addition for games not tried yet.
 | --- | --- | --- | --- | --- | --- |
 | Seraph's Last Stand | 1919460 | Unity 2021.3 (IL2CPP, D3D11) | ✅ Verified | build 244, 2026-09-25 | Fully playable with the controller (hold View + Menu to switch to mouse and keyboard). Steam sign-in shows "In-Game" to friends. Steam achievements not tested yet. |
 | Brawlhalla | 291550 | Adobe AIR (x64) | ⛔ Not working | build 244, 2026-09-25 | Downloads and starts; the AIR runtime loads and opens its application descriptor, then reports "Application descriptor could not be found". |
-| Hades | 1145360 | Supergiant engine (D3D11, SDL2, FMOD) | ⬜ Untested | — | Downloading. |
+| Hades | 1145360 | Supergiant engine (x64, D3D11, SDL2, FMOD, runtime HLSL via D3DCompiler_47) | ⬜ Untested | — | Download filled the console's app storage at 86% (11.5 GB game); it continues on a USB drive. The program lives in `x64\`, which the loader now finds. |
 | Little Nightmares | 424840 | Unreal Engine 4 | ⬜ Untested | — | Audio uses XAudio 2.7 from the 2010 DirectX redistributable, which the console lacks. |
 | WAVESHAPER | 562260 | 32-bit Windows | ⛔ Not working | 2026-09-23 | 32-bit executables are not supported. |
 | LEGO Jurassic World | 352400 | TT Games (D3D11, x64 `LEGOJurassicWorld_DX11.exe`) | ⬜ Untested | — | Borrowed through Steam Families. Borrowed games download like owned ones: the family license arrives with the account, and the game depot (352401) is keyed normally. 14 GB. |

@@ -35,6 +35,12 @@ echo === d3dcompiler_43.dll (pure forwarder to d3dcompiler_47) ===
 link /nologo /DLL /NOENTRY /DEF:d3dcompiler_43\d3dcompiler_43.def /OUT:bin\d3dcompiler_43.dll /MACHINE:X64
 if errorlevel 1 exit /b 1
 
+echo === d3dx9_43.dll ===
+cl /nologo /LD /EHsc /O2 /MD ^
+   d3dx9_43\d3dx9_43.cpp ^
+   /Fo:bin\ /Fe:bin\d3dx9_43.dll
+if errorlevel 1 exit /b 1
+
 echo === tests: xaudio2_7 ===
 cl /nologo /EHsc /O2 /MD /DUNICODE /D_UNICODE ^
    tests\test_xaudio2_7.cpp xaudio2_7\xaudio2_7.cpp ^
@@ -55,4 +61,12 @@ copy /y bin\d3dcompiler_43.dll . >nul
 bin\test_d3dcompiler.exe
 set TEST_RC=%errorlevel%
 del d3dcompiler_43.dll >nul 2>&1
-exit /b %TEST_RC%
+if not "%TEST_RC%"=="0" exit /b %TEST_RC%
+
+echo === tests: d3dx9 maths ===
+cl /nologo /EHsc /O2 /MD ^
+   tests\test_d3dx9.cpp d3dx9_43\d3dx9_43.cpp ^
+   /Fo:bin\ /Fe:bin\test_d3dx9.exe
+if errorlevel 1 exit /b 1
+bin\test_d3dx9.exe
+exit /b %errorlevel%

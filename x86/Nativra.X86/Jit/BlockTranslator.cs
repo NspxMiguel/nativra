@@ -399,10 +399,10 @@ namespace Nativra.X86.Jit
                 if (IsMem(ins)) { EmitAddress(ins); e.ShiftMemImm(sub, Mem, S1, 1, 0, count, width); }
                 else e.ShiftImm(sub, G[ins.Rm], count, width);
             }
-            else if (op <= 0xD1) // by 1
+            else if (op <= 0xD1) // by 1 — emit the D0/D1 form, not the C0/C1 imm form
             {
-                if (IsMem(ins)) { EmitAddress(ins); e.ShiftMemImm(sub, Mem, S1, 1, 0, 1, width); }
-                else e.ShiftImm(sub, G[ins.Rm], 1, width);
+                if (IsMem(ins)) { EmitAddress(ins); e.ShiftMemOne(sub, Mem, S1, 1, 0, width); }
+                else e.ShiftOne(sub, G[ins.Rm], width);
             }
             else // by CL (guest ECX == host RCX, so CL is already the guest count)
             {

@@ -267,6 +267,28 @@ namespace Nativra.X86.Jit
             U8(count);
         }
 
+        /// <summary>
+        /// The by-one shift/rotate form (D0/D1), kept distinct from the by-imm
+        /// form (C0/C1): they are different instructions and leave the
+        /// officially-undefined AF in different states on real silicon, so the
+        /// JIT must emit whichever one the guest used to match it bit for bit.
+        /// </summary>
+        public void ShiftOne(int sub, int reg, int size = 32)
+        {
+            if (size == 16) U8(0x66);
+            MaybeRex(false, 0, 0, reg);
+            U8(size == 8 ? (byte)0xD0 : (byte)0xD1);
+            ModRegReg(sub, reg);
+        }
+
+        public void ShiftMemOne(int sub, int baseR, int index, int scale, int disp, int size = 32)
+        {
+            if (size == 16) U8(0x66);
+            MaybeRex(false, 0, index, baseR);
+            U8(size == 8 ? (byte)0xD0 : (byte)0xD1);
+            ModMem(sub, baseR, index, scale, disp);
+        }
+
         public void ImulRegReg(int dst, int src, int size = 32)
         {
             if (size == 16) U8(0x66);

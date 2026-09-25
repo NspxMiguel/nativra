@@ -298,6 +298,7 @@ namespace Kiosk.Native
         public static void Install(SystemImports system)
         {
             imports = system;
+            system.MapMissing = name => MapFromGame(name, name) != IntPtr.Zero;
 
             loadW = name => Open(Marshal.PtrToStringUni(name));
             loadA = name => Open(Marshal.PtrToStringAnsi(name));

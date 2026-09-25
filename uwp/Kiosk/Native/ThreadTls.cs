@@ -27,6 +27,9 @@ namespace Kiosk.Native
         [DllImport("api-ms-win-core-libraryloader-l1-2-0.dll", CharSet = CharSet.Ansi)]
         private static extern IntPtr GetProcAddress(IntPtr module, string name);
 
+        /// <summary>NativraTls0..15.dll, built by uwp/TlsCarrier/build.cmd.</summary>
+        private const int Carriers = 16;
+
         private static readonly object Gate = new object();
         private static readonly List<EnsureDelegate> Blocks = new List<EnsureDelegate>();
         private static CreateThreadDelegate createThread;
@@ -42,7 +45,10 @@ namespace Kiosk.Native
         {
             lock (Gate)
             {
-                if (Blocks.Count >= 8) throw new InvalidOperationException("Game TLS capacity exceeded");
+                // One carrier DLL per game module with static TLS. Hades maps
+                // eleven (engine, SDL2, FMOD, Steam, EOS, Discord...), past
+                // the eight there used to be.
+                if (Blocks.Count >= Carriers) throw new InvalidOperationException("Game TLS capacity exceeded");
                 var module = LoadPackagedLibrary("NativraTls" + Blocks.Count + ".dll", 0);
                 if (module == IntPtr.Zero)
                     throw new InvalidOperationException("TLS carrier load failed: " + Marshal.GetLastWin32Error());

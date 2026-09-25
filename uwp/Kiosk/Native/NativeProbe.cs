@@ -329,6 +329,14 @@ namespace Kiosk.Native
                         continue;
                     }
 
+                    // Already mapped because a module mapped before it imports
+                    // it; its DllMain has run, in the order Windows would use.
+                    if (imports.Find(file.Name) != null)
+                    {
+                        lines.Add(file.Name + ": mapped earlier as a dependency");
+                        continue;
+                    }
+
                     var bytes = (await FileIO.ReadBufferAsync(file)).ToArray();
                     // Written before the attempt: mapping an image runs the
                     // module's own code, and that can take the process with it.

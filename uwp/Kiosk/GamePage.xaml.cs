@@ -148,33 +148,8 @@ namespace Kiosk
 
         private static async Task<string> FreeAsync(StorageFolder folder)
         {
-            try
-            {
-                var properties = await folder.Properties.RetrievePropertiesAsync(
-                    new[] { "System.FreeSpace" });
-                if (properties.TryGetValue("System.FreeSpace", out var value) && value != null)
-                {
-                    return Human(Convert.ToUInt64(value));
-                }
-            }
-            catch
-            {
-                // Free space is information, not a requirement.
-            }
-            return "";
-        }
-
-        private static string Human(ulong bytes)
-        {
-            string[] units = { "B", "KB", "MB", "GB", "TB" };
-            double size = bytes;
-            var unit = 0;
-            while (size >= 1024 && unit < units.Length - 1)
-            {
-                size /= 1024;
-                unit++;
-            }
-            return size.ToString(size >= 10 ? "0" : "0.0") + " " + units[unit];
+            var free = await Steam.SteamDownload.FreeBytesAsync(folder);
+            return free.HasValue ? Steam.SteamDownload.Human(free.Value) : "";
         }
 
         private void OnCancelInstall(object sender, RoutedEventArgs e)

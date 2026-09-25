@@ -242,6 +242,12 @@ namespace Kiosk.Native
                     // On a console the application is not competing with a
                     // desktop; it only has to leave room for itself.
                     + " -job-worker-count=" + JobWorkers;
+                // The switches above are Unity's. Any other program gets the
+                // command line Windows would give it: its own path. Adobe AIR
+                // reads what follows the path as arguments of its own.
+                if (await folder.TryGetItemAsync("UnityPlayer.dll") == null)
+                    started = "\"" + folder.Path + "\\" + exeName + "\"";
+                lines.Add("commandline=" + started);
                 ModuleFileName.SetCommandLine(imports, started);
                 ImageLookup.Install(
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));

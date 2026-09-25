@@ -190,6 +190,10 @@ namespace Kiosk.Native
                 return mine.BaseAddress;
             }
 
+            // A console shell library answers from the bridge even when
+            // something else already loaded the real one into this process.
+            if (SystemImports.IsShell(name)) return Invent(name);
+
             var handle = GetModuleHandleW(name);
             if (handle == IntPtr.Zero)
             {

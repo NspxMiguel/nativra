@@ -31,12 +31,28 @@ cl /nologo /LD /EHsc /O2 /MD ^
    /link /DEF:xapofx1_5\xapofx1_5.def xaudio2.lib
 if errorlevel 1 exit /b 1
 
-echo === tests ===
+echo === d3dcompiler_43.dll (pure forwarder to d3dcompiler_47) ===
+link /nologo /DLL /NOENTRY /DEF:d3dcompiler_43\d3dcompiler_43.def /OUT:bin\d3dcompiler_43.dll /MACHINE:X64
+if errorlevel 1 exit /b 1
+
+echo === tests: xaudio2_7 ===
 cl /nologo /EHsc /O2 /MD /DUNICODE /D_UNICODE ^
    tests\test_xaudio2_7.cpp xaudio2_7\xaudio2_7.cpp ^
    /Fo:bin\ /Fe:bin\test_xaudio2_7.exe ^
    /link xaudio2.lib ole32.lib
 if errorlevel 1 exit /b 1
-
 bin\test_xaudio2_7.exe
-exit /b %errorlevel%
+if errorlevel 1 exit /b 1
+
+echo === tests: d3dcompiler ===
+cl /nologo /EHsc /O2 /MD ^
+   tests\test_d3dcompiler.cpp ^
+   /Fo:bin\ /Fe:bin\test_d3dcompiler.exe ^
+   /link d3dcompiler.lib dxguid.lib
+if errorlevel 1 exit /b 1
+rem The forwarder must be found next to the test exe.
+copy /y bin\d3dcompiler_43.dll . >nul
+bin\test_d3dcompiler.exe
+set TEST_RC=%errorlevel%
+del d3dcompiler_43.dll >nul 2>&1
+exit /b %TEST_RC%

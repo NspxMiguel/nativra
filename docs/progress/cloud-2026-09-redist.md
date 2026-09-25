@@ -79,4 +79,39 @@ line to add in the loader.
 
 ## Goal B — shader compiler and D3DX
 
-Not started.
+### Done
+
+**`d3dcompiler_43.dll` (`native/directx-redist/d3dcompiler_43`).** A pure
+export-forwarder DLL: the whole D3DCompile family (`D3DCompile`, `D3DCompile2`,
+`D3DPreprocess`, `D3DReflect`, `D3DGetBlobPart`, `D3DCreateBlob`,
+`D3DDisassemble`, `D3DStripShader`, the signature-blob getters, …) forwards to
+the platform's `d3dcompiler_47.dll`, which is a Windows 10 system DLL. The API
+is source-compatible across those versions, so a game that links the SDK-era
+`d3dcompiler_43` keeps working with no code in between.
+
+**Tests (`tests/test_d3dcompiler.cpp`).** Compiles a representative set of
+shaders (VS/PS in SM4 and SM5, a compute shader) through the forwarder, and:
+- checks each result is a valid `DXBC` container;
+- checks it is **byte-for-byte identical** to what the real compiler produces
+  directly (the forwarder reaches the same function);
+- exercises the container helpers a game uses — `D3DGetBlobPart` pulls the
+  input signature out of the vertex shaders, and `D3DReflect` returns a shader
+  description.
+
+### To do
+
+- The probe: have the loader record whether the console can load
+  `d3dcompiler_47` on its own (LoadPackagedLibrary and the system path), written
+  from a new module via a single registration line.
+- D3DX: the maths (`D3DXMatrix*`, `D3DXVec*`, `D3DXQuaternion*`) and the texture
+  loaders games use most (DDS/PNG/JPG/TGA/BMP), as `d3dx9_43.dll` /
+  `d3dx11_43.dll`. These have no forwarding target (D3DX was removed from
+  Windows), so they are real implementations.
+
+### To measure on the console
+
+- Does the console load `d3dcompiler_47.dll` by itself? The probe answers this;
+  if yes, `d3dcompiler_43` forwards to it and Hades' runtime HLSL compilation
+  works. If no, the redistributable `d3dcompiler_47.dll` must ship in the
+  package (note which, from the probe).
+- Hades: does startup get past the D3DCOMPILER_47 import and reach a frame?

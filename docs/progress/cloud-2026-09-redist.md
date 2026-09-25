@@ -98,15 +98,38 @@ shaders (VS/PS in SM4 and SM5, a compute shader) through the forwarder, and:
   input signature out of the vertex shaders, and `D3DReflect` returns a shader
   description.
 
+**`d3dx9_43.dll` maths (`native/directx-redist/d3dx9_43`).** D3DX has no
+forwarding target, so this is a real implementation of the maths games import
+most: matrix multiply/transpose/inverse/determinant, translation/scaling and
+every rotation form (X/Y/Z, axis, quaternion, yaw-pitch-roll), LookAt and
+perspective/ortho projections, vector transforms and normalisation, and
+quaternion rotation/multiply/normalize/slerp. Row-major, row-vector convention,
+exported with clean x64 names. Its tests (`tests/test_d3dx9.cpp`) check
+mathematical identities and hand-computed references, and were validated
+locally under Wine as well as in the workflow.
+
+**The probe (`uwp/Kiosk/Native/RedistProbe.cs`, new file).** On game load it
+records, to `redist-probe.txt`, whether the console can load each redist
+library on its own — `d3dcompiler_47` first, then the 2.9 audio engine and the
+older redistributable names — through `LoadPackagedLibrary` and the already-
+loaded-module check. Wired by a single line at the end of `LoaderStubs.Install`.
+(The CI runner, Windows Server 2025, does carry `d3dcompiler_47.dll`: the
+d3dcompiler test links and loads it. The console is expected to as well; this
+confirms it there.)
+
 ### To do
 
-- The probe: have the loader record whether the console can load
-  `d3dcompiler_47` on its own (LoadPackagedLibrary and the system path), written
-  from a new module via a single registration line.
-- D3DX: the maths (`D3DXMatrix*`, `D3DXVec*`, `D3DXQuaternion*`) and the texture
-  loaders games use most (DDS/PNG/JPG/TGA/BMP), as `d3dx9_43.dll` /
-  `d3dx11_43.dll`. These have no forwarding target (D3DX was removed from
-  Windows), so they are real implementations.
+- Wire XAudio 2.7 COM activation: one line in `ComStubs`' `CoCreateInstance`
+  handler, next to the existing `AudioBridge.ClassFor` check, to route the 2.7
+  CLSIDs to `xaudio2_7.dll`'s `DllGetClassObject`. Direct DLL-name imports of
+  the shims need no code once the DLLs ship in the package (`LoadPackagedLibrary`
+  finds them); they are added to `Kiosk.csproj` as `Content` alongside the
+  TlsCarrier DLLs.
+- D3DX texture loading (`D3DX11CreateTextureFromMemory` and friends:
+  DDS/PNG/JPG/TGA/BMP) — needs a D3D11 device, so it is testable on the runner
+  with WARP; deferred.
+- A 32-bit (x86) build of the shims, once the x86 loader lands, for the many
+  D3DX9-era games that are 32-bit.
 
 ### To measure on the console
 

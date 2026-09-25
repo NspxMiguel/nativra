@@ -1,0 +1,153 @@
+# Differential test snippets for the x86 interpreter and JIT.
+#
+#   name | machine-code hex | flag-mask | setup options
+#
+# The flag-mask names EFLAGS bits (hex) to ignore when comparing, for the few
+# instructions that leave a flag architecturally undefined. Setup options seed
+# the random state: reg=ptr points a register into the data page, reg=nz makes
+# it nonzero, fpu=N fills N x87 registers, xmm=float|double|int fills XMM.
+#
+# ---- ALU r/m, r and r, r/m (all sizes) ----
+add_r32          | 01 C8          | 0 |
+add_r8           | 00 C8          | 0 |
+add_rm_r32       | 03 01          | 0 | ecx=ptr
+or_r32           | 09 D0          | 10 |
+adc_r32          | 11 D8          | 0 |
+sbb_r32          | 19 F0          | 0 |
+and_r32          | 21 CA          | 10 |
+sub_r32          | 29 D9          | 0 |
+xor_r32          | 31 E0          | 10 |
+cmp_r32          | 39 C1          | 0 |
+add_r16          | 66 01 C8       | 0 |
+sub_r16          | 66 29 D9       | 0 |
+# ---- immediates ----
+add_eax_imm      | 05 78 56 34 12 | 0 |
+add_al_imm       | 04 42          | 0 |
+grp1_imm32       | 81 C1 EF BE AD DE | 0 |
+grp1_imm8_sx     | 83 E9 FB       | 0 |
+grp1_or          | 81 CA 00 F0 00 00 | 10 |
+grp1_and8        | 80 E3 0F       | 10 |
+test_imm32       | F7 C1 FF 00 00 00 | 10 |
+test_r32         | 85 C8          | 10 |
+# ---- mov / movzx / movsx / lea ----
+mov_r32          | 89 C8          | 0 |
+mov_r8           | 88 C8          | 0 |
+mov_imm32        | B8 EF BE AD DE | 0 |
+movzx_bl         | 0F B6 C3       | 0 |
+movsx_bl         | 0F BE C3       | 0 |
+movzx_wx         | 0F B7 C3       | 0 |
+movsx_wx         | 0F BF C3       | 0 |
+lea_sib          | 8D 04 91       | 0 | ecx=small edx=small
+lea_disp         | 8D 44 0A 10    | 0 | ecx=small edx=small
+# ---- inc / dec / neg / not ----
+inc_r32          | 40             | 0 |
+dec_r32          | 4B             | 0 |
+neg_r32          | F7 D8          | 0 |
+not_r32          | F7 D0          | 0 |
+inc_mem8         | FE 01          | 0 | ecx=ptr
+# ---- shifts and rotates ----
+shl_imm          | C1 E0 05       | 810 |
+shr_imm          | C1 E8 05       | 810 |
+sar_imm          | C1 F8 05       | 810 |
+shl_cl           | D3 E0          | 810 | ecx=small
+shr_cl           | D3 E8          | 810 | ecx=small
+sar_cl           | D3 F8          | 810 | ecx=small
+shl_1            | D1 E0          | 0 |
+rol_imm          | C1 C0 07       | 810 |
+ror_imm          | C1 C8 07       | 810 |
+rcl_1            | D1 D0          | 0 |
+rcr_imm          | C1 D8 03       | 800 |
+shld             | 0F A4 C8 07    | 810 |
+shrd             | 0F AC C8 07    | 810 |
+# ---- mul / imul / div / idiv ----
+mul_r32          | F7 E1          | D4 | ecx=nz
+imul_r32         | F7 E9          | D4 |
+imul2            | 0F AF C1       | D4 |
+imul3_imm8       | 6B C1 07       | D4 |
+imul3_imm32      | 69 C1 34 12 00 00 | D4 |
+div_r32          | F7 F1          | 8D5 | ecx=nz edx=0
+idiv_r32         | F7 F9          | 8D5 | ecx=nz edx=0
+mul_r8           | F6 E1          | D4 | ecx=nz
+# ---- setcc / cmovcc / bit ----
+sete             | 0F 94 C0       | 0 |
+setl             | 0F 9C C0       | 0 |
+cmovz            | 0F 44 C1       | 0 |
+cmovs            | 0F 48 C1       | 0 |
+bt_imm           | 0F BA E0 0D    | 894 |
+bts_imm          | 0F BA E8 0D    | 894 |
+btr_r            | 0F B3 C8       | 894 |
+bsf              | 0F BC C1       | 895 | ecx=nz
+bsr              | 0F BD C1       | 895 | ecx=nz
+popcnt           | F3 0F B8 C1    | 0 |
+bswap            | 0F C8          | 0 |
+xadd             | 0F C1 C8       | 0 |
+cmpxchg          | 0F B1 CA       | 0 | edx=ptr
+xchg_r32         | 91             | 0 |
+# ---- stack, flags ----
+push_pop         | 50 59          | 0 |
+pushf_popf       | 9C 58          | 0 |
+lahf_sahf        | 9F 9E          | 0 |
+sahf             | 9E             | 0 |
+cdq              | 99             | 0 |
+cwde             | 98             | 0 |
+stc_cmc          | F9 F5          | 0 |
+salc             | D6             | 0 |
+# ---- string ops ----
+movsb_rep        | F3 A4          | 0 | esi=ptr0 edi=ptr count=4 ecx=3
+stosd_rep        | F3 AB          | 0 | edi=ptr count=4 ecx=3
+scasb_repne      | F2 AE          | 10 | edi=ptr count=4 ecx=8
+lodsd            | AD             | 0 | esi=ptr
+# ---- BCD ----
+aaa              | 37             | 8C4 |
+daa              | 27             | 800 |
+das              | 2F             | 800 |
+aam              | D4 0A          | 811 |
+# ---- x87 ----
+fadd             | DE C1          | 0 | fpu=3
+fmul             | DE C9          | 0 | fpu=3
+fsub             | DE E1          | 0 | fpu=3
+fdiv             | DE F9          | 0 | fpu=3
+fld_st           | D9 C1          | 0 | fpu=3
+fxch             | D9 C9          | 0 | fpu=3
+fabs             | D9 E1          | 0 | fpu=2
+fchs             | D9 E0          | 0 | fpu=2
+fsqrt            | D9 FA          | 0 | fpu=2
+fld1_faddp       | D9 E8 DE C1    | 0 | fpu=2
+fistp_m32        | DB 19          | 0 | fpu=1 ecx=ptr
+fst_m64          | DD 11          | 0 | fpu=2 ecx=ptr
+fild_m32         | DB 01          | 0 | ecx=ptr
+fcom_fnstsw      | D8 D1 DF E0    | 0 | fpu=3
+fcomi            | DB F1          | 0 | fpu=3
+# ---- SSE / SSE2 moves and math ----
+movaps           | 0F 28 C1       | 0 | xmm=float
+addps            | 0F 58 C1       | 0 | xmm=float
+mulps            | 0F 59 C1       | 0 | xmm=float
+subps            | 0F 5C C1       | 0 | xmm=float
+addss            | F3 0F 58 C1    | 0 | xmm=float
+addsd            | F2 0F 58 C1    | 0 | xmm=double
+mulsd            | F2 0F 59 C1    | 0 | xmm=double
+divsd            | F2 0F 5E C1    | 0 | xmm=double
+sqrtsd           | F2 0F 51 C1    | 0 | xmm=double
+andps            | 0F 54 C1       | 0 | xmm=int
+xorps            | 0F 57 C1       | 0 | xmm=int
+unpcklps         | 0F 14 C1       | 0 | xmm=int
+shufps           | 0F C6 C1 1B    | 0 | xmm=float
+cvtsi2sd         | F2 0F 2A C1    | 0 |
+cvttsd2si        | F2 0F 2C C1    | 0 | xmm=double
+cvtdq2ps         | 0F 5B C1       | 0 | xmm=int
+comiss           | 0F 2F C1       | 0 | xmm=float
+movd_xmm         | 66 0F 6E C1    | 0 |
+# ---- MMX / packed integer ----
+paddd            | 0F FE C1       | 0 | xmm=int
+paddb            | 0F FC C1       | 0 | xmm=int
+psubw            | 0F F9 C1       | 0 | xmm=int
+pand             | 0F DB C1       | 0 | xmm=int
+pxor             | 0F EF C1       | 0 | xmm=int
+pcmpeqb          | 0F 74 C1       | 0 | xmm=int
+pcmpgtd          | 0F 66 C1       | 0 | xmm=int
+punpcklbw        | 0F 60 C1       | 0 | xmm=int
+packssdw         | 0F 6B C1       | 0 | xmm=int
+pmullw           | 0F D5 C1       | 0 | xmm=int
+pslld_imm        | 66 0F 72 F1 05 | 0 | xmm=int
+pmovmskb         | 66 0F D7 C1    | 0 | xmm=int
+pshufd           | 66 0F 70 C1 1B | 0 | xmm=int

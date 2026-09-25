@@ -19,6 +19,9 @@ namespace Kiosk
         public static double PointerSensitivity { get; private set; } = 1;
         public static bool ShowDiagnostics { get; private set; } = true;
 
+        /// <summary>Shows the controller-mode hint for a few seconds when a game starts.</summary>
+        public static bool ShowInputHint { get; private set; } = true;
+
         public static async Task LoadAsync()
         {
             try
@@ -34,6 +37,7 @@ namespace Kiosk
                 PointerSensitivity = double.IsNaN(sensitivity) || double.IsInfinity(sensitivity)
                     ? 1 : Math.Max(0.25, Math.Min(2, sensitivity));
                 ShowDiagnostics = root.GetNamedBoolean("showDiagnostics", true);
+                ShowInputHint = root.GetNamedBoolean("showInputHint", true);
             }
             catch
             {
@@ -47,11 +51,12 @@ namespace Kiosk
             await SaveAsync();
         }
 
-        public static async Task SetInputAsync(bool desktop, double sensitivity, bool diagnostics)
+        public static async Task SetInputAsync(bool desktop, double sensitivity, bool diagnostics, bool inputHint)
         {
             DesktopInput = desktop;
             PointerSensitivity = Math.Max(0.25, Math.Min(2, sensitivity));
             ShowDiagnostics = diagnostics;
+            ShowInputHint = inputHint;
             await SaveAsync();
         }
 
@@ -65,6 +70,7 @@ namespace Kiosk
                     { "desktopInput", JsonValue.CreateBooleanValue(DesktopInput) },
                     { "pointerSensitivity", JsonValue.CreateNumberValue(PointerSensitivity) },
                     { "showDiagnostics", JsonValue.CreateBooleanValue(ShowDiagnostics) },
+                    { "showInputHint", JsonValue.CreateBooleanValue(ShowInputHint) },
                 };
                 var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
                     FileName, CreationCollisionOption.ReplaceExisting);

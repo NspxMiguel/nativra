@@ -33,11 +33,19 @@ namespace Kiosk
                     OnContent = Texts.Get("setup.on"),
                     OffContent = Texts.Get("setup.off"),
                 };
+                var inputHint = new ToggleSwitch
+                {
+                    Header = Texts.Get("setup.inputhint"),
+                    IsOn = Settings.ShowInputHint,
+                    OnContent = Texts.Get("setup.on"),
+                    OffContent = Texts.Get("setup.off"),
+                };
                 var content = new StackPanel { Spacing = 20 };
                 content.Children.Add(new TextBlock { Text = Texts.Get("setup.hint"), TextWrapping = TextWrapping.Wrap });
                 content.Children.Add(mode);
                 content.Children.Add(sensitivity);
                 content.Children.Add(diagnostics);
+                content.Children.Add(inputHint);
                 var dialog = new ContentDialog
                 {
                     Title = Texts.Get("setup.title"),
@@ -47,7 +55,7 @@ namespace Kiosk
                 };
                 if (await dialog.ShowAsync() == ContentDialogResult.Primary)
                 {
-                    await Settings.SetInputAsync(mode.SelectedIndex == 0, sensitivity.Value, diagnostics.IsOn);
+                    await Settings.SetInputAsync(mode.SelectedIndex == 0, sensitivity.Value, diagnostics.IsOn, inputHint.IsOn);
                     Native.ControllerMode.Desktop = Settings.DesktopInput;
                     Native.ControllerMode.Changes++;
                     StatusText.Text = Texts.Get("setup.applied");

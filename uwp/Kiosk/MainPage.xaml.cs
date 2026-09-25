@@ -141,6 +141,7 @@ namespace Kiosk
         private uint requestedGame;
         private bool gameLaunchPending;
         private int shownControllerMode = -1;
+        private int hintUntil;
 
         protected override void OnNavigatedTo(Windows.UI.Xaml.Navigation.NavigationEventArgs e)
         {
@@ -198,7 +199,12 @@ namespace Kiosk
                 GameLoadingText.Text = Texts.Get("game.loading");
                 GameLoadingHint.Text = Texts.Get("game.loading.hint");
                 GameInputHint.Text = Texts.Get("game.input.hint");
-                SetupButton.Content = Texts.Get("setup.title");
+                // A gear, the way consoles mark settings; the name stays for
+                // narrators and for the tooltip.
+                SetupButton.Content = "\uE713";
+                SetupButton.FontFamily = new Windows.UI.Xaml.Media.FontFamily("Segoe MDL2 Assets");
+                Windows.UI.Xaml.Automation.AutomationProperties.SetName(SetupButton, Texts.Get("setup.title"));
+                ToolTipService.SetToolTip(SetupButton, Texts.Get("setup.title"));
             }
             catch
             {
@@ -327,8 +333,15 @@ namespace Kiosk
                 GamePointerTransform.X = Native.PointerBridge.X;
                 GamePointerTransform.Y = Native.PointerBridge.Y;
                 GamePointer.Visibility = Native.ControllerMode.Desktop ? Visibility.Visible : Visibility.Collapsed;
+                // The notice shows like a notification: the first 15 seconds of a
+                // game, and 5 seconds after each switch, unless turned off.
+                var now = Environment.TickCount;
+                if (hintUntil == 0) hintUntil = now + 15000;
+                GameInputHintCard.Visibility = Settings.ShowInputHint && now - hintUntil < 0
+                    ? Visibility.Visible : Visibility.Collapsed;
                 if (shownControllerMode != Native.ControllerMode.Changes)
                 {
+                    if (shownControllerMode >= 0) hintUntil = Math.Max(hintUntil, now + 5000);
                     shownControllerMode = Native.ControllerMode.Changes;
                     GameInputHint.Text = Texts.Get(Native.ControllerMode.Desktop ? "game.mode.pc" : "game.mode.controller");
                     if (Native.ControllerMode.Desktop)

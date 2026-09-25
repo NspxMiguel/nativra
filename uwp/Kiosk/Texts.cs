@@ -13,6 +13,7 @@ namespace Kiosk
         private static readonly Dictionary<string, string> Pt = new Dictionary<string, string>
         {
             { "setup.title", "Configurar" },
+            { "setup.inputhint", "Aviso do modo de controle" },
             { "setup.input", "Modo de entrada ao abrir um jogo" },
             { "setup.pc", "PC — controle como mouse e teclado" },
             { "setup.controller", "Controle nativo — exige suporte do jogo" },
@@ -143,6 +144,7 @@ namespace Kiosk
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
             { "setup.title", "Setup" },
+            { "setup.inputhint", "Controller mode notice" },
             { "setup.input", "Input mode when opening a game" },
             { "setup.pc", "PC — controller as mouse and keyboard" },
             { "setup.controller", "Native controller — requires game support" },

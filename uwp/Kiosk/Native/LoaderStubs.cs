@@ -483,6 +483,11 @@ namespace Kiosk.Native
                     system.Overrides[module + "!" + pair.Key] = pair.Value;
                 }
             }
+
+            // Measure whether the console already has the DirectX libraries
+            // SDK-era games ask for (d3dcompiler_47 first), so the redist shims
+            // are only relied on where they are needed.
+            RedistProbe.Run();
         }
     }
 }

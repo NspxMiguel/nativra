@@ -204,6 +204,12 @@ BIOS, keys or Steam sessions are supplied. Download the pre-alpha package from
 Releases; its notes explain installation and limitations. Internal folder names
 and the package identity still use `Kiosk` to preserve compatibility.
 
+After the first install the app keeps itself current: when its home screen
+opens it checks this repository's releases and installs a newer build as an
+update, which keeps downloaded games and the Steam sign-in. Games read the
+controller through XInput; hold View + Menu to switch between controller and
+mouse-and-keyboard mode.
+
 ## Licence
 
 Free to use, change and share. Not to sell — see [LICENSE](LICENSE) and

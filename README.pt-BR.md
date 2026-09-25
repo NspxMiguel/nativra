@@ -189,6 +189,12 @@ bun src/xbdev.ts launch kiosk
 Os builds são feitos no GitHub Actions com Windows. Os caminhos internos e a
 identidade do pacote ainda usam `Kiosk` para preservar compatibilidade.
 
+Depois da primeira instalação o app se mantém atualizado: ao abrir a tela
+inicial ele consulta as releases deste repositório e instala uma versão mais
+nova como atualização, que preserva os jogos baixados e o login da Steam. Os
+jogos leem o controle por XInput; segure View + Menu para alternar entre o
+modo controle e o modo mouse e teclado.
+
 Nunca publique `steam.json`, tokens, QR de login, credenciais, dumps de memória
 ou arquivos dos jogos em issues. Revise os logs antes de compartilhar.
 

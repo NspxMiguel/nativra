@@ -33,7 +33,11 @@ test("hiding diagnostics preserves the input overlay and launch defaults", async
   expect(
     launch.indexOf("ControllerMode.Desktop = Settings.DesktopInput"),
   ).toBeLessThan(launch.indexOf("await Native.NativeProbe.RunAsync"));
-  expect(page).toContain('SetupButton.Content = Texts.Get("setup.title")');
+  // A gear icon, still named for screen readers in the chosen language.
+  expect(page).toContain('SetupButton.Content = "\\uE713"');
+  expect(page).toContain(
+    'AutomationProperties.SetName(SetupButton, Texts.Get("setup.title"))',
+  );
   expect(page).toContain("SetupButton.Focus(FocusState.Programmatic)");
   expect(page).toContain(
     "if (FocusManager.GetFocusedElement() == SetupButton) FocusShelf()",

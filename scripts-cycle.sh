@@ -82,6 +82,11 @@ trap 'tools/console-lock.sh release nativra' EXIT
 # The cycle closes the app when it is done, so an app still open means someone
 # is using the console. Replacing it under them froze a game and threw away
 # their Steam sign-in. FORCE=on overrides.
+# A download in progress dies with the app; even FORCE waits for it.
+if bun src/xbdev.ts ls kiosk LocalState 2>/dev/null | grep -q "downloading.txt"; then
+  echo "Nativra is downloading a game; not replacing it until it finishes"
+  exit 3
+fi
 if [ "${FORCE:-off}" != "on" ] && bun src/xbdev.ts running kiosk >/dev/null 2>&1; then
   echo "Nativra is open on the console; not replacing it (FORCE=on to override)"
   exit 3

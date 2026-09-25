@@ -54,9 +54,34 @@ namespace Kiosk
             return null;
         }
 
+        private static bool marked;
+
         private static void Raise()
         {
             try { Changed?.Invoke(); } catch { }
+            var _ = MarkAsync(Active() != null);
+        }
+
+        /// <summary>
+        /// downloading.txt in the app's storage while anything downloads, so
+        /// tools that replace or close the app can see it is busy.
+        /// </summary>
+        private static async Task MarkAsync(bool busy)
+        {
+            if (busy == marked) return;
+            marked = busy;
+            try
+            {
+                var local = Windows.Storage.ApplicationData.Current.LocalFolder;
+                if (busy)
+                    await local.CreateFileAsync("downloading.txt", Windows.Storage.CreationCollisionOption.ReplaceExisting);
+                else if (await local.TryGetItemAsync("downloading.txt") is Windows.Storage.IStorageItem item)
+                    await item.DeleteAsync();
+            }
+            catch
+            {
+                // Only a courtesy to outside tools.
+            }
         }
 
         /// <summary>

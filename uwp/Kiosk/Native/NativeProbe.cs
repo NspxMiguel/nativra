@@ -391,6 +391,18 @@ namespace Kiosk.Native
                     var engine = imports.Find("UnityPlayer.dll");
                     var entry = engine?.Export("UnityMain") ?? IntPtr.Zero;
                     var exe = imports.FindExecutable();
+                    // Not every game is Unity. Without UnityMain the game is
+                    // started the way Windows starts any program: at its own
+                    // entry point (WinMainCRTStartup), which ignores the four
+                    // arguments UnityMain takes — harmless on x64, where the
+                    // caller owns the stack.
+                    var generic = false;
+                    if (entry == IntPtr.Zero && exe != null && exe.EntryPoint != IntPtr.Zero)
+                    {
+                        engine = exe;
+                        entry = exe.EntryPoint;
+                        generic = true;
+                    }
 
                     // A marker that stops just short of playing: everything is
                     // mapped and every module's own startup has run, but the
@@ -404,7 +416,7 @@ namespace Kiosk.Native
 
                     if (entry != IntPtr.Zero)
                     {
-                        lines.Add("exe=UnityMain starting");
+                        lines.Add(generic ? "exe=entry point starting" : "exe=UnityMain starting");
                         await WriteAsync(lines);
 
                         // The program has to believe it is the process, or its

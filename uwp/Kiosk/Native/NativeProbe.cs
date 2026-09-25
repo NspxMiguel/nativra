@@ -281,6 +281,8 @@ namespace Kiosk.Native
                 ComStubs.Install(imports);
                 PlainAnswers.Install(imports);
                 ShellPath.Install(imports);
+                UserFolders.Install(imports, local.Path);
+                CrtFiles.Install(imports);
                 DisplayStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 
@@ -700,7 +702,7 @@ namespace Kiosk.Native
                                 "exe.alive=" + runner.IsAlive,
                                 "exe.stubs=" + imports.Shim.Called.Count,
                                 "exe.thunks.full=" + imports.Shim.Overflowed,
-                                "exe.files.failed=" + FileWatch.Failures,
+                                "exe.files.failed=" + FileWatch.Failures + " crt.rescued=" + CrtFiles.Rescued,
                                 "exe.tls.threads=" + ThreadTls.Adopted,
                                 "exe.tls.blocks=" + ThreadTls.CopiedBlocks,
                                 "exe.tls.failures=" + ThreadTls.Failures + " " + ThreadTls.LastError,

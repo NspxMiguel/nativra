@@ -304,6 +304,7 @@ namespace Kiosk
             // without a hundred megabytes crossing the network by hand.
             await AutoDownloadAsync();
             await ResumeInterruptedAsync();
+            await DriveProbe.RunAsync();
 
             // A newer build on GitHub installs itself as an update, which
             // keeps the games and the Steam sign-in. Only here, on the home

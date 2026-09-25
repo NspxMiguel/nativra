@@ -57,7 +57,8 @@ namespace Kiosk.Native
             return lower.EndsWith(".log")
                 || lower.EndsWith("global-metadata.dat")
                 || lower.EndsWith(".dll")
-                || lower.EndsWith("boot.config");
+                || lower.EndsWith("boot.config")
+                || lower.EndsWith(".xml");
         }
 
         [DllImport("api-ms-win-core-file-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -88,6 +89,7 @@ namespace Kiosk.Native
                 var path = name == IntPtr.Zero ? null : Marshal.PtrToStringUni(name);
                 var found = FindFirstFileExW(path, level, data, search, filter, flags);
                 if (found == InvalidHandle) Say("find failed " + (path ?? "?") + " (" + Marshal.GetLastWin32Error() + ")");
+                else Say("find " + (path ?? "?"));
                 return found;
             };
             findFirst = (name, data) => findFirstEx(name, 0, data, 0, IntPtr.Zero, 0);

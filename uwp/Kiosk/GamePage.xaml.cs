@@ -56,6 +56,13 @@ namespace Kiosk
 
             game = argument.Game;
             session = argument.Session;
+            DownloadManager.Changed += OnDownloadsChanged;
+            var running = DownloadManager.Find(game.AppId);
+            if (running != null && running.Running)
+            {
+                busy = true;
+                ShowJob(running);
+            }
 
             TitleText.Text = game.Name;
             PlayedText.Text = game.Played;
@@ -186,29 +193,45 @@ namespace Kiosk
 
             busy = true;
             StatusText.Text = Texts.Get("steam.starting", game.Name);
-            try
+            // The download belongs to the app, not to this page: leaving the
+            // page no longer stops it, and Downloads on the home dock shows it.
+            ShowJob(DownloadManager.Start(session, game.AppId, game.Name, root));
+        }
+
+        private void ShowJob(DownloadJob job)
+        {
+            StatusText.Text = Texts.Get("steam.downloading", job.Name, job.Percent, job.File);
+        }
+
+        private void OnDownloadsChanged()
+        {
+            var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, async () =>
             {
-                await Steam.SteamDownload.RunAsync(session, game.AppId, root, progress =>
+                var job = game == null ? null : DownloadManager.Find(game.AppId);
+                if (job == null) return;
+                if (job.Running)
                 {
-                    var _ = Dispatcher.RunAsync(
-                        Windows.UI.Core.CoreDispatcherPriority.Low,
-                        () => StatusText.Text = Texts.Get(
-                            "steam.downloading", game.Name, progress.Percent, progress.File));
-                });
-                StatusText.Text = Texts.Get("steam.downloaded", game.Name);
-                await RefreshStateAsync();
-            }
-            catch (Exception error)
-            {
-                ShowError(
-                    Texts.Get("game.failed.title"),
-                    error.Message,
-                    Texts.Get("game.failed.hint"));
-            }
-            finally
-            {
+                    ShowJob(job);
+                    return;
+                }
+                if (!busy) return;
                 busy = false;
-            }
+                if (job.Finished)
+                {
+                    StatusText.Text = Texts.Get("steam.downloaded", game.Name);
+                    await RefreshStateAsync();
+                }
+                else if (job.Error != null)
+                {
+                    ShowError(Texts.Get("game.failed.title"), job.Error, Texts.Get("game.failed.hint"));
+                }
+            });
+        }
+
+        protected override void OnNavigatedFrom(NavigationEventArgs e)
+        {
+            DownloadManager.Changed -= OnDownloadsChanged;
+            base.OnNavigatedFrom(e);
         }
 
         private void ShowError(string title, string body, string hint)

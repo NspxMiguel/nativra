@@ -126,6 +126,10 @@
           <!-- Emulators. Not games, so not on the shelf: this is
                          where they are set up, and where he decides which of
                          them is worth a place on the shelf at all. -->
+          <StackPanel x:Name="DownloadsScreen" Visibility="Collapsed" Margin="56,40,56,0">
+            <TextBlock x:Name="DownloadsTitle" FontSize="{StaticResource ModalTitleSize}" Foreground="{StaticResource TextPrimary}"/>
+            <TextBlock x:Name="DownloadsList" Margin="0,24,0,0" FontSize="{StaticResource BodySize}" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" LineHeight="40"/>
+          </StackPanel>
           <Grid x:Name="EmulatorScreen" Visibility="Collapsed" Margin="56,40,56,0">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/>

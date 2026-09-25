@@ -234,7 +234,7 @@
           </StackPanel>
           <!-- What the app is doing, when it is doing something the
                          person should be able to see. -->
-          <TextBlock x:Name="StatusText" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,56,0" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource TextMuted}"/>
+          <TextBlock x:Name="StatusText" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,56,0" MaxWidth="480" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource TextMuted}"/>
         </Grid>
       </Grid>
     </Viewbox>

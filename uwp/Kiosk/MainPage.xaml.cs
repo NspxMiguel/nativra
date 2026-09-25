@@ -233,6 +233,17 @@ namespace Kiosk
         {
             StatusText.Text = Texts.Get("status.reading");
             await Settings.LoadAsync();
+            // The invitation to sign in is only for someone who has not.
+            try
+            {
+                SignInLink.Visibility = (await SteamSession.LoadAsync()).IsSignedIn
+                    ? Visibility.Collapsed
+                    : Visibility.Visible;
+            }
+            catch
+            {
+                SignInLink.Visibility = Visibility.Visible;
+            }
             Native.ControllerMode.Desktop = Settings.DesktopInput;
             Tiles.Clear();
 
@@ -729,9 +740,18 @@ namespace Kiosk
             var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
             {
                 if (Native.NativeProbe.GameRunning) return;
+                // Name and percent only: the file being written belongs on
+                // the Downloads screen, and a long path ran into the dock.
                 var active = DownloadManager.Active();
                 if (active != null)
-                    StatusText.Text = Texts.Get("steam.downloading", active.Name, active.Percent, active.File);
+                    StatusText.Text = Texts.Get("steam.downloading.short", active.Name, active.Percent);
+                else
+                {
+                    var jobs = DownloadManager.Snapshot();
+                    var last = jobs.Count > 0 ? jobs[jobs.Count - 1] : null;
+                    if (last?.Finished == true) StatusText.Text = Texts.Get("steam.downloaded", last.Name);
+                    else if (last?.Error != null) StatusText.Text = Texts.Get("steam.downloadfailed", last.Name, last.Error);
+                }
                 if (DownloadsScreen.Visibility == Visibility.Visible) ShowDownloads();
             });
         }

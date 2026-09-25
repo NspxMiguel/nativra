@@ -13,7 +13,7 @@ idea, with one addition for games not tried yet.
 
 | Game | Steam app | Engine | Rating | Last tested | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Seraph's Last Stand | 1919460 | Unity 2021.3 (IL2CPP, D3D11) | 🟡 Playable | build 244, 2026-09-25 | Menu and gameplay at 60 fps with Xbox game mode on; controller in controller mode (hold View + Menu to switch); Steam sign-in shows "In-Game" to friends. Achievements not yet confirmed on the account. |
+| Seraph's Last Stand | 1919460 | Unity 2021.3 (IL2CPP, D3D11) | ✅ Verified | build 244, 2026-09-25 | Fully playable with the controller (hold View + Menu to switch to mouse and keyboard). Steam sign-in shows "In-Game" to friends. Steam achievements not tested yet. |
 | Brawlhalla | 291550 | Adobe AIR (x64) | ⛔ Not working | build 244, 2026-09-25 | Downloads and starts; the AIR runtime loads and opens its application descriptor, then reports "Application descriptor could not be found". |
 | Hades | 1145360 | Supergiant engine (D3D11, SDL2, FMOD) | ⬜ Untested | — | Downloading. |
 | Little Nightmares | 424840 | Unreal Engine 4 | ⬜ Untested | — | Audio uses XAudio 2.7 from the 2010 DirectX redistributable, which the console lacks. |

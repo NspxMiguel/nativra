@@ -218,6 +218,9 @@ for _ in $(seq 1 "$WAIT"); do
     echo "   $(tail -1 native-probe.txt)"
   fi
 done
+# PLAYFOR seconds more before the reports are read: a game that has only
+# just started says little, and some take a while to reach their first frame.
+sleep "${PLAYFOR:-30}"
 bun src/xbdev.ts pull kiosk native-probe.txt LocalState >/dev/null 2>&1 || true
 bun src/xbdev.ts pull kiosk native-pulse.txt LocalState >/dev/null 2>&1 || true
 bun src/xbdev.ts shot /tmp/xbox-cycle.png >/dev/null 2>&1 || true

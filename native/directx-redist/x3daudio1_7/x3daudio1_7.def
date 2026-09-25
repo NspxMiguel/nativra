@@ -1,0 +1,4 @@
+LIBRARY X3DAUDIO1_7
+EXPORTS
+    X3DAudioInitialize = X3DAudioInitialize_17
+    X3DAudioCalculate = X3DAudioCalculate_17

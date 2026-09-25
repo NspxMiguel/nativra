@@ -422,8 +422,14 @@ async function cmdStop(args: string[]): Promise<void> {
 
 /** Exit 0 when the app has a live process on the console, 1 when it does not. */
 async function cmdRunning(args: string[]): Promise<void> {
+  // An empty name matches every package, and the answer would be about
+  // whichever one came first.
+  if (!args[0]) {
+    console.error("usage: xbdev running <app>");
+    process.exit(2);
+  }
   const portal = await portalOrExit();
-  const pkg = await findPackage(portal, args[0] ?? "");
+  const pkg = await findPackage(portal, args[0]);
   if (!pkg) process.exit(1);
   const live = (await portal.processes()).some(
     (proc) => proc.PackageFullName === pkg.PackageFullName,

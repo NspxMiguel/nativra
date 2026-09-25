@@ -46,6 +46,38 @@ namespace Kiosk.Steam
                 appId.ToString(), CreationCollisionOption.OpenIfExists);
         }
 
+        /// <summary>Free bytes where the folder lives, or null if it will not say.</summary>
+        public static async Task<ulong?> FreeBytesAsync(StorageFolder folder)
+        {
+            try
+            {
+                var properties = await folder.Properties.RetrievePropertiesAsync(
+                    new[] { "System.FreeSpace" });
+                if (properties.TryGetValue("System.FreeSpace", out var value) && value != null)
+                    return Convert.ToUInt64(value);
+            }
+            catch
+            {
+                // Free space is information, not a requirement.
+            }
+            return null;
+        }
+
+        public static string Human(ulong bytes)
+        {
+            string[] units = { "B", "KB", "MB", "GB", "TB" };
+            double size = bytes;
+            var unit = 0;
+            while (size >= 1024 && unit < units.Length - 1)
+            {
+                size /= 1024;
+                unit++;
+            }
+            return size.ToString(size >= 10 ? "0" : "0.0") + " " + units[unit];
+        }
+
+        private const int DiskFull = unchecked((int)0x80070070);
+
         public static async Task RunAsync(
             SteamSession session,
             uint appId,
@@ -88,85 +120,109 @@ namespace Kiosk.Steam
                 if (depots.Count == 0) throw new Exception("this app has no Windows depot");
 
                 var folder = await TargetAsync(root, appId);
+
+                // A fresh download that cannot fit is refused before the first
+                // byte, rather than failing gigabytes in. A resumed one has
+                // part of its size on disk already, so only the real write can
+                // tell, and a full disk is then reported in the same words.
+                long needed = 0;
+                foreach (var depot in depots) needed += depot.Size;
+                var resuming = await folder.TryGetItemAsync(".downloading") != null;
+                var free = await FreeBytesAsync(folder);
+                if (!resuming && free.HasValue && needed > 0 && (ulong)needed > free.Value)
+                {
+                    throw new Exception(Texts.Get("steam.nospace",
+                        Human((ulong)needed - free.Value), Human(free.Value)));
+                }
+
                 var pending = await folder.CreateFileAsync(".downloading", CreationCollisionOption.ReplaceExisting);
 
                 var licensed = 0;
-                foreach (var depot in depots)
+                try
                 {
-                    // A depot the account has no license for (a DLC or a
-                    // soundtrack it does not own) is refused a key; that is
-                    // not the game, so it is left out rather than failing.
-                    byte[] key;
-                    try
+                    foreach (var depot in depots)
                     {
-                        key = await cm.DepotKeyAsync(appId, depot.Id);
-                    }
-                    catch (Exception) when (depots.Count > 1)
-                    {
-                        continue;
-                    }
-                    licensed++;
-                    var code = await SteamDepot.ManifestCodeAsync(cm, appId, depot.Id, depot.ManifestId);
-                    var manifest = SteamDepot.ParseManifest(
-                        await SteamDepot.FetchManifestAsync(servers, depot.Id, depot.ManifestId, code));
-
-                    long done = 0;
-                    foreach (var file in manifest.Files)
-                    {
-                        if (file.IsDirectory) continue;
-
-                        var name = manifest.NamesEncrypted
-                            ? SteamDepot.DecryptName(file.Name, key)
-                            : file.Name;
-                        var target = await CreateAsync(folder, name.Replace('\\', '/'));
-
-                        var existing = await target.GetBasicPropertiesAsync();
-                        if ((long)existing.Size == file.Size)
+                        // A depot the account has no license for (a DLC or a
+                        // soundtrack it does not own) is refused a key; that is
+                        // not the game, so it is left out rather than failing.
+                        byte[] key;
+                        try
                         {
-                            done += file.Size;
-                            onProgress?.Invoke(new DownloadProgress
-                            {
-                                File = name,
-                                Done = done,
-                                Total = manifest.TotalBytes,
-                            });
+                            key = await cm.DepotKeyAsync(appId, depot.Id);
+                        }
+                        catch (Exception) when (depots.Count > 1)
+                        {
                             continue;
                         }
+                        licensed++;
+                        var code = await SteamDepot.ManifestCodeAsync(cm, appId, depot.Id, depot.ManifestId);
+                        var manifest = SteamDepot.ParseManifest(
+                            await SteamDepot.FetchManifestAsync(servers, depot.Id, depot.ManifestId, code));
 
-                        // Named before its first chunk, so a failure points at
-                        // this file rather than at the last one that finished.
-                        onProgress?.Invoke(new DownloadProgress
+                        long done = 0;
+                        foreach (var file in manifest.Files)
                         {
-                            File = name,
-                            Done = done,
-                            Total = manifest.TotalBytes,
-                        });
-                        using (var stream = await target.OpenStreamForWriteAsync())
-                        {
-                            for (var i = 0; i < file.Chunks.Count; i += parallel)
+                            if (file.IsDirectory) continue;
+
+                            var name = manifest.NamesEncrypted
+                                ? SteamDepot.DecryptName(file.Name, key)
+                                : file.Name;
+                            var target = await CreateAsync(folder, name.Replace('\\', '/'));
+
+                            var existing = await target.GetBasicPropertiesAsync();
+                            if ((long)existing.Size == file.Size)
                             {
-                                var batch = new List<Task<KeyValuePair<Chunk, byte[]>>>();
-                                for (var j = i; j < Math.Min(i + parallel, file.Chunks.Count); j++)
-                                {
-                                    var chunk = file.Chunks[j];
-                                    batch.Add(FetchOneAsync(servers, depot.Id, chunk, key));
-                                }
-                                foreach (var task in batch)
-                                {
-                                    var result = await task;
-                                    stream.Seek(result.Key.Offset, SeekOrigin.Begin);
-                                    await stream.WriteAsync(result.Value, 0, result.Value.Length);
-                                    done += result.Value.Length;
-                                }
+                                done += file.Size;
                                 onProgress?.Invoke(new DownloadProgress
                                 {
                                     File = name,
                                     Done = done,
                                     Total = manifest.TotalBytes,
                                 });
+                                continue;
+                            }
+
+                            // Named before its first chunk, so a failure points at
+                            // this file rather than at the last one that finished.
+                            onProgress?.Invoke(new DownloadProgress
+                            {
+                                File = name,
+                                Done = done,
+                                Total = manifest.TotalBytes,
+                            });
+                            using (var stream = await target.OpenStreamForWriteAsync())
+                            {
+                                for (var i = 0; i < file.Chunks.Count; i += parallel)
+                                {
+                                    var batch = new List<Task<KeyValuePair<Chunk, byte[]>>>();
+                                    for (var j = i; j < Math.Min(i + parallel, file.Chunks.Count); j++)
+                                    {
+                                        var chunk = file.Chunks[j];
+                                        batch.Add(FetchOneAsync(servers, depot.Id, chunk, key));
+                                    }
+                                    foreach (var task in batch)
+                                    {
+                                        var result = await task;
+                                        stream.Seek(result.Key.Offset, SeekOrigin.Begin);
+                                        await stream.WriteAsync(result.Value, 0, result.Value.Length);
+                                        done += result.Value.Length;
+                                    }
+                                    onProgress?.Invoke(new DownloadProgress
+                                    {
+                                        File = name,
+                                        Done = done,
+                                        Total = manifest.TotalBytes,
+                                    });
+                                }
                             }
                         }
                     }
+                }
+                catch (Exception error) when (error.HResult == DiskFull)
+                {
+                    var left = await FreeBytesAsync(folder);
+                    throw new Exception(Texts.Get("steam.diskfull",
+                        left.HasValue ? Human(left.Value) : "0 B"));
                 }
                 if (licensed == 0) throw new Exception("no depot of this app is licensed to this account");
                 await folder.CreateFileAsync(".downloaded", CreationCollisionOption.ReplaceExisting);

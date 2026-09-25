@@ -277,6 +277,7 @@ namespace Kiosk.Native
                     var image = PeImage.Load(name, System.IO.File.ReadAllBytes(path), imports.Resolve);
                     imports.Add(image);
                     named[image.BaseAddress.ToInt64()] = name;
+                    ModuleFileName.Register(image.BaseAddress, path);
                     Remember("mapped " + name);
                     if (image.EntryPoint != IntPtr.Zero)
                     {

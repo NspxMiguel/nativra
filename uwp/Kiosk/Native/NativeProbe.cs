@@ -320,6 +320,7 @@ namespace Kiosk.Native
                     {
                         var image = PeImage.Load(file.Name, bytes, imports.Resolve);
                         imports.Add(image);
+                        ModuleFileName.Register(image.BaseAddress, file.Path);
                         if (file.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                             initializedModules.Add(file.Name);
                         lines.Add(

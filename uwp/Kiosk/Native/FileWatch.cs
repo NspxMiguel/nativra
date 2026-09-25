@@ -90,6 +90,58 @@ namespace Kiosk.Native
         private static MappingWDelegate mappingW, mappingA;
         private static MapViewDelegate mapView;
 
+        [DllImport("api-ms-win-core-file-l1-1-0.dll", SetLastError = true)]
+        private static extern bool ReadFile(IntPtr file, IntPtr buffer, uint count, IntPtr read, IntPtr overlapped);
+        [DllImport("api-ms-win-core-file-l1-1-0.dll", SetLastError = true)]
+        private static extern uint GetFileSize(IntPtr file, IntPtr high);
+        [DllImport("api-ms-win-core-file-l1-1-0.dll", SetLastError = true)]
+        private static extern bool GetFileSizeEx(IntPtr file, out long size);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
+        private delegate int ReadDelegate(IntPtr file, IntPtr buffer, uint count, IntPtr read, IntPtr overlapped);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
+        private delegate uint SizeDelegate(IntPtr file, IntPtr high);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
+        private delegate int SizeExDelegate(IntPtr file, IntPtr size);
+        private static ReadDelegate readFile;
+        private static SizeDelegate fileSize;
+        private static SizeExDelegate fileSizeEx;
+
+        /// <summary>
+        /// Reads and sizes that fail or come back empty, which a program
+        /// takes as a missing file. Opt-in (filewatch.txt): ReadFile is hot.
+        /// </summary>
+        public static void WatchReads(SystemImports imports)
+        {
+            readFile = (file, buffer, count, read, overlapped) =>
+            {
+                var ok = ReadFile(file, buffer, count, read, overlapped);
+                var got = read == IntPtr.Zero ? -1 : Marshal.ReadInt32(read);
+                if (!ok || (count > 0 && got == 0 && overlapped == IntPtr.Zero))
+                    Say("read " + (ok ? "empty" : "failed (" + Marshal.GetLastWin32Error() + ")") + " asked " + count + (overlapped != IntPtr.Zero ? " overlapped" : ""));
+                return ok ? 1 : 0;
+            };
+            fileSize = (file, high) =>
+            {
+                var size = GetFileSize(file, high);
+                if (size == 0 || size == uint.MaxValue) Say("size " + size + " (" + Marshal.GetLastWin32Error() + ")");
+                return size;
+            };
+            fileSizeEx = (file, size) =>
+            {
+                var ok = GetFileSizeEx(file, out var value);
+                if (size != IntPtr.Zero) Marshal.WriteInt64(size, value);
+                if (!ok || value == 0) Say("sizeex " + value + " ok=" + ok);
+                return ok ? 1 : 0;
+            };
+            foreach (var module in new[] { "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "api-ms-win-core-file-l1-1-0.dll" })
+            {
+                imports.Overrides[module + "!ReadFile"] = Marshal.GetFunctionPointerForDelegate(readFile);
+                imports.Overrides[module + "!GetFileSize"] = Marshal.GetFunctionPointerForDelegate(fileSize);
+                imports.Overrides[module + "!GetFileSizeEx"] = Marshal.GetFunctionPointerForDelegate(fileSizeEx);
+            }
+        }
+
         /// <summary>
         /// File mappings, through the calls an app container is allowed to
         /// make. CreateFileMappingW and MapViewOfFile are desktop calls; the

@@ -143,6 +143,7 @@ namespace Kiosk.Native
                 GraphicsBridge.NameTheCard = await local.TryGetItemAsync("gpu.txt") != null;
                 GraphicsBridge.NoMirror = await local.TryGetItemAsync("nomirror.txt") != null;
                 GraphicsBridge.Direct = await local.TryGetItemAsync("direct.txt") != null;
+                var watchReads = await local.TryGetItemAsync("filewatch.txt") != null;
                 // Measuring switches for speed: Unity's own render thread, and
                 // the size of its job pool.
                 RenderThread = await local.TryGetItemAsync("renderthread.txt") != null;
@@ -252,6 +253,7 @@ namespace Kiosk.Native
                 ImageLookup.Install(
                     imports, imports.SystemAddress("kernel32.dll", "RtlPcToFileHeader"));
                 FileWatch.Install(imports);
+                if (watchReads) FileWatch.WatchReads(imports);
                 SuspendWatch.Install(imports);
                 ProcessStubs.Install(imports);
                 WindowStubs.Install(imports);

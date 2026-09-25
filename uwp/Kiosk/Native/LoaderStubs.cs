@@ -206,6 +206,12 @@ namespace Kiosk.Native
                     handle = IntPtr.Zero;
                 }
             }
+            if (handle == IntPtr.Zero && SystemImports.AppRuntimeName(name) is string alias)
+            {
+                // The desktop C++ runtime, served by the framework's _app build.
+                try { handle = LoadPackagedLibrary(alias, 0); }
+                catch { handle = IntPtr.Zero; }
+            }
             if (handle != IntPtr.Zero)
             {
                 named[handle.ToInt64()] = name;

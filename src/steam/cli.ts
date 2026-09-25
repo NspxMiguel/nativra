@@ -214,6 +214,10 @@ export async function runSteam(root: string, args: string[]): Promise<void> {
       const baseDir = dirFlag >= 0 ? rest[dirFlag + 1] : join(root, "jogos");
       const depotFlag = rest.indexOf("--depot");
       const only = depotFlag >= 0 ? [Number(rest[depotFlag + 1])] : undefined;
+      // --only <regex>: just the files whose path matches, e.g. the
+      // executables, to study a game before downloading all of it.
+      const onlyFlag = rest.indexOf("--only");
+      const onlyFiles = onlyFlag >= 0 ? new RegExp(rest[onlyFlag + 1], "i") : undefined;
 
       console.log(t("steam.planning", { name: String(appId) }));
       const { name, depots } = await plan(cm, appId, servers, only);
@@ -240,8 +244,13 @@ export async function runSteam(root: string, args: string[]): Promise<void> {
           lastReport = now;
           const percent = Math.floor(((written + progress.doneBytes) / total) * 100);
           console.log(t("steam.progress", { percent, file: progress.file }));
-        });
+        }, 8, onlyFiles);
         written += Number(item.manifest.totalBytes);
+      }
+      // A partial download is a study copy, not an installed game.
+      if (onlyFiles) {
+        console.log(target);
+        return;
       }
       // A record of what exists, wherever it was put: the console's home
       // screen reads this to list what has been downloaded.

@@ -98,8 +98,11 @@ export async function downloadDepot(
   root: string,
   onProgress?: (progress: Progress) => void,
   parallel = 8,
+  only?: RegExp,
 ): Promise<number> {
-  const files = item.manifest.files.filter((f) => !isDirectory(f));
+  const files = item.manifest.files.filter(
+    (f) => !isDirectory(f) && (!only || only.test(item.names.get(f) ?? "")),
+  );
   const totalBytes = files.reduce((n, f) => n + Number(f.size), 0);
 
   let doneBytes = 0;

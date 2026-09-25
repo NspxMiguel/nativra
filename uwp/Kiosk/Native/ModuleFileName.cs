@@ -39,6 +39,27 @@ namespace Kiosk.Native
         private static string path = "";
 
         /// <summary>
+        /// Where each of the game's own modules really lives, by base address.
+        /// Adobe AIR finds its application by walking up from its runtime DLL
+        /// in "Adobe AIR\Versions\1.0"; answered with the executable's path
+        /// for every module, it walked out of the game folder and reported the
+        /// application descriptor missing.
+        /// </summary>
+        private static readonly Dictionary<long, string> modulePaths = new Dictionary<long, string>();
+
+        public static void Register(IntPtr module, string fullPath)
+        {
+            if (module == IntPtr.Zero || string.IsNullOrEmpty(fullPath)) return;
+            lock (modulePaths) modulePaths[module.ToInt64()] = fullPath;
+        }
+
+        private static string PathFor(IntPtr module)
+        {
+            if (module == IntPtr.Zero) return path;
+            lock (modulePaths) return modulePaths.TryGetValue(module.ToInt64(), out var known) ? known : path;
+        }
+
+        /// <summary>
         /// What the game believes it was started with.
         ///
         /// The command line handed to an entry point is only half the story:
@@ -185,7 +206,7 @@ namespace Kiosk.Native
 
             wide = (module, buffer, size) =>
             {
-                var text = path;
+                var text = PathFor(module);
                 var room = (int)size;
                 if (room <= 0) return 0;
                 var copied = Math.Min(text.Length, room - 1);
@@ -199,7 +220,7 @@ namespace Kiosk.Native
 
             narrow = (module, buffer, size) =>
             {
-                var bytes = Encoding.UTF8.GetBytes(path);
+                var bytes = Encoding.UTF8.GetBytes(PathFor(module));
                 var room = (int)size;
                 if (room <= 0) return 0;
                 var copied = Math.Min(bytes.Length, room - 1);

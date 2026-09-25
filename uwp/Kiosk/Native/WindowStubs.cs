@@ -93,8 +93,6 @@ namespace Kiosk.Native
                 { "LoadIconW", FakeCursor },
                 { "LoadIconA", FakeCursor },
                 { "ClipCursor", 1 },
-                { "MessageBoxW", 1 },
-                { "MessageBoxA", 1 },
                 { "MonitorFromWindow", FakeMonitor },
                 { "MonitorFromPoint", FakeMonitor },
                 { "MonitorFromRect", FakeMonitor },
@@ -215,6 +213,27 @@ namespace Kiosk.Native
         // Held in fields so the collector cannot take them while native code
         // still holds their addresses.
         private static RectDelegate rect;
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int MessageBoxDelegate(IntPtr window, IntPtr text, IntPtr caption, uint type);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int MessageBoxExDelegate(IntPtr window, IntPtr text, IntPtr caption, uint type, ushort language);
+        private static MessageBoxDelegate boxW, boxA;
+        private static MessageBoxExDelegate boxExW, boxExA;
+
+        /// <summary>
+        /// A message box is how a program says why it is giving up, and on a
+        /// console nobody sees it. Its words go into the report, and it is
+        /// answered OK — the button every such box has.
+        /// </summary>
+        private static int Box(string text, string caption)
+        {
+            lock (LoaderStubs.Said)
+            {
+                LoaderStubs.Said.Add("messagebox [" + caption + "] " + text);
+            }
+            return 1; // IDOK
+        }
         private static MetricDelegate metric;
         private static MessageWaitDelegate messageWait;
         private static MessageWaitExDelegate messageWaitEx;
@@ -456,8 +475,21 @@ namespace Kiosk.Native
                 return 0;
             };
 
+            boxW = (window, text, caption, type) =>
+                Box(Marshal.PtrToStringUni(text) ?? "", Marshal.PtrToStringUni(caption) ?? "");
+            boxA = (window, text, caption, type) =>
+                Box(Marshal.PtrToStringAnsi(text) ?? "", Marshal.PtrToStringAnsi(caption) ?? "");
+            boxExW = (window, text, caption, type, language) =>
+                Box(Marshal.PtrToStringUni(text) ?? "", Marshal.PtrToStringUni(caption) ?? "");
+            boxExA = (window, text, caption, type, language) =>
+                Box(Marshal.PtrToStringAnsi(text) ?? "", Marshal.PtrToStringAnsi(caption) ?? "");
+
             var ours = new Dictionary<string, IntPtr>
             {
+                { "MessageBoxW", Marshal.GetFunctionPointerForDelegate(boxW) },
+                { "MessageBoxA", Marshal.GetFunctionPointerForDelegate(boxA) },
+                { "MessageBoxExW", Marshal.GetFunctionPointerForDelegate(boxExW) },
+                { "MessageBoxExA", Marshal.GetFunctionPointerForDelegate(boxExA) },
                 { "GetDisplayConfigBufferSizes",
                     Marshal.GetFunctionPointerForDelegate(displaySizes) },
                 { "GetRawInputDeviceList",

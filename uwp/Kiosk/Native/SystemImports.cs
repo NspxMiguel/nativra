@@ -142,7 +142,7 @@ namespace Kiosk.Native
                 "USER32.dll", "SETUPAPI.dll", "HID.DLL", "IMM32.dll", "dwmapi.dll",
             };
 
-        private static string AppRuntimeName(string name)
+        public static string AppRuntimeName(string name)
         {
             var lower = name.ToLowerInvariant();
             if (!lower.EndsWith(".dll")) return null;

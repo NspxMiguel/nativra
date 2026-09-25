@@ -83,6 +83,10 @@ export class DevicePortal {
       headers,
       // Dev Mode consoles always present a self-signed certificate.
       tls: { rejectUnauthorized: false },
+      // A console whose credentials were wiped redirects every call to a
+      // setup page; followed, that page reached callers as HTML where JSON
+      // was expected ("Failed to parse JSON").
+      redirect: "manual",
     } as RequestInit);
   }
 
@@ -93,8 +97,20 @@ export class DevicePortal {
   ): Promise<Response> {
     if (method !== "GET") await this.ensureCsrf();
     const res = await this.raw(method, path, init);
+    if (res.status >= 300 && res.status < 400) {
+      // A system update resets Device Portal authentication: every request
+      // is redirected until a user and password are set again on the console.
+      throw new PortalError(
+        "Device Portal has no credentials (a system update resets them): set a user and password on the console in Dev Home > Remote Access, then run xbdev connect",
+        res.status,
+        res.headers.get("location") ?? "",
+      );
+    }
     if (res.status === 401) {
-      throw new PortalError("unauthorized", 401);
+      throw new PortalError(
+        "Device Portal refused the saved user/password: run xbdev connect <ip> with the pair set on the console",
+        401,
+      );
     }
     return res;
   }
@@ -428,9 +444,11 @@ export async function probe(host: string, port = 11443, timeoutMs = 1500) {
     const res = await fetch(`https://${host}:${port}/api/os/machinename`, {
       signal: controller.signal,
       tls: { rejectUnauthorized: false },
+      redirect: "manual",
     } as RequestInit);
-    // 401 still proves a Device Portal is listening — it just wants credentials.
-    return res.status === 200 || res.status === 401;
+    // 401 still proves a Device Portal is listening — it just wants
+    // credentials; a redirect is one whose credentials were reset.
+    return res.status === 200 || res.status === 401 || (res.status >= 300 && res.status < 400);
   } catch {
     return false;
   } finally {

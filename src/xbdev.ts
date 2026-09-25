@@ -2,6 +2,7 @@
 // xbdev — drives an Xbox Series X|S in Developer Mode from this Mac.
 // Finds the console, installs native packages, flips apps into game mode.
 
+import { networkHosts } from "./net";
 import {
   DevicePortal,
   probe,
@@ -168,25 +169,21 @@ async function download(entry: CatalogEntry): Promise<string[]> {
 // ---------------------------------------------------------------- commands
 
 async function cmdFind(): Promise<void> {
-  const selfAddress = (
-    await $`ipconfig getifaddr en0`
-      .quiet()
-      .text()
-      .catch(() => "")
-  ).trim();
-  const network = selfAddress.split(".").slice(0, 3).join(".") || "10.0.0";
-  console.log(t("find.scanning", { net: `${network}.0/24` }));
+  const read = async (cmd: Promise<string>) => (await cmd.catch(() => "")).trim();
+  const selfAddress = await read($`ipconfig getifaddr en0`.quiet().text());
+  const mask = (await read($`ipconfig getoption en0 subnet_mask`.quiet().text())) || "255.255.255.0";
+  const candidates = selfAddress ? networkHosts(selfAddress, mask) : networkHosts("10.0.0.1", "255.255.255.0");
+  console.log(t("find.scanning", { net: `${candidates[0]} – ${candidates[candidates.length - 1]}` }));
 
-  const candidates = Array.from(
-    { length: 254 },
-    (_, i) => `${network}.${i + 1}`,
-  );
   const hits: string[] = [];
-  await Promise.all(
-    candidates.map(async (host) => {
-      if (await probe(host)) hits.push(host);
-    }),
-  );
+  // In batches: a thousand sockets at once is more than some routers allow.
+  for (let i = 0; i < candidates.length; i += 256) {
+    await Promise.all(
+      candidates.slice(i, i + 256).map(async (host) => {
+        if (await probe(host)) hits.push(host);
+      }),
+    );
+  }
 
   if (hits.length === 0) {
     console.log(t("find.none"));

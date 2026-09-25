@@ -226,11 +226,17 @@ namespace Kiosk.Native
         /// console nobody sees it. Its words go into the report, and it is
         /// answered OK — the button every such box has.
         /// </summary>
+        /// <summary>What was called just before a message box, when tracing.</summary>
+        public static Func<List<string>> RecentCalls;
+
         private static int Box(string text, string caption)
         {
             lock (LoaderStubs.Said)
             {
                 LoaderStubs.Said.Add("messagebox [" + caption + "] " + text);
+                var recent = RecentCalls?.Invoke();
+                if (recent != null)
+                    foreach (var call in recent) LoaderStubs.Said.Add("before box: " + call);
             }
             return 1; // IDOK
         }

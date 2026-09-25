@@ -77,18 +77,26 @@ namespace Kiosk.Native
                 // still only in local storage is moved there once.
                 folder = await GameIn(await DevelopmentFiles(), appId);
 
-                var games = await local.TryGetItemAsync("games") as StorageFolder;
-                if (folder == null && games != null)
+                // A USB drive keeps games the console's own storage had no room for.
+                if (folder == null && appId != 0)
                 {
-                    var here = await GameIn(games, appId);
-                    if (here != null)
+                    foreach (var place in await GameStorage.GamesFoldersAsync())
                     {
-                        lines.Add("mirror=" + here.Name);
-                        await WriteAsync(lines);
-                        folder = await MirrorAsync(here) ?? here;
-                        lines[lines.Count - 1] = "mirror=" + here.Name + " -> " + folder.Path;
+                        if (!place.Key.StartsWith(GameStorage.UsbPrefix, StringComparison.Ordinal)) continue;
+                        folder = await place.Value.TryGetItemAsync(appId.ToString()) as StorageFolder;
+                        if (folder != null)
+                        {
+                            lines.Add("usb=" + folder.Path);
+                            break;
+                        }
                     }
                 }
+
+                // The app's own storage. Updates keep it, so the game is run
+                // where it is rather than copied to the share first, which
+                // for an eleven-gigabyte game filled the share.
+                var games = await local.TryGetItemAsync("games") as StorageFolder;
+                if (folder == null && games != null) folder = await GameIn(games, appId);
                 if (appId == 0)
                     folder = folder ?? await local.TryGetItemAsync(Folder) as StorageFolder;
                 lines.AddRange(ShareNotes);
@@ -190,16 +198,17 @@ namespace Kiosk.Native
                 lines.Add("threads=" + ThreadRank.Note);
 
                 // Where the game thinks it lives, which is how it finds its data.
+                // The program may sit below the download's root (x64 for
+                // Hades, Binaries\Win64 for Unreal); the folder it is in is
+                // the game's own from here on, as it would be on a PC.
                 var exeName = "game.exe";
-                foreach (var file in await folder.GetFilesAsync())
+                var pick = await GameStorage.ExecutableAsync(folder);
+                if (pick != null)
                 {
-                    if (file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-                        !file.Name.StartsWith("Unity", StringComparison.OrdinalIgnoreCase))
-                    {
-                        exeName = file.Name;
-                        break;
-                    }
+                    folder = pick.Item1;
+                    exeName = pick.Item2.Name;
                 }
+                lines.Add("exe.folder=" + folder.Path);
                 // Reject unsupported architecture before mapping any dependency.
                 // A 32-bit image needs a separate execution/ABI path, not x64 thunks.
                 var executable = await folder.GetFileAsync(exeName);
@@ -818,12 +827,7 @@ namespace Kiosk.Native
                 foreach (var candidate in await parent.GetFoldersAsync())
                 {
                     if (appId != 0 && candidate.Name != appId.ToString()) continue;
-                    foreach (var file in await candidate.GetFilesAsync())
-                    {
-                        if (file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-                            !file.Name.StartsWith("Unity", StringComparison.OrdinalIgnoreCase))
-                            return candidate;
-                    }
+                    if (await GameStorage.ExecutableAsync(candidate) != null) return candidate;
                 }
             }
             catch
@@ -831,42 +835,6 @@ namespace Kiosk.Native
                 // An unreadable share is the same as an empty one here.
             }
             return null;
-        }
-
-        /// <summary>
-        /// Copies a game tree into the developer share, once. Downloading it
-        /// again on every build costs more than the whole rest of the cycle.
-        /// </summary>
-        private static async Task<StorageFolder> MirrorAsync(StorageFolder source)
-        {
-            var games = await DevelopmentFiles();
-            if (games == null) return null;
-            try
-            {
-                var target = await games.CreateFolderAsync(
-                    source.Name, CreationCollisionOption.OpenIfExists);
-                await CopyInto(source, target);
-                return target;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static async Task CopyInto(StorageFolder source, StorageFolder target)
-        {
-            foreach (var file in await source.GetFilesAsync())
-            {
-                if (await target.TryGetItemAsync(file.Name) != null) continue;
-                await file.CopyAsync(target, file.Name, NameCollisionOption.ReplaceExisting);
-            }
-            foreach (var child in await source.GetFoldersAsync())
-            {
-                var into = await target.CreateFolderAsync(
-                    child.Name, CreationCollisionOption.OpenIfExists);
-                await CopyInto(child, into);
-            }
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

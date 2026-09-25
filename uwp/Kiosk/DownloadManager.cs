@@ -94,6 +94,35 @@ namespace Kiosk
             }
         }
 
+        /// <summary>Another place with more room than this one, or null.</summary>
+        private static async Task<GamePlace> RoomierAsync(string place)
+        {
+            var places = await GameStorage.PlacesAsync();
+            ulong here = 0;
+            foreach (var candidate in places)
+                if (candidate.Id == place) here = candidate.Free ?? 0;
+            places.RemoveAll(candidate => candidate.Id == place || (candidate.Free ?? 0) <= here);
+            return GameStorage.Roomiest(places);
+        }
+
+        private static async Task MoveAsync(DownloadJob job, uint appId, string from, GamePlace to)
+        {
+            var games = await GameStorage.GamesFolderAsync(from, false);
+            var folder = games == null
+                ? null
+                : await games.TryGetItemAsync(appId.ToString()) as Windows.Storage.StorageFolder;
+            if (folder == null) return;
+            var lastRaised = 0;
+            await GameStorage.MoveAsync(folder, to.Id, moved =>
+            {
+                job.File = Texts.Get("downloads.moving", to.Name, Steam.SteamDownload.Human(moved));
+                var now = Environment.TickCount;
+                if (now - lastRaised < 500) return;
+                lastRaised = now;
+                Raise();
+            });
+        }
+
         /// <summary>
         /// download-error.txt: the whole exception, with the file it was on.
         /// The screen has room for one line; finding why a download stops
@@ -133,16 +162,34 @@ namespace Kiosk
                 var lastRaised = 0;
                 try
                 {
-                    await Steam.SteamDownload.RunAsync(session, appId, root, progress =>
+                    var place = root;
+                    for (var attempt = 0; ; attempt++)
                     {
-                        job.Percent = progress.Percent;
-                        job.File = progress.File ?? string.Empty;
-                        // Enough to move a bar, not a flood of redraws.
-                        var now = Environment.TickCount;
-                        if (now - lastRaised < 500) return;
-                        lastRaised = now;
-                        Raise();
-                    });
+                        try
+                        {
+                            await Steam.SteamDownload.RunAsync(session, appId, place, progress =>
+                            {
+                                job.Percent = progress.Percent;
+                                job.File = progress.File ?? string.Empty;
+                                // Enough to move a bar, not a flood of redraws.
+                                var now = Environment.TickCount;
+                                if (now - lastRaised < 500) return;
+                                lastRaised = now;
+                                Raise();
+                            });
+                            break;
+                        }
+                        catch (Steam.DiskFullException) when (attempt == 0)
+                        {
+                            // The console's storage filled: what is already
+                            // down moves to the roomiest other place, a USB
+                            // drive, and the download carries on there.
+                            var other = await RoomierAsync(place);
+                            if (other == null) throw;
+                            await MoveAsync(job, appId, place, other);
+                            place = other.Id;
+                        }
+                    }
                     job.Percent = 100;
                     job.Finished = true;
                 }

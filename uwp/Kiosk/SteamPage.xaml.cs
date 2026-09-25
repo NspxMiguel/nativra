@@ -410,21 +410,13 @@ namespace Kiosk
         private async Task LoadDownloadedAsync()
         {
             downloaded.Clear();
-            await ReadDownloadedAsync(ApplicationData.Current.LocalFolder);
-            try
-            {
-                await ReadDownloadedAsync(await StorageFolder.GetFolderFromPathAsync(@"D:\DevelopmentFiles"));
-            }
-            catch (Exception)
-            {
-                // The developer drive is optional and may not be accessible.
-            }
+            foreach (var place in await GameStorage.GamesFoldersAsync())
+                await ReadDownloadedAsync(place.Value);
         }
 
-        private async Task ReadDownloadedAsync(StorageFolder root)
+        /// <summary>Reads one "games" folder.</summary>
+        private async Task ReadDownloadedAsync(StorageFolder folder)
         {
-            var folder = await root.TryGetItemAsync(Steam.SteamDownload.DefaultFolder) as StorageFolder;
-            if (folder == null) return;
             foreach (var gameFolder in await folder.GetFoldersAsync())
             {
                 uint appId;

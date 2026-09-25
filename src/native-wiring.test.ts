@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 const probe = await Bun.file("uwp/Kiosk/Native/NativeProbe.cs").text();
+const storage = await Bun.file("uwp/Kiosk/GameStorage.cs").text();
 const tls = await Bun.file("uwp/Kiosk/Native/ThreadTls.cs").text();
 const loader = await Bun.file("uwp/Kiosk/Native/LoaderStubs.cs").text();
 const pe = await Bun.file("uwp/Kiosk/Native/PeImage.cs").text();
@@ -25,7 +26,12 @@ test("the game host is bound before asynchronous home loading or user input", ()
 test("game discovery is engine-independent and rejects unsupported architecture before mapping", () => {
   const discovery = probe.slice(probe.indexOf("private static async Task<StorageFolder> GameIn"));
   expect(discovery).not.toContain('TryGetItemAsync("UnityPlayer.dll")');
-  expect(discovery).toContain('file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)');
+  expect(discovery).toContain("GameStorage.ExecutableAsync(candidate)");
+  // The program is found below the root too, x64 first, and a 32-bit one is
+  // still returned so the architecture check can name the problem.
+  expect(storage).toContain('file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)');
+  expect(storage).toContain("== 0x8664");
+  expect(storage).toContain("return other;");
   expect(probe.indexOf("BitConverter.ToUInt16(executableBytes, peOffset + 4) != 0x8664")).toBeLessThan(probe.indexOf("PeImage.Load("));
   expect(probe).toContain("done.TrySetException(error);");
   expect(mainPage).toContain('Texts.Get("game.architecture")');

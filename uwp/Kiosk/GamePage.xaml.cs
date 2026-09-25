@@ -95,10 +95,9 @@ namespace Kiosk
         {
             try
             {
-                var games = await ApplicationData.Current.LocalFolder
-                    .TryGetItemAsync(Steam.SteamDownload.DefaultFolder) as StorageFolder;
-                if (games == null) return false;
-                return await games.TryGetItemAsync(game.AppId.ToString()) != null;
+                // Wherever it went: the console, the developer share or a USB drive.
+                var folder = await GameStorage.FindAsync(game.AppId);
+                return folder != null && await folder.TryGetItemAsync(".downloading") == null;
             }
             catch
             {
@@ -117,39 +116,42 @@ namespace Kiosk
                 return;
             }
 
+            // The console, then any USB drive; the roomiest is picked for
+            // him, since the console's own storage is the one that fills.
             Places.Clear();
-            Places.Add(new InstallPlace
-            {
-                Id = "local",
-                Name = Texts.Get("game.place.console"),
-                Free = await FreeAsync(ApplicationData.Current.LocalFolder),
-            });
+            var places = await GameStorage.PlacesAsync();
             try
             {
                 var dev = await StorageFolder.GetFolderFromPathAsync(@"D:\DevelopmentFiles");
-                Places.Add(new InstallPlace
+                places.Add(new GamePlace
                 {
                     Id = "dev",
                     Name = Texts.Get("game.place.dev"),
-                    Free = await FreeAsync(dev),
+                    Free = await Steam.SteamDownload.FreeBytesAsync(dev),
                 });
             }
             catch
             {
                 // The developer share is not always reachable from in here.
             }
+            var roomiest = GameStorage.Roomiest(places);
+            var chosen = 0;
+            foreach (var place in places)
+            {
+                if (place == roomiest) chosen = Places.Count;
+                Places.Add(new InstallPlace
+                {
+                    Id = place.Id,
+                    Name = place.Name,
+                    Free = place.Free.HasValue ? Steam.SteamDownload.Human(place.Free.Value) : "",
+                });
+            }
 
-            PlaceList.SelectedIndex = 0;
+            PlaceList.SelectedIndex = chosen;
             SheetName.Text = game.Name;
             SheetSize.Text = Texts.Get("game.sizeunknown");
             InstallSheet.Visibility = Visibility.Visible;
             SheetOk.Focus(FocusState.Programmatic);
-        }
-
-        private static async Task<string> FreeAsync(StorageFolder folder)
-        {
-            var free = await Steam.SteamDownload.FreeBytesAsync(folder);
-            return free.HasValue ? Steam.SteamDownload.Human(free.Value) : "";
         }
 
         private void OnCancelInstall(object sender, RoutedEventArgs e)

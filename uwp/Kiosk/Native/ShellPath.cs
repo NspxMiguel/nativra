@@ -48,7 +48,7 @@ namespace Kiosk.Native
             try
             {
                 var clean = path.StartsWith(@"\\?\", StringComparison.Ordinal) ? path.Substring(4) : path;
-                return System.IO.File.Exists(clean) || System.IO.Directory.Exists(clean);
+                return FileWatch.PathExists(clean);
             }
             catch
             {

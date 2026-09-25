@@ -6,6 +6,12 @@ using Windows.Storage;
 
 namespace Kiosk.Steam
 {
+    /// <summary>The place a game was going to has no room left for it.</summary>
+    public sealed class DiskFullException : Exception
+    {
+        public DiskFullException(string message) : base(message) { }
+    }
+
     public sealed class DownloadProgress
     {
         public string File { get; set; }
@@ -26,22 +32,17 @@ namespace Kiosk.Steam
 
         public static async Task<StorageFolder> TargetAsync(string root, uint appId)
         {
-            var baseFolder = ApplicationData.Current.LocalFolder;
-            if (root == "dev")
+            StorageFolder games;
+            try
             {
-                // The developer share is the roomy one; LocalState is the app's
-                // own corner and fills up first.
-                try
-                {
-                    baseFolder = await StorageFolder.GetFolderFromPathAsync(@"D:\DevelopmentFiles");
-                }
-                catch
-                {
-                    baseFolder = ApplicationData.Current.LocalFolder;
-                }
+                games = await GameStorage.GamesFolderAsync(root, true);
             }
-            var games = await baseFolder.CreateFolderAsync(
-                DefaultFolder, CreationCollisionOption.OpenIfExists);
+            catch when (root != "local")
+            {
+                // A drive pulled out or a share not reachable: the app's own
+                // storage still takes the game.
+                games = await GameStorage.GamesFolderAsync("local", true);
+            }
             return await games.CreateFolderAsync(
                 appId.ToString(), CreationCollisionOption.OpenIfExists);
         }
@@ -131,7 +132,7 @@ namespace Kiosk.Steam
                 var free = await FreeBytesAsync(folder);
                 if (!resuming && free.HasValue && needed > 0 && (ulong)needed > free.Value)
                 {
-                    throw new Exception(Texts.Get("steam.nospace",
+                    throw new DiskFullException(Texts.Get("steam.nospace",
                         Human((ulong)needed - free.Value), Human(free.Value)));
                 }
 
@@ -221,7 +222,7 @@ namespace Kiosk.Steam
                 catch (Exception error) when (error.HResult == DiskFull)
                 {
                     var left = await FreeBytesAsync(folder);
-                    throw new Exception(Texts.Get("steam.diskfull",
+                    throw new DiskFullException(Texts.Get("steam.diskfull",
                         left.HasValue ? Human(left.Value) : "0 B"));
                 }
                 if (licensed == 0) throw new Exception("no depot of this app is licensed to this account");

@@ -61,11 +61,49 @@ namespace Kiosk.Native
                 || lower.EndsWith(".xml");
         }
 
-        [DllImport("api-ms-win-core-file-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        // The FromApp forms reach what the app may open directly and, through
+        // the broker, what it may only reach by capability: a game on a USB
+        // drive. Where direct access works they behave like the plain calls.
+        private const string FromApp = "api-ms-win-core-file-fromapp-l1-1-0.dll";
+
+        [DllImport(FromApp, EntryPoint = "FindFirstFileExFromAppW", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern IntPtr FindFirstFileExW(string name, int level, IntPtr data, int search, IntPtr filter, uint flags);
 
-        [DllImport("api-ms-win-core-file-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern uint GetFileAttributesW(string name);
+        [DllImport(FromApp, CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool GetFileAttributesExFromAppW(string name, int level, IntPtr data);
+
+        [DllImport(FromApp, CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool MoveFileFromAppW(string from, string to);
+
+        [DllImport(FromApp, CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool DeleteFileFromAppW(string name);
+
+        [DllImport(FromApp, CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool CopyFileFromAppW(string from, string to, bool failIfExists);
+
+        private const uint InvalidAttributes = uint.MaxValue;
+        private const uint MoveReplaceExisting = 0x1;
+        private const uint MoveCopyAllowed = 0x2;
+
+        private static uint GetFileAttributesW(string name)
+        {
+            // WIN32_FILE_ATTRIBUTE_DATA is 36 bytes; the attributes lead it.
+            var data = Marshal.AllocHGlobal(40);
+            try
+            {
+                return GetFileAttributesExFromAppW(name, 0, data)
+                    ? (uint)Marshal.ReadInt32(data)
+                    : InvalidAttributes;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(data);
+            }
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int MoveExDelegate(IntPtr from, IntPtr to, uint flags);
+        private static MoveExDelegate moveEx;
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
         private delegate IntPtr FindFirstDelegate(IntPtr name, IntPtr data);
@@ -217,7 +255,8 @@ namespace Kiosk.Native
             WatchLookups(imports);
             BridgeMappings(imports);
             real = null;
-            var address = imports.SystemAddress("kernel32.dll", "CreateFileW");
+            var address = imports.SystemAddress(FromApp, "CreateFileFromAppW");
+            if (address == IntPtr.Zero) address = imports.SystemAddress("kernel32.dll", "CreateFileW");
             if (address != IntPtr.Zero)
             {
                 real = Marshal.GetDelegateForFunctionPointer<CreateFileDelegate>(address);
@@ -272,6 +311,121 @@ namespace Kiosk.Native
             {
                 imports.Overrides[module + "!CreateFileW"] =
                     Marshal.GetFunctionPointerForDelegate(wide);
+            }
+            BrokerFileCalls(imports);
+        }
+
+        /// <summary>
+        /// The rest of what a game does to files, sent to the FromApp forms,
+        /// which take the same arguments. MoveFileExW has no such form, so its
+        /// two common flags are done by hand.
+        /// </summary>
+        private static void BrokerFileCalls(SystemImports imports)
+        {
+            var same = new[]
+            {
+                new[] { "CreateDirectoryW", "CreateDirectoryFromAppW" },
+                new[] { "RemoveDirectoryW", "RemoveDirectoryFromAppW" },
+                new[] { "DeleteFileW", "DeleteFileFromAppW" },
+                new[] { "GetFileAttributesExW", "GetFileAttributesExFromAppW" },
+                new[] { "SetFileAttributesW", "SetFileAttributesFromAppW" },
+                new[] { "MoveFileW", "MoveFileFromAppW" },
+                new[] { "CopyFileW", "CopyFileFromAppW" },
+                new[] { "ReplaceFileW", "ReplaceFileFromAppW" },
+                new[] { "CreateFile2", "CreateFile2FromAppW" },
+            };
+            moveEx = (from, to, flags) =>
+            {
+                var source = from == IntPtr.Zero ? null : Marshal.PtrToStringUni(from);
+                var target = to == IntPtr.Zero ? null : Marshal.PtrToStringUni(to);
+                if (source == null) return 0;
+                // A null target means "delete at reboot", which a game only
+                // asks for to clean up; deleting now is the nearest thing.
+                if (target == null) return DeleteFileFromAppW(source) ? 1 : 0;
+                if ((flags & MoveReplaceExisting) != 0 && PathExists(target)) DeleteFileFromAppW(target);
+                if (MoveFileFromAppW(source, target)) return 1;
+                if ((flags & MoveCopyAllowed) == 0 || !CopyFileFromAppW(source, target, false)) return 0;
+                DeleteFileFromAppW(source);
+                return 1;
+            };
+            var moveExAddress = Marshal.GetFunctionPointerForDelegate(moveEx);
+            foreach (var module in new[]
+                     {
+                         "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll",
+                         "api-ms-win-core-file-l1-1-0.dll",
+                         "api-ms-win-core-file-l1-2-0.dll",
+                         "api-ms-win-core-file-l1-2-1.dll",
+                         "api-ms-win-core-file-l2-1-0.dll",
+                         "api-ms-win-core-file-l2-1-1.dll",
+                     })
+            {
+                foreach (var pair in same)
+                {
+                    var target = imports.SystemAddress(FromApp, pair[1]);
+                    if (target != IntPtr.Zero) imports.Overrides[module + "!" + pair[0]] = target;
+                }
+                imports.Overrides[module + "!MoveFileExW"] = moveExAddress;
+            }
+        }
+
+        /// <summary>File or folder, found through the broker as well.</summary>
+        public static bool PathExists(string path) =>
+            !string.IsNullOrEmpty(path) && GetFileAttributesW(path) != InvalidAttributes;
+
+        [DllImport(FromApp, CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateFileFromAppW(
+            string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+
+        [DllImport("api-ms-win-core-handle-l1-1-0.dll")]
+        private static extern bool CloseHandle(IntPtr handle);
+
+        /// <summary>
+        /// A whole file by path, wherever it is: System.IO is refused outside
+        /// the app's folders, and a game on a USB drive is outside them.
+        /// </summary>
+        public static byte[] ReadAll(string path)
+        {
+            try
+            {
+                return System.IO.File.ReadAllBytes(path);
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+            const uint GenericRead = 0x80000000, ShareRead = 1, OpenExisting = 3;
+            var handle = CreateFileFromAppW(path, GenericRead, ShareRead, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (handle == InvalidHandle || handle == IntPtr.Zero)
+                throw new System.IO.FileNotFoundException("cannot open " + path + " (" + Marshal.GetLastWin32Error() + ")");
+            try
+            {
+                if (!GetFileSizeEx(handle, out var size)) throw new System.IO.IOException("cannot size " + path);
+                var bytes = new byte[size];
+                var buffer = Marshal.AllocHGlobal(new IntPtr(Math.Max(1, size)));
+                var read = Marshal.AllocHGlobal(4);
+                try
+                {
+                    long done = 0;
+                    while (done < size)
+                    {
+                        var chunk = (uint)Math.Min(size - done, 16 * 1024 * 1024);
+                        if (!ReadFile(handle, buffer + (int)done, chunk, read, IntPtr.Zero))
+                            throw new System.IO.IOException("cannot read " + path);
+                        var got = Marshal.ReadInt32(read);
+                        if (got == 0) break;
+                        done += got;
+                    }
+                    Marshal.Copy(buffer, bytes, 0, (int)done);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(read);
+                    Marshal.FreeHGlobal(buffer);
+                }
+                return bytes;
+            }
+            finally
+            {
+                CloseHandle(handle);
             }
         }
     }

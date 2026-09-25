@@ -211,6 +211,14 @@ update, which keeps downloaded games and the Steam sign-in. Games read the
 controller through XInput; hold View + Menu to switch between controller and
 mouse-and-keyboard mode.
 
+The console's own app storage is small and fills first. A USB drive plugged
+into the Xbox shows up in the install sheet with its free space and is chosen
+by default when it has the most room; games go to `Nativra\games` on it and
+run from there. A download that fills its disk moves what it already has to
+the roomier drive and carries on, and an interrupted download resumes from
+where it stopped the next time the app opens. Games borrowed through Steam
+Families download like owned ones.
+
 ## Licence
 
 Free to use, change and share. Not to sell — see [LICENSE](LICENSE) and

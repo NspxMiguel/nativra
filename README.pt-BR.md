@@ -195,6 +195,14 @@ nova como atualização, que preserva os jogos baixados e o login da Steam. Os
 jogos leem o controle por XInput; segure View + Menu para alternar entre o
 modo controle e o modo mouse e teclado.
 
+O armazenamento do próprio app no console é pequeno e enche primeiro. Um
+pendrive ou HD externo ligado ao Xbox aparece na tela de instalação com o
+espaço livre e já vem escolhido quando é o que tem mais espaço; os jogos vão
+para `Nativra\games` nele e rodam de lá. Um download que enche o disco move o
+que já baixou para o outro drive e continua, e um download interrompido
+continua de onde parou na próxima vez que o app abre. Jogos emprestados pela
+Família Steam baixam como os seus.
+
 Nunca publique `steam.json`, tokens, QR de login, credenciais, dumps de memória
 ou arquivos dos jogos em issues. Revise os logs antes de compartilhar.
 

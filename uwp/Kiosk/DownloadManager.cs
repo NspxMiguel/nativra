@@ -12,6 +12,8 @@ namespace Kiosk
         public int Percent;
         public string File = string.Empty;
         public bool Running;
+        /// <summary>Moving what is already down to a roomier place.</summary>
+        public bool Moving;
         public bool Finished;
         public string Error;
     }
@@ -105,6 +107,32 @@ namespace Kiosk
             return GameStorage.Roomiest(places);
         }
 
+        /// <summary>
+        /// A move cut short leaves part of a game in the old place. Before
+        /// downloading, whatever is elsewhere is brought to where the
+        /// download goes, so nothing is fetched twice or stranded.
+        /// </summary>
+        private static async Task GatherAsync(DownloadJob job, uint appId, string place)
+        {
+            try
+            {
+                var target = new GamePlace { Id = place, Name = place };
+                foreach (var candidate in await GameStorage.PlacesAsync())
+                    if (candidate.Id == place) target = candidate;
+                foreach (var pair in await GameStorage.GamesFoldersAsync())
+                {
+                    if (pair.Key == place) continue;
+                    if (!(await pair.Value.TryGetItemAsync(appId.ToString()) is Windows.Storage.StorageFolder stray)) continue;
+                    if (await stray.TryGetItemAsync(".downloaded") != null) continue;
+                    await MoveAsync(job, appId, pair.Key, target);
+                }
+            }
+            catch
+            {
+                // Gathering is tidying; the download itself still runs.
+            }
+        }
+
         private static async Task MoveAsync(DownloadJob job, uint appId, string from, GamePlace to)
         {
             var games = await GameStorage.GamesFolderAsync(from, false);
@@ -113,14 +141,22 @@ namespace Kiosk
                 : await games.TryGetItemAsync(appId.ToString()) as Windows.Storage.StorageFolder;
             if (folder == null) return;
             var lastRaised = 0;
-            await GameStorage.MoveAsync(folder, to.Id, moved =>
+            job.Moving = true;
+            try
             {
-                job.File = Texts.Get("downloads.moving", to.Name, Steam.SteamDownload.Human(moved));
-                var now = Environment.TickCount;
-                if (now - lastRaised < 500) return;
-                lastRaised = now;
-                Raise();
-            });
+                await GameStorage.MoveAsync(folder, to.Id, moved =>
+                {
+                    job.File = Texts.Get("downloads.moving", to.Name, Steam.SteamDownload.Human(moved));
+                    var now = Environment.TickCount;
+                    if (now - lastRaised < 500) return;
+                    lastRaised = now;
+                    Raise();
+                });
+            }
+            finally
+            {
+                job.Moving = false;
+            }
         }
 
         /// <summary>
@@ -163,6 +199,7 @@ namespace Kiosk
                 try
                 {
                     var place = root;
+                    await GatherAsync(job, appId, place);
                     for (var attempt = 0; ; attempt++)
                     {
                         try

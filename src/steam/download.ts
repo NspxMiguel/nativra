@@ -54,7 +54,16 @@ export async function plan(
 
   const depots: DepotPlan[] = [];
   for (const depot of wanted) {
-    const key = await cm.depotKey(appId, depot.id);
+    // A depot the account holds no license for (a DLC or soundtrack it does
+    // not own) is refused a key. That is not the game failing to download;
+    // it is simply not part of what this account gets.
+    let key: Uint8Array;
+    try {
+      key = await cm.depotKey(appId, depot.id);
+    } catch (error) {
+      if (error instanceof SteamError && wanted.length > 1) continue;
+      throw error;
+    }
     const code = await manifestRequestCode(
       cm,
       appId,
@@ -76,6 +85,7 @@ export async function plan(
     }
     depots.push({ depot, manifest, key, names });
   }
+  if (depots.length === 0) throw new SteamError(`no depot of app ${appId} is licensed to this account`);
   return { name, depots };
 }
 

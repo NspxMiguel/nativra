@@ -191,6 +191,21 @@ export async function runSteam(root: string, args: string[]): Promise<void> {
         );
       }
       console.log(human(Number(total)));
+      // The files that give an engine away, so a game can be chosen for
+      // what it would exercise before anything is downloaded.
+      const telling = /(\.exe$|unityplayer\.dll$|gameassembly\.dll$|-shipping\.exe$|adobe air|\.pak$|mono-2\.0|\.pck$|data\.win$|fna\.dll$|monogame|xna)/i;
+      const seen = new Set<string>();
+      for (const item of depots) {
+        for (const name of item.names.values()) {
+          const clean = name.replace(/\\/g, "/");
+          const depth = clean.split("/").length;
+          if (depth > 3 || !telling.test(clean)) continue;
+          const shown = clean.toLowerCase().endsWith(".pak") ? clean.replace(/[^/]*$/, "*.pak") : clean;
+          if (seen.has(shown) || seen.size >= 12) continue;
+          seen.add(shown);
+          console.log("  " + shown);
+        }
+      }
       return;
     }
 

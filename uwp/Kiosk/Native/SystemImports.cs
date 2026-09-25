@@ -126,9 +126,34 @@ namespace Kiosk.Native
             return null;
         }
 
+        /// <summary>
+        /// Libraries the console has only as shells: most of what they export
+        /// answers "not supported". Whether one is already in the process
+        /// depends on what ran first — Windows.Gaming.Input pulls in USER32,
+        /// SETUPAPI and HID once a pad is connected — and when it was, the game
+        /// got the console's MonitorFromWindow, which fails, could not pick a
+        /// resolution and quit after its first frame, with its audio still
+        /// playing over "Starting the game". These always take the bridge's
+        /// answers, the way every run that worked did.
+        /// </summary>
+        private static readonly HashSet<string> NeverFromSystem =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "USER32.dll", "SETUPAPI.dll", "HID.DLL", "IMM32.dll", "dwmapi.dll",
+            };
+
+        /// <summary>Whether a library always answers from the bridge.</summary>
+        public static bool IsShell(string name) => name != null && NeverFromSystem.Contains(name);
+
         private IntPtr Module(string name)
         {
             if (modules.TryGetValue(name, out var handle)) return handle;
+            if (NeverFromSystem.Contains(name))
+            {
+                modules[name] = IntPtr.Zero;
+                lock (MissingModules) MissingModules.Add(name);
+                return IntPtr.Zero;
+            }
 
             handle = GetModuleHandleW(name);
             if (handle == IntPtr.Zero)

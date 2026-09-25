@@ -51,6 +51,9 @@ export class CmClient {
   private pending = new Map<string, Pending>();
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private closed = false;
+  /** Sees every message, answered or not; for probes that study the protocol. */
+  onMessage: ((emsg: number, header: Message, body: Message) => void) | null =
+    null;
 
   /** Steam publishes its own websocket endpoints; picking one is a plain GET. */
   static async endpoints(): Promise<string[]> {
@@ -137,6 +140,8 @@ export class CmClient {
 
     // A reply carries back the job number the request went out with; a service
     // call is matched by name instead, since Steam answers those on job id too.
+    this.onMessage?.(emsg, header, read(body));
+
     const jobTarget = num(header, 11);
     const key =
       jobTarget !== 0n && jobTarget !== 0xffffffffffffffffn
@@ -252,6 +257,19 @@ export class CmClient {
     const job = this.nextJob++;
     const header = this.baseHeader().fixed64(10, job);
     return { header, key: `job:${job}` };
+  }
+
+  /** Any message by number, answered on its job; for protocol probes. */
+  async request(emsg: number, body: Uint8Array): Promise<Message> {
+    const { header, key } = this.jobHeader();
+    const waiting = this.await_(key, 15000);
+    this.send(emsg, body, header);
+    return (await waiting).body;
+  }
+
+  /** A message nobody answers by job. */
+  notify(emsg: number, body: Uint8Array): void {
+    this.send(emsg, body, this.baseHeader());
   }
 
   /** A unified service call, addressed by name rather than by message number. */

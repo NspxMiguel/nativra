@@ -221,7 +221,17 @@ export async function runSteam(root: string, args: string[]): Promise<void> {
 
       console.log(t("steam.planning", { name: String(appId) }));
       const { name, depots } = await plan(cm, appId, servers, only);
-      const total = depots.reduce((n, d) => n + Number(d.manifest.totalBytes), 0);
+      // With --only, what has to fit is the files it picks, not the game.
+      const total = depots.reduce(
+        (n, d) =>
+          n +
+          (onlyFiles
+            ? d.manifest.files
+                .filter((f) => onlyFiles.test(d.names.get(f) ?? ""))
+                .reduce((m, f) => m + Number(f.size), 0)
+            : Number(d.manifest.totalBytes)),
+        0,
+      );
       const target = join(baseDir, String(appId));
 
       // Filling his disk is a real way to break the machine, so the check

@@ -18,7 +18,7 @@ idea, with one addition for games not tried yet.
 | Hades | 1145360 | Supergiant engine (D3D11, SDL2, FMOD) | ⬜ Untested | — | Downloading. |
 | Little Nightmares | 424840 | Unreal Engine 4 | ⬜ Untested | — | Audio uses XAudio 2.7 from the 2010 DirectX redistributable, which the console lacks. |
 | WAVESHAPER | 562260 | 32-bit Windows | ⛔ Not working | 2026-09-23 | 32-bit executables are not supported. |
-| LEGO Jurassic World | 352400 | TT Games (D3D11) | ⬜ Untested | — | Borrowed through Steam Families. Downloading a borrowed game needs the family-sharing authorization the official client performs; being implemented. |
+| LEGO Jurassic World | 352400 | TT Games (D3D11, x64 `LEGOJurassicWorld_DX11.exe`) | ⬜ Untested | — | Borrowed through Steam Families. Borrowed games download like owned ones: the family license arrives with the account, and the game depot (352401) is keyed normally. 14 GB. |
 
 Performance note: Xbox Developer Mode runs sideloaded apps as *apps* unless
 `DefaultUWPContentTypeToGame` is on (`bun src/xbdev.ts gamemode`, then

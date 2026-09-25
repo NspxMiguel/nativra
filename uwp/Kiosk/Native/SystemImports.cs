@@ -218,6 +218,22 @@ namespace Kiosk.Native
         public Dictionary<string, long> Answers { get; } =
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Maps a DLL from the game's folder by name; true when it did.</summary>
+        public Func<string, bool> MapMissing;
+
+        private readonly HashSet<string> notShipped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Asked once per name: most imports are system libraries.</summary>
+        private bool WantsMapping(string module)
+        {
+            lock (notShipped)
+            {
+                if (notShipped.Contains(module)) return false;
+                notShipped.Add(module);
+                return true;
+            }
+        }
+
         public IntPtr Resolve(string module, string function)
         {
             if (Overrides.TryGetValue(module + "!" + function, out var ours))
@@ -227,6 +243,21 @@ namespace Kiosk.Native
             }
 
             if (loaded.TryGetValue(module, out var image))
+            {
+                var own = image.Export(function);
+                if (own != IntPtr.Zero)
+                {
+                    System.Threading.Interlocked.Increment(ref fromImages);
+                    return own;
+                }
+            }
+
+            // A library the game ships, named by an import before anything
+            // loaded it: an engine DLL the program opens at run time imports
+            // SDL2 and FMOD, which nothing had mapped yet. It is mapped now,
+            // its own imports first, as Windows would.
+            if (image == null && MapMissing != null && WantsMapping(module) && MapMissing(module)
+                && loaded.TryGetValue(module, out image))
             {
                 var own = image.Export(function);
                 if (own != IntPtr.Zero)

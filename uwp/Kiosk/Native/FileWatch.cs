@@ -19,7 +19,7 @@ namespace Kiosk.Native
     /// </summary>
     internal static class FileWatch
     {
-        private const int Keep = 40;
+        private const int Keep = 120;
         private static readonly IntPtr InvalidHandle = new IntPtr(-1);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -60,11 +60,58 @@ namespace Kiosk.Native
                 || lower.EndsWith("boot.config");
         }
 
+        [DllImport("api-ms-win-core-file-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr FindFirstFileExW(string name, int level, IntPtr data, int search, IntPtr filter, uint flags);
+
+        [DllImport("api-ms-win-core-file-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern uint GetFileAttributesW(string name);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
+        private delegate IntPtr FindFirstDelegate(IntPtr name, IntPtr data);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
+        private delegate IntPtr FindFirstExDelegate(IntPtr name, int level, IntPtr data, int search, IntPtr filter, uint flags);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
+        private delegate uint AttributesDelegate(IntPtr name);
+        private static FindFirstDelegate findFirst;
+        private static FindFirstExDelegate findFirstEx;
+        private static AttributesDelegate attributes;
+
+        /// <summary>
+        /// The lookups that decide whether a program believes a file exists.
+        /// Watched for the same reason as opens: a failed one, with its path,
+        /// says what the program looked for and where.
+        /// </summary>
+        private static void WatchLookups(SystemImports imports)
+        {
+            findFirstEx = (name, level, data, search, filter, flags) =>
+            {
+                var path = name == IntPtr.Zero ? null : Marshal.PtrToStringUni(name);
+                var found = FindFirstFileExW(path, level, data, search, filter, flags);
+                if (found == InvalidHandle) Say("find failed " + (path ?? "?") + " (" + Marshal.GetLastWin32Error() + ")");
+                return found;
+            };
+            findFirst = (name, data) => findFirstEx(name, 0, data, 0, IntPtr.Zero, 0);
+            attributes = name =>
+            {
+                var path = name == IntPtr.Zero ? null : Marshal.PtrToStringUni(name);
+                var result = GetFileAttributesW(path);
+                if (result == uint.MaxValue) Say("attributes failed " + (path ?? "?") + " (" + Marshal.GetLastWin32Error() + ")");
+                return result;
+            };
+            foreach (var module in new[] { "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "api-ms-win-core-file-l1-1-0.dll" })
+            {
+                imports.Overrides[module + "!FindFirstFileW"] = Marshal.GetFunctionPointerForDelegate(findFirst);
+                imports.Overrides[module + "!FindFirstFileExW"] = Marshal.GetFunctionPointerForDelegate(findFirstEx);
+                imports.Overrides[module + "!GetFileAttributesW"] = Marshal.GetFunctionPointerForDelegate(attributes);
+            }
+        }
+
         /// <summary>Answers an open by name, or zero to let it through.</summary>
         public static Func<IntPtr, IntPtr> Intercept;
 
         public static void Install(SystemImports imports)
         {
+            WatchLookups(imports);
             real = null;
             var address = imports.SystemAddress("kernel32.dll", "CreateFileW");
             if (address != IntPtr.Zero)

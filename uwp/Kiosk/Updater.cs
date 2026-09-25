@@ -93,6 +93,14 @@ namespace Kiosk
                     Asset, CreationCollisionOption.ReplaceExisting);
                 await FileIO.WriteBufferAsync(file, bytes);
 
+                // Installing restarts the app, which would cut a game download
+                // or a game in play; the update waits for both to be over.
+                while (DownloadManager.Active() != null || Native.NativeProbe.GameRunning)
+                {
+                    Note = "build " + newest + " waits for downloads and games to finish";
+                    await Task.Delay(TimeSpan.FromSeconds(30));
+                }
+
                 status?.Invoke(Texts.Get("update.installing", newest));
                 Note = "installing build " + newest;
                 if (!await portal.InstallAsync(file))

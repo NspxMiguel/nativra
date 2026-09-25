@@ -292,6 +292,7 @@ namespace Kiosk
             // that game itself. It is how a build gets something to load
             // without a hundred megabytes crossing the network by hand.
             await AutoDownloadAsync();
+            await ResumeInterruptedAsync();
 
             // A newer build on GitHub installs itself as an update, which
             // keeps the games and the Steam sign-in. Only here, on the home
@@ -484,9 +485,13 @@ namespace Kiosk
                 var text = (await FileIO.ReadTextAsync(file)).Trim();
                 if (!uint.TryParse(text, out var appId)) return;
 
+                // Only a finished game is skipped; a folder left half-way is
+                // exactly what the download picks up again.
                 var games = await ApplicationData.Current.LocalFolder
                     .TryGetItemAsync("games") as StorageFolder;
-                if (games != null && await games.TryGetItemAsync(appId.ToString()) != null)
+                if (games != null
+                    && await games.TryGetItemAsync(appId.ToString()) is StorageFolder existing
+                    && await existing.TryGetItemAsync(".downloaded") != null)
                 {
                     return;
                 }
@@ -507,6 +512,57 @@ namespace Kiosk
             catch (Exception error)
             {
                 StatusText.Text = Texts.Get("steam.downloadfailed", "auto", error.Message);
+            }
+        }
+
+        /// <summary>
+        /// Picks up every download the last session left half-way: a game
+        /// folder with ".downloading" and no ".downloaded". The console can end
+        /// the app at any time (a system update, a crash, the power), and a
+        /// large game should not need someone to find it and press download
+        /// again. Chunks already on disk are kept, so this costs only the rest.
+        /// </summary>
+        private async Task ResumeInterruptedAsync()
+        {
+            try
+            {
+                var games = await ApplicationData.Current.LocalFolder
+                    .TryGetItemAsync("games") as StorageFolder;
+                if (games == null) return;
+
+                var pending = new List<uint>();
+                foreach (var folder in await games.GetFoldersAsync())
+                {
+                    if (!uint.TryParse(folder.Name, out var appId)) continue;
+                    if (await folder.TryGetItemAsync(".downloading") == null) continue;
+                    if (await folder.TryGetItemAsync(".downloaded") != null) continue;
+                    if (DownloadManager.Find(appId)?.Running == true) continue;
+                    pending.Add(appId);
+                }
+                if (pending.Count == 0) return;
+
+                var session = await SteamSession.LoadAsync();
+                if (!session.IsSignedIn) return;
+
+                // Names make the downloads screen readable; the number is
+                // enough when the library cannot be reached.
+                var names = new Dictionary<uint, string>();
+                try
+                {
+                    foreach (var game in await SteamLibrary.OwnedAsync(session)) names[game.AppId] = game.Name;
+                    foreach (var game in await SteamLibrary.FamilyAsync(session)) names[game.AppId] = game.Name;
+                }
+                catch
+                {
+                }
+
+                foreach (var appId in pending)
+                    DownloadManager.Start(session, appId,
+                        names.TryGetValue(appId, out var name) ? name : appId.ToString(), "local");
+            }
+            catch (Exception error)
+            {
+                StatusText.Text = Texts.Get("steam.downloadfailed", "resume", error.Message);
             }
         }
 

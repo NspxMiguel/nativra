@@ -29,7 +29,7 @@
 
 [Primeiro marco](docs/progress/2026-09-23.md) ·
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
-[Como contribuir](docs/CONTRIBUTING.md) · [Licença](LICENSE)
+[Compatibilidade de jogos](docs/COMPATIBILITY.md) · [Como contribuir](docs/CONTRIBUTING.md) · [Licença](LICENSE)
 
 > [!IMPORTANT]
 > **Prioridade atual: rodar jogos de PC no próprio Xbox.** Neste momento, estou

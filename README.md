@@ -39,6 +39,7 @@ Mode. Native PC-game execution is its main technical focus, not its whole purpos
 > not working yet while this core functionality takes priority. Their presence
 > in the interface or roadmap does not mean they are ready to use.
 
+[Game compatibility](docs/COMPATIBILITY.md) ·
 [First milestone](docs/progress/2026-09-23.md) ·
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
 [Contributing](docs/CONTRIBUTING.md) · [License](LICENSE)

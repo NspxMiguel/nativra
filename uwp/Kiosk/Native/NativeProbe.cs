@@ -249,6 +249,7 @@ namespace Kiosk.Native
                 SuspendWatch.Install(imports);
                 ProcessStubs.Install(imports);
                 WindowStubs.Install(imports);
+                WindowStubs.RecentCalls = () => imports.Shim.Recent();
                 WindowMessages.Install(imports);
                 RawInputBridge.Install(imports);
                 HidBridge.Install(imports);

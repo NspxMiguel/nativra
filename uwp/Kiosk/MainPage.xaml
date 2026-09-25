@@ -263,7 +263,7 @@
             <TranslateTransform x:Name="GamePointerTransform"/>
           </Path.RenderTransform>
         </Path>
-        <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="40,0,40,32" Padding="18,10" Background="{StaticResource DiagnosticBackground}" CornerRadius="{StaticResource RadiusCard}">
+        <Border x:Name="GameInputHintCard" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="40,32,40,0" Padding="18,10" Background="{StaticResource DiagnosticBackground}" CornerRadius="{StaticResource RadiusCard}" Visibility="Collapsed">
           <TextBlock x:Name="GameInputHint" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource DiagnosticForeground}"/>
         </Border>
         <Border x:Name="GameDiagnosticsPanel" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,100,40,0" Padding="18,12" CornerRadius="{StaticResource RadiusCard}" Background="{StaticResource DiagnosticBackground}" MaxWidth="720">

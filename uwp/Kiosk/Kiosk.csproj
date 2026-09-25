@@ -122,6 +122,7 @@
     <Compile Include="Native\RawInputBridge.cs" />
     <Compile Include="Texts.cs" />
     <Compile Include="Updater.cs" />
+    <Compile Include="DownloadManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
 

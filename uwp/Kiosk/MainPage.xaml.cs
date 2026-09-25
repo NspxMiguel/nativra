@@ -152,6 +152,7 @@ namespace Kiosk
         {
             InitializeComponent();
             Native.PadBridge.Watch();
+            DownloadManager.Changed += OnDownloadsChanged;
             InitializeGameHost();
             InitializeDiagnostics();
             ApplyStaticText();
@@ -480,14 +481,7 @@ namespace Kiosk
                 if (!session.IsSignedIn) return;
 
                 StatusText.Text = Texts.Get("steam.starting", text);
-                await Steam.SteamDownload.RunAsync(session, appId, "local", progress =>
-                {
-                    var _ = Dispatcher.RunAsync(
-                        Windows.UI.Core.CoreDispatcherPriority.Low,
-                        () => StatusText.Text = Texts.Get(
-                            "steam.downloading", text, progress.Percent, progress.File));
-                });
-                StatusText.Text = Texts.Get("steam.downloaded", text);
+                DownloadManager.Start(session, appId, text, "local");
             }
             catch (Exception error) when (SteamAuth.MeansSignedOut(error))
             {
@@ -634,6 +628,44 @@ namespace Kiosk
         /// on a television there is no menu bar to fall back on, so the way
         /// between screens has to be permanently on screen.
         /// </summary>
+        /// <summary>Every download this session, running ones first.</summary>
+        private void ShowDownloads()
+        {
+            DownloadsTitle.Text = Texts.Get("downloads.title");
+            var jobs = DownloadManager.Snapshot();
+            if (jobs.Count == 0)
+            {
+                DownloadsList.Text = Texts.Get("downloads.empty");
+                return;
+            }
+            var lines = new System.Text.StringBuilder();
+            jobs.Sort((a, b) => b.Running.CompareTo(a.Running));
+            foreach (var job in jobs)
+            {
+                var state = job.Running ? Texts.Get("downloads.running", job.Percent)
+                    : job.Finished ? Texts.Get("downloads.done")
+                    : Texts.Get("downloads.failed", job.Error ?? string.Empty);
+                lines.AppendLine(job.Name + "  ·  " + state);
+            }
+            DownloadsList.Text = lines.ToString();
+        }
+
+        /// <summary>
+        /// A running download shows on the home screen's status line, and the
+        /// Downloads screen follows it while it is open.
+        /// </summary>
+        private void OnDownloadsChanged()
+        {
+            var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
+            {
+                if (Native.NativeProbe.GameRunning) return;
+                var active = DownloadManager.Active();
+                if (active != null)
+                    StatusText.Text = Texts.Get("steam.downloading", active.Name, active.Percent, active.File);
+                if (DownloadsScreen.Visibility == Visibility.Visible) ShowDownloads();
+            });
+        }
+
         private void OnDockClicked(object sender, RoutedEventArgs e)
         {
             if (gameLaunchPending || Native.NativeProbe.GameRunning) return;
@@ -656,8 +688,11 @@ namespace Kiosk
                 where == "library" ? Visibility.Visible : Visibility.Collapsed;
             EmulatorScreen.Visibility =
                 where == "emulators" ? Visibility.Visible : Visibility.Collapsed;
+            DownloadsScreen.Visibility =
+                where == "downloads" ? Visibility.Visible : Visibility.Collapsed;
+            if (where == "downloads") ShowDownloads();
 
-            var built = where == "library" || where == "emulators";
+            var built = where == "library" || where == "emulators" || where == "downloads";
             StatusText.Text = built ? string.Empty : Texts.Get("status.notyet", where);
         }
 

@@ -109,10 +109,26 @@ fi
 NEW_VERSION=$(printf '%s\n' $FILES | grep -oE '_[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+_' | head -1 | tr -d _)
 if [ "${FRESH:-off}" != "on" ] && bun src/xbdev.ts apps 2>/dev/null | grep Nativra | grep -q " $NEW_VERSION"; then
   echo "   $NEW_VERSION is already installed; keeping it"
-elif ! bun src/xbdev.ts install $FILES $DEPS || ! bun src/xbdev.ts apps 2>/dev/null | grep -q Nativra; then
-  echo "   update refused or left nothing registered; replacing the package"
-  bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
-  bun src/xbdev.ts install $FILES $DEPS
+elif ! bun src/xbdev.ts install $FILES $DEPS; then
+  # Replacing wipes the downloaded games and the Steam sign-in, so it needs
+  # proof: the console must answer the package list, three times, without
+  # Nativra in it. A list that fails to load is not an absent app — a
+  # transient portal error once got the app uninstalled this way.
+  absent=0
+  for _ in 1 2 3; do
+    if listing=$(bun src/xbdev.ts apps 2>/dev/null) && ! printf '%s' "$listing" | grep -q Nativra; then
+      absent=$((absent + 1))
+    fi
+    sleep 5
+  done
+  if [ "$absent" -eq 3 ]; then
+    echo "   update refused and no package registered; replacing it"
+    bun src/xbdev.ts uninstall kiosk >/dev/null 2>&1 || true
+    bun src/xbdev.ts install $FILES $DEPS
+  else
+    echo "   install reported a failure but the app is still registered (or the console did not answer); keeping it"
+    exit 1
+  fi
 fi
 # A freshly installed package has no local storage until it has run once, and
 # every push into it fails until then — silently, if the output is thrown away.

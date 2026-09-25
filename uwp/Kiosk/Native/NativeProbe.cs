@@ -405,6 +405,10 @@ namespace Kiosk.Native
                         engine = exe;
                         entry = exe.EntryPoint;
                         generic = true;
+                        // Windows starts a program in its own folder, and some
+                        // find their files by relative path from there — Adobe
+                        // AIR looks for META-INF\AIR\application.xml that way.
+                        lines.Add("cwd=" + (SetCurrentDirectoryW(folder.Path) ? folder.Path : "refused " + Marshal.GetLastWin32Error()));
                     }
 
                     // A marker that stops just short of playing: everything is
@@ -852,6 +856,9 @@ namespace Kiosk.Native
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int MainDelegate();
+
+        [DllImport("api-ms-win-core-processenvironment-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool SetCurrentDirectoryW(string path);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int UnityMainDelegate(

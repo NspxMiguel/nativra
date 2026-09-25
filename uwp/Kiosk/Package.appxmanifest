@@ -19,6 +19,16 @@
       <uap:VisualElements DisplayName="Nativra" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="Every native app installed on this console, in one place." BackgroundColor="#000000">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"/>
       </uap:VisualElements>
+      <!-- removableStorage only opens the file types an app declares. -->
+      <Extensions>
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="nativragame">
+            <uap:SupportedFileTypes>
+              <uap:FileType>.bin</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
     </Application>
   </Applications>
   <Capabilities>
@@ -29,6 +39,10 @@
          JitProbe, and without it a page can be written but never executed —
          which is what took the app down every time it tried. -->
     <rescap:Capability Name="codeGeneration"/>
+    <!-- Games outside the app's own folder: a USB drive or the console's
+         other storage, which the app's own corner fills long before. -->
+    <rescap:Capability Name="broadFileSystemAccess"/>
+    <uap:Capability Name="removableStorage"/>
     <!-- Steam sign-in and the library both talk to api.steampowered.com. -->
     <Capability Name="internetClient"/>
     <!-- The console's own Device Portal answers on a private address, and

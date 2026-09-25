@@ -64,6 +64,7 @@
     <Compile Include="SteamPage.xaml.cs">
       <DependentUpon>SteamPage.xaml</DependentUpon>
     </Compile>
+    <Compile Include="DriveProbe.cs" />
     <Compile Include="EvenWrapPanel.cs" />
     <Compile Include="MainPage.Diagnostics.cs" />
     <Compile Include="MainPage.Setup.cs" />

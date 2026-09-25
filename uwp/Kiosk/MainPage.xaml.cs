@@ -321,8 +321,15 @@ namespace Kiosk
             await RecordProbeAsync();
             if (requestedGame != 0)
                 await StartGameAsync(requestedGame);
-            else if (await ApplicationData.Current.LocalFolder.TryGetItemAsync("autoplay.txt") != null)
-                await Native.NativeProbe.RunAsync();
+            else if (await ApplicationData.Current.LocalFolder.TryGetItemAsync("autoplay.txt") is StorageFile autoplay)
+            {
+                // A test harness names the game to start; pressing A on the
+                // shelf only ever starts whichever game is first there.
+                if (uint.TryParse((await FileIO.ReadTextAsync(autoplay)).Trim(), out var appId) && appId != 0)
+                    await StartGameAsync(appId);
+                else
+                    await Native.NativeProbe.RunAsync();
+            }
         }
 
         private void InitializeGameHost()

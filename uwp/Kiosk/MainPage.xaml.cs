@@ -499,20 +499,14 @@ namespace Kiosk
 
                 // Only a finished game is skipped; a folder left half-way is
                 // exactly what the download picks up again.
-                var games = await ApplicationData.Current.LocalFolder
-                    .TryGetItemAsync("games") as StorageFolder;
-                if (games != null
-                    && await games.TryGetItemAsync(appId.ToString()) is StorageFolder existing
-                    && await existing.TryGetItemAsync(".downloaded") != null)
-                {
-                    return;
-                }
+                if (await GameStorage.IsDownloadedAsync(appId)) return;
 
                 var session = await SteamSession.LoadAsync();
                 if (!session.IsSignedIn) return;
 
                 StatusText.Text = Texts.Get("steam.starting", text);
-                DownloadManager.Start(session, appId, text, "local");
+                var place = GameStorage.Roomiest(await GameStorage.PlacesAsync());
+                DownloadManager.Start(session, appId, text, place?.Id ?? "local");
             }
             catch (Exception error) when (SteamAuth.MeansSignedOut(error))
             {
@@ -538,18 +532,18 @@ namespace Kiosk
         {
             try
             {
-                var games = await ApplicationData.Current.LocalFolder
-                    .TryGetItemAsync("games") as StorageFolder;
-                if (games == null) return;
-
-                var pending = new List<uint>();
-                foreach (var folder in await games.GetFoldersAsync())
+                // Every place a game can be: the console, the share, a USB drive.
+                var pending = new List<KeyValuePair<uint, string>>();
+                foreach (var place in await GameStorage.GamesFoldersAsync())
                 {
-                    if (!uint.TryParse(folder.Name, out var appId)) continue;
-                    if (await folder.TryGetItemAsync(".downloading") == null) continue;
-                    if (await folder.TryGetItemAsync(".downloaded") != null) continue;
-                    if (DownloadManager.Find(appId)?.Running == true) continue;
-                    pending.Add(appId);
+                    foreach (var folder in await place.Value.GetFoldersAsync())
+                    {
+                        if (!uint.TryParse(folder.Name, out var appId)) continue;
+                        if (await folder.TryGetItemAsync(".downloading") == null) continue;
+                        if (await folder.TryGetItemAsync(".downloaded") != null) continue;
+                        if (DownloadManager.Find(appId)?.Running == true) continue;
+                        pending.Add(new KeyValuePair<uint, string>(appId, place.Key));
+                    }
                 }
                 if (pending.Count == 0) return;
 
@@ -568,9 +562,9 @@ namespace Kiosk
                 {
                 }
 
-                foreach (var appId in pending)
-                    DownloadManager.Start(session, appId,
-                        names.TryGetValue(appId, out var name) ? name : appId.ToString(), "local");
+                foreach (var item in pending)
+                    DownloadManager.Start(session, item.Key,
+                        names.TryGetValue(item.Key, out var name) ? name : item.Key.ToString(), item.Value);
             }
             catch (Exception error)
             {

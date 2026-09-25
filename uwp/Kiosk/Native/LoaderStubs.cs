@@ -253,13 +253,13 @@ namespace Kiosk.Native
                 {
                     var full = requested.Replace('/', '\\');
                     if (GameFolder != null && full.StartsWith(GameFolder, StringComparison.OrdinalIgnoreCase)
-                        && System.IO.File.Exists(full))
+                        && FileWatch.PathExists(full))
                         path = full;
                 }
                 else if (GameFolder != null)
                 {
                     var local = System.IO.Path.Combine(GameFolder, name);
-                    if (System.IO.File.Exists(local)) path = local;
+                    if (FileWatch.PathExists(local)) path = local;
                 }
             }
             catch
@@ -274,7 +274,7 @@ namespace Kiosk.Native
                 if (already != null) return already.BaseAddress;
                 try
                 {
-                    var image = PeImage.Load(name, System.IO.File.ReadAllBytes(path), imports.Resolve);
+                    var image = PeImage.Load(name, FileWatch.ReadAll(path), imports.Resolve);
                     imports.Add(image);
                     named[image.BaseAddress.ToInt64()] = name;
                     ModuleFileName.Register(image.BaseAddress, path);

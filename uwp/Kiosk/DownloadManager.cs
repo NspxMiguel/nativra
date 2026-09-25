@@ -95,6 +95,25 @@ namespace Kiosk
         }
 
         /// <summary>
+        /// download-error.txt: the whole exception, with the file it was on.
+        /// The screen has room for one line; finding why a download stops
+        /// at the same file every time needs the stack.
+        /// </summary>
+        private static async Task RecordAsync(DownloadJob job, Exception error)
+        {
+            try
+            {
+                var file = await Windows.Storage.ApplicationData.Current.LocalFolder.CreateFileAsync(
+                    "download-error.txt", Windows.Storage.CreationCollisionOption.ReplaceExisting);
+                await Windows.Storage.FileIO.WriteTextAsync(file,
+                    $"{DateTime.UtcNow:o} app {job.AppId} at {job.Percent}% {job.File}\r\n{error}\r\n");
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
         /// Starts a download, or returns the one already running for the game.
         /// The task completes when the download does; nothing waits on it.
         /// </summary>
@@ -130,6 +149,7 @@ namespace Kiosk
                 catch (Exception error)
                 {
                     job.Error = error.Message;
+                    await RecordAsync(job, error);
                 }
                 finally
                 {

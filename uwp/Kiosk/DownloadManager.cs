@@ -56,6 +56,16 @@ namespace Kiosk
 
         private static bool marked;
 
+        /// <summary>
+        /// A marker left by a session that ended mid-download says nothing
+        /// about this one: nothing downloads until a page starts it.
+        /// </summary>
+        public static void ClearStaleMarker()
+        {
+            marked = true;
+            var _ = MarkAsync(false);
+        }
+
         private static void Raise()
         {
             try { Changed?.Invoke(); } catch { }

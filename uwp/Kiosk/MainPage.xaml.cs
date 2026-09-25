@@ -154,6 +154,7 @@ namespace Kiosk
             InitializeComponent();
             Native.PadBridge.Watch();
             DownloadManager.Changed += OnDownloadsChanged;
+            if (DownloadManager.Active() == null) DownloadManager.ClearStaleMarker();
             InitializeGameHost();
             InitializeDiagnostics();
             ApplyStaticText();

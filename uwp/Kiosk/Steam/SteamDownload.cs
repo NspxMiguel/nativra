@@ -90,9 +90,22 @@ namespace Kiosk.Steam
                 var folder = await TargetAsync(root, appId);
                 var pending = await folder.CreateFileAsync(".downloading", CreationCollisionOption.ReplaceExisting);
 
+                var licensed = 0;
                 foreach (var depot in depots)
                 {
-                    var key = await cm.DepotKeyAsync(appId, depot.Id);
+                    // A depot the account has no license for (a DLC or a
+                    // soundtrack it does not own) is refused a key; that is
+                    // not the game, so it is left out rather than failing.
+                    byte[] key;
+                    try
+                    {
+                        key = await cm.DepotKeyAsync(appId, depot.Id);
+                    }
+                    catch (Exception) when (depots.Count > 1)
+                    {
+                        continue;
+                    }
+                    licensed++;
                     var code = await SteamDepot.ManifestCodeAsync(cm, appId, depot.Id, depot.ManifestId);
                     var manifest = SteamDepot.ParseManifest(
                         await SteamDepot.FetchManifestAsync(servers, depot.Id, depot.ManifestId, code));
@@ -147,6 +160,7 @@ namespace Kiosk.Steam
                         }
                     }
                 }
+                if (licensed == 0) throw new Exception("no depot of this app is licensed to this account");
                 await folder.CreateFileAsync(".downloaded", CreationCollisionOption.ReplaceExisting);
                 await pending.DeleteAsync();
             }

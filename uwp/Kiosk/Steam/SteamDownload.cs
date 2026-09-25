@@ -133,6 +133,14 @@ namespace Kiosk.Steam
                             continue;
                         }
 
+                        // Named before its first chunk, so a failure points at
+                        // this file rather than at the last one that finished.
+                        onProgress?.Invoke(new DownloadProgress
+                        {
+                            File = name,
+                            Done = done,
+                            Total = manifest.TotalBytes,
+                        });
                         using (var stream = await target.OpenStreamForWriteAsync())
                         {
                             for (var i = 0; i < file.Chunks.Count; i += parallel)

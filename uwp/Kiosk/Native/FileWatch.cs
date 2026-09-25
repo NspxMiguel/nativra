@@ -77,6 +77,55 @@ namespace Kiosk.Native
         private static FindFirstExDelegate findFirstEx;
         private static AttributesDelegate attributes;
 
+        [DllImport("api-ms-win-core-memory-l1-1-1.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateFileMappingFromApp(IntPtr file, IntPtr attributes, uint protect, ulong maximumSize, string name);
+
+        [DllImport("api-ms-win-core-memory-l1-1-1.dll", SetLastError = true)]
+        private static extern IntPtr MapViewOfFileFromApp(IntPtr mapping, uint access, ulong offset, IntPtr size);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
+        private delegate IntPtr MappingWDelegate(IntPtr file, IntPtr attributes, uint protect, uint sizeHigh, uint sizeLow, IntPtr name);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
+        private delegate IntPtr MapViewDelegate(IntPtr mapping, uint access, uint offsetHigh, uint offsetLow, IntPtr size);
+        private static MappingWDelegate mappingW, mappingA;
+        private static MapViewDelegate mapView;
+
+        /// <summary>
+        /// File mappings, through the calls an app container is allowed to
+        /// make. CreateFileMappingW and MapViewOfFile are desktop calls; the
+        /// FromApp pair does the same for a packaged app. Adobe AIR maps its
+        /// application descriptor to read it.
+        /// </summary>
+        private static void BridgeMappings(SystemImports imports)
+        {
+            mappingW = (file, attributes, protect, high, low, name) =>
+            {
+                var made = CreateFileMappingFromApp(file, attributes, protect,
+                    ((ulong)high << 32) | low, name == IntPtr.Zero ? null : Marshal.PtrToStringUni(name));
+                if (made == IntPtr.Zero) Say("mapping failed (" + Marshal.GetLastWin32Error() + ")");
+                return made;
+            };
+            mappingA = (file, attributes, protect, high, low, name) =>
+            {
+                var made = CreateFileMappingFromApp(file, attributes, protect,
+                    ((ulong)high << 32) | low, name == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(name));
+                if (made == IntPtr.Zero) Say("mapping failed (" + Marshal.GetLastWin32Error() + ")");
+                return made;
+            };
+            mapView = (mapping, access, high, low, size) =>
+            {
+                var view = MapViewOfFileFromApp(mapping, access, ((ulong)high << 32) | low, size);
+                if (view == IntPtr.Zero) Say("map view failed (" + Marshal.GetLastWin32Error() + ")");
+                return view;
+            };
+            foreach (var module in new[] { "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "api-ms-win-core-memory-l1-1-0.dll" })
+            {
+                imports.Overrides[module + "!CreateFileMappingW"] = Marshal.GetFunctionPointerForDelegate(mappingW);
+                imports.Overrides[module + "!CreateFileMappingA"] = Marshal.GetFunctionPointerForDelegate(mappingA);
+                imports.Overrides[module + "!MapViewOfFile"] = Marshal.GetFunctionPointerForDelegate(mapView);
+            }
+        }
+
         /// <summary>
         /// The lookups that decide whether a program believes a file exists.
         /// Watched for the same reason as opens: a failed one, with its path,
@@ -114,6 +163,7 @@ namespace Kiosk.Native
         public static void Install(SystemImports imports)
         {
             WatchLookups(imports);
+            BridgeMappings(imports);
             real = null;
             var address = imports.SystemAddress("kernel32.dll", "CreateFileW");
             if (address != IntPtr.Zero)

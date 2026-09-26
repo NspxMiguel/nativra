@@ -248,6 +248,16 @@ namespace Kiosk.Native
 
         public IntPtr Resolve(string module, string function)
         {
+            // Steamworks, answered with the signed-in account. A statically
+            // imported steam_api64.dll never reaches GetProcAddress at all,
+            // so without this the bridge only ever saw games that load it
+            // dynamically (LoaderStubs' emulated GetProcAddress).
+            if (SteamBridge.Serves(module))
+            {
+                var bridged = SteamBridge.Resolve(function);
+                if (bridged != IntPtr.Zero) return bridged;
+            }
+
             if (Overrides.TryGetValue(module + "!" + function, out var ours))
             {
                 System.Threading.Interlocked.Increment(ref fromOverrides);

@@ -40,6 +40,7 @@ namespace Kiosk.Native
 
         internal static IDictionary<string, long> Achieved => achieved;
         internal static IDictionary<string, int> Numbers => intStats;
+        internal static IDictionary<string, float> FloatStats => floatStats;
 
         /// <summary>Calls the bridge answered, by export name, for the report.</summary>
         public static readonly Dictionary<string, long> Calls = new Dictionary<string, long>();
@@ -72,7 +73,7 @@ namespace Kiosk.Native
             }
         }
 
-        private static IntPtr Utf8(string text)
+        internal static IntPtr Utf8(string text)
         {
             lock (strings)
             {
@@ -85,7 +86,7 @@ namespace Kiosk.Native
             }
         }
 
-        private static string Text(IntPtr pointer)
+        internal static string Text(IntPtr pointer)
         {
             if (pointer == IntPtr.Zero) return string.Empty;
             var length = 0;
@@ -113,7 +114,7 @@ namespace Kiosk.Native
             lock (pending) pending.Enqueue(new KeyValuePair<int, byte[]>(id, payload));
         }
 
-        private static byte[] StatsReceived()
+        internal static byte[] StatsReceived()
         {
             var body = new byte[24];
             BitConverter.GetBytes((ulong)AppId).CopyTo(body, 0);
@@ -122,7 +123,7 @@ namespace Kiosk.Native
             return body;
         }
 
-        private static byte[] StatsStored()
+        internal static byte[] StatsStored()
         {
             var body = new byte[16];
             BitConverter.GetBytes((ulong)AppId).CopyTo(body, 0);
@@ -130,7 +131,7 @@ namespace Kiosk.Native
             return body;
         }
 
-        private static byte[] AchievementStored(string name)
+        internal static byte[] AchievementStored(string name)
         {
             var body = new byte[152];
             BitConverter.GetBytes((ulong)AppId).CopyTo(body, 0);
@@ -164,7 +165,8 @@ namespace Kiosk.Native
             if (!export.StartsWith("SteamAPI_", StringComparison.Ordinal) &&
                 !export.StartsWith("SteamInternal_", StringComparison.Ordinal) &&
                 !export.StartsWith("SteamGameServer", StringComparison.Ordinal) &&
-                export != "SteamClient" && export != "SteamGameServerClient")
+                export != "SteamClient" && export != "SteamGameServerClient" &&
+                !SteamClassic.IsAccessorName(export))
             {
                 return IntPtr.Zero;
             }
@@ -172,6 +174,20 @@ namespace Kiosk.Native
             {
                 if (answers.Count == 0) Build();
                 if (answers.TryGetValue(export, out var known)) return known;
+
+                // The classic (pre-flat) Steamworks API: games built against the
+                // old C++ SDK (2012-era, like LEGO Jurassic World) call
+                // SteamUser()/SteamFriends()/... directly and dereference the
+                // returned pointer's vtable, and drive callbacks through
+                // SteamAPI_RunCallbacks/RegisterCallback rather than
+                // ManualDispatch. None of that is in the flat table above, so
+                // it is answered separately and cached the same way.
+                var classic = SteamClassic.Resolve(export);
+                if (classic != IntPtr.Zero)
+                {
+                    answers[export] = classic;
+                    return classic;
+                }
 
                 // Interface getters must never answer null: Steamworks.NET
                 // refuses to initialise when any of them does.
@@ -400,7 +416,7 @@ namespace Kiosk.Native
             }
         }
 
-        private static void Save()
+        internal static void Save()
         {
             if (SavePath == null) return;
             try

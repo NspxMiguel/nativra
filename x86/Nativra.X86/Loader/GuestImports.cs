@@ -178,6 +178,27 @@ namespace Nativra.X86.Loader
         public bool TryResolve(uint address, out GuestImport import) =>
             bySentinel.TryGetValue(address, out import);
 
+        /// <summary>True when a host implementation is registered for module!function.</summary>
+        public bool HasHandler(string module, string function) =>
+            function != null && handlers.ContainsKey(Key(Norm(module), function, -1));
+
+        /// <summary>
+        /// True when the program's static imports reference <paramref name="module"/>
+        /// or a handler is registered for it — i.e. the real loader would have it
+        /// loaded, so GetModuleHandle should find it.
+        /// </summary>
+        public bool KnowsModule(string module)
+        {
+            var prefix = Norm(module) + "!";
+            var ordinalPrefix = Norm(module) + "#";
+            foreach (var key in byKey.Keys)
+                if (key.StartsWith(prefix, StringComparison.Ordinal) ||
+                    key.StartsWith(ordinalPrefix, StringComparison.Ordinal)) return true;
+            foreach (var key in handlers.Keys)
+                if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
         /// <summary>True when an address falls inside the sentinel region at all (used to spot strays).</summary>
         public static bool InRegion(uint address) => address >= Region && address < RegionEnd + Stride;
 

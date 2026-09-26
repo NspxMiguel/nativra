@@ -12,8 +12,27 @@ namespace Nativra.X86.Tests
         public const uint EntryRva = 0x1000;
         public const uint MarkerRva = 0x1000;
         public const uint IatRva = 0x2034;
+        public const uint DllMainRva = 0x1010;
+        public const uint DllMainMarkRva = 0x1100;   // where the test DllMain writes its mark
+        public const uint DllMainMark = 0x600DF00D;
 
-        public static byte[] Minimal()
+        // DllMain(hinst, reason, reserved), position-independent so it needs no
+        // relocation: writes DllMainMark at hinst+DllMainMarkRva, returns TRUE.
+        //   mov ecx,[esp+4]; mov dword [ecx+0x1100],0x600DF00D; mov eax,1; ret 12
+        private static readonly byte[] DllMainCode =
+        {
+            0x8B, 0x4C, 0x24, 0x04,
+            0xC7, 0x81, 0x00, 0x11, 0x00, 0x00, 0x0D, 0xF0, 0x0D, 0x60,
+            0xB8, 0x01, 0x00, 0x00, 0x00,
+            0xC2, 0x0C, 0x00,
+        };
+
+        /// <param name="importModule">The DLL the image imports from (at most 15 characters).</param>
+        /// <param name="importName">The by-name import (at most 17 characters); the second import is ordinal 5 of the same DLL.</param>
+        /// <param name="dll">Mark the image a DLL.</param>
+        /// <param name="dllMain">Give the DLL a real entry point (<see cref="DllMainCode"/>); otherwise it has none.</param>
+        public static byte[] Minimal(string importModule = "kernel32.dll", string importName = "GetProcAddress",
+            bool dll = false, bool dllMain = false)
         {
             const int fileLen = 0xA00;
             const int peOff = 0x80;
@@ -40,10 +59,11 @@ namespace Nativra.X86.Tests
             P16(peOff + 4, 0x014C);  // Machine = i386
             P16(peOff + 6, 2);       // NumberOfSections
             P16(peOff + 20, 0xE0);   // SizeOfOptionalHeader (COFF + 16)
-            P16(peOff + 22, 0x0102); // Characteristics: EXECUTABLE_IMAGE | 32BIT_MACHINE (COFF + 18)
+            // Characteristics (COFF + 18): EXECUTABLE_IMAGE | 32BIT_MACHINE, plus DLL.
+            P16(peOff + 22, (ushort)(dll ? 0x2102 : 0x0102));
 
             P16(optOff + 0, 0x010B); // Magic = PE32
-            P32(optOff + 16, EntryRva);
+            P32(optOff + 16, dll ? (dllMain ? DllMainRva : 0) : EntryRva);
             P32(optOff + 28, PreferredBase);
             P32(optOff + 32, 0x1000); // SectionAlignment
             P32(optOff + 36, 0x200);  // FileAlignment
@@ -69,6 +89,9 @@ namespace Nativra.X86.Tests
             P32(sectTable + 40 + 36, 0x40000040u);
 
             P32(0x400, PreferredBase + MarkerRva); // self-referential pointer (needs relocation)
+            if (dllMain)
+                for (var i = 0; i < DllMainCode.Length; i++)
+                    b[0x400 + (int)(DllMainRva - 0x1000) + i] = DllMainCode[i];
 
             P32(R(0x2000) + 0, 0x2028);  // OriginalFirstThunk
             P32(R(0x2000) + 12, 0x2054); // Name
@@ -83,9 +106,9 @@ namespace Nativra.X86.Tests
             P32(R(0x2034) + 8, 0);
 
             P16(R(0x2040), 0);
-            Ascii(R(0x2040) + 2, "GetProcAddress");
+            Ascii(R(0x2040) + 2, importName);
 
-            Ascii(R(0x2054), "kernel32.dll");
+            Ascii(R(0x2054), importModule);
 
             P32(R(0x2064) + 12, 0x209C); // Name -> "test.dll"
             P32(R(0x2064) + 16, 1);      // ordinal base

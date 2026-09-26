@@ -49,20 +49,28 @@ namespace Nativra.X86.Tests
                     if (a.Stop != GuestStop.Budget && a.Stop != GuestStop.Returned)
                         Assert.Fail($"block {block} at 0x{from:X8}: the JIT run stopped: {a} ({jit.Cpu})");
 
-                    // The interpreter catches up to wherever the block ended.
+                    // The interpreter catches up to wherever the block ended. A
+                    // block can branch back into its own middle, so the end
+                    // address may come up more than once before the JIT's
+                    // state does: only a visit that matches settles it.
                     var target = jit.Cpu.Eip;
-                    for (var steps = 0; reference.Cpu.Eip != target; steps++)
+                    string diff = null, seen = null;
+                    for (var steps = 0; ; steps++)
                     {
+                        if (reference.Cpu.Eip == target)
+                        {
+                            diff = Compare(jit.Cpu, reference.Cpu);
+                            if (diff == null) break;
+                            seen = reference.Cpu.ToString();
+                        }
                         var b = reference.Run(halt, 1);
                         if (steps > 100_000 || (b.Stop != GuestStop.Budget && b.Stop != GuestStop.Returned))
-                            Assert.Fail($"block {block} at 0x{from:X8}: the interpreter never reached 0x{target:X8} ({b}; {reference.Cpu})");
-                    }
-
-                    var diff = Compare(jit.Cpu, reference.Cpu);
-                    if (diff != null)
-                    {
-                        var code = BitConverter.ToString(jit.Memory.ReadBytes(from, 32));
-                        Assert.Fail($"block {block} starting at 0x{from:X8} diverged: {diff}\n  jit: {jit.Cpu}\n  ref: {reference.Cpu}\n  code: {code}");
+                        {
+                            var code = BitConverter.ToString(jit.Memory.ReadBytes(from, 32));
+                            Assert.Fail(diff != null
+                                ? $"block {block} starting at 0x{from:X8} diverged: {diff}\n  jit: {jit.Cpu}\n  ref: {seen}\n  code: {code}"
+                                : $"block {block} at 0x{from:X8}: the interpreter never reached 0x{target:X8} ({b}; {reference.Cpu})\n  code: {code}");
+                        }
                     }
                 }
             }

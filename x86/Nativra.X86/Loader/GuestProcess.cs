@@ -116,7 +116,13 @@ namespace Nativra.X86.Loader
         public GuestImports Imports { get; } = new GuestImports();
         public JitEngine Jit { get; }
         public Interpreter Interpreter { get; }
-        public bool UsesJit => Jit != null;
+        public bool UsesJit => Jit != null && JitRefusal == null;
+
+        /// <summary>
+        /// Why the JIT stopped being used mid-run (the host refused to publish an
+        /// executable block), or null. The run carries on in the interpreter.
+        /// </summary>
+        public string JitRefusal { get; private set; }
 
         public uint TebBase { get; private set; }
         public uint PebBase { get; private set; }
@@ -383,8 +389,15 @@ namespace Nativra.X86.Loader
 
                 try
                 {
-                    if (Jit != null) Jit.RunBlock();
+                    if (UsesJit) Jit.RunBlock();
                     else Interpreter.Step();
+                }
+                catch (Exception e) when (UsesJit && (e is InvalidOperationException || e is OutOfMemoryException))
+                {
+                    // The code cache could not publish a block. Nothing ran (the
+                    // block is published before it executes), so the interpreter
+                    // picks up from the very same state.
+                    JitRefusal = e.Message;
                 }
                 catch (GuestFaultException fe)
                 {

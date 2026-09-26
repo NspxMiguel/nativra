@@ -600,6 +600,7 @@ namespace Kiosk.Native
                                     var beat = new List<string>
                                     {
                                         "at=" + DateTime.Now.ToString("HH:mm:ss.fff"),
+                                        MemoryLine(),
                                         "calls=" + imports.Shim.Total,
                                         "pumped=" + WindowStubs.Pumped,
                                         "dispatched=" + WindowMessages.Dispatched + " " + WindowMessages.Note,
@@ -875,6 +876,33 @@ namespace Kiosk.Native
         /// with this console, so every plausible one is tried and the answer
         /// each gave is written down.
         /// </summary>
+        /// <summary>
+        /// Where the app's memory goes, against the console's budget (5 GB
+        /// for a UWP app, graphics memory included): the platform's own
+        /// figures first, then the parts this loader knows it holds.
+        /// </summary>
+        internal static string MemoryLine()
+        {
+            const double Mb = 1048576.0;
+            var line = new System.Text.StringBuilder("memory");
+            try
+            {
+                line.Append(" app=").Append((Windows.System.MemoryManager.AppMemoryUsage / Mb).ToString("F0"))
+                    .Append("MB limit=").Append((Windows.System.MemoryManager.AppMemoryUsageLimit / Mb).ToString("F0")).Append("MB");
+                var report = Windows.System.MemoryManager.GetAppMemoryReport();
+                line.Append(" commit=").Append((report.PrivateCommitUsage / Mb).ToString("F0"))
+                    .Append("MB peak-commit=").Append((report.PeakPrivateCommitUsage / Mb).ToString("F0")).Append("MB");
+            }
+            catch (Exception error)
+            {
+                line.Append(" platform=").Append(error.GetType().Name);
+            }
+            line.Append(" images=").Append((System.Threading.Interlocked.Read(ref PeImage.MappedBytes) / Mb).ToString("F0"))
+                .Append("MB mirror=").Append((FrameMirror.Bytes / Mb).ToString("F0"))
+                .Append("MB managed=").Append((GC.GetTotalMemory(false) / Mb).ToString("F0")).Append("MB");
+            return line.ToString();
+        }
+
         /// <summary>
         /// A game module to map: its file handle when the FromApp path reaches
         /// it, otherwise a read stream from the StorageFile. Never the whole

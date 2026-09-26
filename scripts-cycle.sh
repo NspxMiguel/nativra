@@ -189,6 +189,11 @@ fi
 if [ "${DIRECT:-off}" = "on" ]; then
   bun src/xbdev.ts push kiosk .markers/direct.txt LocalState
 fi
+# STACKS=on samples where every game thread is, in the pulse.
+if [ "${STACKS:-off}" = "on" ]; then
+  touch .markers/stacks.txt
+  bun src/xbdev.ts push kiosk .markers/stacks.txt LocalState
+fi
 # FILEWATCH=on logs the game's file reads and sizes (FileWatch.WatchReads).
 if [ "${FILEWATCH:-off}" = "on" ]; then
   touch .markers/filewatch.txt
@@ -251,6 +256,6 @@ cat native-pulse.txt 2>/dev/null | head -40
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
 # Measuring switches must not outlive the measurement: a trace left behind
 # slows every game he opens afterwards.
-bun src/xbdev.ts rm kiosk trace.txt direct.txt steambridge.txt renderthread.txt workers.txt noupdate.txt autoplay.txt filewatch.txt --dir LocalState >/dev/null 2>&1 || true
+bun src/xbdev.ts rm kiosk trace.txt direct.txt steambridge.txt renderthread.txt workers.txt noupdate.txt autoplay.txt filewatch.txt stacks.txt --dir LocalState >/dev/null 2>&1 || true
 exit
 }

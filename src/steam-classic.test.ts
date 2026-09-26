@@ -48,12 +48,20 @@ test("SteamClassic answers the flat SteamAPI_ exports the classic loop needs, an
   expect(classic).toContain('case "SteamAPI_RunCallbacks":');
   expect(classic).toContain('case "SteamAPI_RegisterCallback":');
   expect(classic).toContain('case "SteamAPI_UnregisterCallback":');
-  expect(classic).toContain('case "SteamUser": return User();');
-  expect(classic).toContain('case "SteamFriends": return Friends();');
-  expect(classic).toContain('case "SteamApps": return Apps();');
-  expect(classic).toContain('case "SteamUserStats": return UserStats();');
-  expect(classic).toContain('case "SteamUtils": return Utils();');
-  expect(classic).toContain('case "SteamRemoteStorage": return RemoteStorage();');
+  // Accessors are exported functions that return the object; returning the
+  // object pointer itself made the game execute the vtable pointer.
+  for (const [name, make] of [
+    ["SteamUser", "User"],
+    ["SteamFriends", "Friends"],
+    ["SteamApps", "Apps"],
+    ["SteamUserStats", "UserStats"],
+    ["SteamUtils", "Utils"],
+    ["SteamRemoteStorage", "RemoteStorage"],
+  ]) {
+    expect(classic).toContain(`case "${name}": return Accessor(export, ${make});`);
+    expect(classic).not.toContain(`case "${name}": return ${make}();`);
+  }
+  expect(classic).toContain("Fn call = (a0, a1, a2, a3, a4, a5, a6, a7, a8, a9) => make();");
 });
 
 test("GetSteamID writes through the hidden return pointer rather than returning a value directly", () => {

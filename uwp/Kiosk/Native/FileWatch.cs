@@ -239,8 +239,52 @@ namespace Kiosk.Native
         private delegate IntPtr MappingWDelegate(IntPtr file, IntPtr attributes, uint protect, uint sizeHigh, uint sizeLow, IntPtr name);
         [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
         private delegate IntPtr MapViewDelegate(IntPtr mapping, uint access, uint offsetHigh, uint offsetLow, IntPtr size);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
+        private delegate IntPtr MapViewExDelegate(IntPtr mapping, uint access, uint offsetHigh, uint offsetLow, IntPtr size, IntPtr baseAddress);
         private static MappingWDelegate mappingW, mappingA;
         private static MapViewDelegate mapView;
+        private static MapViewExDelegate mapViewEx;
+
+        /// <summary>Mappings made from a handle on an .xml file: the descriptor AIR maps.</summary>
+        private static readonly HashSet<long> xmlMappings = new HashSet<long>();
+
+        private static void NoteMapping(IntPtr file, IntPtr made, uint protect, uint high, uint low)
+        {
+            if (made == IntPtr.Zero)
+            {
+                Say("mapping failed (" + Marshal.GetLastWin32Error() + ")");
+                return;
+            }
+            if (!IsXml(file)) return;
+            lock (xmlMappings) xmlMappings.Add(made.ToInt64());
+            Say("xml mapping ok protect 0x" + protect.ToString("X") + " size " + (((ulong)high << 32) | low));
+        }
+
+        /// <summary>What a view of the descriptor holds: its first bytes, printable.</summary>
+        private static void NoteView(IntPtr mapping, IntPtr view, IntPtr size)
+        {
+            if (view == IntPtr.Zero)
+            {
+                Say("map view failed (" + Marshal.GetLastWin32Error() + ")");
+                return;
+            }
+            bool xml;
+            lock (xmlMappings) xml = xmlMappings.Contains(mapping.ToInt64());
+            if (!xml) return;
+            var head = new byte[80];
+            try
+            {
+                Marshal.Copy(view, head, 0, head.Length);
+            }
+            catch
+            {
+                Say("xml view at 0x" + view.ToString("X") + " unreadable");
+                return;
+            }
+            var text = new System.Text.StringBuilder();
+            foreach (var b in head) text.Append(b >= 32 && b < 127 ? (char)b : '.');
+            Say("xml view at 0x" + view.ToString("X") + " size " + size.ToInt64() + " starts: " + text);
+        }
 
         [DllImport("api-ms-win-core-file-l1-1-0.dll", SetLastError = true)]
         private static extern bool ReadFile(IntPtr file, IntPtr buffer, uint count, IntPtr read, IntPtr overlapped);
@@ -347,20 +391,30 @@ namespace Kiosk.Native
             {
                 var made = CreateFileMappingFromApp(file, attributes, protect,
                     ((ulong)high << 32) | low, name == IntPtr.Zero ? null : Marshal.PtrToStringUni(name));
-                if (made == IntPtr.Zero) Say("mapping failed (" + Marshal.GetLastWin32Error() + ")");
+                NoteMapping(file, made, protect, high, low);
                 return made;
             };
             mappingA = (file, attributes, protect, high, low, name) =>
             {
                 var made = CreateFileMappingFromApp(file, attributes, protect,
                     ((ulong)high << 32) | low, name == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(name));
-                if (made == IntPtr.Zero) Say("mapping failed (" + Marshal.GetLastWin32Error() + ")");
+                NoteMapping(file, made, protect, high, low);
                 return made;
             };
             mapView = (mapping, access, high, low, size) =>
             {
                 var view = MapViewOfFileFromApp(mapping, access, ((ulong)high << 32) | low, size);
-                if (view == IntPtr.Zero) Say("map view failed (" + Marshal.GetLastWin32Error() + ")");
+                NoteView(mapping, view, size);
+                return view;
+            };
+            // The Ex form asks for a base address; the FromApp call cannot
+            // honour one, so it is logged when asked and the view goes where
+            // the system puts it.
+            mapViewEx = (mapping, access, high, low, size, baseAddress) =>
+            {
+                if (baseAddress != IntPtr.Zero) Say("map view ex asked base 0x" + baseAddress.ToString("X"));
+                var view = MapViewOfFileFromApp(mapping, access, ((ulong)high << 32) | low, size);
+                NoteView(mapping, view, size);
                 return view;
             };
             foreach (var module in new[] { "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "api-ms-win-core-memory-l1-1-0.dll" })
@@ -368,6 +422,7 @@ namespace Kiosk.Native
                 imports.Overrides[module + "!CreateFileMappingW"] = Marshal.GetFunctionPointerForDelegate(mappingW);
                 imports.Overrides[module + "!CreateFileMappingA"] = Marshal.GetFunctionPointerForDelegate(mappingA);
                 imports.Overrides[module + "!MapViewOfFile"] = Marshal.GetFunctionPointerForDelegate(mapView);
+                imports.Overrides[module + "!MapViewOfFileEx"] = Marshal.GetFunctionPointerForDelegate(mapViewEx);
             }
         }
 

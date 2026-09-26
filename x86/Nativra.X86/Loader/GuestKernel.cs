@@ -200,6 +200,7 @@ namespace Nativra.X86.Loader
             InstallSeh(i);
             InstallThreads(i);
             InstallUser32(i);
+            InstallKernel32(i);
         }
 
         // --- handler bodies -----------------------------------------------

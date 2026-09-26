@@ -232,6 +232,52 @@ namespace Nativra.X86.Cpu
             Write8(address + 3, (byte)(value >> 24));
         }
 
+        // --- atomics --------------------------------------------------------
+        // Guest threads are green threads on one host thread today, but the
+        // memory is shared with host code (audio callbacks, COM objects), so
+        // the Interlocked family is a real locked operation on the host
+        // address whenever the guest space is native.
+
+        /// <summary>Atomically: if [address] == comparand then [address] = value. Returns the old value.</summary>
+        public uint CompareExchange32(uint address, uint value, uint comparand)
+        {
+            if (host != null)
+                return (uint)System.Threading.Interlocked.CompareExchange(ref *(int*)NativeAt(address, 4, true), (int)value, (int)comparand);
+            var old = Read32(address);
+            if (old == comparand) Write32(address, value);
+            return old;
+        }
+
+        /// <summary>Atomically: [address] = value. Returns the old value.</summary>
+        public uint Exchange32(uint address, uint value)
+        {
+            if (host != null)
+                return (uint)System.Threading.Interlocked.Exchange(ref *(int*)NativeAt(address, 4, true), (int)value);
+            var old = Read32(address);
+            Write32(address, value);
+            return old;
+        }
+
+        /// <summary>Atomically: [address] += addend. Returns the old value.</summary>
+        public uint ExchangeAdd32(uint address, uint addend)
+        {
+            if (host != null)
+                return (uint)(System.Threading.Interlocked.Add(ref *(int*)NativeAt(address, 4, true), (int)addend) - (int)addend);
+            var old = Read32(address);
+            Write32(address, old + addend);
+            return old;
+        }
+
+        /// <summary>Atomically: if [address] == comparand then [address] = value (64-bit). Returns the old value.</summary>
+        public ulong CompareExchange64(uint address, ulong value, ulong comparand)
+        {
+            if (host != null)
+                return (ulong)System.Threading.Interlocked.CompareExchange(ref *(long*)NativeAt(address, 8, true), (long)value, (long)comparand);
+            var old = Read64(address);
+            if (old == comparand) Write64(address, value);
+            return old;
+        }
+
         public void Write64(uint address, ulong value)
         {
             Write32(address, (uint)value);

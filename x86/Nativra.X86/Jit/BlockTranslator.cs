@@ -191,8 +191,10 @@ namespace Nativra.X86.Jit
             switch (op)
             {
                 case 0x69: case 0x6B:
-                    if (IsMem(ins)) { EmitAddress(ins); e.ImulRegMem(G[ins.RegField], Mem, S1, 1, 0, size); }
-                    // 3-operand imul: dst = src * imm. Compute into dst directly.
+                    // 3-operand imul: dst = src * imm. The source goes into dst
+                    // first (a load for a memory source, not dst *= mem, which
+                    // multiplied dst's old value in), then dst *= imm.
+                    if (IsMem(ins)) { EmitAddress(ins); e.LoadMem(G[ins.RegField], Mem, S1, 1, 0, size); }
                     else e.MovRegReg(G[ins.RegField], G[ins.Rm], false);
                     e.ImulRegRegImm(G[ins.RegField], G[ins.RegField],
                         op == 0x6B ? (uint)(sbyte)ins.Imm : ins.Imm, size, op == 0x6B);

@@ -122,6 +122,23 @@ namespace Kiosk.Native
                     { "GetModuleFileNameExW", 0 },
                     { "GetModuleFileNameExA", 0 },
                 },
+                // DirectX redistributable pieces the console lacks. They return
+                // HRESULTs and fill an out pointer: a stub's zero is S_OK with
+                // nothing written, which the caller then reads. E_NOTIMPL is
+                // the truth, and a game can take the path it has for failure.
+                ["d3dx9_43.dll"] = new Dictionary<string, long>
+                {
+                    { "D3DXGetShaderConstantTableEx", 0x80004001 },
+                    { "D3DXGetShaderConstantTable", 0x80004001 },
+                    { "D3DXCompileShader", 0x80004001 },
+                    { "D3DXCreateTextureFromFileA", 0x80004001 },
+                    { "D3DXCreateTextureFromFileW", 0x80004001 },
+                    { "D3DXCreateTextureFromFileInMemory", 0x80004001 },
+                },
+                ["XAPOFX1_5.dll"] = new Dictionary<string, long>
+                {
+                    { "CreateFX", 0x80004001 },
+                },
                 ["SETUPAPI.dll"] = new Dictionary<string, long>
                 {
                     // No device set to walk, which is what an invalid handle means.

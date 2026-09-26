@@ -481,6 +481,38 @@ int main()
     Check(countAfter == countBefore + 1, "a texture's surface shares the texture's count",
           std::to_string(countBefore) + " -> " + std::to_string(countAfter));
 
+    // --- CPU copies dropped after upload come back from the GPU ------------------------
+    {
+        IDirect3DTexture9* still = nullptr;
+        Check(SUCCEEDED(dev->CreateTexture(16, 16, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &still, nullptr)),
+              "static texture created");
+        D3DLOCKED_RECT lr = {};
+        still->LockRect(0, &lr, nullptr, 0);
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++)
+                reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(lr.pBits) + y * lr.Pitch)[x] = 0xFF000000u | (y << 8) | x;
+        still->UnlockRect(0);
+        std::memset(&lr, 0, sizeof lr);
+        still->LockRect(0, &lr, nullptr, D3DLOCK_READONLY);
+        const uint32_t texel = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(lr.pBits) + 9 * lr.Pitch)[5];
+        still->UnlockRect(0);
+        Check(texel == 0xFF000905u, "a static texture relocked after upload keeps its texels", Hex(texel));
+        still->Release();
+
+        IDirect3DVertexBuffer9* stillVb = nullptr;
+        Check(SUCCEEDED(dev->CreateVertexBuffer(256, 0, 0, D3DPOOL_MANAGED, &stillVb, nullptr)), "static vertex buffer created");
+        void* data = nullptr;
+        stillVb->Lock(0, 0, &data, 0);
+        for (int i = 0; i < 64; i++) static_cast<uint32_t*>(data)[i] = 0xC0DE0000u + i;
+        stillVb->Unlock();
+        data = nullptr;
+        stillVb->Lock(64, 16, &data, D3DLOCK_READONLY);
+        const uint32_t word = data ? static_cast<uint32_t*>(data)[1] : 0;
+        stillVb->Unlock();
+        Check(word == 0xC0DE0011u, "a static vertex buffer relocked after upload keeps its data", Hex(word));
+        stillVb->Release();
+    }
+
     rtSurface->Release();
     backBuffer->Release();
     rtTex->Release();

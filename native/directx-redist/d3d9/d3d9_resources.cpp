@@ -179,12 +179,33 @@ uint8_t* Image::Shadow(UINT sub)
     if (!s.shadow) {
         const size_t bytes = static_cast<size_t>(s.pitch) * RowCount(*fmt, s.height);
         s.shadow = static_cast<uint8_t*>(LockMemoryAlloc(bytes));
-        if (s.shadow) std::memset(s.shadow, 0, bytes);
+        if (!s.shadow) return nullptr;
+        std::memset(s.shadow, 0, bytes);
+        if (s.evicted) {
+            // Dropped after its upload: the GPU copy is the contents.
+            s.evicted = false;
+            s.valid = false;
+            ReadBack(sub);
+            return s.shadow;
+        }
         // A fresh CPU-only image, or one the GPU has never been given data
         // for, starts as zeros on both sides.
         s.valid = !texture || !(usage & (D3DUSAGE_RENDERTARGET | D3DUSAGE_DEPTHSTENCIL));
     }
     return s.shadow;
+}
+
+// A static texture's CPU copy is only needed while it is locked: once the
+// data is on the GPU it goes, and comes back from the GPU if the game locks
+// again. That keeps most textures in video memory only, inside the console's
+// budget. Kept: dynamic textures (locked every frame), render targets and
+// depth, system-memory and scratch pools (CPU only by definition), and
+// formats converted on upload (the GPU copy is not in the D3D9 layout).
+bool Image::Evictable() const
+{
+    return texture && !IsDepth() && fmt->convert == Convert::None &&
+           !(usage & (D3DUSAGE_DYNAMIC | D3DUSAGE_RENDERTARGET | D3DUSAGE_DEPTHSTENCIL)) &&
+           (pool == D3DPOOL_MANAGED || pool == D3DPOOL_DEFAULT);
 }
 
 HRESULT Image::Lock(UINT sub, D3DLOCKED_RECT* locked, const RECT* rect, DWORD flags)
@@ -222,6 +243,13 @@ HRESULT Image::Unlock(UINT sub)
         const UINT level = sub % levels;
         if (level == 0 && (usage & D3DUSAGE_AUTOGENMIPMAP) && Srv(false))
             device->ctx->GenerateMips(Srv(false));
+    }
+    if (Evictable()) {
+        Subresource& s = subs[sub];
+        LockMemoryFree(s.shadow);
+        s.shadow = nullptr;
+        s.evicted = true;
+        s.valid = false;
     }
     return D3D_OK;
 }
@@ -532,9 +560,13 @@ BufferData::~BufferData()
 HRESULT BufferData::Init()
 {
     if (size == 0) return D3DERR_INVALIDCALL;
-    shadow = static_cast<uint8_t*>(LockMemoryAlloc(size));
-    if (!shadow) return E_OUTOFMEMORY;
-    std::memset(shadow, 0, size);
+    // Index buffers keep a CPU copy for the triangle-fan expansion; vertex
+    // buffers get one when first locked.
+    if (bind == D3D11_BIND_INDEX_BUFFER) {
+        shadow = static_cast<uint8_t*>(LockMemoryAlloc(size));
+        if (!shadow) return E_OUTOFMEMORY;
+        std::memset(shadow, 0, size);
+    }
 
     D3D11_BUFFER_DESC desc = {};
     desc.ByteWidth = (size + 15) & ~15u;
@@ -549,6 +581,14 @@ HRESULT BufferData::Lock(UINT offset, UINT bytes, void** data, DWORD flags)
     if (!data) return D3DERR_INVALIDCALL;
     if (offset > size) offset = size;
     if (bytes == 0 || offset + bytes > size) bytes = size - offset;
+    if (!shadow) {
+        shadow = static_cast<uint8_t*>(LockMemoryAlloc(size));
+        if (!shadow) return E_OUTOFMEMORY;
+        // Written before and dropped since: unless the lock throws the old
+        // contents away, they come back from the GPU.
+        if (uploaded && !(flags & D3DLOCK_DISCARD)) ReadBack();
+        else std::memset(shadow, 0, size);
+    }
     *data = shadow + offset;
     if (!(flags & D3DLOCK_READONLY)) {
         dirtyBegin = std::min(dirtyBegin, offset);
@@ -564,8 +604,45 @@ HRESULT BufferData::Unlock()
     if (--locks == 0) {
         std::lock_guard<std::recursive_mutex> guard(device->mutex);
         Flush();
+        if (Evictable()) {
+            LockMemoryFree(shadow);
+            shadow = nullptr;
+        }
     }
     return D3D_OK;
+}
+
+// A static vertex buffer is filled once and drawn from the GPU copy for the
+// rest of its life, so its CPU copy goes after the upload. Dynamic buffers
+// (refilled every frame), system-memory and scratch pools, and index
+// buffers (read on the CPU for triangle fans) keep theirs.
+bool BufferData::Evictable() const
+{
+    return buffer && bind != D3D11_BIND_INDEX_BUFFER && !(usage & D3DUSAGE_DYNAMIC) &&
+           pool != D3DPOOL_SYSTEMMEM && pool != D3DPOOL_SCRATCH;
+}
+
+bool BufferData::ReadBack()
+{
+    if (!buffer || !shadow) return false;
+    D3D11_BUFFER_DESC desc = {};
+    buffer->GetDesc(&desc);
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    desc.MiscFlags = 0;
+    ID3D11Buffer* copy = nullptr;
+    if (FAILED(device->dev->CreateBuffer(&desc, nullptr, &copy))) return false;
+    std::lock_guard<std::recursive_mutex> guard(device->mutex);
+    device->ctx->CopyResource(copy, buffer);
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    const bool ok = SUCCEEDED(device->ctx->Map(copy, 0, D3D11_MAP_READ, 0, &mapped));
+    if (ok) {
+        std::memcpy(shadow, mapped.pData, size);
+        device->ctx->Unmap(copy, 0);
+    }
+    copy->Release();
+    return ok;
 }
 
 void BufferData::Flush()
@@ -573,6 +650,7 @@ void BufferData::Flush()
     if (dirtyBegin >= dirtyEnd || !buffer) return;
     D3D11_BOX box = { dirtyBegin, 0, 0, dirtyEnd, 1, 1 };
     device->ctx->UpdateSubresource(buffer, 0, &box, shadow + dirtyBegin, 0, 0);
+    uploaded = true;
     dirtyBegin = UINT_MAX;
     dirtyEnd = 0;
 }

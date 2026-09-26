@@ -81,6 +81,10 @@ namespace Kiosk.Native
                 // The guest sees C:\users\Player (Wine's layout); it lands in LocalState\profile.
                 if (UserFolders.Root == null) UserFolders.Root = System.IO.Path.Combine(local.Path, "profile");
                 kernel.ProfileRoot = UserFolders.Root;
+                // Files through the removable drive's folder handle or the broker:
+                // System.IO cannot reach a game on a USB drive.
+                await UsbFiles.InstallAsync();
+                kernel.Files = new X86Files();
                 kernel.Install();
                 // Direct3D 9 through the packaged 64-bit layer.
                 var com = new GuestCom(process, kernel);

@@ -132,6 +132,7 @@
     <Compile Include="Native\XAudio27Route.cs" />
     <Compile Include="Native\StackSampler.cs" />
     <Compile Include="Native\UsbFiles.cs" />
+    <Compile Include="Native\X86Files.cs" />
     <Compile Include="Native\SteamBridge.cs" />
     <Compile Include="Native\SteamClassic.cs" />
     <Compile Include="Native\SuspendWatch.cs" />

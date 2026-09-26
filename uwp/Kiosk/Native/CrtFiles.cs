@@ -160,6 +160,12 @@ namespace Kiosk.Native
         /// <summary>The last brokered open failed on a path that does not exist.</summary>
         [ThreadStatic] private static bool lastMissing;
 
+        private static void SetErrno(int value)
+        {
+            var at = errno == null ? IntPtr.Zero : errno();
+            if (at != IntPtr.Zero) Marshal.WriteInt32(at, value);
+        }
+
         private static int ErrnoNow()
         {
             var at = errno == null ? IntPtr.Zero : errno();
@@ -281,7 +287,9 @@ namespace Kiosk.Native
                     // The _s forms return the error rather than set errno.
                     if (stream == IntPtr.Zero)
                     {
+                        // Returned and in errno both: games print strerror(errno).
                         var answer = lastMissing ? ENOENT : error;
+                        SetErrno(answer);
                         Record(pair.Name, wide ? Wide(name) : Narrow(name), answer);
                         return answer;
                     }
@@ -317,6 +325,7 @@ namespace Kiosk.Native
                     if (descriptor < 0)
                     {
                         var answer = lastMissing ? ENOENT : error;
+                        SetErrno(answer);
                         Record(pair.Name, wide ? Wide(name) : Narrow(name), answer);
                         return answer;
                     }

@@ -233,6 +233,9 @@ namespace Kiosk.Native
         /// <summary>The game's folder, where a library it asks for by name is looked for first.</summary>
         public static string GameFolder;
 
+        /// <summary>The whole download, which libraries asked for by full path may come from.</summary>
+        public static string GameRoot;
+
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int ModuleMainDelegate(IntPtr instance, uint reason, IntPtr reserved);
 
@@ -252,8 +255,12 @@ namespace Kiosk.Native
                 if (requested.IndexOf('\\') >= 0 || requested.IndexOf('/') >= 0)
                 {
                     var full = requested.Replace('/', '\\');
-                    if (GameFolder != null && full.StartsWith(GameFolder, StringComparison.OrdinalIgnoreCase)
-                        && FileWatch.PathExists(full))
+                    // Anywhere in the game's download, not only beside the
+                    // program: Unreal keeps PhysX in Engine\Binaries\ThirdParty
+                    // and loads it by full path from Game\Binaries\Win64.
+                    var inGame = (GameFolder != null && full.StartsWith(GameFolder, StringComparison.OrdinalIgnoreCase))
+                        || (GameRoot != null && full.StartsWith(GameRoot, StringComparison.OrdinalIgnoreCase));
+                    if (inGame && FileWatch.PathExists(full))
                         path = full;
                 }
                 else if (GameFolder != null)

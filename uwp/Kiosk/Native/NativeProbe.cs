@@ -203,6 +203,7 @@ namespace Kiosk.Native
                 // the game's own from here on, as it would be on a PC.
                 var exeName = "game.exe";
                 FileWatch.CacheRoot = folder.Path.TrimEnd('\\') + "\\";
+                LoaderStubs.GameRoot = FileWatch.CacheRoot;
                 if (await local.TryGetItemAsync("brokerprobe.txt") != null)
                 {
                     // Files from the game's own folder, whatever it holds.

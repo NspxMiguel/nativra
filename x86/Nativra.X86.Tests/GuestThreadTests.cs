@@ -15,7 +15,8 @@ namespace Nativra.X86.Tests
 
         private static GuestProcess Load(byte[] program, bool jit, out GuestKernel kernel)
         {
-            var p = new GuestProcess(new GuestMemory(), useJit: jit);
+            var p = new GuestProcess(new GuestMemory(native: jit), useJit: jit);
+            Assert.Equal(jit, p.UsesJit);   // a JIT case must not fall back to the interpreter unnoticed
             kernel = new GuestKernel(p);
             kernel.Install();
             p.Memory.Map(Code, 0x2000);

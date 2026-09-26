@@ -319,6 +319,13 @@ namespace Kiosk.Native
                 // Reading a pad by its hidden ordinal is how some engines get
                 // the guide button; the ordinary reading is the honest answer.
                 { "#100", Marshal.GetFunctionPointerForDelegate(state) },
+                // xinput1_3 and 1_4 export these by number too, and some games
+                // (LEGO Jurassic World) import them that way.
+                { "#2", Marshal.GetFunctionPointerForDelegate(state) },
+                { "#3", Marshal.GetFunctionPointerForDelegate(vibration) },
+                { "#4", Marshal.GetFunctionPointerForDelegate(capabilities) },
+                { "#5", Marshal.GetFunctionPointerForDelegate(enable) },
+                { "#7", Marshal.GetFunctionPointerForDelegate(battery) },
             };
 
             foreach (var module in new[]

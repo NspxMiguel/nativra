@@ -22,6 +22,8 @@ namespace Nativra.X86.Loader
         Raised,
         /// <summary>Every guest thread waits on something nothing can signal.</summary>
         Deadlocked,
+        /// <summary>A host handler failed with an exception of its own (a bug or a host refusal, not the guest's doing).</summary>
+        HostError,
     }
 
     /// <summary>The outcome of a run, with the fault, missing-import or exit detail when relevant.</summary>
@@ -32,12 +34,16 @@ namespace Nativra.X86.Loader
         public GuestImport Import { get; }
         public uint ExitCode { get; }
 
-        public GuestRunResult(GuestStop stop, uint faultAddress = 0, GuestImport import = null, uint exitCode = 0)
+        /// <summary>For <see cref="GuestStop.HostError"/>: the host exception, in full.</summary>
+        public string Detail { get; }
+
+        public GuestRunResult(GuestStop stop, uint faultAddress = 0, GuestImport import = null, uint exitCode = 0, string detail = null)
         {
             Stop = stop;
             FaultAddress = faultAddress;
             Import = import;
             ExitCode = exitCode;
+            Detail = detail;
         }
 
         public bool Ok => Stop == GuestStop.Returned;
@@ -50,6 +56,12 @@ namespace Nativra.X86.Loader
                 case GuestStop.MissingImport: return $"missing import {Import}";
                 case GuestStop.Exited: return $"exited with code {ExitCode}";
                 case GuestStop.Raised: return $"raised exception 0x{ExitCode:X8} from 0x{FaultAddress:X8}";
+                case GuestStop.HostError:
+                {
+                    var first = Detail ?? "";
+                    var line = first.IndexOf('\n');
+                    return $"host error in {Import}: {(line > 0 ? first.Substring(0, line).TrimEnd() : first)}";
+                }
                 default: return Stop.ToString().ToLowerInvariant();
             }
         }
@@ -512,6 +524,11 @@ namespace Nativra.X86.Loader
                     {
                         // A handler read or wrote a bad guest pointer the game passed it.
                         return new GuestRunResult(GuestStop.Fault, fe.Address, import);
+                    }
+                    catch (Exception e) when (!(e is OutOfMemoryException) && !(e is StackOverflowException))
+                    {
+                        // The host's own failure: stop with the import named, never take the layer down.
+                        return new GuestRunResult(GuestStop.HostError, eip, import, detail: e.ToString());
                     }
                     continue;
                 }

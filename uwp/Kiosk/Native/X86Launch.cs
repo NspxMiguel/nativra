@@ -46,7 +46,7 @@ namespace Kiosk.Native
             {
                 // A layer failure (no room for the guest space, an image it cannot
                 // map) is still "this game cannot start yet", not a crash.
-                lines.Add("x86.failed=" + error.GetType().Name + ": " + error.Message);
+                lines.Add("x86.failed=" + Flat(error));
                 return false;
             }
         }
@@ -76,6 +76,15 @@ namespace Kiosk.Native
                 // The same input the 64-bit path reads (pad as mouse and keys),
                 // delivered as messages on the game's window.
                 kernel.Input = new ConsoleInput();
+                // Documents, Saved Games, AppData...: the same profile folders a
+                // 64-bit game gets, so saves live in one place whatever the game's bitness.
+                // The guest sees C:\users\Player (Wine's layout); it lands in LocalState\profile.
+                if (UserFolders.Root == null) UserFolders.Root = System.IO.Path.Combine(local.Path, "profile");
+                kernel.ProfileRoot = UserFolders.Root;
+                // Files through the removable drive's folder handle or the broker:
+                // System.IO cannot reach a game on a USB drive.
+                await UsbFiles.InstallAsync();
+                kernel.Files = new X86Files();
                 kernel.Install();
                 // Direct3D 9 through the packaged 64-bit layer.
                 var com = new GuestCom(process, kernel);
@@ -95,23 +104,33 @@ namespace Kiosk.Native
                     return bytes;
                 };
 
-                var image = process.LoadExecutable(exeName, exeBytes);
-                lines.Add("x86.image=" + exeName +
-                          " base=0x" + image.BaseAddress.ToString("X8") +
-                          " preferred=0x" + image.PreferredBase.ToString("X8") +
-                          " entry=0x" + image.EntryPoint.ToString("X8") +
-                          " size=0x" + image.ImageSize.ToString("X"));
-                lines.Add("x86.jit=" + (process.UsesJit ? "on" : interpreterOnly ? "off (x86interp.txt)" : "unavailable"));
-                lines.Add("x86.modules=" + string.Join(",", process.Images.Select(i => i.Name)));
-                if (fromPackage.Count > 0) lines.Add("x86.packaged=" + string.Join(",", fromPackage));
-                ReportImports(process, lines);
-
-                result = process.InitializeModules(BlockBudget);
-                lines.Add("x86.init=" + result);
-                if (result.Ok)
+                result = null;
+                try
                 {
-                    result = process.Call(image.EntryPoint, out var exitCode, BlockBudget);
-                    lines.Add("x86.run=" + result + (result.Ok ? " (entry returned " + exitCode + ")" : ""));
+                    var image = process.LoadExecutable(exeName, exeBytes);
+                    lines.Add("x86.image=" + exeName +
+                              " base=0x" + image.BaseAddress.ToString("X8") +
+                              " preferred=0x" + image.PreferredBase.ToString("X8") +
+                              " entry=0x" + image.EntryPoint.ToString("X8") +
+                              " size=0x" + image.ImageSize.ToString("X"));
+                    lines.Add("x86.jit=" + (process.UsesJit ? "on" : interpreterOnly ? "off (x86interp.txt)" : "unavailable"));
+                    lines.Add("x86.modules=" + string.Join(",", process.Images.Select(i => i.Name)));
+                    if (fromPackage.Count > 0) lines.Add("x86.packaged=" + string.Join(",", fromPackage));
+                    ReportImports(process, lines);
+
+                    result = process.InitializeModules(BlockBudget);
+                    lines.Add("x86.init=" + result);
+                    if (result.Ok)
+                    {
+                        result = process.Call(image.EntryPoint, out var exitCode, BlockBudget);
+                        lines.Add("x86.run=" + result + (result.Ok ? " (entry returned " + exitCode + ")" : ""));
+                    }
+                }
+                catch (Exception error)
+                {
+                    // Whatever broke, the report below still says where the game was.
+                    lines.Add("x86.failed=" + Flat(error));
+                    result = new GuestRunResult(GuestStop.HostError, detail: error.ToString());
                 }
 
                 lines.Add("x86.eip=0x" + process.Cpu.Eip.ToString("X8") + " " + process.Cpu);
@@ -155,6 +174,10 @@ namespace Kiosk.Native
                 return null;
             }
         }
+
+        /// <summary>An exception with its stack and inner exceptions, on one report line.</summary>
+        private static string Flat(Exception error) =>
+            error.ToString().Replace("\r", "").Replace("\n", " | ");
 
         /// <summary>
         /// A 32-bit DLL the package carries for games that do not bring their

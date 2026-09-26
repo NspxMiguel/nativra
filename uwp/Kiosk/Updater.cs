@@ -25,8 +25,40 @@ namespace Kiosk
 
         private static bool checkedOnce;
 
-        /// <summary>What happened on the last check, for diagnostics.</summary>
-        public static string Note = "not checked";
+        private static string note = "not checked";
+        private static readonly object logGate = new object();
+        private static Task logTail = Task.CompletedTask;
+
+        /// <summary>
+        /// What happened on the last check, for diagnostics. Every change is
+        /// also appended to update-log.txt: all the screen shows of a failed
+        /// install is that it failed, and the reason — the portal's answer —
+        /// used to stay in memory where nobody could read it.
+        /// </summary>
+        public static string Note
+        {
+            get => note;
+            set
+            {
+                note = value;
+                var line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " build " + Installed + ": " + value + "\r\n";
+                lock (logGate) logTail = logTail.ContinueWith(_ => AppendAsync(line)).Unwrap();
+            }
+        }
+
+        private static async Task AppendAsync(string line)
+        {
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                    "update-log.txt", CreationCollisionOption.OpenIfExists);
+                await FileIO.AppendTextAsync(file, line);
+            }
+            catch
+            {
+                // Diagnostics only: a log that cannot be written changes nothing.
+            }
+        }
 
         public static int Installed => Package.Current.Id.Version.Build;
 
@@ -111,7 +143,7 @@ namespace Kiosk
             }
             catch (Exception error)
             {
-                Note = "check failed: " + error.GetType().Name;
+                Note = "check failed: " + error.GetType().Name + " 0x" + error.HResult.ToString("X8") + " " + error.Message;
             }
         }
     }

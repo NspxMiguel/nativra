@@ -140,6 +140,7 @@
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Native\RawInputBridge.cs" />
     <Compile Include="Native\RedistProbe.cs" />
+    <Compile Include="Native\X86Direct3D9.cs" />
     <Compile Include="Native\X86Launch.cs" />
     <Compile Include="Native\D3D9Bridge.cs" />
     <Compile Include="Texts.cs" />

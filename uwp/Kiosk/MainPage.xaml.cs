@@ -511,9 +511,10 @@ namespace Kiosk
                 var session = await SteamSession.LoadAsync();
                 if (!session.IsSignedIn) return;
 
-                StatusText.Text = Texts.Get("steam.starting", text);
+                var name = await GameNameAsync(session, appId) ?? text;
+                StatusText.Text = Texts.Get("steam.starting", name);
                 var place = GameStorage.Roomiest(await GameStorage.PlacesAsync());
-                DownloadManager.Start(session, appId, text, place?.Id ?? "local");
+                DownloadManager.Start(session, appId, name, place?.Id ?? "local");
             }
             catch (Exception error) when (SteamAuth.MeansSignedOut(error))
             {
@@ -526,6 +527,31 @@ namespace Kiosk
             {
                 StatusText.Text = Texts.Get("steam.downloadfailed", "auto", error.Message);
             }
+        }
+
+        private Dictionary<uint, string> libraryNames;
+
+        /// <summary>
+        /// A game's name from his library or his family's, for the downloads
+        /// screen; null when the library cannot be reached.
+        /// </summary>
+        private async Task<string> GameNameAsync(SteamSession session, uint appId)
+        {
+            if (libraryNames == null)
+            {
+                var names = new Dictionary<uint, string>();
+                try
+                {
+                    foreach (var game in await SteamLibrary.OwnedAsync(session)) names[game.AppId] = game.Name;
+                    foreach (var game in await SteamLibrary.FamilyAsync(session)) names[game.AppId] = game.Name;
+                    libraryNames = names;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+            return libraryNames.TryGetValue(appId, out var name) ? name : null;
         }
 
         /// <summary>
@@ -557,21 +583,9 @@ namespace Kiosk
                 var session = await SteamSession.LoadAsync();
                 if (!session.IsSignedIn) return;
 
-                // Names make the downloads screen readable; the number is
-                // enough when the library cannot be reached.
-                var names = new Dictionary<uint, string>();
-                try
-                {
-                    foreach (var game in await SteamLibrary.OwnedAsync(session)) names[game.AppId] = game.Name;
-                    foreach (var game in await SteamLibrary.FamilyAsync(session)) names[game.AppId] = game.Name;
-                }
-                catch
-                {
-                }
-
                 foreach (var item in pending)
                     DownloadManager.Start(session, item.Key,
-                        names.TryGetValue(item.Key, out var name) ? name : item.Key.ToString(), item.Value);
+                        await GameNameAsync(session, item.Key) ?? item.Key.ToString(), item.Value);
             }
             catch (Exception error)
             {

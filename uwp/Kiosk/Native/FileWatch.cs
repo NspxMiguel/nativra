@@ -436,7 +436,49 @@ namespace Kiosk.Native
                 imports.Overrides[module + "!CreateFileW"] =
                     Marshal.GetFunctionPointerForDelegate(wide);
             }
+            InstallNarrow(imports);
             BrokerFileCalls(imports);
+        }
+
+        private static CreateFileDelegate narrow;
+        private static AttributesDelegate narrowAttributes;
+        private static AttributesExDelegate narrowAttributesEx;
+
+        /// <summary>
+        /// The ANSI forms, converted and sent the same way as the wide ones.
+        /// Bink opens its movies with CreateFileA, which went to the system's
+        /// own and could not reach a USB drive: Hades' menu had no background.
+        /// </summary>
+        private static void InstallNarrow(SystemImports imports)
+        {
+            narrow = (name, access, share, security, disposition, flags, template) =>
+            {
+                if (name == IntPtr.Zero) return wide(name, access, share, security, disposition, flags, template);
+                var converted = Marshal.StringToHGlobalUni(Marshal.PtrToStringAnsi(name));
+                try
+                {
+                    return wide(converted, access, share, security, disposition, flags, template);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(converted);
+                }
+            };
+            narrowAttributes = name => GetFileAttributesW(name == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(name));
+            narrowAttributesEx = (name, level, data) =>
+                Attributes(name == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(name), data) ? 1 : 0;
+            foreach (var module in new[]
+                     {
+                         "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll",
+                         "api-ms-win-core-file-l1-1-0.dll",
+                         "api-ms-win-core-file-l1-2-0.dll",
+                         "api-ms-win-core-file-l1-2-1.dll",
+                     })
+            {
+                imports.Overrides[module + "!CreateFileA"] = Marshal.GetFunctionPointerForDelegate(narrow);
+                imports.Overrides[module + "!GetFileAttributesA"] = Marshal.GetFunctionPointerForDelegate(narrowAttributes);
+                imports.Overrides[module + "!GetFileAttributesExA"] = Marshal.GetFunctionPointerForDelegate(narrowAttributesEx);
+            }
         }
 
         /// <summary>

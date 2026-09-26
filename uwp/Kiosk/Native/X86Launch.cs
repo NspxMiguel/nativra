@@ -73,6 +73,9 @@ namespace Kiosk.Native
                 kernel.SetCommandLine("\"" + kernel.ExePath + "\"");
                 var guestLog = new List<string>();
                 kernel.Log = text => { if (guestLog.Count < LogLines) guestLog.Add(text); };
+                // The same input the 64-bit path reads (pad as mouse and keys),
+                // delivered as messages on the game's window.
+                kernel.Input = new ConsoleInput();
                 kernel.Install();
 
                 var packaged = System.IO.Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "x86");
@@ -117,6 +120,8 @@ namespace Kiosk.Native
                 if (kernel.FilesNotFound.Count > 0)
                     lines.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(LogLines)));
                 foreach (var text in guestLog) lines.Add("x86.log=" + text);
+                lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
+                lines.Add("x86.window=0x" + kernel.InputWindow.ToString("X") + " dispatched=" + kernel.MessagesDispatched);
                 lines.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
 
                 await WriteImportsAsync(process, kernel);
@@ -197,6 +202,36 @@ namespace Kiosk.Native
             catch
             {
                 // Losing the list loses a measurement, not the app.
+            }
+        }
+
+        /// <summary>
+        /// PointerBridge's queue and state for a 32-bit guest: it writes 64-bit
+        /// MSGs, so each is read back from one reused native block and handed
+        /// over as the three values the guest's 32-bit MSG needs.
+        /// </summary>
+        private sealed class ConsoleInput : IGuestInput
+        {
+            private readonly IntPtr message = Marshal.AllocHGlobal(48);
+
+            public bool TakeMessage(bool remove, out uint id, out uint wParam, out uint lParam)
+            {
+                id = wParam = lParam = 0;
+                if (!PointerBridge.Take(message, remove)) return false;
+                id = (uint)Marshal.ReadInt32(message, 8);
+                wParam = (uint)Marshal.ReadInt64(message, 16);
+                lParam = (uint)Marshal.ReadInt64(message, 24);
+                return true;
+            }
+
+            public void CursorPosition(out int x, out int y) => PointerBridge.ReadPosition(out x, out y);
+            public void SetCursorPosition(int x, int y) => PointerBridge.Warp(x, y);
+
+            public bool KeyDown(int virtualKey)
+            {
+                if (virtualKey == 1) return PointerBridge.Left;    // VK_LBUTTON
+                if (virtualKey == 2) return PointerBridge.Right;   // VK_RBUTTON
+                return PointerBridge.Down(virtualKey);
             }
         }
 

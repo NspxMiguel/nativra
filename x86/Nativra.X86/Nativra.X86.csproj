@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Portable core of the 32-bit (x86) execution layer: instruction decoder,
+    reference interpreter, guest memory, 32-bit PE loader and the x86-to-x64
+    block JIT. netstandard2.0 and C# 7.3 because the UWP app (.NET Native,
+    Microsoft.NETCore.UniversalWindowsPlatform 6.2) references this very
+    project; the tests run it on net8.0 on the CI runner and locally.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+        <LangVersion>7.3</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>Nativra.X86</AssemblyName>
+    <RootNamespace>Nativra.X86</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,4 @@
+LIBRARY XAUDIO2_7
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

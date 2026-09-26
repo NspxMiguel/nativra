@@ -40,7 +40,7 @@ namespace Kiosk.Native
         /// process, the system's and this app's own: a thread stuck inside the
         /// bridge shows up as Kiosk or SharedLibrary rather than as a number.
         /// </summary>
-        private static string Describe(long address)
+        internal static string Describe(long address)
         {
             var mine = ImageLookup.Describe(address);
             if (!mine.StartsWith("0x", StringComparison.Ordinal) || header == null) return mine;

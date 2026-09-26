@@ -173,16 +173,15 @@ has no windows.
   drive, raw input, DirectInput, the HLSL compiler).
 - **Verified**: Seraph's Last Stand (Unity) plays at 60 fps with the controller,
   and shows "In-Game" to Steam friends.
-- **Hades** (Supergiant's own engine, D3D11, SDL2, FMOD) reaches its main menu at
-  60 fps from a USB drive.
+- **Playable**: Hades (Supergiant's own engine, D3D11, SDL2, FMOD) runs at 60 fps
+  from a USB drive, with the controller and sound.
 - **Remote control of the console** from a terminal, for testing.
 
 See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for every game tried.
 
 ## What does not work yet
 
-**Experimental, not a finished PC-game compatibility layer.** Hades' controller
-and sound in its menus are not confirmed yet. Games using the classic
+**Experimental, not a finished PC-game compatibility layer.** Games using the classic
 Steamworks C++ interfaces (LEGO Jurassic World) stop at Steam's start-up, 32-bit
 games are not supported, Direct3D 9 games have no renderer, and Adobe AIR
 (Brawlhalla) does not find its application descriptor. Multiplayer and friend

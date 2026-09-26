@@ -156,16 +156,15 @@ também registram metas e investigações anteriores; não são garantias de com
   raw input, DirectInput, o compilador HLSL).
 - **Verificado**: Seraph's Last Stand (Unity) roda a 60 fps no controle e mostra
   "Jogando" para os amigos da Steam.
-- **Hades** (motor próprio da Supergiant, D3D11, SDL2, FMOD) chega ao menu
-  principal a 60 fps, rodando do pendrive.
+- **Jogável**: Hades (motor próprio da Supergiant, D3D11, SDL2, FMOD) roda a
+  60 fps do pendrive, com controle e som.
 - **Controle remoto do console** pelo terminal, para testes.
 
 A tabela de cada jogo testado está em [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ## O que falta
 
-**Experimental, ainda não é uma camada de compatibilidade pronta.** O controle e
-o som do Hades no menu ainda não foram confirmados. Jogos que usam a API C++
+**Experimental, ainda não é uma camada de compatibilidade pronta.** Jogos que usam a API C++
 clássica da Steam (LEGO Jurassic World) param na inicialização da Steam, jogos de
 32 bits não são suportados, jogos Direct3D 9 não têm renderizador, e o Adobe AIR
 (Brawlhalla) não acha o descritor da aplicação. Multiplayer e convites de amigos

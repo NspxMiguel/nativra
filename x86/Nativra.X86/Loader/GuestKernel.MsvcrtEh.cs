@@ -56,6 +56,34 @@ namespace Nativra.X86.Loader
             C(i, "_invoke_watson", 5, c => Abort("_invoke_watson"));
             C(i, "__security_error_handler", 2, c => Abort("buffer overrun detected"));
 
+            C(i, "isleadbyte", 1, c => 0);   // single-byte code page
+            C(i, "_ismbblead", 1, c => 0);
+            C(i, "_tempnam", 2, c =>
+            {
+                var folder = c.Arg(0) != 0 ? ReadText(c.Arg(0), false) : Folder(ExePath).TrimEnd('\\');
+                var name = folder.TrimEnd('\\') + "\\" + (c.Arg(1) != 0 ? ReadText(c.Arg(1), false) : "") + ((uint)Milliseconds & 0xFFFF).ToString("x") + (nextFind++);
+                var p = CrtAlloc((uint)name.Length + 1, false);
+                if (p != 0) WriteText(p, name, false);
+                return p;
+            });
+
+            // __pioinfo: the low-level I/O table code compiled against msvcrt reads
+            // directly (osfile flags); 32 entries of 36 bytes, the three standard
+            // handles open in text mode. __badioinfo is the entry for a bad descriptor.
+            var ioinfo = heap.Alloc(32 * 36, zero: true);
+            for (uint n = 0; n < 3; n++)
+            {
+                memory.Write32(ioinfo + n * 36, 0x10 + n * 4);        // the standard handles
+                memory.Write8(ioinfo + n * 36 + 4, 0x81);             // FOPEN | FTEXT
+            }
+            var pioinfo = heap.Alloc(64 * 4, zero: true);
+            memory.Write32(pioinfo, ioinfo);
+            CrtData(i, "__pioinfo", pioinfo);
+            var badioinfo = heap.Alloc(36, zero: true);
+            memory.Write32(badioinfo, 0xFFFFFFFF);
+            memory.Write8(badioinfo + 4, 0x80);                       // FTEXT
+            CrtData(i, "__badioinfo", badioinfo);
+
             // type_info: its vftable is a data import; the scalar deleting destructor is its one entry.
             var typeInfoTable = heap.Alloc(8, zero: true);
             memory.Write32(typeInfoTable, i.Bind(Crt, "??_Etype_info@@UAEPAXI@Z", -1));

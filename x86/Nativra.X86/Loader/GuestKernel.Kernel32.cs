@@ -332,6 +332,18 @@ namespace Nativra.X86.Loader
             i.Register(k, "ReadConsoleA", CallConv.Stdcall, 5, c => { if (c.Arg(3) != 0) memory.Write32(c.Arg(3), 0); return 1; });
             i.Register(k, "ReadConsoleW", CallConv.Stdcall, 5, c => { if (c.Arg(3) != 0) memory.Write32(c.Arg(3), 0); return 1; });
             i.Register(k, "FlushConsoleInputBuffer", CallConv.Stdcall, 1, c => 1);
+
+            i.Register(k, "CompareStringA", CallConv.Stdcall, 6, c =>
+            {
+                string Text(uint p, uint n) => (int)n < 0 ? ReadText(p, false) : Ansi.Decode(memory.ReadBytes(p, (int)n)).Split('\0')[0];
+                var result = string.Compare(Text(c.Arg(2), c.Arg(3)), Text(c.Arg(4), c.Arg(5)),
+                    (c.Arg(1) & 1) != 0 ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+                return result < 0 ? 1u : result > 0 ? 3u : 2u;
+            });
+            i.Register(k, "HeapWalk", CallConv.Stdcall, 2, c => { process.LastError = 259; return 0; });   // ERROR_NO_MORE_ITEMS
+            i.Register(k, "HeapLock", CallConv.Stdcall, 1, c => 1);
+            i.Register(k, "HeapUnlock", CallConv.Stdcall, 1, c => 1);
+            i.Register(k, "PeekNamedPipe", CallConv.Stdcall, 6, c => { process.LastError = ErrorInvalidHandle; return 0; });
         }
 
         // --- memory ---------------------------------------------------------

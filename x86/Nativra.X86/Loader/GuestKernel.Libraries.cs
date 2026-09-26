@@ -197,6 +197,14 @@ namespace Nativra.X86.Loader
             foreach (var none in new[] { "waveInGetNumDevs", "midiOutGetNumDevs", "midiInGetNumDevs", "mixerGetNumDevs", "auxGetNumDevs" })
                 i.Register(w, none, CallConv.Stdcall, 0, c => 0);
             i.Register(w, "waveInOpen", CallConv.Stdcall, 6, c => 2);   // MMSYSERR_BADDEVICEID
+            i.Register(w, "waveInGetDevCapsA", CallConv.Stdcall, 3, c => 2);
+            i.Register(w, "waveInGetDevCapsW", CallConv.Stdcall, 3, c => 2);
+            foreach (var name in new[] { "waveInClose", "waveInStart", "waveInStop", "waveInReset" })
+                i.Register(w, name, CallConv.Stdcall, 1, c => 5);   // MMSYSERR_INVALHANDLE: nothing is open
+            foreach (var name in new[] { "waveInPrepareHeader", "waveInUnprepareHeader", "waveInAddBuffer" })
+                i.Register(w, name, CallConv.Stdcall, 3, c => 5);
+            i.Register(w, "waveInGetPosition", CallConv.Stdcall, 3, c => 5);
+            i.Register(w, "waveInGetID", CallConv.Stdcall, 2, c => 5);
             i.Register(w, "midiOutOpen", CallConv.Stdcall, 5, c => 2);
             i.Register(w, "mixerOpen", CallConv.Stdcall, 5, c => 2);
             i.Register(w, "joyGetNumDevs", CallConv.Stdcall, 0, c => 16);
@@ -1086,6 +1094,17 @@ namespace Nativra.X86.Loader
 
         private void InstallSmallDlls(GuestImports i)
         {
+            i.Register("gdi32.dll", "TranslateCharsetInfo", CallConv.Stdcall, 3, c =>
+            {
+                // Everything is the Western (1252) character set here.
+                memory.WriteBytes(c.Arg(1), new byte[32]);
+                memory.Write32(c.Arg(1), 0);          // ANSI_CHARSET
+                memory.Write32(c.Arg(1) + 4, 1252);
+                memory.Write32(c.Arg(1) + 24, 1);     // FS_LATIN1
+                return 1;
+            });
+            i.Register("user32.dll", "GetRawInputDeviceInfoA", CallConv.Stdcall, 4, c => 0xFFFFFFFF);
+            i.Register("user32.dll", "GetRawInputDeviceInfoW", CallConv.Stdcall, 4, c => 0xFFFFFFFF);
             i.Register("comctl32.dll", "InitCommonControls", CallConv.Stdcall, 0, c => 0);
             i.RegisterOrdinal("comctl32.dll", 17, CallConv.Stdcall, 0, c => 0);
             i.Register("comctl32.dll", "InitCommonControlsEx", CallConv.Stdcall, 1, c => 1);
@@ -1204,6 +1223,19 @@ namespace Nativra.X86.Loader
                 i.Register(net, "InternetQueryOption" + x, CallConv.Stdcall, 4, c => 0);
                 i.Register(net, "InternetCrackUrl" + x, CallConv.Stdcall, 4, c => 0);
                 i.Register(net, "InternetGetLastResponseInfo" + x, CallConv.Stdcall, 3, c => { memory.Write32(c.Arg(0), 0); return 1; });
+            }
+            foreach (var x in new[] { "A", "W" })
+            {
+                var wide = x == "W";
+                i.Register(net, "InternetCanonicalizeUrl" + x, CallConv.Stdcall, 4, c =>
+                {
+                    var url = ReadText(c.Arg(0), wide).Replace(" ", "%20");
+                    var room = memory.Read32(c.Arg(2));
+                    memory.Write32(c.Arg(2), (uint)url.Length + (room < url.Length + 1 ? 1u : 0u));
+                    if (room < url.Length + 1) { process.LastError = 122; return 0; }
+                    WriteText(c.Arg(1), url, wide);
+                    return 1;
+                });
             }
             i.Register(net, "InternetReadFile", CallConv.Stdcall, 4, c => { if (c.Arg(3) != 0) memory.Write32(c.Arg(3), 0); process.LastError = CannotConnect; return 0; });
             i.Register(net, "InternetCloseHandle", CallConv.Stdcall, 1, c => 1);

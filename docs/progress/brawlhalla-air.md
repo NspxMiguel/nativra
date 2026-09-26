@@ -27,3 +27,14 @@ Static analysis of `Adobe AIR.dll` (x64):
 Next: log, for handles opened on `.xml` files, the results of `GetFileType`,
 `GetFileInformationByHandle(Ex)` and every `ReadFile` byte count (not only the
 failures), and the `GetModuleFileNameW` answers AIR receives.
+
+## Build 327 (FILEWATCH=on, every call on .xml handles logged)
+- `GetModuleFileNameW(NULL)` answers `...\LocalState\games\291550\Brawlhalla.exe`
+  (the game root), and the working directory is the game root.
+- `application.xml` is found and opened, and then no `ReadFile`, `GetFileSize(Ex)`,
+  `GetFileType` or `GetFileInformationByHandle` is made on that handle; no file
+  mapping fails; no C runtime open fails; the only stubs reached are USER32 ones.
+- So the descriptor is read through a route that works and is not logged (the C
+  runtime's `_read` on a descriptor from `_open_osfhandle`, or a mapping view), and
+  rejected by a later check. Next: log `_open_osfhandle`/`_read`/`_fstat`, the first
+  bytes AIR gets, and the AVM-side error path around `Adobe AIR.dll+0x2F3CC8`.

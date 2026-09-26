@@ -82,7 +82,7 @@ namespace Kiosk.Native
                 X86Direct3D9.Install(process, kernel, com);
                 // XAudio 2.7 through the packaged 64-bit shim, as for a 64-bit game.
                 var xaudio = new XAudio27Com(process, kernel, com);
-                xaudio.Install((clsid, iid, result) => XAudio27Route.Create(clsid, iid, result));
+                xaudio.Install((clsid, iid, made) => XAudio27Route.Create(clsid, iid, made));
 
                 var packaged = System.IO.Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "x86");
                 var fromPackage = new List<string>();

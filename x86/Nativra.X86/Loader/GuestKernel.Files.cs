@@ -359,7 +359,7 @@ namespace Nativra.X86.Loader
                 files.Remove(handle);
                 return 1;
             }
-            if (CloseRuntimeHandle(handle)) return 1;
+            if (CloseRuntimeHandle(handle) || CloseMapping(handle)) return 1;
             // Standard handles, pseudo handles and anything else the guest holds.
             return 1;
         }

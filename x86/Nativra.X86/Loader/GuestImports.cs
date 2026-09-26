@@ -116,6 +116,8 @@ namespace Nativra.X86.Loader
         private readonly Dictionary<string, GuestImport> byKey = new Dictionary<string, GuestImport>();
         private readonly Dictionary<string, HostFunction> handlers =
             new Dictionary<string, HostFunction>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, uint> data =
+            new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Imports that were called but had no registered handler.</summary>
         public IReadOnlyCollection<GuestImport> Missing
@@ -143,6 +145,18 @@ namespace Nativra.X86.Loader
             if (byKey.TryGetValue(key, out var existing)) existing.Handler = fn;
         }
 
+        /// <summary>
+        /// Registers an exported variable (msvcrt's _iob, _pctype, __argc...):
+        /// the IAT slot of an import of it receives the variable's guest
+        /// address instead of a sentinel, as the Windows loader would write.
+        /// </summary>
+        public void RegisterData(string module, string name, uint address) =>
+            data[Key(Norm(module), name, -1)] = address;
+
+        /// <summary>The guest address of an exported variable, or 0.</summary>
+        public uint DataAddress(string module, string name) =>
+            name != null && data.TryGetValue(Key(Norm(module), name, -1), out var at) ? at : 0;
+
         /// <summary>Registers a handler matched by ordinal instead of name.</summary>
         public void RegisterOrdinal(string module, int ordinal, CallConv conv, int argDwords, HostCall body)
         {
@@ -161,6 +175,7 @@ namespace Nativra.X86.Loader
         {
             module = Norm(module);
             var key = Key(module, function, ordinal);
+            if (data.TryGetValue(key, out var variable)) return variable;
             if (byKey.TryGetValue(key, out var existing)) return existing.Sentinel;
 
             if (cursor >= RegionEnd) throw new InvalidOperationException("out of import sentinels");
@@ -180,7 +195,8 @@ namespace Nativra.X86.Loader
 
         /// <summary>True when a host implementation is registered for module!function.</summary>
         public bool HasHandler(string module, string function) =>
-            function != null && handlers.ContainsKey(Key(Norm(module), function, -1));
+            function != null && (handlers.ContainsKey(Key(Norm(module), function, -1)) ||
+                                 data.ContainsKey(Key(Norm(module), function, -1)));
 
         /// <summary>
         /// True when the program's static imports reference <paramref name="module"/>

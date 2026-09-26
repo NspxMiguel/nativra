@@ -90,6 +90,7 @@ namespace Nativra.X86.Loader
             InstallCrtThreads(i);
             InstallCrtText(i);
             InstallCrtStdio(i);
+            InstallCrtEh(i);
         }
 
         // --- exported variables ---------------------------------------------

@@ -657,6 +657,7 @@ namespace Kiosk.Native
                                         foreach (var f in CrtFiles.Failed) beat.Add("crt " + f);
                                     }
                                     beat.Add(FileWatch.BrokerReport());
+                                    beat.Add("xaudio2.7 " + XAudio27Route.Note);
                                     lock (LoaderStubs.Asked)
                                     {
                                         var start = Math.Max(0, LoaderStubs.Asked.Count - 12);

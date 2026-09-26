@@ -68,6 +68,13 @@ jobs:
           Copy-Item $found.FullName uwp\Redist\d3dcompiler_47.dll
           Write-Host "carrying $($found.FullName) ($($found.Length) bytes)"
 
+      # XAudio 2.7, X3DAudio 1.7, XAPOFX 1.5 and D3DX9 shims (native/directx-redist),
+      # built for the package with a static runtime and packaged beside the
+      # HLSL compiler.
+      - name: Build the DirectX redist shims for the package
+        shell: cmd
+        run: native\directx-redist\build-app.cmd
+
       - name: Restore
         run: msbuild uwp\Kiosk.sln /t:Restore /p:Configuration=Release /p:Platform=x64
 

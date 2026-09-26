@@ -300,7 +300,7 @@ namespace Kiosk.Native
                 // The app's own UI thread too: when a game's window procedure
                 // or a bridge call blocks it, the console ends the app after
                 // some seconds without a dump, and this is where it shows.
-                var __ = Windows.ApplicationModel.Core.CoreApplication.MainView.Dispatcher.RunAsync(
+                var uiTracked = Windows.ApplicationModel.Core.CoreApplication.MainView.Dispatcher.RunAsync(
                     Windows.UI.Core.CoreDispatcherPriority.High, () => StackSampler.TrackCurrent("ui"));
                 await UsbFiles.InstallAsync();
                 DisplayStubs.Install(imports);

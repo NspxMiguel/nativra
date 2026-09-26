@@ -144,7 +144,8 @@ namespace Kiosk
                 // each logged, show which half is the one that stops.
                 item.Status = Texts.Get("shop.installing");
                 var manager = new PackageManager();
-                Log(item.Slug + ": " + Path.GetFileName(main) + " with " + dependencies.Count + " dependencies");
+                Log(item.Slug + ": " + Path.GetFileName(main) + " with " + dependencies.Count + " dependencies"
+                    + (dependencies.Count > 0 ? ": " + string.Join(", ", dependencies.Select(d => Path.GetFileName(d.LocalPath))) : string.Empty));
                 var failed = await StepAsync(item.Slug + " stage",
                     manager.StagePackageAsync(new Uri(main), dependencies), item, 0, 60);
                 if (failed != null) return failed;
@@ -156,6 +157,7 @@ namespace Kiosk
             }
             catch (Exception error)
             {
+                Log(item.Slug + " failed: " + error.GetType().Name + " 0x" + error.HResult.ToString("X8") + " " + error.Message);
                 return error.GetType().Name + " 0x" + error.HResult.ToString("X8") + " " + error.Message;
             }
             finally
@@ -201,7 +203,17 @@ namespace Kiosk
                 Log(what + " stuck at " + lastSeen + " for 2 minutes, operation " + operation.Status);
                 return Texts.Get("shop.stuck", lastSeen);
             }
-            var result = await done;
+            DeploymentResult result;
+            try
+            {
+                result = await done;
+            }
+            catch (Exception error)
+            {
+                // A refused deployment arrives as an exception, not a result.
+                Log(what + " failed: " + error.GetType().Name + " 0x" + error.HResult.ToString("X8") + " " + error.Message);
+                return "0x" + error.HResult.ToString("X8") + " " + error.Message;
+            }
             var code = result.ExtendedErrorCode != null ? result.ExtendedErrorCode.HResult : 0;
             Log(what + " done: registered=" + result.IsRegistered + " 0x" + code.ToString("X8") + " " + result.ErrorText);
             return code == 0 ? null : "0x" + code.ToString("X8") + " " + result.ErrorText;

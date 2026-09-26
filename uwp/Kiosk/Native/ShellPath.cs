@@ -97,6 +97,15 @@ namespace Kiosk.Native
                     WriteWide(buffer, kept);
                     return 1;
                 })),
+                // PathStripPath: the file name moves to the start of the buffer.
+                ["PathStripPathW"] = Keep(new OnePtr(buffer =>
+                {
+                    var text = Wide(buffer);
+                    if (string.IsNullOrEmpty(text)) return 0;
+                    var cut = text.TrimEnd('\\').LastIndexOf('\\');
+                    if (cut >= 0) WriteWide(buffer, text.Substring(cut + 1));
+                    return 0;
+                })),
                 ["PathAppendW"] = Keep(new TwoPtr((buffer, more) =>
                 {
                     if (buffer == IntPtr.Zero) return 0;

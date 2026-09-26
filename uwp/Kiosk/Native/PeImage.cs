@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Kiosk.Native
 {
@@ -112,11 +113,21 @@ namespace Kiosk.Native
 
         public static PeImage Load(string name, byte[] file, Func<string, string, IntPtr> resolver)
         {
+            using (var source = ImageFile.FromBytes(file)) return Load(name, source, resolver);
+        }
+
+        /// <summary>
+        /// Maps an image straight from its file: only the headers are held in
+        /// managed memory, and each section is read directly into the
+        /// reserved image, so the module exists once, where it runs.
+        /// </summary>
+        public static PeImage Load(string name, ImageFile source, Func<string, string, IntPtr> resolver)
+        {
             var image = new PeImage(name);
-            image.Map(file);
+            var headers = image.Map(source);
             image.Relocate();
-            image.BindImports(file, resolver);
-            image.Protect(file);
+            image.BindImports(headers, resolver);
+            image.Protect(headers);
             image.ReadExports();
             image.RegisterExceptions();
             try { image.SetUpTls(); }
@@ -137,8 +148,15 @@ namespace Kiosk.Native
         private static uint U32(byte[] b, int at) => BitConverter.ToUInt32(b, at);
         private static ulong U64(byte[] b, int at) => BitConverter.ToUInt64(b, at);
 
-        private void Map(byte[] file)
+        /// <summary>Total bytes of every image mapped so far (the pulse's memory line).</summary>
+        public static long MappedBytes;
+
+        /// <summary>Reserves the image, reads it in, and returns its headers.</summary>
+        private byte[] Map(ImageFile source)
         {
+            // The headers are small; everything past them goes straight into
+            // the image. SizeOfHeaders can exceed a page, so read what it says.
+            var file = source.ReadBytes(0, 4096);
             if (file.Length < 0x40 || U16(file, 0) != 0x5A4D)
             {
                 throw new BadImageFormatException($"{Name}: not a PE");
@@ -164,6 +182,10 @@ namespace Kiosk.Native
             imageSize = U32(file, optionalHeader + 56);
             preferredBase = U64(file, optionalHeader + 24);
             var headerSize = U32(file, optionalHeader + 60);
+            if (sectionTable + sectionCount * 40 > file.Length || headerSize > file.Length)
+                file = source.ReadBytes(0, (int)Math.Max(headerSize, (uint)(sectionTable + sectionCount * 40)));
+            if (sectionTable + sectionCount * 40 > file.Length)
+                throw new BadImageFormatException($"{Name}: section table past the end of the file");
 
             // Asking for the preferred address first saves relocating; failing
             // that is normal and the relocation pass handles it.
@@ -182,7 +204,8 @@ namespace Kiosk.Native
                     $"{Name}: could not reserve {imageSize} bytes");
             }
 
-            Marshal.Copy(file, 0, baseAddress, (int)headerSize);
+            Interlocked.Add(ref MappedBytes, imageSize);
+            Marshal.Copy(file, 0, baseAddress, (int)Math.Min(headerSize, (uint)file.Length));
 
             for (var i = 0; i < sectionCount; i++)
             {
@@ -190,15 +213,19 @@ namespace Kiosk.Native
                 var virtualAddress = U32(file, section + 12);
                 var rawSize = U32(file, section + 16);
                 var rawPointer = U32(file, section + 20);
-                if (rawSize == 0) continue;
-                Marshal.Copy(
-                    file, (int)rawPointer,
-                    baseAddress + (int)virtualAddress, (int)rawSize);
+                if (rawSize == 0 || virtualAddress >= imageSize) continue;
+                // Never past the image, nor past the end of the file (the
+                // last section's raw size is often rounded up beyond it).
+                var count = Math.Min(rawSize, imageSize - virtualAddress);
+                count = (uint)Math.Max(0, Math.Min(count, source.Length - rawPointer));
+                if (count == 0) continue;
+                source.Read(rawPointer, baseAddress + (int)virtualAddress, (int)count);
             }
 
             EntryPoint = U32(file, optionalHeader + 16) == 0
                 ? IntPtr.Zero
                 : baseAddress + (int)U32(file, optionalHeader + 16);
+            return file;
         }
 
         private int DirectoryRva(int index)
@@ -607,6 +634,7 @@ namespace Kiosk.Native
         {
             if (baseAddress == IntPtr.Zero) return;
             VirtualFree(baseAddress, UIntPtr.Zero, MEM_RELEASE);
+            Interlocked.Add(ref MappedBytes, -imageSize);
             baseAddress = IntPtr.Zero;
         }
     }

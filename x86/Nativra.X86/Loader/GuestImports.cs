@@ -202,6 +202,26 @@ namespace Nativra.X86.Loader
         /// <summary>True when an address falls inside the sentinel region at all (used to spot strays).</summary>
         public static bool InRegion(uint address) => address >= Region && address < RegionEnd + Stride;
 
-        private static string Norm(string module) => module == null ? "" : module.ToLowerInvariant();
+        private static string Norm(string module) => Canonical(module);
+
+        /// <summary>
+        /// The DLL that really implements <paramref name="module"/>. Windows
+        /// resolves API sets through a schema; the guest has no schema, so the
+        /// families a game or its C runtime import are folded here: the core
+        /// sets and kernelbase onto kernel32 (served by host handlers), the C
+        /// runtime sets onto ucrtbase (a guest DLL, when one is available).
+        /// </summary>
+        public static string Canonical(string module)
+        {
+            if (string.IsNullOrEmpty(module)) return "";
+            var m = module.ToLowerInvariant();
+            if (m.StartsWith("api-ms-win-crt-", StringComparison.Ordinal)) return "ucrtbase.dll";
+            if (m.StartsWith("api-ms-win-core-", StringComparison.Ordinal) ||
+                m.StartsWith("api-ms-win-eventing-", StringComparison.Ordinal) ||
+                m.StartsWith("api-ms-win-security-base", StringComparison.Ordinal) ||
+                m == "kernelbase.dll")
+                return "kernel32.dll";
+            return m;
+        }
     }
 }

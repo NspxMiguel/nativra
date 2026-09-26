@@ -140,10 +140,10 @@ namespace Nativra.X86.Tests
             Assert.True(result.Ok);
             Assert.True(kernel.Heap.Owns(ptr));
 
-            // FlsAlloc has none: the program is told it does not exist, and we note it.
-            Assert.Equal(0u, CallK(p, "GetProcAddress", kernel32, Ansi(kernel, p, "FlsAlloc")));
+            // CreateToolhelp32Snapshot has none: the program is told it does not exist, and we note it.
+            Assert.Equal(0u, CallK(p, "GetProcAddress", kernel32, Ansi(kernel, p, "CreateToolhelp32Snapshot")));
             Assert.Equal(127u, CallK(p, "GetLastError"));   // ERROR_PROC_NOT_FOUND
-            Assert.Contains("kernel32.dll!FlsAlloc", kernel.ProbedAbsent);
+            Assert.Contains("kernel32.dll!CreateToolhelp32Snapshot", kernel.ProbedAbsent);
         }
 
         [Fact]

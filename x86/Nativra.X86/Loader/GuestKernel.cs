@@ -17,7 +17,7 @@ namespace Nativra.X86.Loader
     /// UWP layer adds the calls that must reach the real system (file and device
     /// I/O, real module loading, graphics) on top of this same import table.
     /// </summary>
-    public sealed class GuestKernel
+    public sealed partial class GuestKernel
     {
         private const uint ProcessHeapHandle = 0x00A00000;
         private const uint HeapZeroMemory = 0x00000008;
@@ -51,7 +51,8 @@ namespace Nativra.X86.Loader
         private uint commandLineAnsi;
         private uint commandLineWide;
         private uint virtualCursor = 0x20000000;   // where anonymous VirtualAlloc lands
-        private long ticks = 1;
+        private readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+        private long Milliseconds => clock.ElapsedMilliseconds + 60_000;   // never 0, as on a PC that has been up a while
 
         public GuestHeap Heap => heap;
 
@@ -151,16 +152,17 @@ namespace Nativra.X86.Loader
             i.Register(k, "GetCommandLineA", CallConv.Stdcall, 0, c => commandLineAnsi);
             i.Register(k, "GetCommandLineW", CallConv.Stdcall, 0, c => commandLineWide);
 
-            i.Register(k, "GetTickCount", CallConv.Stdcall, 0, c => (uint)(ticks++ & 0xFFFFFFFF));
-            i.Register(k, "GetTickCount64", CallConv.Stdcall, 0, c => (ulong)ticks++);
+            // Real time: games pace frames and time out waits on these.
+            i.Register(k, "GetTickCount", CallConv.Stdcall, 0, c => (uint)Milliseconds);
+            i.Register(k, "GetTickCount64", CallConv.Stdcall, 0, c => (ulong)Milliseconds);
             i.Register(k, "QueryPerformanceCounter", CallConv.Stdcall, 1, c =>
             {
-                memory.Write64(c.Arg(0), (ulong)(ticks++));
+                memory.Write64(c.Arg(0), (ulong)clock.ElapsedTicks);
                 return 1;
             });
             i.Register(k, "QueryPerformanceFrequency", CallConv.Stdcall, 1, c =>
             {
-                memory.Write64(c.Arg(0), 10_000_000);
+                memory.Write64(c.Arg(0), (ulong)System.Diagnostics.Stopwatch.Frequency);
                 return 1;
             });
             i.Register(k, "Sleep", CallConv.Stdcall, 1, c => 0);
@@ -169,7 +171,7 @@ namespace Nativra.X86.Loader
             i.Register(k, "GetSystemInfo", CallConv.Stdcall, 1, c => { FillSystemInfo(c.Arg(0)); return 0; });
             i.Register(k, "GetSystemTimeAsFileTime", CallConv.Stdcall, 1, c =>
             {
-                memory.Write64(c.Arg(0), (ulong)(ticks++) * 10_000);
+                memory.Write64(c.Arg(0), (ulong)DateTime.UtcNow.ToFileTimeUtc());
                 return 0;
             });
 
@@ -181,8 +183,8 @@ namespace Nativra.X86.Loader
             i.Register(k, "LeaveCriticalSection", CallConv.Stdcall, 1, c => 0);
             i.Register(k, "DeleteCriticalSection", CallConv.Stdcall, 1, c => 0);
 
-            i.Register(k, "OutputDebugStringA", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "OutputDebugStringW", CallConv.Stdcall, 1, c => 0);
+            InstallRuntime(i);
+            InstallFiles(i);
         }
 
         // --- handler bodies -----------------------------------------------
@@ -379,7 +381,7 @@ namespace Nativra.X86.Loader
             var slash = name.LastIndexOfAny(new[] { '\\', '/' });
             if (slash >= 0) name = name.Substring(slash + 1);
             name = name.ToLowerInvariant();
-            return name.IndexOf('.') < 0 ? name + ".dll" : name;
+            return GuestImports.Canonical(name.IndexOf('.') < 0 ? name + ".dll" : name);
         }
     }
 }

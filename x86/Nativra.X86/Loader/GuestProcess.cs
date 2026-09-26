@@ -18,6 +18,8 @@ namespace Nativra.X86.Loader
         MissingImport,
         /// <summary>The guest ended the process (ExitProcess and friends).</summary>
         Exited,
+        /// <summary>The guest raised a software exception (RaiseException; a C++ throw) that nothing dispatches yet.</summary>
+        Raised,
     }
 
     /// <summary>The outcome of a run, with the fault, missing-import or exit detail when relevant.</summary>
@@ -45,6 +47,7 @@ namespace Nativra.X86.Loader
                 case GuestStop.Fault: return $"fault at 0x{FaultAddress:X8}";
                 case GuestStop.MissingImport: return $"missing import {Import}";
                 case GuestStop.Exited: return $"exited with code {ExitCode}";
+                case GuestStop.Raised: return $"raised exception 0x{ExitCode:X8} from 0x{FaultAddress:X8}";
                 default: return Stop.ToString().ToLowerInvariant();
             }
         }
@@ -293,6 +296,7 @@ namespace Nativra.X86.Loader
         /// <summary>The address a guest call to module!function should reach.</summary>
         public uint ResolveImport(string module, string function, int ordinal)
         {
+            module = GuestImports.Canonical(module);
             var image = LoadModule(module);
             if (image != null)
             {
@@ -324,7 +328,7 @@ namespace Nativra.X86.Loader
             var slash = name.LastIndexOfAny(new[] { '\\', '/' });
             if (slash >= 0) name = name.Substring(slash + 1);
             name = name.ToLowerInvariant();
-            return name.IndexOf('.') < 0 ? name + ".dll" : name;
+            return GuestImports.Canonical(name.IndexOf('.') < 0 ? name + ".dll" : name);
         }
 
         // --- calling and running -------------------------------------------
@@ -378,6 +382,10 @@ namespace Nativra.X86.Loader
                     catch (GuestExitException exit)
                     {
                         return new GuestRunResult(GuestStop.Exited, exitCode: exit.Code);
+                    }
+                    catch (GuestRaisedException raised)
+                    {
+                        return new GuestRunResult(GuestStop.Raised, Memory.Read32(Cpu.Esp), import, raised.Code);
                     }
                     catch (GuestFaultException fe)
                     {

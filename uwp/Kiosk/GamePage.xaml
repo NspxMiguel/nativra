@@ -47,6 +47,8 @@
                     </StackPanel>
                 </StackPanel>
 
+                <ProgressBar x:Name="DownloadBar" Height="6" Margin="0,8,0,0" Minimum="0" Maximum="100"
+                             Foreground="{StaticResource Accent}" Visibility="Collapsed"/>
                 <TextBlock x:Name="StatusText" FontSize="12" Margin="0,4,0,0"
                            TextWrapping="Wrap" MaxLines="2"
                            Foreground="{StaticResource TextSecondary}" />

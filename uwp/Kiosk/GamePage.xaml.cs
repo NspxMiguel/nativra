@@ -177,6 +177,8 @@ namespace Kiosk
 
         private void ShowJob(DownloadJob job)
         {
+            DownloadBar.Visibility = job.Running ? Visibility.Visible : Visibility.Collapsed;
+            DownloadBar.Value = job.Percent;
             StatusText.Text = Texts.Get("steam.downloading", job.Name, job.Percent, job.File);
         }
 
@@ -191,6 +193,7 @@ namespace Kiosk
                     ShowJob(job);
                     return;
                 }
+                DownloadBar.Visibility = Visibility.Collapsed;
                 if (!busy) return;
                 busy = false;
                 if (job.Finished)

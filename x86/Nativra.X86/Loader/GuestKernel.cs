@@ -52,7 +52,15 @@ namespace Nativra.X86.Loader
         private uint commandLineWide;
         private uint virtualCursor = 0x20000000;   // where anonymous VirtualAlloc lands
         private readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
-        private long Milliseconds => clock.ElapsedMilliseconds + 60_000;   // never 0, as on a PC that has been up a while
+        private long Milliseconds => DeterministicTime ? 60_000 : clock.ElapsedMilliseconds + 60_000;   // never 0, as on a PC that has been up a while
+        private long Ticks => DeterministicTime ? 600_000 : clock.ElapsedTicks;
+        private DateTime UtcNow => DeterministicTime ? new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc) : DateTime.UtcNow;
+
+        /// <summary>
+        /// Every clock the guest reads stands still (tests that run one
+        /// program twice and compare, such as JIT against interpreter).
+        /// </summary>
+        public bool DeterministicTime { get; set; }
 
         public GuestHeap Heap => heap;
 
@@ -169,7 +177,7 @@ namespace Nativra.X86.Loader
             i.Register(k, "GetTickCount64", CallConv.Stdcall, 0, c => (ulong)Milliseconds);
             i.Register(k, "QueryPerformanceCounter", CallConv.Stdcall, 1, c =>
             {
-                memory.Write64(c.Arg(0), (ulong)clock.ElapsedTicks);
+                memory.Write64(c.Arg(0), (ulong)Ticks);
                 return 1;
             });
             i.Register(k, "QueryPerformanceFrequency", CallConv.Stdcall, 1, c =>
@@ -182,7 +190,7 @@ namespace Nativra.X86.Loader
             i.Register(k, "GetSystemInfo", CallConv.Stdcall, 1, c => { FillSystemInfo(c.Arg(0)); return 0; });
             i.Register(k, "GetSystemTimeAsFileTime", CallConv.Stdcall, 1, c =>
             {
-                memory.Write64(c.Arg(0), (ulong)DateTime.UtcNow.ToFileTimeUtc());
+                memory.Write64(c.Arg(0), (ulong)UtcNow.ToFileTimeUtc());
                 return 0;
             });
 

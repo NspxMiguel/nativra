@@ -248,11 +248,11 @@ namespace Nativra.X86.Loader
             i.Register(k, "GetVersionExW", CallConv.Stdcall, 1, c => VersionInfo(c.Arg(0)));
             i.Register(k, "GetSystemTimePreciseAsFileTime", CallConv.Stdcall, 1, c =>
             {
-                memory.Write64(c.Arg(0), (ulong)DateTime.UtcNow.ToFileTimeUtc());
+                memory.Write64(c.Arg(0), (ulong)UtcNow.ToFileTimeUtc());
                 return 0;
             });
-            i.Register(k, "GetSystemTime", CallConv.Stdcall, 1, c => { WriteSystemTime(c.Arg(0), DateTime.UtcNow); return 0; });
-            i.Register(k, "GetLocalTime", CallConv.Stdcall, 1, c => { WriteSystemTime(c.Arg(0), DateTime.Now); return 0; });
+            i.Register(k, "GetSystemTime", CallConv.Stdcall, 1, c => { WriteSystemTime(c.Arg(0), UtcNow); return 0; });
+            i.Register(k, "GetLocalTime", CallConv.Stdcall, 1, c => { WriteSystemTime(c.Arg(0), DeterministicTime ? UtcNow : DateTime.Now); return 0; });
             i.Register(k, "FileTimeToSystemTime", CallConv.Stdcall, 2, c =>
             {
                 WriteSystemTime(c.Arg(1), DateTime.FromFileTimeUtc((long)memory.Read64(c.Arg(0))));

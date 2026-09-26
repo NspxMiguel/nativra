@@ -217,6 +217,55 @@ namespace Kiosk.Native
         public static bool NameTheCard;
         // Captured from the real DXGI response before compatibility overrides.
         public static string ReportedAdapter;
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint ReleaseDelegate(IntPtr self);
+
+        /// <summary>
+        /// The adapter a device was really made on, as "description
+        /// vendor:device". A game that picks an adapter itself can land on
+        /// the Basic Render Driver, which is software and draws a frame in
+        /// seconds; this says which one it got.
+        /// </summary>
+        private static string AdapterOf(IntPtr device)
+        {
+            if (device == IntPtr.Zero) return "nothing";
+            var dxgiDevice = IntPtr.Zero;
+            var adapter = IntPtr.Zero;
+            var riid = Marshal.AllocHGlobal(16);
+            var slot = Marshal.AllocHGlobal(IntPtr.Size);
+            var desc = Marshal.AllocHGlobal(512);
+            try
+            {
+                Marshal.StructureToPtr(new Guid("54ec77fa-1377-44e6-8c32-88fd5f44c84c"), riid, false);
+                var ask = Marshal.GetDelegateForFunctionPointer<QueryInterfaceDelegate>(ComProxy.Method(device, 0));
+                if (ask(device, riid, slot) != S_OK) return "no IDXGIDevice";
+                dxgiDevice = Marshal.ReadIntPtr(slot);
+                // IDXGIDevice::GetAdapter follows IUnknown (3) and IDXGIObject (4).
+                var getAdapter = Marshal.GetDelegateForFunctionPointer<OneOutDelegate>(ComProxy.Method(dxgiDevice, 7));
+                if (getAdapter(dxgiDevice, slot) != S_OK) return "no adapter";
+                adapter = Marshal.ReadIntPtr(slot);
+                // IDXGIAdapter::GetDesc: IUnknown (3), IDXGIObject (4), EnumOutputs.
+                var getDesc = Marshal.GetDelegateForFunctionPointer<OneOutDelegate>(ComProxy.Method(adapter, 8));
+                if (getDesc(adapter, desc) != S_OK) return "no description";
+                var name = Marshal.PtrToStringUni(desc, 128).TrimEnd('\0');
+                return name + " " + Marshal.ReadInt32(desc, 256).ToString("X4") + ":" + Marshal.ReadInt32(desc, 260).ToString("X4");
+            }
+            catch (Exception error)
+            {
+                return error.GetType().Name;
+            }
+            finally
+            {
+                if (adapter != IntPtr.Zero)
+                    Marshal.GetDelegateForFunctionPointer<ReleaseDelegate>(ComProxy.Method(adapter, 2))(adapter);
+                if (dxgiDevice != IntPtr.Zero)
+                    Marshal.GetDelegateForFunctionPointer<ReleaseDelegate>(ComProxy.Method(dxgiDevice, 2))(dxgiDevice);
+                Marshal.FreeHGlobal(desc);
+                Marshal.FreeHGlobal(slot);
+                Marshal.FreeHGlobal(riid);
+            }
+        }
         public static uint ReportedVendor;
         public static uint ReportedDevice;
         public static ulong ReportedVideoMemory;
@@ -1688,6 +1737,8 @@ namespace Kiosk.Native
                         ReportedFeatureLevel = Marshal.ReadInt32(resultLevel);
                         Note("feature level 0x" + Marshal.ReadInt32(resultLevel).ToString("X"));
                     }
+                    if (code == S_OK && resultDevice != IntPtr.Zero)
+                        Note("device on " + AdapterOf(Marshal.ReadIntPtr(resultDevice)));
 
                     // The device goes back as a stand-in as well. Without this
                     // the engine reaches the real factory through it and asks

@@ -193,8 +193,36 @@ namespace Kiosk.Native
             return (short)scaled;
         }
 
+        [DllImport("api-ms-win-core-processenvironment-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool SetEnvironmentVariableW(string name, string value);
+
+        /// <summary>
+        /// Steers SDL2 onto XInput. SDL reads an Xbox pad through
+        /// Windows.Gaming.Input when it can, which goes around this bridge:
+        /// Hades never called XInputGetState, so Device Portal input never
+        /// reached it and the PC/controller mode switch did not apply (the pad
+        /// kept driving the game in PC mode). SDL takes its hints from the
+        /// process environment, read when the game starts, so they are set
+        /// before it loads. Games without SDL never look at these names.
+        /// </summary>
+        private static void SteerSdl()
+        {
+            try
+            {
+                SetEnvironmentVariableW("SDL_JOYSTICK_WGI", "0");
+                SetEnvironmentVariableW("SDL_JOYSTICK_RAWINPUT", "0");
+                SetEnvironmentVariableW("SDL_JOYSTICK_HIDAPI", "0");
+                SetEnvironmentVariableW("SDL_XINPUT_ENABLED", "1");
+            }
+            catch
+            {
+                // Without the hints SDL picks its own backend, as before.
+            }
+        }
+
         public static void Install(SystemImports imports)
         {
+            SteerSdl();
             state = (index, target) =>
             {
                 if (target == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;

@@ -287,7 +287,11 @@ namespace Kiosk.Native
                 if (already != null) return already.BaseAddress;
                 try
                 {
-                    var image = PeImage.Load(name, FileWatch.ReadAll(path), imports.Resolve);
+                    PeImage image;
+                    // Straight from the file into the image; the whole-file
+                    // read is only the fallback when the handle is refused.
+                    using (var source = ImageFile.TryOpen(path) ?? ImageFile.FromBytes(FileWatch.ReadAll(path)))
+                        image = PeImage.Load(name, source, imports.Resolve);
                     imports.Add(image);
                     named[image.BaseAddress.ToInt64()] = name;
                     ModuleFileName.Register(image.BaseAddress, path);

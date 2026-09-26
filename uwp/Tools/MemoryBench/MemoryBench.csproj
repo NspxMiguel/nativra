@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Measures the loader's memory on the Windows runner: maps real DLLs with
+       the app's own PeImage, the old way (whole file in memory) and the new
+       way (sections read straight into the image), and reports the process's
+       peak commit for each. Not part of the app. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Kiosk\Native\ImageFile.cs" Link="Native\ImageFile.cs" />
+    <Compile Include="..\..\Kiosk\Native\PeImage.cs" Link="Native\PeImage.cs" />
+  </ItemGroup>
+</Project>

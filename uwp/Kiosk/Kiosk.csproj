@@ -91,6 +91,7 @@
     <Compile Include="Steam\SteamCm.cs" />
     <Compile Include="Steam\SteamVdf.cs" />
     <Compile Include="Steam\SteamDepot.cs" />
+    <Compile Include="Native\ImageFile.cs" />
     <Compile Include="Native\PeImage.cs" />
     <Compile Include="Native\SystemImports.cs" />
     <Compile Include="Native\Win32Shim.cs" />

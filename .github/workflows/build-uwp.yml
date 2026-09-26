@@ -23,6 +23,28 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
+      # The console gives the app 5 GB including GPU memory, and a game
+      # needs most of it. This maps the machine's largest DLLs with the app's
+      # own PeImage, once with the whole file held in memory (the old way) and
+      # once reading each section straight into the image, and fails if the
+      # new way does not cost less.
+      - name: Set up .NET for the memory bench
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Measure the loader's memory
+        shell: pwsh
+        run: |
+          $old = dotnet run -c Release --project uwp/Tools/MemoryBench -- old
+          $old | Write-Host
+          $new = dotnet run -c Release --project uwp/Tools/MemoryBench -- new
+          $new | Write-Host
+          $o = [int](($old | Select-String 'RESULT').Line -replace '.*peak_over_baseline_mb=(\d+).*','$1')
+          $n = [int](($new | Select-String 'RESULT').Line -replace '.*peak_over_baseline_mb=(\d+).*','$1')
+          Write-Host "loader peak commit over baseline: old $o MB, new $n MB"
+          if ($n -ge $o) { throw "mapping from the file did not reduce the loader's peak commit" }
+
       - name: Restore signing certificate
         shell: pwsh
         env:

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -224,7 +225,10 @@ namespace Kiosk.Native
                 // Reject unsupported architecture before mapping any dependency.
                 // A 32-bit image needs a separate execution/ABI path, not x64 thunks.
                 var executable = await folder.GetFileAsync(exeName);
-                var executableBytes = (await FileIO.ReadBufferAsync(executable)).ToArray();
+                // Only the headers decide the architecture; the image itself
+                // is read into place when it is mapped, not held here.
+                byte[] executableBytes;
+                using (var source = await OpenImageAsync(executable)) executableBytes = source.ReadBytes(0, 4096);
                 if (executableBytes.Length < 64)
                     throw new BadImageFormatException("The executable header is incomplete.");
                 var peOffset = BitConverter.ToInt32(executableBytes, 0x3C);
@@ -368,7 +372,7 @@ namespace Kiosk.Native
                         continue;
                     }
 
-                    var bytes = (await FileIO.ReadBufferAsync(file)).ToArray();
+                    var source = await OpenImageAsync(file);
                     // Written before the attempt: mapping an image runs the
                     // module's own code, and that can take the process with it.
                     lines.Add(file.Name + ": loading");
@@ -376,7 +380,8 @@ namespace Kiosk.Native
                     lines.RemoveAt(lines.Count - 1);
                     try
                     {
-                        var image = PeImage.Load(file.Name, bytes, imports.Resolve);
+                        PeImage image;
+                        using (source) image = PeImage.Load(file.Name, source, imports.Resolve);
                         imports.Add(image);
                         ModuleFileName.Register(image.BaseAddress, file.Path);
                         if (file.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
@@ -870,6 +875,19 @@ namespace Kiosk.Native
         /// with this console, so every plausible one is tried and the answer
         /// each gave is written down.
         /// </summary>
+        /// <summary>
+        /// A game module to map: its file handle when the FromApp path reaches
+        /// it, otherwise a read stream from the StorageFile. Never the whole
+        /// file in memory.
+        /// </summary>
+        private static async Task<ImageFile> OpenImageAsync(StorageFile file)
+        {
+            var direct = string.IsNullOrEmpty(file.Path) ? null : ImageFile.TryOpen(file.Path);
+            if (direct != null) return direct;
+            var stream = await file.OpenReadAsync();
+            return ImageFile.FromStream(stream.AsStreamForRead());
+        }
+
         private static async Task<StorageFolder> DevelopmentFiles()
         {
             var roots = new[]

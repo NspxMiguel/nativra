@@ -543,14 +543,14 @@ namespace Kiosk.Native
                         {
                             var watch = new System.Threading.Thread(() =>
                             {
-                                var path = System.IO.Path.Combine(local.Path, "native-watch.txt");
+                                var watchPath = System.IO.Path.Combine(local.Path, "native-watch.txt");
                                 while (true)
                                 {
                                     try
                                     {
-                                        var seen = new List<string> { "at=" + DateTime.Now.ToString("HH:mm:ss.fff") };
-                                        seen.AddRange(StackSampler.Sample());
-                                        System.IO.File.WriteAllLines(path, seen);
+                                        var sampled = new List<string> { "at=" + DateTime.Now.ToString("HH:mm:ss.fff") };
+                                        sampled.AddRange(StackSampler.Sample());
+                                        System.IO.File.WriteAllLines(watchPath, sampled);
                                     }
                                     catch
                                     {

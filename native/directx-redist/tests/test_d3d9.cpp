@@ -149,6 +149,11 @@ int main()
     auto useWarp = reinterpret_cast<WarpFn>(GetProcAddress(dll, "NativraD3D9UseWarp"));
     if (!create || !useWarp) { std::printf("FAIL missing exports\n"); return 1; }
     useWarp(TRUE);
+    // The DLL's own diagnostics (shader compile errors, unsupported paths)
+    // belong in the test log, not in OutputDebugString.
+    using LogFn = void (WINAPI*)(void (*)(const char*));
+    if (auto setLog = reinterpret_cast<LogFn>(GetProcAddress(dll, "NativraD3D9SetLog")))
+        setLog([](const char* line) { std::printf("  d3d9: %s\n", line); });
 
     IDirect3D9* d3d = create(D3D_SDK_VERSION);
     Check(d3d != nullptr, "Direct3DCreate9");
@@ -361,6 +366,95 @@ int main()
     dev->GetRenderState(D3DRS_CULLMODE, &cull);
     Check(cull == D3DCULL_CW, "a recorded block applies its states");
     block->Release();
+
+    // --- fixed function ---------------------------------------------------------------------
+    dev->SetVertexShader(nullptr);
+    dev->SetPixelShader(nullptr);
+    dev->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
+    dev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+
+    // A 2D sprite the D3D9 way: pre-transformed vertices shifted by -0.5 so
+    // each pixel samples its own texel, under the default stage (texture x
+    // diffuse). Most 2D games and every UI draw like this.
+    struct TlVertex { float x, y, z, rhw; D3DCOLOR color; float u, v; };
+    const float lo = -0.5f, hi = kSize - 0.5f;
+    const TlVertex sprite[4] = {
+        { lo, lo, 0.5f, 1.0f, 0xFFFFFFFF, 0, 0 },
+        { hi, lo, 0.5f, 1.0f, 0xFFFFFFFF, 1, 0 },
+        { lo, hi, 0.5f, 1.0f, 0xFFFFFFFF, 0, 1 },
+        { hi, hi, 0.5f, 1.0f, 0xFFFFFFFF, 1, 1 },
+    };
+    dev->SetFVF(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1);
+    dev->SetTexture(0, tex);
+    dev->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0);
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, sprite, sizeof(TlVertex));
+    mismatches = 0;
+    first.clear();
+    if (ReadBackBuffer(dev, rb)) {
+        for (UINT y = 0; y < kSize; y++)
+            for (UINT x = 0; x < kSize; x++) {
+                const DWORD want = D3DCOLOR_XRGB(x * 4, y * 4, (x ^ y) & 0xFF) & 0x00FFFFFF;
+                if (rb.At(x, y) != want && mismatches++ == 0)
+                    first = "(" + std::to_string(x) + "," + std::to_string(y) + ") " + Hex(rb.At(x, y)) + " want " + Hex(want);
+            }
+    } else {
+        mismatches = -1;
+    }
+    Check(mismatches == 0, "fixed function: pre-transformed sprite is texel exact",
+          mismatches ? std::to_string(mismatches) + " pixels differ, first " + first : "");
+
+    // Stage 0 selecting the texture factor.
+    dev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+    dev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TFACTOR);
+    dev->SetRenderState(D3DRS_TEXTUREFACTOR, D3DCOLOR_XRGB(12, 34, 56));
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, sprite, sizeof(TlVertex));
+    Check(ReadBackBuffer(dev, rb) && rb.At(20, 20) == 0x0C2238, "fixed function: texture stage selects TFACTOR",
+          Hex(rb.At(20, 20)));
+    dev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+    dev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+    dev->SetTexture(0, nullptr);
+
+    // Untransformed geometry, lit by one directional light head-on.
+    struct LitVertex { float x, y, z, nx, ny, nz; };
+    const LitVertex lit[4] = {
+        { -1, -1, 0.5f, 0, 0, -1 }, { -1, 1, 0.5f, 0, 0, -1 }, { 1, -1, 0.5f, 0, 0, -1 }, { 1, 1, 0.5f, 0, 0, -1 },
+    };
+    D3DMATRIX identity = {};
+    identity._11 = identity._22 = identity._33 = identity._44 = 1.0f;
+    dev->SetTransform(D3DTS_WORLD, &identity);
+    dev->SetTransform(D3DTS_VIEW, &identity);
+    dev->SetTransform(D3DTS_PROJECTION, &identity);
+    D3DMATERIAL9 material = {};
+    material.Diffuse = { 0.5f, 1.0f, 0.25f, 1.0f };
+    dev->SetMaterial(&material);
+    D3DLIGHT9 light = {};
+    light.Type = D3DLIGHT_DIRECTIONAL;
+    light.Diffuse = { 1.0f, 1.0f, 1.0f, 1.0f };
+    light.Direction = { 0.0f, 0.0f, 1.0f };   // shining along +z, onto normals facing -z
+    dev->SetLight(0, &light);
+    dev->LightEnable(0, TRUE);
+    dev->SetRenderState(D3DRS_LIGHTING, TRUE);
+    dev->SetRenderState(D3DRS_AMBIENT, 0);
+    dev->SetFVF(D3DFVF_XYZ | D3DFVF_NORMAL);
+    dev->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0);
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, lit, sizeof(LitVertex));
+    Check(ReadBackBuffer(dev, rb) && Near(rb.At(32, 32), 0x80FF40), "fixed function: directional light x material",
+          Hex(rb.At(32, 32)));
+
+    // Linear vertex fog: depth 0.5 between start 0 and end 1 is half fogged.
+    dev->SetRenderState(D3DRS_FOGENABLE, TRUE);
+    dev->SetRenderState(D3DRS_FOGVERTEXMODE, D3DFOG_LINEAR);
+    dev->SetRenderState(D3DRS_FOGCOLOR, D3DCOLOR_XRGB(0, 0, 255));
+    const float fogStart = 0.0f, fogEnd = 1.0f;
+    DWORD bits;
+    std::memcpy(&bits, &fogStart, 4); dev->SetRenderState(D3DRS_FOGSTART, bits);
+    std::memcpy(&bits, &fogEnd, 4); dev->SetRenderState(D3DRS_FOGEND, bits);
+    dev->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0);
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, lit, sizeof(LitVertex));
+    Check(ReadBackBuffer(dev, rb) && Near(rb.At(32, 32), 0x4080A0, 3), "fixed function: linear vertex fog",
+          Hex(rb.At(32, 32)));
+    dev->SetRenderState(D3DRS_FOGENABLE, FALSE);
+    dev->SetRenderState(D3DRS_LIGHTING, FALSE);
 
     // --- reference counting ----------------------------------------------------------------
     const ULONG countBefore = rtTex->AddRef() - 1;

@@ -18,7 +18,7 @@ idea, with one addition for games not tried yet.
 | Hades | 1145360 | Supergiant engine (x64, D3D11, SDL2, FMOD, runtime HLSL via D3DCompiler_47) | ⛔ Not working | build 282, 2026-09-26 | Reaches the main menu at 60 fps (2.3 ms per frame), running from a USB drive ([screenshot](screenshots/hades-main-menu.png)). Not yet: controller in menus, audio (FMOD), the menu's Bink background movie. |
 | Little Nightmares | 424840 | Unreal Engine 4 | ⬜ Untested | — | Audio uses XAudio 2.7 from the 2010 DirectX redistributable, which the console lacks. |
 | WAVESHAPER | 562260 | 32-bit Windows | ⛔ Not working | 2026-09-23 | 32-bit executables are not supported. |
-| LEGO Jurassic World | 352400 | TT Games (D3D11, x64 `LEGOJurassicWorld_DX11.exe`) | ⬜ Untested | — | Borrowed through Steam Families. Borrowed games download like owned ones: the family license arrives with the account, and the game depot (352401) is keyed normally. 14 GB. |
+| LEGO Jurassic World | 352400 | TT Games (D3D11, x64 `LEGOJurassicWorld_DX11.exe`) | ⛔ Not working | build 292, 2026-09-26 | Borrowed through Steam Families; downloads (15.3 GB, to a USB drive) and starts. Stops at `SteamAPI_Init`: it uses the classic Steamworks C++ interfaces (`SteamUser()`, `SteamApps()`...), which the Steam bridge does not answer yet. |
 
 Performance note: Xbox Developer Mode runs sideloaded apps as *apps* unless
 `DefaultUWPContentTypeToGame` is on (`bun src/xbdev.ts gamemode`, then

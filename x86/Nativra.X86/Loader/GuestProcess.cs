@@ -426,13 +426,24 @@ namespace Nativra.X86.Loader
             var esp = Cpu.Esp;
             var returnAddress = Memory.Read32(esp);
             var call = new GuestCall(this, returnAddress, esp + 4, Cpu.Ecx);
+            jumped = false;
             var result = import.Handler.Body(call);
+            if (jumped) return;   // the handler set the whole CPU state itself
 
             Cpu.Eax = (uint)result;
             Cpu.Edx = (uint)(result >> 32);
             Cpu.Esp = esp + 4 + (uint)import.Handler.CleanupBytes;   // pop return + callee-cleaned args
             Cpu.Eip = returnAddress;
         }
+
+        private bool jumped;
+
+        /// <summary>
+        /// Called by a host handler that has set EIP, ESP and the registers
+        /// itself (exception dispatch, unwinding): the import returns nowhere,
+        /// the guest continues from that state.
+        /// </summary>
+        public void Jumped() => jumped = true;
 
         public void Dispose()
         {

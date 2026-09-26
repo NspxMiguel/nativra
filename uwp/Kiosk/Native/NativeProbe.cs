@@ -295,6 +295,7 @@ namespace Kiosk.Native
                 UserFolders.Install(imports, local.Path);
                 CrtFiles.Install(imports);
                 DirectInputStub.Install(imports);
+                SspiStub.Install(imports);
                 StackSampler.Enabled = await local.TryGetItemAsync("stacks.txt") != null;
                 // While diagnosing, every classic Steam interface call is traced.
                 if (StackSampler.Enabled && SteamBridge.Active)

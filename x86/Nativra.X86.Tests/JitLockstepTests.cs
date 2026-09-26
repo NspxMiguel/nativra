@@ -18,7 +18,9 @@ namespace Nativra.X86.Tests
     {
         private static GuestProcess Start(string path, bool jit, out uint halt)
         {
-            var p = new GuestProcess(new GuestMemory(native: true), useJit: jit);
+            // Threads switch only where the program waits or yields, never on a
+            // block count the two engines would reach at different places.
+            var p = new GuestProcess(new GuestMemory(native: true), useJit: jit) { SliceBlocks = int.MaxValue };
             var kernel = new GuestKernel(p) { DeterministicTime = true, ExePath = "C:\\guest\\" + Path.GetFileName(path) };
             kernel.SetCommandLine(Path.GetFileName(path));
             kernel.Install();
@@ -66,7 +68,7 @@ namespace Nativra.X86.Tests
                         var b = reference.Run(halt, 1);
                         if (steps > 100_000 || (b.Stop != GuestStop.Budget && b.Stop != GuestStop.Returned))
                         {
-                            var code = BitConverter.ToString(jit.Memory.ReadBytes(from, 32));
+                            var code = Describe(jit, from);
                             Assert.Fail(diff != null
                                 ? $"block {block} starting at 0x{from:X8} diverged: {diff}\n  jit: {jit.Cpu}\n  ref: {seen}\n  code: {code}"
                                 : $"block {block} at 0x{from:X8}: the interpreter never reached 0x{target:X8} ({b}; {reference.Cpu})\n  code: {code}");
@@ -74,6 +76,15 @@ namespace Nativra.X86.Tests
                     }
                 }
             }
+        }
+
+        /// <summary>The block's first bytes, or the import it is the sentinel of.</summary>
+        private static string Describe(GuestProcess p, uint address)
+        {
+            if (p.Imports.TryResolve(address, out var import))
+                return $"import {import} (recent: {string.Join(" ", p.RecentImports)})";
+            try { return BitConverter.ToString(p.Memory.ReadBytes(address, 32)); }
+            catch (GuestFaultException) { return "unmapped"; }
         }
 
         private static string Compare(CpuState a, CpuState b)

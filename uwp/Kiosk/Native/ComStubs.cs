@@ -61,6 +61,9 @@ namespace Kiosk.Native
                         // One class this app can honestly provide: the audio
                         // endpoint enumerator, standing in front of the
                         // console's real audio engine.
+                        // XAudio 2.7, through the packaged shim over XAudio 2.9.
+                        if (XAudio27Route.Serves(name)) return XAudio27Route.Create(clsid, riid, result);
+
                         var made = AudioBridge.ClassFor(name);
                         if (made == IntPtr.Zero) made = DirectInputStub.ClassFor(name);
                         if (made != IntPtr.Zero && result != IntPtr.Zero)

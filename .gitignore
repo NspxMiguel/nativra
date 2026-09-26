@@ -38,3 +38,4 @@ CLOUD-TASKS.md
 __pycache__/
 .probe/
 uwp/Redist/
+native/directx-redist/obj-app/

@@ -26,12 +26,49 @@ namespace Kiosk.Native
         private delegate int DuplicateDelegate(IntPtr sourceProcess, IntPtr source, IntPtr targetProcess, out IntPtr target, uint access, int inherit, uint options);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int ReadDelegate(IntPtr process, IntPtr address, IntPtr buffer, IntPtr size, IntPtr read);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate IntPtr HeaderDelegate(IntPtr pc, out IntPtr imageBase);
+
+        [DllImport("api-ms-win-core-libraryloader-l1-2-0.dll", CharSet = CharSet.Unicode)]
+        private static extern uint GetModuleFileNameW(IntPtr module, System.Text.StringBuilder name, uint size);
+
+        private static HeaderDelegate header;
+        private static readonly Dictionary<long, string> moduleNames = new Dictionary<long, string>();
+
+        /// <summary>
+        /// A game image as module+offset, and failing that any module in the
+        /// process, the system's and this app's own: a thread stuck inside the
+        /// bridge shows up as Kiosk or SharedLibrary rather than as a number.
+        /// </summary>
+        private static string Describe(long address)
+        {
+            var mine = ImageLookup.Describe(address);
+            if (!mine.StartsWith("0x", StringComparison.Ordinal) || header == null) return mine;
+            try
+            {
+                if (header(new IntPtr(address), out var imageBase) == IntPtr.Zero || imageBase == IntPtr.Zero) return mine;
+                var key = imageBase.ToInt64();
+                if (!moduleNames.TryGetValue(key, out var name))
+                {
+                    var text = new System.Text.StringBuilder(260);
+                    GetModuleFileNameW(imageBase, text, 260);
+                    name = System.IO.Path.GetFileName(text.ToString());
+                    if (string.IsNullOrEmpty(name)) name = "module@" + key.ToString("X");
+                    moduleNames[key] = name;
+                }
+                return "~" + name + "+0x" + (address - key).ToString("X");
+            }
+            catch
+            {
+                return mine;
+            }
+        }
 
         private const uint ContextFull = 0x10000B;
         private const int ContextSize = 1232;
         private const int RipOffset = 0xF8;
         private const int RspOffset = 0x98;
-        private const int StackBytes = 4096;
+        private const int StackBytes = 16384;
         private const int MaxThreads = 48;
 
         private sealed class Tracked
@@ -69,6 +106,7 @@ namespace Kiosk.Native
             threadId = Get<IdDelegate>(imports, "GetThreadId");
             duplicate = Get<DuplicateDelegate>(imports, "DuplicateHandle");
             read = Get<ReadDelegate>(imports, "ReadProcessMemory");
+            header = Get<HeaderDelegate>(imports, "RtlPcToFileHeader");
             // CONTEXT must be 16-byte aligned; everything the sample touches
             // while a thread is suspended exists before it is suspended.
             contextBlock = Marshal.AllocHGlobal(ContextSize + 16);
@@ -132,14 +170,16 @@ namespace Kiosk.Native
 
                 if (got > 0) Marshal.Copy(stack, words, 0, (int)(got / 8));
                 var frames = new List<string>();
-                for (var i = 0; i < got / 8 && frames.Count < 10; i++)
+                // Every word that lands in a module; the ~ ones are the
+                // system's or this app's, the rest are the game's.
+                for (var i = 0; i < got / 8 && frames.Count < 16; i++)
                 {
-                    var described = ImageLookup.Describe(words[i]);
+                    var described = Describe(words[i]);
                     if (described.StartsWith("0x", StringComparison.Ordinal)) continue;
                     if (frames.Count > 0 && frames[frames.Count - 1] == described) continue;
                     frames.Add(described);
                 }
-                lines.Add("stack " + thread.Name + " tid=" + thread.Id + " at " + ImageLookup.Describe(rip)
+                lines.Add("stack " + thread.Name + " tid=" + thread.Id + " at " + Describe(rip)
                     + " | " + string.Join(" < ", frames));
             }
             return lines;

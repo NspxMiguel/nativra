@@ -155,7 +155,10 @@ struct DclEntry {
 
 class Translator {
 public:
+    explicit Translator(const Options& options) : options(options) {}
     Result Run(const uint32_t* tokens, size_t count);
+
+    const Options options;
 
 private:
     bool Decode(const uint32_t* tokens, size_t count);
@@ -813,13 +816,15 @@ std::string Translator::Assemble(const std::map<uint32_t, std::string>& labelBod
     if (vs) {
         s << "struct NativraIn\n{\n";
         for (const auto& in : res.inputs) {
-            s << "    float4 i" << in.reg << " : " << UsageName(in.usage) << static_cast<int>(in.index) << ";\n";
+            const InputType type = in.reg < 16 ? options.inputTypes[in.reg] : InputType::Float;
+            const char* hlslType = type == InputType::SInt ? "int4" : type == InputType::UInt ? "uint4" : "float4";
+            s << "    " << hlslType << " i" << in.reg << " : " << UsageName(in.usage) << static_cast<int>(in.index) << ";\n";
         }
         if (res.inputs.empty()) s << "    uint nativra_vertex : SV_VertexID;\n";
         s << "};\n\nstruct NativraOut\n{\n";
         slots(s, {});
         s << "};\n\nNativraOut main(NativraIn input)\n{\n";
-        for (const auto& in : res.inputs) s << "    v[" << in.reg << "] = input.i" << in.reg << ";\n";
+        for (const auto& in : res.inputs) s << "    v[" << in.reg << "] = float4(input.i" << in.reg << ");\n";
         s << "    nativra_main();\n";
         s << "    NativraOut output = (NativraOut)0;\n";
         if (major >= 3) {
@@ -960,9 +965,9 @@ const char* UsageName(uint8_t usage)
     return usage < sizeof(names) / sizeof(names[0]) ? names[usage] : "UNKNOWN";
 }
 
-Result Translate(const uint32_t* tokens, size_t count)
+Result Translate(const uint32_t* tokens, size_t count, const Options& options)
 {
-    Translator t;
+    Translator t(options);
     return t.Run(tokens, count);
 }
 

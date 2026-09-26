@@ -48,8 +48,10 @@ constexpr int VaryingSlots = 30;
 
 // Layout of the fixup cbuffer (b3), which carries the D3D9 behaviours D3D11
 // does not have.
-//   vertex: nativra_fix[0].xy = position adjust per unit w (the D3D9 half-pixel
-//           offset: (-1/width, +1/height)), 0 to disable.
+//   vertex: nativra_fix[0].xy = position adjust per unit w, the D3D9 half-pixel
+//           offset. D3D9 puts pixel centres on integers, D3D10+ on halves, so
+//           a D3D9 position lands half a pixel right and down in D3D11:
+//           (+1/viewport width, -1/viewport height) in NDC. 0 disables it.
 //   pixel:  nativra_fix[0].x  = alpha test D3DCMPFUNC (0 or 8 = off),
 //           nativra_fix[0].y  = alpha reference in [0,1].
 enum FixupSlot { FixupPositionAdjust = 0, FixupAlphaTest = 0 };
@@ -82,9 +84,19 @@ struct Result {
     uint32_t renderTargets = 0;                 // pixel: bit n = writes oCn
 };
 
+// How the input assembler hands a vertex input to the shader. D3D9 delivers
+// UBYTE4, SHORT2 and SHORT4 as integer values in float registers; D3D11 has no
+// format that converts that way, so such inputs are fetched as integers and
+// converted in the shader.
+enum class InputType : uint8_t { Float = 0, SInt = 1, UInt = 2 };
+
+struct Options {
+    InputType inputTypes[16] = {};   // by vertex input register v#
+};
+
 // Translates a D3D9 shader token stream (starting at the version token).
 // `count` is in DWORDs; the stream may be longer than the shader (the END
 // token stops it).
-Result Translate(const uint32_t* tokens, size_t count);
+Result Translate(const uint32_t* tokens, size_t count, const Options& options = Options());
 
 } // namespace dxso

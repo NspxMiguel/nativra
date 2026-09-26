@@ -51,13 +51,14 @@ namespace Nativra.X86.Tests
                 };
 
                 var image = p.LoadExecutable(exe, File.ReadAllBytes(Path.Combine(folder, exe)));
-                var result = p.InitializeModules(200_000_000);
-                if (result.Ok) result = p.Call(image.EntryPoint, out _, 500_000_000);
+                var result = p.InitializeModules(20_000_000);
+                if (result.Ok) result = p.Call(image.EntryPoint, out _, 20_000_000);
 
                 var detail = $"{exe}: {result}; eip=0x{p.Cpu.Eip:X8} {p.Cpu}; modules={string.Join(",", p.Images.Select(i => i.Name))}" +
                              $"; raised={string.Join(",", kernel.ExceptionsRaised.Select(c => c.ToString("X8")))}" +
                              $"; probed-absent={string.Join(",", kernel.ProbedAbsent.Distinct())}" +
                              $"; log=[{string.Join(" | ", log)}]" +
+                             $"; recent=[{string.Join(" ", p.RecentImports)}]" +
                              $"; unserved={string.Join(",", p.Images.SelectMany(i => i.Imports).Where(i => GuestImports.InRegion(i.Bound) && !(p.Imports.TryResolve(i.Bound, out var g) && g.Handler != null)).Select(i => i.ToString()).Distinct())}";
                 Assert.True(result.Stop == GuestStop.Exited, detail);
                 Assert.True(result.ExitCode == 42, detail);

@@ -54,6 +54,20 @@ jobs:
         shell: cmd
         run: uwp\TlsCarrier\build.cmd
 
+      # The console has no HLSL compiler, and games that reflect or compile
+      # shaders at run time (Hades) call it. The Windows SDK ships
+      # d3dcompiler_47.dll as redistributable code for exactly this: carried
+      # in the package, LoadPackagedLibrary finds it by name.
+      - name: Take the redistributable shader compiler from the Windows SDK
+        shell: pwsh
+        run: |
+          $found = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Redist" -Recurse -Filter d3dcompiler_47.dll |
+            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $found) { throw "d3dcompiler_47.dll not found in the Windows SDK redist folder" }
+          New-Item -ItemType Directory -Force uwp\Redist | Out-Null
+          Copy-Item $found.FullName uwp\Redist\d3dcompiler_47.dll
+          Write-Host "carrying $($found.FullName) ($($found.Length) bytes)"
+
       - name: Restore
         run: msbuild uwp\Kiosk.sln /t:Restore /p:Configuration=Release /p:Platform=x64
 

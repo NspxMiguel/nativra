@@ -51,6 +51,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="..\Redist\*.dll">
+      <Link>%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="..\TlsCarrier\bin\NativraTls*.dll">
       <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

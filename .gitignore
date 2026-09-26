@@ -37,3 +37,4 @@ eden_uwp_diag.txt
 CLOUD-TASKS.md
 __pycache__/
 .probe/
+uwp/Redist/

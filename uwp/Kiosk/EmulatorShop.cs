@@ -138,16 +138,19 @@ namespace Kiosk
                     main = download;
                 }
 
+                // Staged first, then registered: on the console a single
+                // AddPackageAsync stopped at about 95% and never returned, and
+                // left a registration the system would not launch. Two steps,
+                // each logged, show which half is the one that stops.
                 item.Status = Texts.Get("shop.installing");
                 var manager = new PackageManager();
-                var operation = manager.AddPackageAsync(new Uri(main), dependencies, DeploymentOptions.None);
-                operation.Progress = (info, progress) => Ui(() => item.Percent = progress.percentage);
-                var result = await operation;
-                if (!result.IsRegistered)
-                {
-                    var code = result.ExtendedErrorCode != null ? result.ExtendedErrorCode.HResult : 0;
-                    return "0x" + code.ToString("X8") + " " + result.ErrorText;
-                }
+                Log(item.Slug + ": " + Path.GetFileName(main) + " with " + dependencies.Count + " dependencies");
+                var failed = await StepAsync(item.Slug + " stage",
+                    manager.StagePackageAsync(new Uri(main), dependencies), item, 0, 60);
+                if (failed != null) return failed;
+                failed = await StepAsync(item.Slug + " register",
+                    manager.AddPackageAsync(new Uri(main), dependencies, DeploymentOptions.None), item, 60, 40);
+                if (failed != null) return failed;
                 await MarkInstalledAsync(item.Slug);
                 return null;
             }
@@ -166,6 +169,66 @@ namespace Kiosk
                     // Temporary storage: the system clears what is left.
                 }
                 item.Busy = false;
+            }
+        }
+
+        /// <summary>
+        /// Awaits one deployment step: every state and percent goes to
+        /// shop-log.txt, and two minutes without progress ends the wait with
+        /// the last one seen instead of leaving the card spinning.
+        /// </summary>
+        private static async Task<string> StepAsync(string what,
+            Windows.Foundation.IAsyncOperationWithProgress<DeploymentResult, DeploymentProgress> operation,
+            CatalogItem item, double from, double span)
+        {
+            var lastChange = DateTime.UtcNow;
+            var lastSeen = "queued";
+            operation.Progress = (info, progress) =>
+            {
+                var seen = progress.state + " " + progress.percentage + "%";
+                if (seen != lastSeen)
+                {
+                    lastSeen = seen;
+                    lastChange = DateTime.UtcNow;
+                    Log(what + " " + seen);
+                }
+                Ui(() => item.Percent = from + span * progress.percentage / 100.0);
+            };
+            var done = operation.AsTask();
+            while (await Task.WhenAny(done, Task.Delay(TimeSpan.FromSeconds(10))) != done)
+            {
+                if (DateTime.UtcNow - lastChange < TimeSpan.FromMinutes(2)) continue;
+                Log(what + " stuck at " + lastSeen + " for 2 minutes, operation " + operation.Status);
+                return Texts.Get("shop.stuck", lastSeen);
+            }
+            var result = await done;
+            var code = result.ExtendedErrorCode != null ? result.ExtendedErrorCode.HResult : 0;
+            Log(what + " done: registered=" + result.IsRegistered + " 0x" + code.ToString("X8") + " " + result.ErrorText);
+            return code == 0 ? null : "0x" + code.ToString("X8") + " " + result.ErrorText;
+        }
+
+        private static readonly object logGate = new object();
+        private static Task logTail = Task.CompletedTask;
+
+        /// <summary>Appends a timestamped line to LocalState\shop-log.txt, readable from the Mac.</summary>
+        private static void Log(string line)
+        {
+            var text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + line + "\r\n";
+            lock (logGate)
+            {
+                logTail = logTail.ContinueWith(async _ =>
+                {
+                    try
+                    {
+                        var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                            "shop-log.txt", CreationCollisionOption.OpenIfExists);
+                        await FileIO.AppendTextAsync(file, text);
+                    }
+                    catch
+                    {
+                        // Diagnostics only.
+                    }
+                }).Unwrap();
             }
         }
 

@@ -43,11 +43,36 @@ jobs:
           $cases = (Select-String -Path $v -Pattern '^I ' -AllMatches).Count
           Write-Host "oracle: $snippets snippets, $cases cases from real silicon"
 
+      # Real 32-bit MSVC programs the layer runs end to end (GuestProgramTests).
+      - name: Build the guest programs
+        shell: cmd
+        run: x86\harness\build-guests.cmd
+
+      # The programs themselves, for reproducing a failure off the runner.
+      - name: Keep the guest programs
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-programs
+          path: x86/harness/guests/bin/*.exe
+          retention-days: 7
+
       - name: Restore
         run: dotnet restore x86/Nativra.X86.sln
 
       - name: Build
         run: dotnet build x86/Nativra.X86.sln -c Release --no-restore
 
+      # First on its own, so a failure's diagnosis is not buried in the
+      # oracle listing below.
+      # With the lockstep check: the JIT and the interpreter run crt_static
+      # side by side, and a divergence names the block that caused it.
+      - name: Run the guest programs through the layer
+        env:
+          NATIVRA_GUEST_PROGRAMS: ${{ github.workspace }}\x86\harness\guests\bin
+          NATIVRA_LOCKSTEP_EXE: ${{ github.workspace }}\x86\harness\guests\bin\crt_static.exe
+        run: dotnet test x86/Nativra.X86.sln -c Release --no-build --filter "FullyQualifiedName~GuestProgramTests|FullyQualifiedName~JitLockstepTests" --logger "console;verbosity=normal"
+
       - name: Test (interpreter and JIT vs. hardware)
+        env:
+          NATIVRA_GUEST_PROGRAMS: ${{ github.workspace }}\x86\harness\guests\bin
         run: dotnet test x86/Nativra.X86.sln -c Release --no-build --logger "console;verbosity=normal"

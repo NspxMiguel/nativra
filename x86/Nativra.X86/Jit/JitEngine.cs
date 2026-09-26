@@ -27,6 +27,14 @@ namespace Nativra.X86.Jit
         private readonly CodeCache cache = new CodeCache();
         private readonly Dictionary<uint, IntPtr> blocks = new Dictionary<uint, IntPtr>();
         private readonly Dictionary<IntPtr, BlockFn> delegates = new Dictionary<IntPtr, BlockFn>();
+        private readonly Dictionary<IntPtr, BlockMap> maps = new Dictionary<IntPtr, BlockMap>();
+
+        /// <summary>Where each guest instruction of a block starts in its host code.</summary>
+        private sealed class BlockMap
+        {
+            public int[] HostOffsets;
+            public uint[] GuestEips;
+        }
 
         public long BlocksCompiled { get; private set; }
         public long BlocksExecuted { get; private set; }
@@ -38,6 +46,7 @@ namespace Nativra.X86.Jit
                 throw new ArgumentException("the JIT needs a native-backed guest memory (guest address + host base = pointer)");
             Cpu = cpu;
             Memory = memory;
+            JitFaults.Install();
             Interpreter = new Interpreter(cpu, memory);
             ctx = new JitContext(memory);
         }
@@ -55,6 +64,7 @@ namespace Nativra.X86.Jit
             DelegateFor(block)(ctx.Pointer);
             BlocksExecuted++;
             ctx.Store(Cpu);
+            if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault(block);
             if (ctx.ExitReason == Ctx.ReasonFallback)
             {
                 Interpreter.Step();
@@ -94,10 +104,12 @@ namespace Nativra.X86.Jit
                 var code = translator.Translate(Memory, Cpu.Eip, stop);
                 LastFullyTranslated = translator.FullyTranslated;
                 LastInstructionCount = translator.InstructionCount;
-                DelegateFor(cache.Publish(code))(ctx.Pointer);
+                var block = Publish(code, translator);
+                DelegateFor(block)(ctx.Pointer);
                 BlocksCompiled++;
                 BlocksExecuted++;
                 ctx.Store(Cpu);
+                if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault(block);
                 if (ctx.ExitReason == Ctx.ReasonFallback)
                 {
                     Interpreter.Step();
@@ -115,10 +127,40 @@ namespace Nativra.X86.Jit
             var code = translator.Translate(Memory, eip, stopEip);
             LastFullyTranslated = translator.FullyTranslated;
             LastInstructionCount = translator.InstructionCount;
-            var published = cache.Publish(code);
+            var published = Publish(code, translator);
             BlocksCompiled++;
             blocks[eip] = published;
             return published;
+        }
+
+        private IntPtr Publish(byte[] code, BlockTranslator translator)
+        {
+            var block = cache.Publish(code);
+            maps[block] = new BlockMap
+            {
+                HostOffsets = translator.HostOffsets.ToArray(),
+                GuestEips = translator.GuestEips.ToArray(),
+            };
+            JitFaults.Register(block, code.Length, block + translator.FaultExitOffset);
+            return block;
+        }
+
+        /// <summary>
+        /// A block left through its fault exit: put EIP back on the guest
+        /// instruction whose host code faulted and raise the guest access
+        /// violation, exactly as the interpreter would have.
+        /// </summary>
+        private void RaiseFault(IntPtr block)
+        {
+            JitFaults.Pending = false;
+            var offset = (long)(JitFaults.Rip - (ulong)block.ToInt64());
+            var map = maps[block];
+            var eip = map.GuestEips.Length > 0 ? map.GuestEips[0] : Cpu.Eip;
+            for (var i = 0; i < map.HostOffsets.Length && map.HostOffsets[i] <= offset; i++) eip = map.GuestEips[i];
+            Cpu.Eip = eip;
+
+            var guest = (uint)(JitFaults.Address - (ulong)Memory.HostBase.ToInt64());
+            throw new GuestException(GuestException.AccessViolation, eip, JitFaults.Access, guest);
         }
 
         public bool LastFullyTranslated { get; private set; }
@@ -136,6 +178,7 @@ namespace Nativra.X86.Jit
 
         public void Dispose()
         {
+            foreach (var block in maps.Keys) JitFaults.Unregister(block);
             cache.Dispose();
             ctx.Dispose();
         }

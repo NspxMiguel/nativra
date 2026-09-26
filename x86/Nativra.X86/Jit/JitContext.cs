@@ -48,6 +48,7 @@ namespace Nativra.X86.Jit
         public const int ReasonNext = 0;       // fell through / took a branch; continue at Eip
         public const int ReasonFallback = 1;   // hit an untranslated instruction at Eip
         public const int ReasonHalt = 2;       // hlt / explicit stop
+        public const int ReasonFault = 3;      // a guest memory access faulted (JitFaults)
     }
 
     /// <summary>Owns the native context block and mirrors it to/from a managed <see cref="CpuState"/>.</summary>

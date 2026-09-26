@@ -41,6 +41,50 @@ namespace Nativra.X86.Cpu
 
         public int Top => top;
 
+        /// <summary>The whole x87/SSE register file, for switching guest threads.</summary>
+        public sealed class Snapshot
+        {
+            internal readonly ulong[] Mant = new ulong[8];
+            internal readonly ushort[] Sexp = new ushort[8];
+            internal readonly bool[] Empty = new bool[8];
+            internal readonly ulong[] XmmLo = new ulong[8];
+            internal readonly ulong[] XmmHi = new ulong[8];
+            internal ushort Control = 0x037F, Status;
+            internal int Top;
+            internal uint Mxcsr = 0x1F80;
+
+            public Snapshot()
+            {
+                for (var i = 0; i < 8; i++) Empty[i] = true;
+            }
+        }
+
+        public void SaveTo(Snapshot s)
+        {
+            Array.Copy(mant, s.Mant, 8);
+            Array.Copy(sexp, s.Sexp, 8);
+            Array.Copy(empty, s.Empty, 8);
+            Array.Copy(XmmLo, s.XmmLo, 8);
+            Array.Copy(XmmHi, s.XmmHi, 8);
+            s.Control = Control;
+            s.Status = status;
+            s.Top = top;
+            s.Mxcsr = Mxcsr;
+        }
+
+        public void LoadFrom(Snapshot s)
+        {
+            Array.Copy(s.Mant, mant, 8);
+            Array.Copy(s.Sexp, sexp, 8);
+            Array.Copy(s.Empty, empty, 8);
+            Array.Copy(s.XmmLo, XmmLo, 8);
+            Array.Copy(s.XmmHi, XmmHi, 8);
+            Control = s.Control;
+            status = s.Status;
+            top = s.Top;
+            Mxcsr = s.Mxcsr;
+        }
+
         public void Reset()
         {
             Control = 0x037F;

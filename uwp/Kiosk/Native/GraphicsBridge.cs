@@ -390,6 +390,33 @@ namespace Kiosk.Native
 
         /// <summary>When the first frame reached the screen.</summary>
         public static int FirstFrameAt;
+
+        private static IntPtr handedTexture;
+        private static int handedWide, handedHigh;
+
+        /// <summary>
+        /// A finished frame from a renderer that owns no DXGI swap chain — the
+        /// Direct3D 9 layer, which draws with D3D11 into a back-buffer texture.
+        /// It is mirrored exactly as a fake chain's back buffer is: the mirror
+        /// restarts when the texture changes (a device reset), then each frame
+        /// is copied to the screen and paced.
+        /// </summary>
+        public static void HandFrame(IntPtr device, IntPtr texture, int wide, int high, int format)
+        {
+            if (NoMirror || Mirror == null || OnUi == null || texture == IntPtr.Zero) return;
+            if (texture != handedTexture || wide != handedWide || high != handedHigh)
+            {
+                Mirroring = FrameMirror.Start(device, IntPtr.Zero, wide, high, format, Mirror, OnUi, texture);
+                Note("mirror (d3d9 " + wide + "x" + high + "): " + FrameMirror.Note);
+                handedTexture = texture;
+                handedWide = wide;
+                handedHigh = high;
+            }
+            if (Frames == 0) FirstFrameAt = Environment.TickCount;
+            Frames++;
+            FrameMirror.Take();
+            Pace();
+        }
         private static GetFullscreenDelegate getFullscreen;
         private static ResizeTargetDelegate resizeTarget;
         private static SetFullscreenGetDelegate describe;

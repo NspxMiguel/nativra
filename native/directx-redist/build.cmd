@@ -69,4 +69,33 @@ cl /nologo /EHsc /O2 /MD ^
    /Fo:bin\ /Fe:bin\test_d3dx9.exe
 if errorlevel 1 exit /b 1
 bin\test_d3dx9.exe
+if errorlevel 1 exit /b 1
+
+rem D3D9 shader bytecode -> SM5: real D3D9 bytecode from Microsoft's compiler,
+rem translated, must render what a direct SM5 compile renders (under WARP).
+echo === tests: d3d9 shader translation (dxso) ===
+cl /nologo /EHsc /O2 /MD /std:c++17 ^
+   tests\test_dxso.cpp d3d9\dxso.cpp ^
+   /Fo:bin\ /Fe:bin\test_dxso.exe ^
+   /link d3dcompiler.lib d3d11.lib dxguid.lib
+if errorlevel 1 exit /b 1
+bin\test_dxso.exe --render
+if errorlevel 1 exit /b 1
+
+rem Direct3D 9 on Direct3D 11, driven through the public D3D9 API under WARP.
+echo === d3d9.dll ===
+cl /nologo /LD /EHsc /O2 /MD /std:c++17 ^
+   d3d9\d3d9_main.cpp d3d9\d3d9_device.cpp d3d9\d3d9_draw.cpp d3d9\d3d9_resources.cpp ^
+   d3d9\d3d9_ff.cpp d3d9\d3d9_format.cpp d3d9\dxso.cpp ^
+   /Fo:bin\ /Fe:bin\d3d9.dll ^
+   /link /DEF:d3d9\d3d9.def d3d11.lib d3dcompiler.lib dxguid.lib uuid.lib
+if errorlevel 1 exit /b 1
+
+echo === tests: d3d9 device ===
+cl /nologo /EHsc /O2 /MD /std:c++17 ^
+   tests\test_d3d9.cpp ^
+   /Fo:bin\ /Fe:bin\test_d3d9.exe ^
+   /link d3dcompiler.lib
+if errorlevel 1 exit /b 1
+bin\test_d3d9.exe
 exit /b %errorlevel%

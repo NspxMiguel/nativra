@@ -28,6 +28,12 @@ jobs:
         shell: cmd
         run: native\directx-redist\build.cmd
 
+      # 32-bit copies for games under the x86 layer; checks every export is
+      # reachable by its undecorated name.
+      - name: Build 32-bit shims
+        shell: cmd
+        run: native\directx-redist\build-x86.cmd
+
       - name: Show built DLLs
         shell: pwsh
         if: always()

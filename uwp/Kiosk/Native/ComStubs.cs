@@ -62,6 +62,7 @@ namespace Kiosk.Native
                         // endpoint enumerator, standing in front of the
                         // console's real audio engine.
                         var made = AudioBridge.ClassFor(name);
+                        if (made == IntPtr.Zero) made = DirectInputStub.ClassFor(name);
                         if (made != IntPtr.Zero && result != IntPtr.Zero)
                         {
                             Marshal.WriteIntPtr(result, made);

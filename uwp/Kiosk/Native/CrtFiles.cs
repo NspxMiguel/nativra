@@ -248,8 +248,10 @@ namespace Kiosk.Native
                 {
                     var error = real(result, name, mode);
                     if (error == 0 || result == IntPtr.Zero) return error;
+                    lastError = 0;
                     var stream = wide ? Stream(Wide(name), Wide(mode), true) : Stream(Narrow(name), Narrow(mode), false);
-                    if (stream == IntPtr.Zero) return error;
+                    // The _s forms return the error rather than set errno.
+                    if (stream == IntPtr.Zero) return lastError == 2 || lastError == 3 ? ENOENT : error;
                     Marshal.WriteIntPtr(result, stream);
                     return 0;
                 }));
@@ -275,8 +277,9 @@ namespace Kiosk.Native
                 {
                     var error = real(result, name, flags, share, permission);
                     if (error == 0 || result == IntPtr.Zero) return error;
+                    lastError = 0;
                     var descriptor = OpenFlagsToDescriptor(wide ? Wide(name) : Narrow(name), flags);
-                    if (descriptor < 0) return error;
+                    if (descriptor < 0) return lastError == 2 || lastError == 3 ? ENOENT : error;
                     Marshal.WriteInt32(result, descriptor);
                     return 0;
                 }));

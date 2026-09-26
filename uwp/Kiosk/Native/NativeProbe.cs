@@ -283,6 +283,7 @@ namespace Kiosk.Native
                 ShellPath.Install(imports);
                 UserFolders.Install(imports, local.Path);
                 CrtFiles.Install(imports);
+                DirectInputStub.Install(imports);
                 DisplayStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 

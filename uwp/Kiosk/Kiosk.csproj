@@ -122,6 +122,7 @@
     <Compile Include="Native\UserFolders.cs" />
     <Compile Include="Native\CrtFiles.cs" />
     <Compile Include="Native\DirectInputStub.cs" />
+    <Compile Include="Native\SspiStub.cs" />
     <Compile Include="Native\StackSampler.cs" />
     <Compile Include="Native\UsbFiles.cs" />
     <Compile Include="Native\SteamBridge.cs" />

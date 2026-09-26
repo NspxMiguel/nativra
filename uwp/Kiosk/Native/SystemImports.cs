@@ -162,6 +162,9 @@ namespace Kiosk.Native
             {
                 return stem + "_app.dll";
             }
+            // Older HLSL compilers (LEGO Jurassic World asks for _46) have the
+            // same exports and signatures as _47, which the package carries.
+            if (stem.StartsWith("d3dcompiler_") && stem != "d3dcompiler_47") return "d3dcompiler_47.dll";
             return null;
         }
 

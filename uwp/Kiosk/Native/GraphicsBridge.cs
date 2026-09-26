@@ -462,6 +462,47 @@ namespace Kiosk.Native
         /// question differently — which display device it is — and from there
         /// the walk lands back on our adapter and our factory.
         /// </summary>
+        private const int CreateTexture2DSlot = 5;
+        private const int CreateDepthStencilViewSlot = 10;
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ThreeArgDelegate(IntPtr self, IntPtr a, IntPtr b, IntPtr c);
+
+        /// <summary>
+        /// The two device calls a game's depth buffer goes through, passed on
+        /// unchanged and noted when they fail, with what was asked. LEGO
+        /// Jurassic World reads the depth view it asked for without checking,
+        /// and finds nothing there.
+        /// </summary>
+        private static readonly ThreeArgDelegate createTexture2D = (self, desc, data, result) =>
+        {
+            var original = ComProxy.Original(self);
+            var call = Marshal.GetDelegateForFunctionPointer<ThreeArgDelegate>(ComProxy.Method(original, CreateTexture2DSlot));
+            var code = call(original, desc, data, result);
+            if (code < 0 && desc != IntPtr.Zero)
+            {
+                var d = new int[11];
+                Marshal.Copy(desc, d, 0, 11);
+                Note("CreateTexture2D failed 0x" + code.ToString("X8") + ": " + d[0] + "x" + d[1] + " mips " + d[2]
+                    + " array " + d[3] + " format " + d[4] + " samples " + d[5] + "/" + d[6] + " usage " + d[7]
+                    + " bind 0x" + d[8].ToString("X") + " cpu 0x" + d[9].ToString("X") + " misc 0x" + d[10].ToString("X"));
+            }
+            return code;
+        };
+
+        private static readonly ThreeArgDelegate createDepthView = (self, resource, desc, result) =>
+        {
+            var original = ComProxy.Original(self);
+            var call = Marshal.GetDelegateForFunctionPointer<ThreeArgDelegate>(ComProxy.Method(original, CreateDepthStencilViewSlot));
+            var code = call(original, resource, desc, result);
+            if (code < 0)
+            {
+                Note("CreateDepthStencilView failed 0x" + code.ToString("X8") + " on 0x" + resource.ToInt64().ToString("X")
+                    + (desc == IntPtr.Zero ? " (no desc)" : " format " + Marshal.ReadInt32(desc) + " dimension " + Marshal.ReadInt32(desc, 4)));
+            }
+            return code;
+        };
+
         private static IntPtr WrapDevice(IntPtr device)
         {
             if (device == IntPtr.Zero) return device;
@@ -474,6 +515,8 @@ namespace Kiosk.Native
                 return Proxy.Wrap(device, DeviceMethods, new Dictionary<int, IntPtr>
                 {
                     { QueryInterfaceSlot, Marshal.GetFunctionPointerForDelegate(deviceAsk) },
+                    { CreateTexture2DSlot, Marshal.GetFunctionPointerForDelegate(createTexture2D) },
+                    { CreateDepthStencilViewSlot, Marshal.GetFunctionPointerForDelegate(createDepthView) },
                 });
             }
             catch

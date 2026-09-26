@@ -89,9 +89,10 @@ HRESULT Device::Init(D3DPRESENT_PARAMETERS* params)
     } else {
         const D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0 };
         HRESULT hr = E_FAIL;
+        HRESULT hardware = E_FAIL;
         if (!host.warp) {
-            hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                                   levels, 2, D3D11_SDK_VERSION, &dev, nullptr, nullptr);
+            hardware = hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                              levels, 2, D3D11_SDK_VERSION, &dev, nullptr, nullptr);
         }
         if (FAILED(hr)) {
             hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
@@ -101,6 +102,9 @@ HRESULT Device::Init(D3DPRESENT_PARAMETERS* params)
             Log("no D3D11 device: 0x%08lX", static_cast<unsigned long>(hr));
             return D3DERR_NOTAVAILABLE;
         }
+        if (host.warp) Log("D3D11 device: WARP (requested)");
+        else if (FAILED(hardware)) Log("D3D11 device: WARP, hardware refused 0x%08lX", static_cast<unsigned long>(hardware));
+        else Log("D3D11 device: hardware, feature level 0x%X", static_cast<unsigned>(dev->GetFeatureLevel()));
     }
     dev->GetImmediateContext(&ctx);
     ctx->QueryInterface(__uuidof(ID3D11DeviceContext1), reinterpret_cast<void**>(&ctx1));

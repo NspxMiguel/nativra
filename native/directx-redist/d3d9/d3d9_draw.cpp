@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <cstdio>
 
 namespace d3d9 {
 
@@ -210,34 +211,40 @@ bool Device::Blit(Image* src, UINT srcSub, const RECT& srcRect, Image* dst, UINT
 
 bool Device::BindShaders(UINT instanceMask)
 {
-    if (!state.vs || !state.ps) {
+    VertexDeclaration* decl = state.decl;
+    if (!decl) return false;
+
+    std::vector<dxso::InputDecl> inputs;
+    if (state.vs) {
+        // Integer vertex types need a variant that fetches them as integers.
+        dxso::Options options;
+        for (const auto& in : state.vs->base.inputs) {
+            for (const auto& e : decl->elements) {
+                if (e.Usage != in.usage || e.UsageIndex != in.index || in.reg >= 16) continue;
+                int integer = 0;
+                DeclTypeFormat(e.Type, &integer);
+                options.inputTypes[in.reg] = integer == 1 ? dxso::InputType::SInt
+                                           : integer == 2 ? dxso::InputType::UInt : dxso::InputType::Float;
+                break;
+            }
+        }
+        currentVs = state.vs->Variant(options);
+        inputs = state.vs->base.inputs;
+    } else {
+        currentVs = FixedVertexShader(decl, &inputs);
+    }
+    currentPs = state.ps ? state.ps->Variant(dxso::Options()) : FixedPixelShader();
+    if (!currentVs || !currentPs) {
         if (!warnedFixedFunction) {
-            Log("draw skipped: the fixed-function pipeline is not implemented yet (vs=%p ps=%p)",
-                static_cast<void*>(state.vs), static_cast<void*>(state.ps));
+            Log("draw skipped: no usable shader (vs %s, ps %s)", state.vs ? "translated" : "fixed",
+                state.ps ? "translated" : "fixed");
             warnedFixedFunction = true;
         }
         return false;
     }
-    VertexDeclaration* decl = state.decl;
-    if (!decl) return false;
+    usingFixed = !state.vs || !state.ps;
 
-    // Integer vertex types need a shader variant that fetches them as integers.
-    dxso::Options options;
-    for (const auto& in : state.vs->base.inputs) {
-        for (const auto& e : decl->elements) {
-            if (e.Usage != in.usage || e.UsageIndex != in.index || in.reg >= 16) continue;
-            int integer = 0;
-            DeclTypeFormat(e.Type, &integer);
-            options.inputTypes[in.reg] = integer == 1 ? dxso::InputType::SInt
-                                       : integer == 2 ? dxso::InputType::UInt : dxso::InputType::Float;
-            break;
-        }
-    }
-    currentVs = state.vs->Variant(options);
-    currentPs = state.ps->Variant(dxso::Options());
-    if (!currentVs || !currentPs) return false;
-
-    ID3D11InputLayout* layout = InputLayout(currentVs, decl, instanceMask);
+    ID3D11InputLayout* layout = InputLayout(currentVs, decl, instanceMask, inputs);
     if (!layout) return false;
     ctx->IASetInputLayout(layout);
     ctx->VSSetShader(static_cast<ID3D11VertexShader*>(currentVs->shader), nullptr, 0);
@@ -245,7 +252,8 @@ bool Device::BindShaders(UINT instanceMask)
     return true;
 }
 
-ID3D11InputLayout* Device::InputLayout(ShaderVariant* vs, const VertexDeclaration* decl, UINT instanceMask)
+ID3D11InputLayout* Device::InputLayout(ShaderVariant* vs, const VertexDeclaration* decl, UINT instanceMask,
+                                       const std::vector<dxso::InputDecl>& inputs)
 {
     const auto key = std::make_pair((decl->id << 16) | instanceMask, vs->shader);
     auto it = inputLayouts.find(key);
@@ -272,7 +280,7 @@ ID3D11InputLayout* Device::InputLayout(ShaderVariant* vs, const VertexDeclaratio
         elements.push_back(d);
     }
     // Inputs the shader reads but the declaration does not supply read zeros.
-    for (const auto& in : state.vs->base.inputs) {
+    for (const auto& in : inputs) {
         const auto sem = std::make_pair(in.usage, in.index);
         if (std::find(seen.begin(), seen.end(), sem) != seen.end()) continue;
         seen.push_back(sem);
@@ -562,6 +570,7 @@ bool Device::PrepareDraw(UINT* instances)
     ctx->IASetVertexBuffers(0, 17, buffers, strides, offsets);
 
     FlushConstants();
+    if (usingFixed) UploadFixedConstants();
     BindOutputs();
     BindStates();
     BindTextures();

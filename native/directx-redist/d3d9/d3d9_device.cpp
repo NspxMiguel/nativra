@@ -61,6 +61,9 @@ Device::~Device()
     for (auto& s : samplerStates) s.second->Release();
     for (auto& s : inputLayouts) s.second->Release();
     for (auto& c : compiled) if (c.second) c.second->Release();
+    for (auto& v : fixedVs) { SafeRelease(v.second.variant.shader); SafeRelease(v.second.variant.bytecode); }
+    for (auto& v : fixedPs) { SafeRelease(v.second.shader); SafeRelease(v.second.bytecode); }
+    SafeRelease(cbFixed);
     SafeRelease(blitVs);
     SafeRelease(blitPs);
     SafeRelease(blitSampler[0]);

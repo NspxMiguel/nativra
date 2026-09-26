@@ -416,6 +416,7 @@ namespace Kiosk.Native
                     {
                         SetThreadPriority(thread, -1);   // below normal
                         Calmed++;
+                        StackSampler.Track(thread, "game");
                     }
                     catch
                     {

@@ -284,6 +284,8 @@ namespace Kiosk.Native
                 UserFolders.Install(imports, local.Path);
                 CrtFiles.Install(imports);
                 DirectInputStub.Install(imports);
+                StackSampler.Enabled = await local.TryGetItemAsync("stacks.txt") != null;
+                StackSampler.Install(imports);
                 DisplayStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 
@@ -598,6 +600,7 @@ namespace Kiosk.Native
                                     {
                                         foreach (var f in CrtFiles.Failed) beat.Add("crt " + f);
                                     }
+                                    beat.AddRange(StackSampler.Sample());
                                     lock (GraphicsBridge.Notes)
                                     {
                                         foreach (var note in GraphicsBridge.Notes)
@@ -651,6 +654,7 @@ namespace Kiosk.Native
                             try
                             {
                                 ThreadTls.Adopt();
+                                StackSampler.TrackCurrent("main");
                                 var main = Marshal.GetDelegateForFunctionPointer<UnityMainDelegate>(
                                     entry);
                                 // An empty string, not nothing: a program that

@@ -84,12 +84,36 @@ namespace Kiosk.Native
         private static int generation;
 
         private static WriteableBitmap picture;
-        // Two buffers, used in turn: the game fills one while the interface
-        // thread is still reading the other. One buffer means a frame half
-        // overwritten while it is being shown, which looks like tearing.
-        private static byte[][] scratch;
-        private static int filling;
+        private static System.IO.Stream pixels;   // the picture's buffer, opened once per picture
+        // One buffer between the card and the picture. The busy flag already
+        // keeps the game from filling it until the interface thread has copied
+        // it into the picture, so a second one would only ever sit idle (8 MB
+        // at 1080p, on the large-object heap). Kept across resizes when big
+        // enough.
+        private static byte[] scratch;
         private static int busy;
+
+        // Everything a frame needs, made once per Start instead of per frame:
+        // the context's methods as delegates, the mapped-subresource block,
+        // and the interface-thread handler.
+        private static CopyDelegate copyFn;
+        private static MapDelegate mapFn;
+        private static UnmapDelegate unmapFn;
+        private static IntPtr mappedBlock;
+        private static Windows.UI.Core.DispatchedHandler showFrame;
+        private static int showVersion;
+        private static long showQueuedAt;
+
+        /// <summary>Bytes this mirror holds: staging textures, the CPU buffer, the picture.</summary>
+        public static long Bytes
+        {
+            get
+            {
+                if (!Running) return scratch?.LongLength ?? 0;
+                var frame = (long)width * height * 4;
+                return RingDepth * frame + (scratch?.LongLength ?? 0) + frame;
+            }
+        }
         private static long mapTicks;
         private static long pixelsTicks;
         private static long uiTicks;
@@ -168,7 +192,11 @@ namespace Kiosk.Native
                 ringNext = ringPrimed = 0;
                 if (context != IntPtr.Zero) Marshal.Release(context);
                 back = staging = context = IntPtr.Zero;
+                copyFn = null;
+                mapFn = null;
+                unmapFn = null;
                 picture = null;
+                pixels = null;
                 chain = swapChain;
                 given = texture;
                 width = pixelsWide;
@@ -239,6 +267,11 @@ namespace Kiosk.Native
                     Note = "no device context";
                     return false;
                 }
+                copyFn = Marshal.GetDelegateForFunctionPointer<CopyDelegate>(ComProxy.Method(context, CopyResourceSlot));
+                mapFn = Marshal.GetDelegateForFunctionPointer<MapDelegate>(ComProxy.Method(context, MapSlot));
+                unmapFn = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(ComProxy.Method(context, UnmapSlot));
+                if (mappedBlock == IntPtr.Zero) mappedBlock = Marshal.AllocHGlobal(16);
+                if (showFrame == null) showFrame = ShowFrame;
 
                 // A texture handed straight over needs no asking: it is the
                 // back buffer, because this application made it.
@@ -275,11 +308,9 @@ namespace Kiosk.Native
                     }
                 }
 
-                scratch = new[]
-                {
-                    new byte[width * height * 4],
-                    new byte[width * height * 4],
-                };
+                var needed = width * height * 4;
+                if (scratch == null || scratch.Length < needed) scratch = null;   // let the old one go first
+                if (scratch == null) scratch = new byte[needed];
 
                 var ready = new System.Threading.ManualResetEventSlim(false);
                 var _ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.High, () =>
@@ -288,6 +319,9 @@ namespace Kiosk.Native
                     {
                         if (version != generation) return;
                         picture = new WriteableBitmap(pixelsWide, pixelsHigh);
+                        // Named in full rather than as an extension: which
+                        // namespace carries it differs between runtimes.
+                        pixels = WindowsRuntimeBufferExtensions.AsStream(picture.PixelBuffer);
                         target.Source = picture;
                         target.Visibility = Windows.UI.Xaml.Visibility.Visible;
 
@@ -366,15 +400,13 @@ namespace Kiosk.Native
             // The in-flight update is the backpressure. A second 16 ms gate
             // skips otherwise-ready frames when the render clock jitters.
             if (System.Threading.Interlocked.Exchange(ref busy, 1) == 1) return;
-            var mapped = IntPtr.Zero;
+            var mapped = mappedBlock;
             var isMapped = false;
             var queued = false;
             try
             {
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
-                var copy = Marshal.GetDelegateForFunctionPointer<CopyDelegate>(
-                    ComProxy.Method(context, CopyResourceSlot));
-                copy(context, ring[ringNext], back);
+                copyFn(context, ring[ringNext], back);
                 var readable = (ringNext + 1) % RingDepth;
                 ringNext = readable;
                 if (ringPrimed < RingDepth - 1)
@@ -384,26 +416,20 @@ namespace Kiosk.Native
                 }
                 staging = ring[readable];
 
-                mapped = Marshal.AllocHGlobal(16);
-                var map = Marshal.GetDelegateForFunctionPointer<MapDelegate>(
-                    ComProxy.Method(context, MapSlot));
-                if (map(context, staging, 0, 1, 0, mapped) != S_OK) return;
+                if (mapFn(context, staging, 0, 1, 0, mapped) != S_OK) return;
                 isMapped = true;
                 var mappedAt = System.Diagnostics.Stopwatch.GetTimestamp();
 
                 var from = Marshal.ReadIntPtr(mapped, 0);
                 var pitch = Marshal.ReadInt32(mapped, 8);
-                var into = scratch[filling];
+                var into = scratch;
                 // One pass from the mapped texture into the picture. The
                 // window back buffer uses IGNORE alpha, while WriteableBitmap
                 // composites it, so every pixel is made opaque; and the
                 // bitmap is BGRA while games may render RGBA.
                 CopyOpaque(from, pitch, into, width, height, pixelFormat == 28 || pixelFormat == 29);
-                filling = 1 - filling;
 
-                var unmap = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(
-                    ComProxy.Method(context, UnmapSlot));
-                unmap(context, staging, 0);
+                unmapFn(context, staging, 0);
                 isMapped = false;
                 var pixelsAt = System.Diagnostics.Stopwatch.GetTimestamp();
                 mapTicks += mappedAt - started;
@@ -416,7 +442,8 @@ namespace Kiosk.Native
                 // graphics hot path. Pixels only; no process memory or tokens.
                 if (Copied == 600)
                 {
-                    var captured = (byte[])into.Clone();
+                    var captured = new byte[width * height * 4];   // the buffer may be larger after a resize
+                    Buffer.BlockCopy(into, 0, captured, 0, captured.Length);
                     var capturedWidth = width;
                     var capturedHeight = height;
                     var capture = System.Threading.Tasks.Task.Run(async () =>
@@ -442,39 +469,9 @@ namespace Kiosk.Native
 
                 // Keep one update in flight; drop frames while the UI is busy
                 // instead of accumulating latency behind the current picture.
-                var showing = into;
-                var showingPicture = picture;
-                var version = generation;
-                var queuedAt = System.Diagnostics.Stopwatch.GetTimestamp();
-                var __ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                {
-                    try
-                    {
-                        if (version != generation) return;
-                        // Named in full rather than as an extension: which
-                        // namespace carries it differs between runtimes, and a
-                        // missing using here is a build that fails for a
-                        // reason that has nothing to do with the problem.
-                        using (var stream = WindowsRuntimeBufferExtensions.AsStream(
-                            showingPicture.PixelBuffer))
-                        {
-                            stream.Write(showing, 0, showing.Length);
-                        }
-                        showingPicture.Invalidate();
-                        System.Threading.Interlocked.Add(ref uiTicks,
-                            System.Diagnostics.Stopwatch.GetTimestamp() - queuedAt);
-                        Shown++;
-                        Presented?.Invoke();
-                    }
-                    catch
-                    {
-                        // A dropped frame is a dropped frame.
-                    }
-                    finally
-                    {
-                        System.Threading.Interlocked.Exchange(ref busy, 0);
-                    }
-                });
+                showVersion = generation;
+                showQueuedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+                var __ = ui.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, showFrame);
                 queued = true;
             }
             catch (Exception error)
@@ -484,14 +481,32 @@ namespace Kiosk.Native
             }
             finally
             {
-                if (isMapped)
-                {
-                    var unmap = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(
-                        ComProxy.Method(context, UnmapSlot));
-                    unmap(context, staging, 0);
-                }
-                if (mapped != IntPtr.Zero) Marshal.FreeHGlobal(mapped);
+                if (isMapped) unmapFn(context, staging, 0);
                 if (!queued) System.Threading.Interlocked.Exchange(ref busy, 0);
+            }
+        }
+
+        /// <summary>On the interface thread: the CPU buffer into the picture.</summary>
+        private static void ShowFrame()
+        {
+            try
+            {
+                if (showVersion != generation || pixels == null) return;
+                pixels.Position = 0;
+                pixels.Write(scratch, 0, width * height * 4);
+                picture.Invalidate();
+                System.Threading.Interlocked.Add(ref uiTicks,
+                    System.Diagnostics.Stopwatch.GetTimestamp() - showQueuedAt);
+                Shown++;
+                Presented?.Invoke();
+            }
+            catch
+            {
+                // A dropped frame is a dropped frame.
+            }
+            finally
+            {
+                System.Threading.Interlocked.Exchange(ref busy, 0);
             }
         }
     }

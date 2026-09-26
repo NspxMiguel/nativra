@@ -594,6 +594,10 @@ namespace Kiosk.Native
                                     {
                                         foreach (var f in FileWatch.Seen) beat.Add("file " + f);
                                     }
+                                    lock (CrtFiles.Failed)
+                                    {
+                                        foreach (var f in CrtFiles.Failed) beat.Add("crt " + f);
+                                    }
                                     lock (GraphicsBridge.Notes)
                                     {
                                         foreach (var note in GraphicsBridge.Notes)

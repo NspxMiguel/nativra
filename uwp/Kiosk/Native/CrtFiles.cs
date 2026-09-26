@@ -63,6 +63,18 @@ namespace Kiosk.Native
 
         public static long Rescued;
 
+        /// <summary>The last opens that failed both ways: function, path, answer.</summary>
+        public static readonly List<string> Failed = new List<string>();
+
+        private static void Record(string function, string path, int answer)
+        {
+            lock (Failed)
+            {
+                if (Failed.Count >= 24) Failed.RemoveAt(0);
+                Failed.Add(function + " " + path + " -> " + answer + (lastMissing ? " (missing)" : ""));
+            }
+        }
+
         private static IntPtr Keep(Delegate function)
         {
             roots.Add(function);
@@ -147,6 +159,12 @@ namespace Kiosk.Native
 
         /// <summary>The last brokered open failed on a path that does not exist.</summary>
         [ThreadStatic] private static bool lastMissing;
+
+        private static int ErrnoNow()
+        {
+            var at = errno == null ? IntPtr.Zero : errno();
+            return at == IntPtr.Zero ? -1 : Marshal.ReadInt32(at);
+        }
         private const int ENOENT = 2;
 
         /// <summary>
@@ -214,32 +232,40 @@ namespace Kiosk.Native
                 ours["fopen"] = Keep(new OpenNarrow((name, mode) =>
                 {
                     var stream = fopen(name, mode);
-                    return stream != IntPtr.Zero ? stream : KeepingErrno(
-                        () => Stream(Narrow(name), Narrow(mode), false), s => s != IntPtr.Zero, IntPtr.Zero);
+                    if (stream != IntPtr.Zero) return stream;
+                    stream = KeepingErrno(() => Stream(Narrow(name), Narrow(mode), false), s => s != IntPtr.Zero, IntPtr.Zero);
+                    if (stream == IntPtr.Zero) Record("fopen", Narrow(name), ErrnoNow());
+                    return stream;
                 }));
             var wfopen = Real<OpenNarrow>(imports, Stdio, "_wfopen");
             if (wfopen != null)
                 ours["_wfopen"] = Keep(new OpenNarrow((name, mode) =>
                 {
                     var stream = wfopen(name, mode);
-                    return stream != IntPtr.Zero ? stream : KeepingErrno(
-                        () => Stream(Wide(name), Wide(mode), true), s => s != IntPtr.Zero, IntPtr.Zero);
+                    if (stream != IntPtr.Zero) return stream;
+                    stream = KeepingErrno(() => Stream(Wide(name), Wide(mode), true), s => s != IntPtr.Zero, IntPtr.Zero);
+                    if (stream == IntPtr.Zero) Record("_wfopen", Wide(name), ErrnoNow());
+                    return stream;
                 }));
             var fsopen = Real<ShareOpen>(imports, Stdio, "_fsopen");
             if (fsopen != null)
                 ours["_fsopen"] = Keep(new ShareOpen((name, mode, share) =>
                 {
                     var stream = fsopen(name, mode, share);
-                    return stream != IntPtr.Zero ? stream : KeepingErrno(
-                        () => Stream(Narrow(name), Narrow(mode), false), s => s != IntPtr.Zero, IntPtr.Zero);
+                    if (stream != IntPtr.Zero) return stream;
+                    stream = KeepingErrno(() => Stream(Narrow(name), Narrow(mode), false), s => s != IntPtr.Zero, IntPtr.Zero);
+                    if (stream == IntPtr.Zero) Record("_fsopen", Narrow(name), ErrnoNow());
+                    return stream;
                 }));
             var wfsopen = Real<ShareOpen>(imports, Stdio, "_wfsopen");
             if (wfsopen != null)
                 ours["_wfsopen"] = Keep(new ShareOpen((name, mode, share) =>
                 {
                     var stream = wfsopen(name, mode, share);
-                    return stream != IntPtr.Zero ? stream : KeepingErrno(
-                        () => Stream(Wide(name), Wide(mode), true), s => s != IntPtr.Zero, IntPtr.Zero);
+                    if (stream != IntPtr.Zero) return stream;
+                    stream = KeepingErrno(() => Stream(Wide(name), Wide(mode), true), s => s != IntPtr.Zero, IntPtr.Zero);
+                    if (stream == IntPtr.Zero) Record("_wfsopen", Wide(name), ErrnoNow());
+                    return stream;
                 }));
             foreach (var pair in new[] { new { Name = "fopen_s", Wide = false }, new { Name = "_wfopen_s", Wide = true } })
             {
@@ -253,7 +279,12 @@ namespace Kiosk.Native
                     lastMissing = false;
                     var stream = wide ? Stream(Wide(name), Wide(mode), true) : Stream(Narrow(name), Narrow(mode), false);
                     // The _s forms return the error rather than set errno.
-                    if (stream == IntPtr.Zero) return lastMissing ? ENOENT : error;
+                    if (stream == IntPtr.Zero)
+                    {
+                        var answer = lastMissing ? ENOENT : error;
+                        Record(pair.Name, wide ? Wide(name) : Narrow(name), answer);
+                        return answer;
+                    }
                     Marshal.WriteIntPtr(result, stream);
                     return 0;
                 }));
@@ -266,8 +297,10 @@ namespace Kiosk.Native
                 ours[pair.Name] = Keep(new DescriptorOpen((name, flags, permission) =>
                 {
                     var descriptor = real(name, flags, permission);
-                    return descriptor >= 0 ? descriptor : KeepingErrno(
-                        () => OpenFlagsToDescriptor(wide ? Wide(name) : Narrow(name), flags), d => d >= 0, -1);
+                    if (descriptor >= 0) return descriptor;
+                    descriptor = KeepingErrno(() => OpenFlagsToDescriptor(wide ? Wide(name) : Narrow(name), flags), d => d >= 0, -1);
+                    if (descriptor < 0) Record(pair.Name, wide ? Wide(name) : Narrow(name), ErrnoNow());
+                    return descriptor;
                 }));
             }
             foreach (var pair in new[] { new { Name = "_sopen_s", Wide = false }, new { Name = "_wsopen_s", Wide = true } })
@@ -281,7 +314,12 @@ namespace Kiosk.Native
                     if (error == 0 || result == IntPtr.Zero) return error;
                     lastMissing = false;
                     var descriptor = OpenFlagsToDescriptor(wide ? Wide(name) : Narrow(name), flags);
-                    if (descriptor < 0) return lastMissing ? ENOENT : error;
+                    if (descriptor < 0)
+                    {
+                        var answer = lastMissing ? ENOENT : error;
+                        Record(pair.Name, wide ? Wide(name) : Narrow(name), answer);
+                        return answer;
+                    }
                     Marshal.WriteInt32(result, descriptor);
                     return 0;
                 }));
@@ -369,6 +407,7 @@ namespace Kiosk.Native
                     if (text == null) return IntPtr.Zero;
                     stream = KeepingErrno(() => Stream(wide ? Wide(name) : Narrow(name), text, false),
                         s => s != IntPtr.Zero, IntPtr.Zero);
+                    if (stream == IntPtr.Zero) Record("_Fiopen", wide ? Wide(name) : Narrow(name), ErrnoNow());
                     // ios_base::ate: opened, then placed at the end.
                     if (stream != IntPtr.Zero && (mode & 0x04) != 0 && seek != null) seek(stream, 0, 2);
                     return stream;

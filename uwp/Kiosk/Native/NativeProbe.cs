@@ -293,6 +293,7 @@ namespace Kiosk.Native
                 RawInputBridge.Install(imports);
                 HidBridge.Install(imports);
                 GraphicsBridge.Install(imports);
+                D3D9Bridge.Install();
                 LoaderStubs.Install(imports);
                 // Wrap the loader's priority hook rather than letting it
                 // replace TLS initialization on every game-created thread.

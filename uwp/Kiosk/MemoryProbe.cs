@@ -22,7 +22,10 @@ namespace Kiosk
     /// </summary>
     internal static class MemoryProbe
     {
-        [DllImport("api-ms-win-core-memory-l1-1-0.dll", SetLastError = true)]
+        // VirtualAllocFromApp lives in the l1-1-3 API set (as the loader
+        // imports it); asked for from l1-1-0 it failed with TypeLoadException
+        // before a single block was committed.
+        [DllImport("api-ms-win-core-memory-l1-1-3.dll", SetLastError = true)]
         private static extern IntPtr VirtualAllocFromApp(
             IntPtr address, UIntPtr size, uint allocationType, uint protect);
 

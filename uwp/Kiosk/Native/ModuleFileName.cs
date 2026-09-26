@@ -207,6 +207,7 @@ namespace Kiosk.Native
             wide = (module, buffer, size) =>
             {
                 var text = PathFor(module);
+                if (module == IntPtr.Zero) FileWatch.Note("module name of the program: " + text);
                 var room = (int)size;
                 if (room <= 0) return 0;
                 var copied = Math.Min(text.Length, room - 1);

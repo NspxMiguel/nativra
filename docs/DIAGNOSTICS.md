@@ -22,6 +22,27 @@ volumes and engine internals cannot be inferred from these measurements.
   capture or a person listening. The owner confirmed menu audio in build 194.
 - GPU identity is captured before optional compatibility naming overrides.
 
+## Files written for remote reading
+
+All in the package's `LocalState`, readable with `xbdev pull Nativra <file> LocalState`:
+
+- `update-log.txt` — every over-the-air update step with its reason, one
+  timestamped line each (from build 353).
+- `portal-probe.txt` — whether the app reached the console's Device Portal.
+- `recorder-note.txt` — the in-app recorder's state; recordings themselves go
+  to `LocalState/recordings` (from build 355).
+
+## The Device Portal is out of the app's reach
+
+Measured on September 26, 2026 (build 353): the app cannot connect to the
+Device Portal of the console it runs on, not even for a GET
+(`portal-probe.txt`: `reachable=False`, "a connection with the server could not
+be established"). The portal listens on the console's own address, which UWP
+network isolation treats as loopback. Every in-app update through the portal
+had failed for this reason. Updates now go through `PackageManager` instead
+(build 359), and anything else the app wants from the portal has to find
+another route or run from a machine on the network.
+
 ## Private session evidence
 
 ```sh

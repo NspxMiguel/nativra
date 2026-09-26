@@ -127,6 +127,16 @@ namespace Kiosk
         }
     }
 
+    /// <summary>A download as the Downloads screen shows it: a name, a one-line
+    /// state, and a bar with the percent while it is still running.</summary>
+    public sealed class DownloadRow
+    {
+        public string Name { get; set; }
+        public string Status { get; set; }
+        public double Percent { get; set; }
+        public Visibility BarShown { get; set; }
+    }
+
     public sealed partial class MainPage : Page
     {
         public ObservableCollection<Tile> Tiles { get; } = new ObservableCollection<Tile>();
@@ -141,6 +151,10 @@ namespace Kiosk
         /// </summary>
         public ObservableCollection<Tile> Emulators { get; } =
             new ObservableCollection<Tile>();
+
+        /// <summary>The Downloads screen's rows, refreshed while it is open.</summary>
+        public ObservableCollection<DownloadRow> Downloads { get; } =
+            new ObservableCollection<DownloadRow>();
 
         // One colour per tile is identity here, not decoration: without the
         // package query there is no app artwork to show.
@@ -403,6 +417,20 @@ namespace Kiosk
             };
             Native.GraphicsBridge.OnUi = Dispatcher;
             Native.ThreadRank.RaiseThisThread();
+
+            try
+            {
+                // No arrow on a TV: the shelf is driven by the pad, and a game
+                // that wants a pointer gets the app-drawn GamePointer instead.
+                // Hiding the system cursor stops the stray mouse arrow the user
+                // saw on top of everything in controller mode.
+                var window = Windows.UI.Core.CoreWindow.GetForCurrentThread();
+                if (window != null) window.PointerCursor = null;
+            }
+            catch
+            {
+                // Not every host lets the cursor go; the pad still drives the shelf.
+            }
 
             try
             {
@@ -806,21 +834,24 @@ namespace Kiosk
         {
             DownloadsTitle.Text = Texts.Get("downloads.title");
             var jobs = DownloadManager.Snapshot();
-            if (jobs.Count == 0)
-            {
-                DownloadsList.Text = Texts.Get("downloads.empty");
-                return;
-            }
-            var lines = new System.Text.StringBuilder();
             jobs.Sort((a, b) => b.Running.CompareTo(a.Running));
+            Downloads.Clear();
             foreach (var job in jobs)
             {
-                var state = job.Running ? Texts.Get("downloads.running", job.Percent)
+                var status = job.Moving ? job.File
+                    : job.Running ? Texts.Get("downloads.running", job.Percent)
                     : job.Finished ? Texts.Get("downloads.done")
                     : Texts.Get("downloads.failed", job.Error ?? string.Empty);
-                lines.AppendLine(job.Name + "  ·  " + state);
+                Downloads.Add(new DownloadRow
+                {
+                    Name = job.Name,
+                    Status = status,
+                    Percent = job.Percent,
+                    BarShown = job.Running ? Visibility.Visible : Visibility.Collapsed,
+                });
             }
-            DownloadsList.Text = lines.ToString();
+            DownloadsEmpty.Text = Texts.Get("downloads.empty");
+            DownloadsEmpty.Visibility = jobs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         /// <summary>

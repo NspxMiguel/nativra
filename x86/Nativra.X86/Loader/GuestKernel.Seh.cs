@@ -168,6 +168,11 @@ namespace Nativra.X86.Loader
             var cpu = process.Cpu;
             if (IsEnd(ChainHead)) return false;
             ExceptionsRaised.Add(fault.Code);
+            // The record and context go below the faulting thread's stack
+            // pointer; when that is not writable (a stack overflow, a wild
+            // ESP) there is no dispatching it, and the fault is reported.
+            var below = (cpu.Esp - AreaSize - 64) & ~0xFu;
+            if (!memory.IsMapped(below) || !memory.IsMapped(cpu.Esp - 4)) return false;
             var d = NewDispatch(cpu.Esp);
 
             memory.WriteBytes(d.Record, new byte[RecordSize]);

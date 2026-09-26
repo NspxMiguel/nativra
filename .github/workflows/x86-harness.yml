@@ -48,6 +48,14 @@ jobs:
         shell: cmd
         run: x86\harness\build-guests.cmd
 
+      # The programs themselves, for reproducing a failure off the runner.
+      - name: Keep the guest programs
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-programs
+          path: x86/harness/guests/bin/*.exe
+          retention-days: 7
+
       - name: Restore
         run: dotnet restore x86/Nativra.X86.sln
 

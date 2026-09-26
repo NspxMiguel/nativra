@@ -83,6 +83,24 @@ namespace Kiosk.Native
 
                     // CONTEXT.Rip sits at 0xF8 on x64; it names the instruction
                     // even when the exception record does not.
+                    // A delay-load failure (0xC06D007E module, 0xC06D007F
+                    // procedure) carries a DelayLoadInfo naming the DLL and
+                    // the function; the names are copied now, while they exist.
+                    if ((code == 0xC06D007E || code == 0xC06D007F) && count > 0)
+                    {
+                        var info = new IntPtr(Marshal.ReadInt64(record, 32));
+                        if (info != IntPtr.Zero)
+                        {
+                            CopyText(Marshal.ReadIntPtr(info, 24), into + 32, 64);
+                            var byName = Marshal.ReadInt32(info, 32) != 0;
+                            var proc = Marshal.ReadIntPtr(info, 40);
+                            if (byName) CopyText(proc, into + 96, 64);
+                            else Marshal.WriteInt64(into, 96, 0x23 | ((long)(proc.ToInt64() & 0xFFFF) << 8));
+                            Marshal.WriteInt64(into, 16, -2);
+                            return ContinueSearch;
+                        }
+                    }
+
                     if (context != IntPtr.Zero && slot < Room)
                     {
                         Marshal.WriteInt64(into, 8, Marshal.ReadInt64(context, 0xF8));
@@ -112,6 +130,18 @@ namespace Kiosk.Native
             }
         }
 
+        /// <summary>Copies an ANSI string into the slab without allocating.</summary>
+        private static void CopyText(IntPtr text, IntPtr target, int room)
+        {
+            for (var i = 0; i < room - 1; i++)
+            {
+                var b = text == IntPtr.Zero ? (byte)0 : Marshal.ReadByte(text, i);
+                Marshal.WriteByte(target, i, b);
+                if (b == 0) return;
+            }
+            Marshal.WriteByte(target, room - 1, 0);
+        }
+
         private static string Frames(IntPtr words)
         {
             var frames = new System.Collections.Generic.List<string>();
@@ -136,6 +166,14 @@ namespace Kiosk.Native
                 var code = Marshal.ReadInt64(from, 0);
                 if (code == 0) continue;
                 var kind = Marshal.ReadInt64(from, 16);
+                if (kind == -2)
+                {
+                    var dll = Marshal.PtrToStringAnsi(from + 32) ?? "?";
+                    var ordinal = Marshal.ReadByte(from + 96) == 0x23;
+                    var proc = ordinal ? "#" + ((Marshal.ReadInt64(from, 96) >> 8) & 0xFFFF) : Marshal.PtrToStringAnsi(from + 96);
+                    found.Add("fault 0x" + ((uint)code).ToString("X8") + " delay-load " + dll + "!" + proc);
+                    continue;
+                }
                 found.Add(
                     "fault 0x" + ((uint)code).ToString("X8") +
                     " at " + ImageLookup.Describe(Marshal.ReadInt64(from, 8)) +

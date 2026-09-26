@@ -30,6 +30,9 @@ namespace Kiosk.Native
         // Written to from the handler, which must not allocate: a managed
         // allocation inside an exception handler is its own kind of crash.
         private const int Room = 8;
+        // Per fault: code, address, two parameters, then the top of the stack.
+        private const int StackWords = 64;
+        private const int SlotBytes = 32 + StackWords * 8;
         private static IntPtr slab;
         private static int at;
 
@@ -49,8 +52,8 @@ namespace Kiosk.Native
         public static void Install()
         {
             if (slab != IntPtr.Zero) return;
-            slab = Marshal.AllocHGlobal(Room * 32);
-            for (var i = 0; i < Room * 4; i++) Marshal.WriteInt64(slab, i * 8, 0);
+            slab = Marshal.AllocHGlobal(Room * SlotBytes);
+            for (var i = 0; i < Room * SlotBytes / 8; i++) Marshal.WriteInt64(slab, i * 8, 0);
 
             handler = pointers =>
             {
@@ -68,7 +71,7 @@ namespace Kiosk.Native
                     if (slot >= Room) return ContinueSearch;
                     at = slot + 1;
 
-                    var into = slab + slot * 32;
+                    var into = slab + slot * SlotBytes;
                     Marshal.WriteInt64(into, 0, code);
                     Marshal.WriteInt64(into, 8, Marshal.ReadIntPtr(record, 16).ToInt64());
 
@@ -83,6 +86,12 @@ namespace Kiosk.Native
                     if (context != IntPtr.Zero && slot < Room)
                     {
                         Marshal.WriteInt64(into, 8, Marshal.ReadInt64(context, 0xF8));
+                        // The words above the stack pointer (CONTEXT.Rsp at
+                        // 0x98): the return addresses among them say who
+                        // raised it, which RaiseException's own address does not.
+                        var rsp = new IntPtr(Marshal.ReadInt64(context, 0x98));
+                        for (var i = 0; i < StackWords; i++)
+                            Marshal.WriteInt64(into, 32 + i * 8, Marshal.ReadInt64(rsp, i * 8));
                     }
                 }
                 catch
@@ -103,6 +112,19 @@ namespace Kiosk.Native
             }
         }
 
+        private static string Frames(IntPtr words)
+        {
+            var frames = new System.Collections.Generic.List<string>();
+            for (var i = 0; i < StackWords && frames.Count < 12; i++)
+            {
+                var named = StackSampler.Describe(Marshal.ReadInt64(words, i * 8));
+                if (named.StartsWith("0x", StringComparison.Ordinal)) continue;
+                if (frames.Count > 0 && frames[frames.Count - 1] == named) continue;
+                frames.Add(named);
+            }
+            return string.Join(" < ", frames);
+        }
+
         /// <summary>What was recorded, in the order it happened.</summary>
         public static System.Collections.Generic.List<string> Faults()
         {
@@ -110,7 +132,7 @@ namespace Kiosk.Native
             if (slab == IntPtr.Zero) return found;
             for (var slot = 0; slot < at && slot < Room; slot++)
             {
-                var from = slab + slot * 32;
+                var from = slab + slot * SlotBytes;
                 var code = Marshal.ReadInt64(from, 0);
                 if (code == 0) continue;
                 var kind = Marshal.ReadInt64(from, 16);
@@ -119,7 +141,8 @@ namespace Kiosk.Native
                     " at " + ImageLookup.Describe(Marshal.ReadInt64(from, 8)) +
                     (kind < 0 ? "" :
                         (kind == 1 ? " writing 0x" : " reading 0x") +
-                        Marshal.ReadInt64(from, 24).ToString("X")));
+                        Marshal.ReadInt64(from, 24).ToString("X")) +
+                    " | " + Frames(from + 32));
             }
             return found;
         }

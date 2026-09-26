@@ -105,8 +105,17 @@ namespace Kiosk.Native
         }
 
         /// <summary>Builds a vtable object: an IntPtr to a table of function pointers.</summary>
-        private static IntPtr Table(params IntPtr[] slots)
+        /// <summary>
+        /// Set while diagnosing: wraps each slot so every call is recorded as
+        /// Interface#slot, which is how a wrong slot or signature is found.
+        /// </summary>
+        public static Func<string, IntPtr, IntPtr> Tracer;
+
+        private static IntPtr Table(string name, params IntPtr[] slots)
         {
+            var tracer = Tracer;
+            if (tracer != null)
+                for (var i = 0; i < slots.Length; i++) slots[i] = tracer(name + "#" + i, slots[i]);
             var table = Marshal.AllocHGlobal(IntPtr.Size * slots.Length);
             for (var i = 0; i < slots.Length; i++) Marshal.WriteIntPtr(table, i * IntPtr.Size, slots[i]);
             var obj = Marshal.AllocHGlobal(IntPtr.Size);
@@ -126,6 +135,16 @@ namespace Kiosk.Native
         // ---- object caches -------------------------------------------------
 
         private static IntPtr userObj, friendsObj, utilsObj, appsObj, statsObj, storageObj, emptyObj, clientObj;
+
+        /// <summary>
+        /// Builds every object now. Traced slots are thunks in the loader's
+        /// code page, which is sealed read-and-execute before the game runs,
+        /// so with a tracer they have to exist before that.
+        /// </summary>
+        public static void Prebuild()
+        {
+            User(); Friends(); Utils(); Apps(); UserStats(); RemoteStorage(); Client(); Empty();
+        }
 
         private static IntPtr User()
         {
@@ -170,7 +189,7 @@ namespace Kiosk.Native
                 if (emptyObj != IntPtr.Zero) return emptyObj;
                 var slots = new IntPtr[80];
                 for (var i = 0; i < slots.Length; i++) slots[i] = stubZero;
-                return emptyObj = Table(slots);
+                return emptyObj = Table("SteamEmpty", slots);
             }
         }
 
@@ -355,7 +374,7 @@ namespace Kiosk.Native
                 catch { return Zero; }
             };
 
-            return Table(
+            return Table("ISteamUser016",
                 /* 0  GetHSteamUser              */ stubTrue,
                 /* 1  BLoggedOn                   */ stubTrue,
                 /* 2  GetSteamID                  */ Keep(getSteamId),
@@ -392,7 +411,7 @@ namespace Kiosk.Native
 
             var emptyString = Utf8(string.Empty);
 
-            return Table(
+            return Table("ISteamFriends011",
                 /* 0  GetPersonaName                     */ Keep(getPersonaName),
                 /* 1  SetPersonaName                      */ stubZero,
                 /* 2  GetPersonaState                     */ stubTrue, // 1 = online
@@ -487,7 +506,7 @@ namespace Kiosk.Native
                 return Zero;
             };
 
-            return Table(
+            return Table("ISteamUtils005",
                 /* 0  GetSecondsSinceAppActive      */ Keep(secondsAppActive),
                 /* 1  GetSecondsSinceComputerActive */ Keep(secondsAppActive),
                 /* 2  GetConnectedUniverse          */ stubTrue, // k_EUniversePublic = 1
@@ -530,7 +549,7 @@ namespace Kiosk.Native
                 return new IntPtr(Encoding.UTF8.GetByteCount(LoaderStubs.GameFolder));
             };
 
-            return Table(
+            return Table("STEAMAPPS005",
                 /* 0  BIsSubscribed                  */ stubTrue,
                 /* 1  BIsLowViolence                 */ stubZero,
                 /* 2  BIsCybercafe                   */ stubZero,
@@ -640,7 +659,7 @@ namespace Kiosk.Native
             };
             var emptyString = Utf8(string.Empty);
 
-            return Table(
+            return Table("STEAMUSERSTATS010",
                 /* 0  RequestCurrentStats             */ Keep(requestCurrentStats),
                 /* 1  GetStat(float*)                 */ Keep(getStatFloat),
                 /* 2  GetStat(int32*)                 */ Keep(getStatInt32),
@@ -806,7 +825,7 @@ namespace Kiosk.Native
                 return True;
             };
 
-            return Table(
+            return Table("STEAMREMOTESTORAGE006",
                 /* 0  FileWrite                        */ Keep(fileWrite),
                 /* 1  FileRead                         */ Keep(fileRead),
                 /* 2  FileForget                       */ stubTrue,
@@ -874,7 +893,7 @@ namespace Kiosk.Native
             Fn getRemoteStorage = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => RemoteStorage();
             Fn getEmpty = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => Empty();
 
-            return Table(
+            return Table("SteamClient012",
                 /* 0  CreateSteamPipe               */ stubTrue,
                 /* 1  BReleaseSteamPipe             */ stubTrue,
                 /* 2  ConnectToGlobalUser           */ stubTrue,

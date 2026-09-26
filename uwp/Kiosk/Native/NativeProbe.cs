@@ -296,6 +296,13 @@ namespace Kiosk.Native
                 CrtFiles.Install(imports);
                 DirectInputStub.Install(imports);
                 StackSampler.Enabled = await local.TryGetItemAsync("stacks.txt") != null;
+                // While diagnosing, every classic Steam interface call is traced.
+                if (StackSampler.Enabled && SteamBridge.Active)
+                {
+                    SteamClassic.Tracer = (name, target) => imports.Shim.TraceFor(name, target);
+                    SteamClassic.Prebuild();
+                    SteamClassic.Tracer = null;
+                }
                 StackSampler.Install(imports);
                 // The app's own UI thread too: when a game's window procedure
                 // or a bridge call blocks it, the console ends the app after
@@ -550,6 +557,7 @@ namespace Kiosk.Native
                                     {
                                         var sampled = new List<string> { "at=" + DateTime.Now.ToString("HH:mm:ss.fff") };
                                         sampled.AddRange(StackSampler.Sample());
+                                        foreach (var name in imports.Shim.Recent()) sampled.Add("recent " + name);
                                         System.IO.File.WriteAllLines(watchPath, sampled);
                                     }
                                     catch

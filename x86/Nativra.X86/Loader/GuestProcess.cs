@@ -106,6 +106,11 @@ namespace Nativra.X86.Loader
         private const uint PebOsBuildNumber = 0xAC;   // 16-bit
 
         private const uint PebLdrData = 0x800;   // PEB_LDR_DATA, inside the PEB page past the PEB itself
+        private const uint PebParameters = 0x900;   // RTL_USER_PROCESS_PARAMETERS, likewise
+        private const uint ParametersSize = 0x2A0;
+
+        /// <summary>Guest VA of RTL_USER_PROCESS_PARAMETERS (PEB+0x10).</summary>
+        public uint ProcessParameters { get; private set; }
 
         private const uint BlockSize = 0x1000;
         private const uint MaxTlsModules = BlockSize / 4;
@@ -218,7 +223,13 @@ namespace Nativra.X86.Loader
                 Memory.Write32(ldr + head + 4, ldr + head);
             }
             Memory.Write32(PebBase + PebLdr, ldr);
-            Memory.Write32(PebBase + PebProcessParameters, 0);
+            // RTL_USER_PROCESS_PARAMETERS: normalised, no console; the kernel
+            // fills in the image path and command line strings.
+            ProcessParameters = PebBase + PebParameters;
+            Memory.Write32(ProcessParameters + 0x00, ParametersSize);   // MaximumLength
+            Memory.Write32(ProcessParameters + 0x04, ParametersSize);   // Length
+            Memory.Write32(ProcessParameters + 0x08, 1);                // Flags: RTL_USER_PROC_PARAMS_NORMALIZED
+            Memory.Write32(PebBase + PebProcessParameters, ProcessParameters);
             Memory.Write32(PebBase + PebProcessHeap, 0);
             Memory.Write32(PebBase + PebNumberOfProcessors, 4);
             Memory.Write32(PebBase + PebOsMajorVersion, 10);

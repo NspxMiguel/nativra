@@ -131,6 +131,7 @@ namespace Kiosk.Native
         private static readonly Dictionary<string, byte[]> attributeCache =
             new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         private static readonly byte[] Missing = new byte[0];
+        private const int MaxCachedAttributes = 8192;
 
         /// <summary>Forgets every cached answer; called on anything that writes.</summary>
         public static void Invalidate()
@@ -177,7 +178,14 @@ namespace Kiosk.Native
                 }
                 // Only "not there" is worth remembering among failures.
                 if (cacheable && (ok || error == 2 || error == 3))
-                    lock (attributeCache) attributeCache[path] = answer;
+                    lock (attributeCache)
+                    {
+                        // A game with tens of thousands of assets would keep
+                        // every path forever; starting over past the cap costs
+                        // one broker round trip per path, once.
+                        if (attributeCache.Count >= MaxCachedAttributes) attributeCache.Clear();
+                        attributeCache[path] = answer;
+                    }
                 if (!ok) SetLastError((uint)error);
                 return ok;
             }
@@ -454,7 +462,13 @@ namespace Kiosk.Native
                     // every call on an .xml handle is written down.
                     var opened = Marshal.PtrToStringUni(name);
                     if (opened != null && opened.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-                        lock (xmlHandles) xmlHandles.Add(handle.ToInt64());
+                        lock (xmlHandles)
+                        {
+                            // Handles are never taken back out on close; a
+                            // cap keeps a diagnostic from becoming a leak.
+                            if (xmlHandles.Count >= 1024) xmlHandles.Clear();
+                            xmlHandles.Add(handle.ToInt64());
+                        }
                 }
                 if (!failed && Seen.Count >= Keep) return handle;
 

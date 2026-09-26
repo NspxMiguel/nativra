@@ -297,6 +297,7 @@ namespace Kiosk.Native
 
         private static readonly List<IntPtr> registered = new List<IntPtr>();
         private static readonly Queue<KeyValuePair<int, byte[]>> pending = new Queue<KeyValuePair<int, byte[]>>();
+        private const int MaxPending = 256;
 
         private static void RegisterCallback(IntPtr callback, int iCallback)
         {
@@ -317,7 +318,13 @@ namespace Kiosk.Native
 
         private static void Post(int callbackId, byte[] payload)
         {
-            lock (pending) pending.Enqueue(new KeyValuePair<int, byte[]>(callbackId, payload));
+            lock (pending)
+            {
+                // A game that never pumps callbacks would grow this forever;
+                // the oldest results are the ones it has stopped waiting for.
+                while (pending.Count >= MaxPending) pending.Dequeue();
+                pending.Enqueue(new KeyValuePair<int, byte[]>(callbackId, payload));
+            }
         }
 
         private static void RunPendingCallbacks()

@@ -140,37 +140,37 @@ também registram metas e investigações anteriores; não são garantias de com
 
 ## O que já foi demonstrado
 
-- Login na Steam por QR, feito pelo próprio dono da conta.
-- Biblioteca de jogos próprios e compartilhados, coleções, busca e filtros.
-- Caminho de download dos arquivos pelos servidores da Steam.
-- Carregamento dos binários e inicialização de um jogo Unity comercial.
-- Menu real de **Seraph's Last Stand**, Steam 1919460, na tela do Xbox Series X.
-- Partidas curtas com movimento, salto e tiro por comandos remotos. No build 194,
-  o dono confirmou som audível no menu; sessões longas e controle físico completo
-  ainda precisam de validação.
-- Ferramentas de controle remoto e coleta de evidências no console para testes.
+- **Login na Steam** no console, por QR code, nativo; a sessão sobrevive às
+  atualizações do app.
+- **A biblioteca inteira**: jogos próprios e da Família Steam, com as coleções,
+  filtros e busca da conta. Jogos emprestados pela família baixam como os seus.
+- **Download no console**, direto dos servidores da Steam, para o console ou um
+  pendrive/HD externo, com progresso na tela inicial, retomada depois de
+  interrupção, mudança para o drive com mais espaço quando um disco enche, e
+  conferência de cada bloco contra o manifesto em arquivos que um download
+  interrompido deixou.
+- **Jogos rodando dos próprios arquivos**, no console ou no pendrive, por um
+  carregador que mapeia, reloca e liga as DLLs do jogo na ordem de dependência,
+  dá a cada thread o TLS e o `DLL_THREAD_ATTACH`, e responde as APIs do Windows
+  que o console não tem (pastas do usuário, arquivos do runtime C no pendrive,
+  raw input, DirectInput, o compilador HLSL).
+- **Verificado**: Seraph's Last Stand (Unity) roda a 60 fps no controle e mostra
+  "Jogando" para os amigos da Steam.
+- **Hades** (motor próprio da Supergiant, D3D11, SDL2, FMOD) chega ao menu
+  principal a 60 fps, rodando do pendrive.
+- **Controle remoto do console** pelo terminal, para testes.
 
-O [registro do marco](docs/progress/2026-09-23.md) separa medições, correções e
-hipóteses. O pacote mais recente pode conter mudanças ainda não validadas no Xbox.
+A tabela de cada jogo testado está em [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ## O que falta
 
-**Isto é uma prova de conceito pré-alpha, não um produto pronto.**
-
-- Confirmar uma partida jogável e estável, controle e abertura repetida.
-- Corrigir e medir a fluidez: o espelhamento tinha um teto de 20 FPS, independente
-  do contador de renderização do jogo. Retirar o teto não garante 60 FPS.
-- Validar o filtro Baixados e o lançamento pelo botão Jogar em todos os caminhos.
-- Validar o áudio em sessões prolongadas e trocas de dispositivo. O build 194
-  passou a obter o cliente real de áudio, sem a falha anterior do FMOD, e o dono
-  confirmou som audível no menu.
-- Resolver a integração SteamAPI; online, conquistas, amigos e convites não estão validados.
-- Testar LEGO Jurassic World e outros jogos. Não há garantia de compatibilidade.
-- Substituir a arte provisória de abertura, rejeitada após avaliação na TV.
-- Validar resoluções e desempenho. Jogabilidade em 4K ainda não foi comprovada.
-
-Hoje, carregar outro jogo exige reiniciar o aplicativo. Nenhuma licença ou
-autenticação é burlada para fazer um jogo avançar.
+**Experimental, ainda não é uma camada de compatibilidade pronta.** O controle e
+o som do Hades no menu ainda não foram confirmados. Jogos que usam a API C++
+clássica da Steam (LEGO Jurassic World) param na inicialização da Steam, jogos de
+32 bits não são suportados, jogos Direct3D 9 não têm renderizador, e o Adobe AIR
+(Brawlhalla) não acha o descritor da aplicação. Multiplayer e convites de amigos
+não foram validados. Nenhuma verificação de licença ou autenticação é contornada:
+os jogos rodam das licenças da própria conta logada.
 
 ## Testes de desenvolvimento
 

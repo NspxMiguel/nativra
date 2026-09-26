@@ -155,6 +155,23 @@
               </ItemsControl>
             </ScrollViewer>
           </Grid>
+          <!-- Every game at once, when the one-row shelf is too long to walk. -->
+          <Grid x:Name="AllGamesScreen" Visibility="Collapsed" Margin="56,40,56,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="AllGamesTitle" Grid.Row="0" FontSize="{StaticResource SectionSize}" FontWeight="ExtraBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,8"/>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+              <ItemsControl x:Name="AllGamesGrid" ItemsSource="{x:Bind AllGames}" ItemTemplate="{StaticResource TileTemplate}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <local:EvenWrapPanel Columns="6" Gap="8"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
+            </ScrollViewer>
+          </Grid>
           <Grid x:Name="EmulatorScreen" Visibility="Collapsed" Margin="56,40,56,0">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/>

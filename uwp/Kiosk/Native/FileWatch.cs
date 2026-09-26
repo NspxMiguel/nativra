@@ -90,6 +90,27 @@ namespace Kiosk.Native
         /// <summary>Calls that went to the file broker, and the time they took.</summary>
         public static long BrokerCalls, BrokerTicks;
 
+        /// <summary>The same, by kind: opens, directory listings, attribute questions.</summary>
+        public static long OpenCalls, OpenTicks, FindCalls, FindTicks, AttributeCalls, AttributeTicks;
+
+        public static string BrokerReport()
+        {
+            var perMs = System.Diagnostics.Stopwatch.Frequency / 1000.0;
+            return "broker calls=" + BrokerCalls + " ms=" + (long)(BrokerTicks / perMs)
+                + " opens=" + OpenCalls + "/" + (long)(OpenTicks / perMs) + "ms"
+                + " finds=" + FindCalls + "/" + (long)(FindTicks / perMs) + "ms"
+                + " attributes=" + AttributeCalls + "/" + (long)(AttributeTicks / perMs) + "ms";
+        }
+
+        internal static void Count(ref long calls, ref long ticks, long started)
+        {
+            var spent = System.Diagnostics.Stopwatch.GetTimestamp() - started;
+            System.Threading.Interlocked.Increment(ref calls);
+            System.Threading.Interlocked.Add(ref ticks, spent);
+            System.Threading.Interlocked.Increment(ref BrokerCalls);
+            System.Threading.Interlocked.Add(ref BrokerTicks, spent);
+        }
+
         /// <summary>
         /// The game's own download folder. Every file call for a game on a USB
         /// drive is a round trip to the broker in another process, and Hades
@@ -138,8 +159,7 @@ namespace Kiosk.Native
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var ok = GetFileAttributesExFromAppW(path, 0, buffer);
                 var error = Marshal.GetLastWin32Error();
-                System.Threading.Interlocked.Increment(ref BrokerCalls);
-                System.Threading.Interlocked.Add(ref BrokerTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                Count(ref AttributeCalls, ref AttributeTicks, started);
                 byte[] answer = Missing;
                 if (ok)
                 {
@@ -314,8 +334,7 @@ namespace Kiosk.Native
                 var path = name == IntPtr.Zero ? null : Marshal.PtrToStringUni(name);
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var found = FindFirstFileExW(path, level, data, search, filter, flags);
-                System.Threading.Interlocked.Increment(ref BrokerCalls);
-                System.Threading.Interlocked.Add(ref BrokerTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                Count(ref FindCalls, ref FindTicks, started);
                 if (found == InvalidHandle) Say("find failed " + (path ?? "?") + " (" + Marshal.GetLastWin32Error() + ")");
                 else Say("find " + (path ?? "?"));
                 return found;
@@ -362,8 +381,7 @@ namespace Kiosk.Native
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var handle = real(
                     name, access, share, security, disposition, flags, template);
-                System.Threading.Interlocked.Increment(ref BrokerCalls);
-                System.Threading.Interlocked.Add(ref BrokerTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                Count(ref OpenCalls, ref OpenTicks, started);
                 // Anything that can create or change a file changes the answers.
                 if ((access & 0x40000000) != 0 || (disposition != 3 && disposition != 0)) Invalidate();
 
@@ -485,6 +503,60 @@ namespace Kiosk.Native
                 imports.Overrides[module + "!GetFileAttributesExW"] = attributesExAddress;
                 foreach (var pair in changing) imports.Overrides[module + "!" + pair.Key] = pair.Value;
             }
+        }
+
+        [DllImport("api-ms-win-core-file-l2-1-0.dll", SetLastError = true)]
+        private static extern IntPtr ReOpenFile(IntPtr original, uint access, uint share, uint flags);
+
+        /// <summary>
+        /// Measures what the broker costs on this drive, to choose how to make
+        /// loading from it faster: one open, a ReOpenFile on a brokered handle
+        /// (if that works without the broker, handles can be reused), and eight
+        /// opens at once against eight in a row (if the broker answers in
+        /// parallel, files can be opened ahead in bulk).
+        /// </summary>
+        public static List<string> MeasureBroker(IList<string> files)
+        {
+            var lines = new List<string>();
+            if (files.Count < 17) return lines;
+            var tick = System.Diagnostics.Stopwatch.Frequency / 1000.0;
+            Func<string, IntPtr> open = path => CreateFileFromAppW(path, 0x80000000, 1, IntPtr.Zero, 3, 0x80, IntPtr.Zero);
+
+            var t = System.Diagnostics.Stopwatch.GetTimestamp();
+            var first = open(files[0]);
+            lines.Add("brokerprobe one open " + ((System.Diagnostics.Stopwatch.GetTimestamp() - t) / tick).ToString("0.0") + "ms ok=" + (first != InvalidHandle));
+            if (first != InvalidHandle)
+            {
+                t = System.Diagnostics.Stopwatch.GetTimestamp();
+                var again = ReOpenFile(first, 0x80000000, 1, 0);
+                var error = Marshal.GetLastWin32Error();
+                lines.Add("brokerprobe reopen " + ((System.Diagnostics.Stopwatch.GetTimestamp() - t) / tick).ToString("0.0") + "ms ok=" + (again != InvalidHandle) + " error=" + error);
+                if (again != InvalidHandle) CloseHandle(again);
+                CloseHandle(first);
+            }
+
+            t = System.Diagnostics.Stopwatch.GetTimestamp();
+            for (var i = 1; i <= 8; i++)
+            {
+                var handle = open(files[i]);
+                if (handle != InvalidHandle) CloseHandle(handle);
+            }
+            lines.Add("brokerprobe 8 in a row " + ((System.Diagnostics.Stopwatch.GetTimestamp() - t) / tick).ToString("0") + "ms");
+
+            t = System.Diagnostics.Stopwatch.GetTimestamp();
+            var tasks = new System.Threading.Tasks.Task[8];
+            for (var i = 0; i < 8; i++)
+            {
+                var path = files[9 + i];
+                tasks[i] = System.Threading.Tasks.Task.Run(() =>
+                {
+                    var handle = open(path);
+                    if (handle != InvalidHandle) CloseHandle(handle);
+                });
+            }
+            System.Threading.Tasks.Task.WaitAll(tasks);
+            lines.Add("brokerprobe 8 at once " + ((System.Diagnostics.Stopwatch.GetTimestamp() - t) / tick).ToString("0") + "ms");
+            return lines;
         }
 
         /// <summary>File or folder, found through the broker as well.</summary>

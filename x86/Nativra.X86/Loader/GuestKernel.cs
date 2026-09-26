@@ -65,7 +65,13 @@ namespace Nativra.X86.Loader
         public GuestHeap Heap => heap;
 
         /// <summary>The program's full path, as GetModuleFileName reports it.</summary>
-        public string ExePath { get; set; } = "C:\\game\\game.exe";
+        public string ExePath
+        {
+            get => exePath;
+            set { exePath = value; filesGuard = null; }
+        }
+
+        private string exePath = "C:\\game\\game.exe";
 
         /// <summary>
         /// Functions the guest looked up with GetProcAddress that have no host

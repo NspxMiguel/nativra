@@ -19,16 +19,21 @@ namespace Nativra.X86.Loader
     // its offline path.
     public sealed partial class GuestKernel
     {
-        /// <summary>
-        /// Where a known folder ("Documents", "SavedGames", "AppData",
-        /// "LocalAppData", "ProgramData", "Desktop") lives in the guest's file
-        /// system. The default keeps them in the game's own folder; the app
-        /// can point them at the console's save storage.
-        /// </summary>
-        public Func<string, string> KnownFolder { get; set; }
-
-        private string KnownFolderPath(string name) =>
-            KnownFolder?.Invoke(name) ?? Folder(ExePath) + "nativra-user\\" + name;
+        /// <summary>A known folder as the guest sees it: under C:\\users\\Player, as on Wine.</summary>
+        private static string KnownFolderPath(string name)
+        {
+            switch (name)
+            {
+                case "": return GuestProfile;
+                case "SavedGames": return GuestProfile + "\\Saved Games";
+                case "AppData": return GuestProfile + "\\AppData\\Roaming";
+                case "LocalAppData": return GuestProfile + "\\AppData\\Local";
+                case "LocalAppDataLow": return GuestProfile + "\\AppData\\LocalLow";
+                case "ProgramData": return "C:\\ProgramData";
+                case "PublicDocuments": return "C:\\users\\Public\\Documents";
+                default: return GuestProfile + "\\" + name;   // Documents, Desktop, Music, Pictures, Videos
+            }
+        }
 
         private void InstallLibraries(GuestImports i)
         {
@@ -814,7 +819,15 @@ namespace Nativra.X86.Loader
         /// <summary>The known folder's guest path, created (with its parents) so the game can write there.</summary>
         private string EnsureKnownFolder(string name)
         {
-            var path = FullPath(KnownFolderPath(name)).TrimEnd('\\');
+            var path = KnownFolderPath(name);
+            CreateTree(path);
+            return path;
+        }
+
+        /// <summary>Creates a folder and its missing parents; the guard answers for the ones above what the guest can reach.</summary>
+        private bool CreateTree(string path)
+        {
+            path = FullPath(path).TrimEnd('\\');
             var at = path.IndexOf('\\', 3);
             while (at > 0)
             {
@@ -822,8 +835,7 @@ namespace Nativra.X86.Loader
                 if (Files.Stat(part) == null) Files.CreateDirectory(part);
                 at = path.IndexOf('\\', at + 1);
             }
-            if (Files.Stat(path) == null) Files.CreateDirectory(path);
-            return path;
+            return Files.Stat(path) != null || Files.CreateDirectory(path);
         }
 
         private void InstallShell32(GuestImports i)
@@ -851,9 +863,7 @@ namespace Nativra.X86.Loader
                 {
                     var path = FullPath(ReadText(c.Arg(1), w)).TrimEnd('\\');
                     if (Files.Stat(path) != null) return 183;   // ERROR_ALREADY_EXISTS
-                    var at = path.IndexOf('\\', 3);
-                    while (at > 0) { var part = path.Substring(0, at); if (Files.Stat(part) == null) Files.CreateDirectory(part); at = path.IndexOf('\\', at + 1); }
-                    return Files.CreateDirectory(path) ? 0u : 3u;
+                    return CreateTree(path) ? 0u : 3u;          // ERROR_PATH_NOT_FOUND
                 });
                 i.Register(s, "ShellExecute" + x, CallConv.Stdcall, 6, c => { Say("x86: ShellExecute " + ReadText(c.Arg(2), w)); return 42; });
                 i.Register(s, "ShellExecuteEx" + x, CallConv.Stdcall, 1, c => { memory.Write32(c.Arg(0) + 32, 42); return 1; });

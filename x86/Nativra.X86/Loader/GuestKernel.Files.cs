@@ -27,8 +27,47 @@ namespace Nativra.X86.Loader
             public Stream Stream;   // null for a folder opened with FILE_FLAG_BACKUP_SEMANTICS
         }
 
-        /// <summary>The guest's file system; the portable System.IO one unless the host sets its own.</summary>
-        public IGuestFiles Files { get; set; } = new HostFolderFiles();
+        private IGuestFiles filesInner = new HostFolderFiles();
+        private GuardedFiles filesGuard;
+
+        /// <summary>
+        /// The guest's file system: whatever the host sets (the portable
+        /// System.IO one by default), always seen through <see cref="GuardedFiles"/>,
+        /// which maps the guest's profile and keeps host refusals from escaping.
+        /// </summary>
+        public IGuestFiles Files
+        {
+            get => filesGuard ?? (filesGuard = BuildGuard());
+            set { filesInner = value; filesGuard = null; }
+        }
+
+        /// <summary>The guest user's profile folder, as Wine names it.</summary>
+        public const string GuestProfile = "C:\\users\\Player";
+
+        private string profileRoot;
+
+        /// <summary>
+        /// Where the guest's C:\users\Player (and C:\users\Public, C:\ProgramData)
+        /// really are, as a path the inner file system understands: the app's
+        /// profile folder. By default a folder beside the game.
+        /// </summary>
+        public string ProfileRoot
+        {
+            get => profileRoot ?? Folder(ExePath) + "nativra-user";
+            set { profileRoot = value?.TrimEnd('\\'); filesGuard = null; }
+        }
+
+        private GuardedFiles BuildGuard()
+        {
+            var guard = new GuardedFiles(filesInner);
+            var root = ProfileRoot;
+            guard.Map(GuestProfile, root);
+            guard.Map("C:\\users\\Public", root + "\\Public");
+            guard.Map("C:\\ProgramData", root + "\\ProgramData");
+            guard.Reach(Folder(ExePath));
+            guard.Reach(root);
+            return guard;
+        }
 
         /// <summary>Files the guest looked for and did not find, in order — what a missing asset looks like.</summary>
         public List<string> FilesNotFound { get; } = new List<string>();

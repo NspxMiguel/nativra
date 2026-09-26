@@ -158,10 +158,17 @@ namespace Kiosk.Native
                     if (getContext(thread.Handle, context) == 0) continue;
                     rip = Marshal.ReadInt64(context, RipOffset);
                     rsp = Marshal.ReadInt64(context, RspOffset);
-                    if (read(currentProcess(), new IntPtr(rsp), stack, new IntPtr(StackBytes), readCount) != 0)
-                        got = Marshal.ReadInt64(readCount);
-                    else if (read(currentProcess(), new IntPtr(rsp), stack, new IntPtr(512), readCount) != 0)
-                        got = Marshal.ReadInt64(readCount);
+                    // Page by page up to the top of the stack: one read that
+                    // runs past it fails whole.
+                    var at = rsp;
+                    while (got < StackBytes)
+                    {
+                        var toPage = 4096 - (at & 4095);
+                        var size = Math.Min(toPage, StackBytes - got);
+                        if (read(currentProcess(), new IntPtr(at), stack + (int)got, new IntPtr(size), readCount) == 0) break;
+                        got += size;
+                        at += size;
+                    }
                 }
                 finally
                 {

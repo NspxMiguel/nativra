@@ -73,6 +73,7 @@ struct Subresource {
     UINT pitch = 0;              // D3D9 row pitch of the shadow
     bool locked = false;
     bool valid = false;          // shadow holds current contents
+    bool evicted = false;        // shadow dropped after upload; the GPU copy is the contents
 };
 
 // A D3D11 texture plus everything D3D9 layers on top: CPU shadows for
@@ -89,7 +90,8 @@ public:
     HRESULT Unlock(UINT sub);
     void Upload(UINT sub);          // shadow -> GPU
     bool ReadBack(UINT sub);        // GPU -> shadow
-    uint8_t* Shadow(UINT sub);      // allocates on demand
+    uint8_t* Shadow(UINT sub);      // allocates on demand (reading an evicted one back)
+    bool Evictable() const;         // the shadow can go once uploaded
 
     ID3D11ShaderResourceView* Srv(bool srgb);
     ID3D11RenderTargetView* Rtv(UINT sub, bool srgb);
@@ -233,6 +235,9 @@ public:
     HRESULT Lock(UINT offset, UINT size, void** data, DWORD flags);
     HRESULT Unlock();
     void Flush();              // upload the dirty range
+    bool ReadBack();           // GPU -> a fresh shadow
+    bool Evictable() const;
+    bool uploaded = false;     // the GPU buffer holds data the game wrote
 
     Device* device;
     ID3D11Buffer* buffer = nullptr;

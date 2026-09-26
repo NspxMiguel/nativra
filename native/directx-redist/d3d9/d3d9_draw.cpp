@@ -903,7 +903,12 @@ HRESULT Device::UpdateTexture(IDirect3DBaseTexture9* srcTexture, IDirect3DBaseTe
     for (UINT face = 0; face < dst->faces; face++) {
         for (UINT level = 0; level < dst->levels && srcFirst + level < src->levels; level++) {
             const UINT s = src->Sub(face, srcFirst + level);
-            if (!src->subs[s].shadow) continue;   // never written
+            if (!src->subs[s].shadow) {
+                // Dropped after its upload: the GPU has it, copy on the GPU.
+                if (src->subs[s].evicted && src->texture)
+                    ctx->CopySubresourceRegion(dst->texture, dst->Sub(face, level), 0, 0, 0, src->texture, s, nullptr);
+                continue;   // otherwise never written
+            }
             const Subresource& sub = src->subs[s];
             const FormatInfo& f = *src->fmt;
             const UINT rows = RowCount(f, sub.height);

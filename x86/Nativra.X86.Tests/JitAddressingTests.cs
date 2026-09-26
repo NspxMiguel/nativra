@@ -36,5 +36,30 @@ namespace Nativra.X86.Tests
                 Assert.Equal(0x33333337u, eax);
             }
         }
+
+        // eax = 7; eax = [esp+4] * 24; ecx = 5; ecx = [esp+4] * 1000; return eax + ecx
+        // (the memory form of three-operand imul once multiplied the
+        // destination's old value in; found by the lockstep check)
+        private static readonly byte[] ImulMemory =
+        {
+            0xB8, 0x07, 0x00, 0x00, 0x00, 0x6B, 0x44, 0x24, 0x04, 0x18, 0xB9, 0x05, 0x00, 0x00, 0x00, 0x69,
+            0x4C, 0x24, 0x04, 0xE8, 0x03, 0x00, 0x00, 0x01, 0xC8, 0xC3,
+        };
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void ThreeOperandImulWithAMemorySourceIgnoresTheOldDestination(bool jit)
+        {
+            using (var p = new GuestProcess(new GuestMemory(native: jit), useJit: jit))
+            {
+                Assert.Equal(jit, p.UsesJit);
+                p.Memory.Map(0x00600000, 0x1000);
+                p.Memory.WriteBytes(0x00600000, ImulMemory);
+                var result = p.Call(0x00600000, out var eax, 1000, 14);
+                Assert.True(result.Ok, result.ToString());
+                Assert.Equal(14u * 24u + 14u * 1000u, eax);
+            }
+        }
     }
 }

@@ -46,6 +46,15 @@ namespace Nativra.X86.Loader
                 ["windir"] = "C:\\Windows",
                 ["TEMP"] = "C:\\Temp",
                 ["TMP"] = "C:\\Temp",
+                ["USERNAME"] = "Player",
+                ["USERPROFILE"] = GuestProfile,
+                ["HOMEDRIVE"] = "C:",
+                ["HOMEPATH"] = "\\users\\Player",
+                ["APPDATA"] = GuestProfile + "\\AppData\\Roaming",
+                ["LOCALAPPDATA"] = GuestProfile + "\\AppData\\Local",
+                ["ALLUSERSPROFILE"] = "C:\\ProgramData",
+                ["ProgramData"] = "C:\\ProgramData",
+                ["PUBLIC"] = "C:\\users\\Public",
             };
 
         // Fiber-local values per thread: key is thread id << 32 | index.

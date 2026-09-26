@@ -240,6 +240,57 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void WalkingAProfilePathFromTheDriveRootNeverReachesTheHost()
+        {
+            // As a CRT's mkdir -p does: every part from C:\ down.
+            Assert.Equal(0u, Call("kernel32.dll", "CreateDirectoryA", Str("C:\\users"), 0));
+            Assert.Equal(183u, Call("kernel32.dll", "GetLastError"));            // ERROR_ALREADY_EXISTS
+            Assert.Equal(0x10u, Call("kernel32.dll", "GetFileAttributesA", Str("C:\\")) & 0x10);
+            foreach (var part in new[] { "C:\\users\\Player", "C:\\users\\Player\\Documents", "C:\\users\\Player\\Documents\\Studio" })
+                Call("kernel32.dll", "CreateDirectoryA", Str(part), 0);
+            Assert.True(Directory.Exists(Path.Combine(work, "nativra-user", "Documents", "Studio")));
+            var f = Call("msvcrt.dll", "fopen", Str("C:\\users\\Player\\Documents\\Studio\\save.dat"), Str("wb"));
+            Assert.NotEqual(0u, f);
+            Call("msvcrt.dll", "fclose", f);
+            Assert.True(File.Exists(Path.Combine(work, "nativra-user", "Documents", "Studio", "save.dat")));
+            var env = k.Heap.Alloc(260);
+            Call("kernel32.dll", "GetEnvironmentVariableA", Str("APPDATA"), env, 260);
+            Assert.Equal("C:\\users\\Player\\AppData\\Roaming", p.Memory.ReadAnsi(env));
+        }
+
+        private sealed class RefusingFiles : IGuestFiles
+        {
+            public Stream Open(string path, FileMode mode, FileAccess access) => throw new UnauthorizedAccessException(path);
+            public GuestFileEntry Stat(string path) => throw new UnauthorizedAccessException(path);
+            public System.Collections.Generic.IEnumerable<GuestFileEntry> List(string folder) => throw new UnauthorizedAccessException(folder);
+            public bool CreateDirectory(string path) => throw new UnauthorizedAccessException(path);
+            public bool Delete(string path) => throw new PathTooLongException(path);
+        }
+
+        [Fact]
+        public void AHostThatRefusesEverythingGivesWin32ErrorsNotExceptions()
+        {
+            k.Files = new RefusingFiles();
+            Assert.Equal(0xFFFFFFFFu, Call("kernel32.dll", "GetFileAttributesA", Str("C:\\game\\data.pak")));
+            Assert.Equal(0xFFFFFFFFu, Call("kernel32.dll", "CreateFileA", Str("C:\\game\\data.pak"), 0x80000000, 0, 0, 3, 0, 0));
+            Assert.Equal(0u, Call("kernel32.dll", "CreateDirectoryA", Str("C:\\game\\new"), 0));
+            Assert.Equal(0u, Call("kernel32.dll", "DeleteFileA", Str("C:\\game\\old")));
+            Assert.Equal(0u, Call("msvcrt.dll", "fopen", Str("x.txt"), Str("r")));
+            var path = k.Heap.Alloc(260);
+            Assert.Equal(0u, Call("shell32.dll", "SHGetFolderPathA", 0, 0x8005, 0, 0, path));   // the path is still handed out
+        }
+
+        [Fact]
+        public void AHandlerThatThrowsStopsTheRunNamingItsImport()
+        {
+            p.Imports.Register("test.dll", "Broken", CallConv.Stdcall, 0, c => throw new InvalidOperationException("boom"));
+            var result = p.Call(p.Imports.Bind("test.dll", "Broken", -1), out _, 1000);
+            Assert.Equal(GuestStop.HostError, result.Stop);
+            Assert.Contains("test.dll!Broken", result.ToString());
+            Assert.Contains("boom", result.Detail);
+        }
+
+        [Fact]
         public void BstrsNetworkAndFolders()
         {
             var wide = k.Heap.Alloc(16, zero: true);
@@ -257,7 +308,7 @@ namespace Nativra.X86.Tests
 
             var path = k.Heap.Alloc(260);
             Assert.Equal(0u, Call("shell32.dll", "SHGetFolderPathA", 0, 0x8005, 0, 0, path));   // CSIDL_PERSONAL | CREATE
-            Assert.Equal("C:\\game\\nativra-user\\Documents", p.Memory.ReadAnsi(path));
+            Assert.Equal("C:\\users\\Player\\Documents", p.Memory.ReadAnsi(path));   // the guest never sees host paths
             Assert.True(Directory.Exists(Path.Combine(work, "nativra-user", "Documents")));
         }
     }

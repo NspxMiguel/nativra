@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace Kiosk.Native
@@ -76,8 +77,65 @@ namespace Kiosk.Native
             }
         }
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void CrtExitDelegate(int code);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void CrtAbortDelegate();
+        private static CrtExitDelegate crtExit;
+        private static CrtAbortDelegate crtAbort;
+
+        [DllImport("api-ms-win-core-rtlsupport-l1-1-0.dll")]
+        private static extern ushort RtlCaptureStackBackTrace(uint skip, uint count, IntPtr[] frames, IntPtr hash);
+
+        /// <summary>Who asked to leave: the game frames on the caller's stack.</summary>
+        private static string Caller()
+        {
+            try
+            {
+                var frames = new IntPtr[32];
+                var got = RtlCaptureStackBackTrace(1, 32, frames, IntPtr.Zero);
+                var named = new List<string>();
+                for (var i = 0; i < got && named.Count < 10; i++)
+                {
+                    var text = StackSampler.Describe(frames[i].ToInt64());
+                    if (text.StartsWith("~", StringComparison.Ordinal) || text.StartsWith("0x", StringComparison.Ordinal)) continue;
+                    named.Add(text);
+                }
+                return named.Count == 0 ? "" : " from " + string.Join(" < ", named);
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        /// <summary>
+        /// The C runtime's ways out: exit and its relatives, and abort, which
+        /// ends in __fastfail that no exception handler sees. They call
+        /// ExitProcess from inside ucrtbase, past the hook above, so a game
+        /// that gave up this way left "exit=nothing" and no reason.
+        /// </summary>
+        private static void InstallCrt(SystemImports imports)
+        {
+            crtExit = code =>
+            {
+                Attempted = "exit(" + code + ")" + Caller();
+                while (true) System.Threading.Thread.Sleep(1000);
+            };
+            crtAbort = () =>
+            {
+                Attempted = "abort()" + Caller();
+                while (true) System.Threading.Thread.Sleep(1000);
+            };
+            foreach (var module in new[] { "api-ms-win-crt-runtime-l1-1-0.dll", "ucrtbase.dll", "UCRTBASE.dll", "MSVCR120.dll", "MSVCR110.dll", "MSVCR100.dll" })
+            {
+                foreach (var name in new[] { "exit", "_exit", "_Exit", "quick_exit" })
+                    imports.Overrides[module + "!" + name] = Marshal.GetFunctionPointerForDelegate(crtExit);
+                imports.Overrides[module + "!abort"] = Marshal.GetFunctionPointerForDelegate(crtAbort);
+            }
+        }
+
         public static void Install(SystemImports imports)
         {
+            InstallCrt(imports);
             Install(imports, new[]
             {
                 "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "kernelbase.dll",

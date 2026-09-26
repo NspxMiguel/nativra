@@ -129,8 +129,7 @@ namespace Kiosk.Native
             if ((access & GenericWrite) != 0 || disposition != OpenExisting) FileWatch.Invalidate();
             var started = System.Diagnostics.Stopwatch.GetTimestamp();
             var handle = CreateFileFromAppW(path, access, ShareAll, IntPtr.Zero, disposition, 0x80, IntPtr.Zero);
-            System.Threading.Interlocked.Increment(ref FileWatch.BrokerCalls);
-            System.Threading.Interlocked.Add(ref FileWatch.BrokerTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started);
+            FileWatch.Count(ref FileWatch.OpenCalls, ref FileWatch.OpenTicks, started);
             if (handle == Invalid || handle == IntPtr.Zero)
             {
                 lastMissing = !FileWatch.PathExists(path);

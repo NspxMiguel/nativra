@@ -203,6 +203,16 @@ namespace Kiosk.Native
                 // the game's own from here on, as it would be on a PC.
                 var exeName = "game.exe";
                 FileWatch.CacheRoot = folder.Path.TrimEnd('\\') + "\\";
+                if (await local.TryGetItemAsync("brokerprobe.txt") != null)
+                {
+                    // Files from the game's own folder, whatever it holds.
+                    var sample = new List<string>();
+                    var query = folder.CreateFileQueryWithOptions(
+                        new Windows.Storage.Search.QueryOptions { FolderDepth = Windows.Storage.Search.FolderDepth.Deep });
+                    foreach (var file in await query.GetFilesAsync(0, 40)) sample.Add(file.Path);
+                    lines.AddRange(FileWatch.MeasureBroker(sample));
+                    await WriteAsync(lines);
+                }
                 var pick = await GameStorage.ExecutableAsync(folder);
                 if (pick != null)
                 {
@@ -602,8 +612,7 @@ namespace Kiosk.Native
                                         foreach (var f in CrtFiles.Failed) beat.Add("crt " + f);
                                     }
                                     beat.AddRange(StackSampler.Sample());
-                                    beat.Add("broker calls=" + FileWatch.BrokerCalls + " ms="
-                                        + (FileWatch.BrokerTicks * 1000 / System.Diagnostics.Stopwatch.Frequency));
+                                    beat.Add(FileWatch.BrokerReport());
                                     lock (GraphicsBridge.Notes)
                                     {
                                         foreach (var note in GraphicsBridge.Notes)

@@ -145,8 +145,22 @@ namespace Kiosk
         /// <summary>A game whose download finished, wherever it is.</summary>
         public static async Task<bool> IsDownloadedAsync(uint appId)
         {
-            var folder = await FindAsync(appId);
-            return folder != null && await folder.TryGetItemAsync(".downloaded") != null;
+            foreach (var pair in await GamesFoldersAsync())
+                if (await pair.Value.TryGetItemAsync(appId.ToString()) is StorageFolder folder && await IsReadyAsync(folder))
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// A game folder that can be played: its download finished and none is
+        /// half-way. Folders from before the completion marker count when they
+        /// hold the game's program.
+        /// </summary>
+        public static async Task<bool> IsReadyAsync(StorageFolder folder)
+        {
+            if (await folder.TryGetItemAsync(".downloading") != null) return false;
+            if (await folder.TryGetItemAsync(".downloaded") != null) return true;
+            return await ExecutableAsync(folder) != null;
         }
 
         /// <summary>

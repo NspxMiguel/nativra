@@ -68,7 +68,7 @@ namespace Kiosk.Native
         private const int ContextSize = 1232;
         private const int RipOffset = 0xF8;
         private const int RspOffset = 0x98;
-        private const int StackBytes = 32768;
+        private const int StackBytes = 65536;
         private const int MaxThreads = 48;
 
         private sealed class Tracked
@@ -139,6 +139,13 @@ namespace Kiosk.Native
             Track(currentThread(), name);
         }
 
+        private static bool Plumbing(string frame) =>
+            frame.StartsWith("~ntdll.dll", StringComparison.OrdinalIgnoreCase)
+            || frame.StartsWith("~RPCRT4.dll", StringComparison.OrdinalIgnoreCase)
+            || frame.StartsWith("~combase.dll", StringComparison.OrdinalIgnoreCase)
+            || frame.StartsWith("~OneCoreCommonProxyStub.dll", StringComparison.OrdinalIgnoreCase)
+            || frame.StartsWith("~KERNELBASE.dll", StringComparison.OrdinalIgnoreCase);
+
         /// <summary>One line per thread: where it is and the game frames on its stack.</summary>
         public static List<string> Sample()
         {
@@ -183,6 +190,9 @@ namespace Kiosk.Native
                 {
                     var described = Describe(words[i]);
                     if (described.StartsWith("0x", StringComparison.Ordinal)) continue;
+                    // Past the first few, the COM and RPC plumbing is noise:
+                    // what matters is who made the call.
+                    if (frames.Count >= 4 && Plumbing(described)) continue;
                     if (frames.Count > 0 && frames[frames.Count - 1] == described) continue;
                     frames.Add(described);
                 }

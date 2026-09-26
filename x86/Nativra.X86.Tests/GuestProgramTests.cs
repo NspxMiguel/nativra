@@ -64,7 +64,7 @@ namespace Nativra.X86.Tests
                              $"; unserved={string.Join(",", p.Images.SelectMany(i => i.Imports).Where(i => GuestImports.InRegion(i.Bound) && !(p.Imports.TryResolve(i.Bound, out var g) && g.Handler != null)).Select(i => i.ToString()).Distinct())}";
                 Assert.True(result.Stop == GuestStop.Exited, detail);
                 Assert.True(result.ExitCode == 42, detail);
-                Assert.Contains("guest passed=31", log);
+                Assert.Contains("guest passed=63", log);
             }
             try { Directory.Delete(work, true); } catch (IOException) { }
         }

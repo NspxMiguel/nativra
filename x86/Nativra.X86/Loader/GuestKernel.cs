@@ -128,7 +128,6 @@ namespace Nativra.X86.Loader
                 ModuleFileName(c.Arg(0), c.Arg(1), c.Arg(2), false));
             i.Register(k, "GetModuleFileNameW", CallConv.Stdcall, 3, c =>
                 ModuleFileName(c.Arg(0), c.Arg(1), c.Arg(2), true));
-            i.Register(k, "GetCurrentThreadId", CallConv.Stdcall, 0, c => 0x1000);
             i.Register(k, "GetCurrentProcessId", CallConv.Stdcall, 0, c => 0x1234);
             i.Register(k, "GetCurrentProcess", CallConv.Stdcall, 0, c => PseudoCurrentProcess);
             i.Register(k, "GetCurrentThread", CallConv.Stdcall, 0, c => PseudoCurrentThread);
@@ -178,7 +177,6 @@ namespace Nativra.X86.Loader
                 memory.Write64(c.Arg(0), (ulong)System.Diagnostics.Stopwatch.Frequency);
                 return 1;
             });
-            i.Register(k, "Sleep", CallConv.Stdcall, 1, c => 0);
             i.Register(k, "GetVersion", CallConv.Stdcall, 0, c => (26100u << 16) | 0x000A);
             i.Register(k, "IsProcessorFeaturePresent", CallConv.Stdcall, 1, c => 1);
             i.Register(k, "GetSystemInfo", CallConv.Stdcall, 1, c => { FillSystemInfo(c.Arg(0)); return 0; });
@@ -188,17 +186,11 @@ namespace Nativra.X86.Loader
                 return 0;
             });
 
-            // Single-threaded guest: the lock calls are structurally no-ops.
-            i.Register(k, "InitializeCriticalSection", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "InitializeCriticalSectionAndSpinCount", CallConv.Stdcall, 2, c => 1);
-            i.Register(k, "InitializeCriticalSectionEx", CallConv.Stdcall, 3, c => 1);
-            i.Register(k, "EnterCriticalSection", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "LeaveCriticalSection", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "DeleteCriticalSection", CallConv.Stdcall, 1, c => 0);
 
             InstallRuntime(i);
             InstallFiles(i);
             InstallSeh(i);
+            InstallThreads(i);
         }
 
         // --- handler bodies -----------------------------------------------

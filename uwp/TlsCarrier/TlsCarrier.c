@@ -3,7 +3,12 @@
 
 // Each packaged copy owns one Windows-managed static TLS index. No CRT,
 // heap allocation or replacement of the system TLS vector.
+// Built twice: 16 KB carriers for ordinary modules, and a 512 KB one
+// (build.cmd passes /DTLS_CAPACITY) for an executable with a large TLS
+// template, such as LEGO Jurassic World's 346 KB.
+#ifndef TLS_CAPACITY
 #define TLS_CAPACITY 16384
+#endif
 #pragma section(".data$TLS", read, write)
 #pragma section(".rdata$T", read)
 // LINK merges .tls into read-only .rdata. The TLS directory accepts a VA in

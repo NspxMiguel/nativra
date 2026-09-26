@@ -29,6 +29,9 @@ namespace Kiosk.Native
 
         /// <summary>NativraTls0..15.dll, built by uwp/TlsCarrier/build.cmd.</summary>
         private const int Carriers = 16;
+        private const int SmallCapacity = 16384;
+        private static int smallUsed;
+        private static bool largeUsed;
 
         private static readonly object Gate = new object();
         private static readonly List<EnsureDelegate> Blocks = new List<EnsureDelegate>();
@@ -48,8 +51,20 @@ namespace Kiosk.Native
                 // One carrier DLL per game module with static TLS. Hades maps
                 // eleven (engine, SDL2, FMOD, Steam, EOS, Discord...), past
                 // the eight there used to be.
-                if (Blocks.Count >= Carriers) throw new InvalidOperationException("Game TLS capacity exceeded");
-                var module = LoadPackagedLibrary("NativraTls" + Blocks.Count + ".dll", 0);
+                // A template past the ordinary carriers' 16 KB goes to the one
+                // large carrier (512 KB): LEGO Jurassic World's is 346 KB.
+                string carrier;
+                if (template.Length > SmallCapacity || size > SmallCapacity)
+                {
+                    if (largeUsed) throw new InvalidOperationException("Large TLS carrier already in use");
+                    carrier = "NativraTlsLarge0.dll";
+                }
+                else
+                {
+                    if (smallUsed >= Carriers) throw new InvalidOperationException("Game TLS capacity exceeded");
+                    carrier = "NativraTls" + smallUsed + ".dll";
+                }
+                var module = LoadPackagedLibrary(carrier, 0);
                 if (module == IntPtr.Zero)
                     throw new InvalidOperationException("TLS carrier load failed: " + Marshal.GetLastWin32Error());
                 var configure = Marshal.GetDelegateForFunctionPointer<ConfigureDelegate>(
@@ -63,6 +78,8 @@ namespace Kiosk.Native
                     var slot = configure(buffer, checked((uint)template.Length), checked((uint)size));
                     if (slot < 0) throw new InvalidOperationException("TLS template exceeds carrier capacity");
                     Blocks.Add(ensure);
+                    if (carrier.StartsWith("NativraTlsLarge", StringComparison.Ordinal)) largeUsed = true;
+                    else smallUsed++;
                     return slot;
                 }
                 finally { Marshal.FreeHGlobal(buffer); }

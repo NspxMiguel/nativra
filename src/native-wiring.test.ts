@@ -156,7 +156,10 @@ test("only the selected game executable is mapped alongside its libraries", () =
 test("game TLS uses Windows-owned slots without replacing the system vector", () => {
   expect(pe).not.toContain("extern uint TlsAlloc");
   expect(pe).not.toContain("Marshal.WriteIntPtr(existing, slot");
-  expect(tls).toContain('LoadPackagedLibrary("NativraTls"');
+  // Packaged carriers: sixteen of 16 KB and one of 512 KB for large templates.
+  expect(tls).toContain('carrier = "NativraTls" + smallUsed + ".dll"');
+  expect(tls).toContain('carrier = "NativraTlsLarge0.dll"');
+  expect(tls).toContain("LoadPackagedLibrary(carrier, 0)");
   expect(tls).toContain('"NativraTlsConfigure"');
   expect(tls).not.toContain("Marshal.WriteIntPtr(teb");
   expect(tls).not.toContain("state.Table");

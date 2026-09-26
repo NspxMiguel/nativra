@@ -205,24 +205,42 @@ namespace Kiosk.Native
         private static IntPtr exportRegisterCallback;
         private static IntPtr exportUnregisterCallback;
 
+        private static readonly Dictionary<string, IntPtr> accessors = new Dictionary<string, IntPtr>(StringComparer.Ordinal);
+
+        /// <summary>A function taking nothing and returning the object, kept once per name.</summary>
+        private static IntPtr Accessor(string export, Func<IntPtr> make)
+        {
+            lock (accessors)
+            {
+                if (accessors.TryGetValue(export, out var known)) return known;
+                Fn call = (a0, a1, a2, a3, a4, a5, a6, a7, a8, a9) => make();
+                var pointer = Keep(call);
+                accessors[export] = pointer;
+                return pointer;
+            }
+        }
+
         public static IntPtr Resolve(string export)
         {
             if (!SteamBridge.Active || string.IsNullOrEmpty(export)) return IntPtr.Zero;
             switch (export)
             {
-                case "SteamUser": return User();
-                case "SteamFriends": return Friends();
-                case "SteamApps": return Apps();
-                case "SteamUserStats": return UserStats();
-                case "SteamUtils": return Utils();
-                case "SteamRemoteStorage": return RemoteStorage();
+                // Exports are functions: SteamUser() is called and returns the
+                // object. Handing back the object itself made the game jump
+                // into its vtable pointer as if it were code.
+                case "SteamUser": return Accessor(export, User);
+                case "SteamFriends": return Accessor(export, Friends);
+                case "SteamApps": return Accessor(export, Apps);
+                case "SteamUserStats": return Accessor(export, UserStats);
+                case "SteamUtils": return Accessor(export, Utils);
+                case "SteamRemoteStorage": return Accessor(export, RemoteStorage);
                 case "SteamMatchmaking":
                 case "SteamNetworking":
                 case "SteamScreenshots":
                 case "SteamHTTP":
-                    return Empty();
+                    return Accessor(export, Empty);
                 case "SteamClient":
-                    return Client();
+                    return Accessor(export, Client);
 
                 // SteamAPI_Init/GetHSteamUser/GetHSteamPipe/RestartAppIfNecessary
                 // are already answered by SteamBridge's flat table with the

@@ -21,10 +21,20 @@ namespace Nativra.X86.Tests
             // Threads switch only where the program waits or yields, never on a
             // block count the two engines would reach at different places.
             var p = new GuestProcess(new GuestMemory(native: true), useJit: jit) { SliceBlocks = int.MaxValue };
-            var kernel = new GuestKernel(p) { DeterministicTime = true, ExePath = "C:\\guest\\" + Path.GetFileName(path) };
+            // The same surroundings as GuestProgramTests, so the program's own
+            // checks pass and it ends with its success code.
+            var work = Path.Combine(Path.GetTempPath(), "nativra-lockstep-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(work);
+            var kernel = new GuestKernel(p)
+            {
+                DeterministicTime = true,
+                ExePath = "C:\\guest\\" + Path.GetFileName(path),
+                Files = new HostFolderFiles("C:\\guest", work),
+            };
             kernel.SetCommandLine(Path.GetFileName(path));
             kernel.Install();
             var image = p.LoadExecutable(Path.GetFileName(path), File.ReadAllBytes(path));
+            Assert.True(p.InitializeModules(20_000_000).Ok);
             // The entry point called as the loader would: returning lands on the halt address.
             p.Cpu.Esp -= 4;
             p.Memory.Write32(p.Cpu.Esp, GuestProcess.HaltAddress);
@@ -48,6 +58,15 @@ namespace Nativra.X86.Tests
                     var from = jit.Cpu.Eip;
                     if (from == halt) return;
                     var a = jit.Run(halt, 1);
+                    if (a.Stop == GuestStop.Exited)
+                    {
+                        // ExitProcess ends the comparison: the reference must get there too, with the same code.
+                        var end = reference.Run(halt, 100_000_000);
+                        Assert.True(end.Stop == GuestStop.Exited && end.ExitCode == a.ExitCode,
+                            $"block {block}: the JIT run exited with {a.ExitCode}, the interpreter's ended {end}");
+                        Assert.Equal(42u, a.ExitCode);   // crt_test's "every check passed"
+                        return;
+                    }
                     if (a.Stop != GuestStop.Budget && a.Stop != GuestStop.Returned)
                         Assert.Fail($"block {block} at 0x{from:X8}: the JIT run stopped: {a} ({jit.Cpu})");
 

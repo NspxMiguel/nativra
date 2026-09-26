@@ -77,6 +77,9 @@ namespace Kiosk.Native
                 // delivered as messages on the game's window.
                 kernel.Input = new ConsoleInput();
                 kernel.Install();
+                // Direct3D 9 through the packaged 64-bit layer.
+                var com = new GuestCom(process, kernel);
+                X86Direct3D9.Install(process, kernel, com);
 
                 var packaged = System.IO.Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "x86");
                 var fromPackage = new List<string>();
@@ -122,6 +125,9 @@ namespace Kiosk.Native
                 foreach (var text in guestLog) lines.Add("x86.log=" + text);
                 lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
                 lines.Add("x86.window=0x" + kernel.InputWindow.ToString("X") + " dispatched=" + kernel.MessagesDispatched);
+                lines.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
+                foreach (var call in com.Calls.OrderByDescending(pair => pair.Value).Take(40))
+                    lines.Add("x86.com " + call.Value + "x " + call.Key);
                 lines.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
 
                 await WriteImportsAsync(process, kernel);

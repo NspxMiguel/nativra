@@ -54,6 +54,39 @@ namespace Kiosk.Native
         /// <summary>Whether the packaged D3D9 layer was found and hooked.</summary>
         public static bool Active { get; private set; }
 
+        /// <summary>The packaged d3d9.dll, once hooked.</summary>
+        public static IntPtr Module { get; private set; }
+
+        /// <summary>An export of the packaged layer (Direct3DCreate9, …), or zero.</summary>
+        public static IntPtr Export(string name) => Module == IntPtr.Zero ? IntPtr.Zero : GetProcAddress(Module, name);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate IntPtr AllocCallback(UIntPtr size);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void FreeCallback(IntPtr memory);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void SetAllocatorDelegate(IntPtr alloc, IntPtr free);
+
+        private static AllocCallback allocator;
+        private static FreeCallback releaser;
+
+        /// <summary>
+        /// Where the layer's lockable memory comes from. A 32-bit guest needs
+        /// every pointer Lock hands out inside its own address space.
+        /// </summary>
+        public static bool SetAllocator(AllocCallback alloc, FreeCallback free)
+        {
+            var set = Export("NativraD3D9SetAllocator");
+            if (set == IntPtr.Zero) return false;
+            allocator = alloc;
+            releaser = free;
+            Marshal.GetDelegateForFunctionPointer<SetAllocatorDelegate>(set)(
+                Marshal.GetFunctionPointerForDelegate(allocator), Marshal.GetFunctionPointerForDelegate(releaser));
+            return true;
+        }
+
         /// <summary>Hooks the packaged d3d9.dll, if there is one. Safe to call more than once.</summary>
         public static void Install(uint defaultWidth = 1920, uint defaultHeight = 1080)
         {
@@ -64,6 +97,7 @@ namespace Kiosk.Native
             var setLog = GetProcAddress(module, "NativraD3D9SetLog");
             var setSize = GetProcAddress(module, "NativraD3D9SetDefaultSize");
             if (setPresent == IntPtr.Zero) return;   // not ours
+            Module = module;
 
             present = OnPresent;
             Marshal.GetDelegateForFunctionPointer<SetPresentDelegate>(setPresent)(

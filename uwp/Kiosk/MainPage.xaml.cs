@@ -413,6 +413,7 @@ namespace Kiosk
                 GamePointerTransform.X = Native.PointerBridge.X;
                 GamePointerTransform.Y = Native.PointerBridge.Y;
                 GamePointer.Visibility = Native.ControllerMode.Desktop ? Visibility.Visible : Visibility.Collapsed;
+                RecordingBadge.Visibility = Native.Recorder.Active ? Visibility.Visible : Visibility.Collapsed;
                 // The notice shows like a notification: the first 15 seconds of a
                 // game, and 5 seconds after each switch, unless turned off.
                 var now = Environment.TickCount;

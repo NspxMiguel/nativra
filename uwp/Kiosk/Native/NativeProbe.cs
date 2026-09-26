@@ -297,6 +297,11 @@ namespace Kiosk.Native
                 DirectInputStub.Install(imports);
                 StackSampler.Enabled = await local.TryGetItemAsync("stacks.txt") != null;
                 StackSampler.Install(imports);
+                // The app's own UI thread too: when a game's window procedure
+                // or a bridge call blocks it, the console ends the app after
+                // some seconds without a dump, and this is where it shows.
+                var __ = Windows.ApplicationModel.Core.CoreApplication.MainView.Dispatcher.RunAsync(
+                    Windows.UI.Core.CoreDispatcherPriority.High, () => StackSampler.TrackCurrent("ui"));
                 await UsbFiles.InstallAsync();
                 DisplayStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
@@ -932,29 +937,25 @@ namespace Kiosk.Native
         /// </summary>
         private static Task WriteAsync(List<string> lines) => SwapAsync(ReportName, lines);
 
-        private static async Task SwapAsync(string name, List<string> lines)
+        private static Task SwapAsync(string name, List<string> lines)
         {
+            // Plain file calls on the app's own folder, not Windows.Storage:
+            // those go through the same machinery a stuck game can hold, and a
+            // report that stops when the app stops answering says nothing
+            // about why it stopped.
             try
             {
-                var local = ApplicationData.Current.LocalFolder;
-                var draft = await local.CreateFileAsync(
-                    name + ".new", CreationCollisionOption.ReplaceExisting);
-                await FileIO.WriteLinesAsync(draft, lines);
-
-                var existing = await local.TryGetItemAsync(name) as StorageFile;
-                if (existing == null)
-                {
-                    await draft.RenameAsync(name, NameCollisionOption.ReplaceExisting);
-                }
-                else
-                {
-                    await draft.MoveAndReplaceAsync(existing);
-                }
+                var path = System.IO.Path.Combine(ApplicationData.Current.LocalFolder.Path, name);
+                var draft = path + ".new";
+                System.IO.File.WriteAllLines(draft, lines);
+                if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+                System.IO.File.Move(draft, path);
             }
             catch
             {
                 // Losing the report loses the measurement, not the app.
             }
+            return Task.CompletedTask;
         }
     }
 }

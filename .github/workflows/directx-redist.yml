@@ -1,0 +1,40 @@
+name: DirectX redistributable shims
+
+# The console has no DirectX June 2010 redistributable, so games that reach for
+# XAudio 2.7, X3DAudio 1.7, XAPOFX 1.5, d3dcompiler_43/47 or d3dx9/10/11 stop at
+# a missing DLL. These shims replace the parts games actually use by forwarding
+# to the platform's own newer libraries. This job builds them and runs their
+# hardware-free tests. It never touches the Xbox package build (build-uwp.yml).
+
+on:
+  push:
+    paths:
+      - "native/directx-redist/**"
+      - ".github/workflows/directx-redist.yml"
+  pull_request:
+    paths:
+      - "native/directx-redist/**"
+      - ".github/workflows/directx-redist.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build shims and run XAudio 2.7 tests
+        shell: cmd
+        run: native\directx-redist\build.cmd
+
+      - name: Show built DLLs
+        shell: pwsh
+        if: always()
+        run: |
+          $bin = "native/directx-redist/bin"
+          if (Test-Path $bin) {
+            Get-ChildItem $bin -Filter *.dll | Select-Object Name, Length | Format-Table -AutoSize
+          } else {
+            Write-Host "no bin/ produced"
+          }

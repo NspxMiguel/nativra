@@ -1,0 +1,24 @@
+; d3dcompiler_43.dll — the DirectX-SDK-era shader compiler, forwarded to the
+; platform's d3dcompiler_47.dll (present on the console as a Windows 10 system
+; DLL). The D3DCompile family is source-compatible across these versions, so a
+; game that links d3dcompiler_43 keeps working. Pure export forwarders: no code,
+; resolved by the loader at the game's first call.
+LIBRARY D3DCOMPILER_43
+EXPORTS
+    D3DCompile = d3dcompiler_47.D3DCompile
+    D3DCompile2 = d3dcompiler_47.D3DCompile2
+    D3DPreprocess = d3dcompiler_47.D3DPreprocess
+    D3DReflect = d3dcompiler_47.D3DReflect
+    D3DGetBlobPart = d3dcompiler_47.D3DGetBlobPart
+    D3DSetBlobPart = d3dcompiler_47.D3DSetBlobPart
+    D3DCreateBlob = d3dcompiler_47.D3DCreateBlob
+    D3DDisassemble = d3dcompiler_47.D3DDisassemble
+    D3DStripShader = d3dcompiler_47.D3DStripShader
+    D3DGetInputSignatureBlob = d3dcompiler_47.D3DGetInputSignatureBlob
+    D3DGetOutputSignatureBlob = d3dcompiler_47.D3DGetOutputSignatureBlob
+    D3DGetInputAndOutputSignatureBlob = d3dcompiler_47.D3DGetInputAndOutputSignatureBlob
+    D3DGetDebugInfo = d3dcompiler_47.D3DGetDebugInfo
+    D3DReflectLibrary = d3dcompiler_47.D3DReflectLibrary
+    D3DCompressShaders = d3dcompiler_47.D3DCompressShaders
+    D3DDecompressShaders = d3dcompiler_47.D3DDecompressShaders
+    D3DDisassemble10Effect = d3dcompiler_47.D3DDisassemble10Effect

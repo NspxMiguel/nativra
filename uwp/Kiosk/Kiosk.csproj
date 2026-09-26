@@ -133,6 +133,7 @@
     <Compile Include="Native\GraphicsBridge.cs" />
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Native\RawInputBridge.cs" />
+    <Compile Include="Native\RedistProbe.cs" />
     <Compile Include="Texts.cs" />
     <Compile Include="Updater.cs" />
     <Compile Include="DownloadManager.cs" />

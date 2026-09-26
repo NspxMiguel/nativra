@@ -255,6 +255,12 @@ namespace Kiosk.Native
                 if (requested.IndexOf('\\') >= 0 || requested.IndexOf('/') >= 0)
                 {
                     var full = requested.Replace('/', '\\');
+                    // Unreal names its third-party DLLs relative to the program
+                    // ("..\..\..\Engine\Binaries\ThirdParty\..."); resolved
+                    // against the program's folder, with the dots walked.
+                    if (GameFolder != null && !System.IO.Path.IsPathRooted(full))
+                        full = System.IO.Path.Combine(GameFolder, full);
+                    try { full = System.IO.Path.GetFullPath(full); } catch { }
                     // Anywhere in the game's download, not only beside the
                     // program: Unreal keeps PhysX in Engine\Binaries\ThirdParty
                     // and loads it by full path from Game\Binaries\Win64.

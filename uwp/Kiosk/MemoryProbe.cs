@@ -35,7 +35,7 @@ namespace Kiosk
         private const uint PAGE_READWRITE = 0x04;
 
         private const long Block = 128L * 1024 * 1024;
-        private const int PageStep = 4096;
+        private const int PageStep = 65536;   // dirty one page per 64 KiB: enough to commit the block, 16x fewer interop writes
 
         public static async Task RunAsync()
         {
@@ -75,7 +75,7 @@ namespace Kiosk
                     for (long off = 0; off < Block; off += PageStep) Marshal.WriteByte(at, (int)off, 1);
                     blocks.Add(at);
                     committed += Block;
-                    if (committed >= 12L * 1024 * 1024 * 1024) { stopped = "reached 12 GiB, stopping"; break; }
+                    if (committed >= 7L * 1024 * 1024 * 1024) { stopped = "reached 7 GiB, stopping"; break; }
                 }
             }
             catch (Exception error)

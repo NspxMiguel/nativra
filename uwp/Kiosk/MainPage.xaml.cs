@@ -456,6 +456,8 @@ namespace Kiosk
                 gameLaunchPending = false;
                 GameLoading.Visibility = Visibility.Collapsed;
                 GameLoadingRing.IsActive = false;
+                // A game that did not start gives the home screen its sounds back.
+                if (!started) ElementSoundPlayer.State = ElementSoundPlayerState.Auto;
             }
         }
 

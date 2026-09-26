@@ -119,6 +119,7 @@
     <Compile Include="Native\KeyboardMessages.cs" />
     <Compile Include="Native\DisplayStubs.cs" />
     <Compile Include="Native\FrameMirror.cs" />
+    <Compile Include="Native\Recorder.cs" />
     <Compile Include="Native\ThreadRank.cs" />
     <Compile Include="Native\FakeSwapChain.cs" />
     <Compile Include="Native\FakeOutput.cs" />

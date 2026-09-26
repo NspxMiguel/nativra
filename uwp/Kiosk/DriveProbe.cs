@@ -135,6 +135,51 @@ namespace Kiosk
                 report.AppendLine("removable failed " + error.GetType().Name + " " + error.Message);
             }
 
+            // How long one open costs on the USB drive, by route: the broker
+            // for a declared file type (.bin) and an undeclared one (.pak),
+            // and Windows.Storage's own StorageFile.
+            try
+            {
+                foreach (var device in await KnownFolders.RemovableDevices.GetFoldersAsync())
+                {
+                    var folder = await device.CreateFolderAsync("nativra-probe", CreationCollisionOption.OpenIfExists);
+                    foreach (var name in new[] { "timing.bin", "timing.pak" })
+                    {
+                        var made = await folder.CreateFileAsync(name, CreationCollisionOption.ReplaceExisting);
+                        await FileIO.WriteBytesAsync(made, new byte[4096]);
+                        var path = System.IO.Path.Combine(folder.Path, name);
+                        var clock = System.Diagnostics.Stopwatch.StartNew();
+                        var opened = 0;
+                        for (var i = 0; i < 5; i++)
+                        {
+                            var handle = CreateFileFromAppW(path, 0x80000000, 1, IntPtr.Zero, 3, 0, IntPtr.Zero);
+                            if (handle != Invalid && handle != IntPtr.Zero) { opened++; CloseHandle(handle); }
+                        }
+                        report.AppendLine($"timing fromapp {name} {clock.ElapsedMilliseconds / 5.0:0.0}ms each, {opened}/5 opened");
+                        clock.Restart();
+                        for (var i = 0; i < 5; i++)
+                        {
+                            var file = await StorageFile.GetFileFromPathAsync(path);
+                            using (var stream = await file.OpenReadAsync()) { }
+                        }
+                        report.AppendLine($"timing storagefile {name} {clock.ElapsedMilliseconds / 5.0:0.0}ms each");
+                        clock.Restart();
+                        for (var i = 0; i < 5; i++)
+                        {
+                            var file = await folder.GetFileAsync(name);
+                            using (var stream = await file.OpenReadAsync()) { }
+                        }
+                        report.AppendLine($"timing folder.getfile {name} {clock.ElapsedMilliseconds / 5.0:0.0}ms each");
+                    }
+                    await folder.DeleteAsync();
+                    break;
+                }
+            }
+            catch (Exception error)
+            {
+                report.AppendLine("timing failed " + error.GetType().Name + " " + error.Message);
+            }
+
             try
             {
                 var output = await local.CreateFileAsync("drives.txt", CreationCollisionOption.ReplaceExisting);

@@ -170,6 +170,13 @@ namespace Nativra.X86.Tests
             var wide = CallK(p, "GetCommandLineW");
             Assert.Equal("waveshaper.exe -foo", p.Memory.ReadAnsi(ansi));
             Assert.Equal("waveshaper.exe -foo", p.Memory.ReadUnicode(wide));
+
+            // PEB->ProcessParameters carries it too, and is never null.
+            var parameters = p.Memory.Read32(p.PebBase + 0x10);
+            Assert.Equal(p.ProcessParameters, parameters);
+            Assert.Equal(0u, p.Memory.Read32(parameters + 8) & 0x80000000);   // not a secure process
+            Assert.Equal((ushort)(19 * 2), p.Memory.Read16(parameters + 0x40));
+            Assert.Equal("waveshaper.exe -foo", p.Memory.ReadUnicode(p.Memory.Read32(parameters + 0x44)));
         }
     }
 }

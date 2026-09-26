@@ -87,6 +87,19 @@ namespace Nativra.X86.Loader
             memory.WriteAnsi(commandLineAnsi, commandLine);
             commandLineWide = heap.Alloc((uint)(commandLine.Length + 1) * 2);
             memory.WriteUnicode(commandLineWide, commandLine);
+
+            // The same strings in the process parameters, as UNICODE_STRINGs.
+            var image = heap.Alloc((uint)(ExePath.Length + 1) * 2);
+            memory.WriteUnicode(image, ExePath);
+            WriteUnicodeString(process.ProcessParameters + 0x38, image, ExePath.Length);          // ImagePathName
+            WriteUnicodeString(process.ProcessParameters + 0x40, commandLineWide, commandLine.Length); // CommandLine
+        }
+
+        private void WriteUnicodeString(uint at, uint buffer, int chars)
+        {
+            memory.Write16(at, (ushort)(chars * 2));
+            memory.Write16(at + 2, (ushort)(chars * 2 + 2));
+            memory.Write32(at + 4, buffer);
         }
 
         /// <summary>Registers every handler on the process's import table.</summary>

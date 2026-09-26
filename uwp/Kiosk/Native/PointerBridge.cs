@@ -149,6 +149,14 @@ namespace Kiosk.Native
 
         internal static void PostRaw(IntPtr window, long handle) => Post(0xFF, 0, handle, window);
 
+        /// <summary>
+        /// WM_DEVICECHANGE with DBT_DEVNODES_CHANGED, which Windows sends every
+        /// top-level window when a device comes or goes. Games that look for
+        /// pads only at start and on this message (Hades) otherwise never see
+        /// one switched on after they started.
+        /// </summary>
+        internal static void PostDeviceChange() => Post(0x0219, 0x0007, 0);
+
         private static void Post(int message, long word, long extra, IntPtr window = default(IntPtr))
         {
             lock (pending)

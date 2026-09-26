@@ -136,10 +136,19 @@
     <Compile Include="Native\NativeProbe.cs" />
     <Compile Include="Native\RawInputBridge.cs" />
     <Compile Include="Native\RedistProbe.cs" />
+    <Compile Include="Native\X86Launch.cs" />
     <Compile Include="Texts.cs" />
     <Compile Include="Updater.cs" />
     <Compile Include="DownloadManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+
+  <!-- The 32-bit (x86) execution layer: PE32 loader, guest process and block JIT. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\x86\Nativra.X86\Nativra.X86.csproj">
+      <Project>{5B8E2A41-3C7D-4F19-A6E2-9D0B1C4E7F38}</Project>
+      <Name>Nativra.X86</Name>
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>

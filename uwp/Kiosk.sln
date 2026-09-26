@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kiosk", "Kiosk\Kiosk.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JitProbe", "JitProbe\JitProbe.csproj", "{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nativra.X86", "..\x86\Nativra.X86\Nativra.X86.csproj", "{5B8E2A41-3C7D-4F19-A6E2-9D0B1C4E7F38}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -24,6 +26,10 @@ Global
 		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Release|x64.ActiveCfg = Release|x64
 		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Release|x64.Build.0 = Release|x64
 		{C1D2E3F4-7A9B-4C5D-8E6F-1A2B3C4D5E6F}.Release|x64.Deploy.0 = Release|x64
+		{5B8E2A41-3C7D-4F19-A6E2-9D0B1C4E7F38}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5B8E2A41-3C7D-4F19-A6E2-9D0B1C4E7F38}.Debug|x64.Build.0 = Debug|Any CPU
+		{5B8E2A41-3C7D-4F19-A6E2-9D0B1C4E7F38}.Release|x64.ActiveCfg = Release|Any CPU
+		{5B8E2A41-3C7D-4F19-A6E2-9D0B1C4E7F38}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

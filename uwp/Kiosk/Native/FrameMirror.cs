@@ -400,6 +400,9 @@ namespace Kiosk.Native
                 // bitmap is BGRA while games may render RGBA.
                 CopyOpaque(from, pitch, into, width, height, pixelFormat == 28 || pixelFormat == 29);
                 filling = 1 - filling;
+                // The same frame goes to the recorder when one is running; it
+                // copies it at once, before the screen gets this buffer.
+                if (Recorder.Active) Recorder.Offer(into, width, height);
 
                 var unmap = Marshal.GetDelegateForFunctionPointer<UnmapDelegate>(
                     ComProxy.Method(context, UnmapSlot));

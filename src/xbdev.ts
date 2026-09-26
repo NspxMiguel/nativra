@@ -978,6 +978,8 @@ function usage(): void {
     ["sync", t("cmd.sync")],
     ["steam <games|info|download>", t("cmd.steam")],
     ["press <botao...>", t("cmd.press")],
+    ["record [seconds]", t("cmd.record")],
+    ["recordings [folder] [--clean]", t("cmd.recordings")],
   ];
   console.log(`${t("cli.usage")}: xbdev <comando>`);
   console.log();
@@ -1029,6 +1031,8 @@ const handlers: Record<string, (args: string[]) => Promise<void>> = {
   sincronizar: cmdSyncKiosk,
   steam: (args: string[]) => runSteam(ROOT, args),
   press: cmdPress,
+  record: cmdRecord,
+  recordings: cmdRecordings,
   type: cmdType,
   win32: cmdWin32,
   "push-game": cmdPushGame,
@@ -1174,6 +1178,59 @@ async function cmdMarkers(args: string[]): Promise<void> {
       );
     }
     console.log(`-> ${target}: ${wanted.join(" ")}`);
+  }
+}
+
+/**
+ * Arms the app's recorder: it starts on the next game frame (or now, if a game
+ * is drawing) and stops after the given seconds; 0 records until the game ends.
+ */
+async function cmdRecord(args: string[]): Promise<void> {
+  const seconds = Math.max(0, Math.floor(Number(args[0] ?? 60)));
+  if (!Number.isFinite(seconds)) {
+    console.error("xbdev record [seconds]");
+    process.exit(2);
+  }
+  const portal = await portalOrExit();
+  const kiosk = await findPackage(portal, "kiosk");
+  if (!kiosk) {
+    console.error("Kiosk is not installed");
+    process.exit(1);
+  }
+  const armed = `${process.env.TMPDIR ?? "/tmp"}/record.txt`;
+  await Bun.write(armed, String(seconds));
+  await portal.pushFile(kiosk.PackageFullName, armed, "LocalState");
+  console.log(`recorder armed: ${seconds ? seconds + " s" : "until the game ends"} from the next game frame`);
+}
+
+/** Downloads recordings the local folder does not have yet; --clean removes them from the console after. */
+async function cmdRecordings(args: string[]): Promise<void> {
+  const clean = args.includes("--clean");
+  const into = args.find((a) => !a.startsWith("--")) ?? "recordings";
+  const portal = await portalOrExit();
+  const kiosk = await findPackage(portal, "kiosk");
+  if (!kiosk) {
+    console.error("Kiosk is not installed");
+    process.exit(1);
+  }
+  const remote = "LocalState/recordings";
+  const items = await portal.listFiles(kiosk.PackageFullName, remote);
+  const videos = items.map((i) => String(i.Name ?? "")).filter((n) => n.toLowerCase().endsWith(".mp4"));
+  if (videos.length === 0) {
+    console.log("no recordings on the console");
+    return;
+  }
+  await $`mkdir -p ${into}`.quiet();
+  for (const name of videos) {
+    const target = `${into}/${name}`;
+    if (!(await Bun.file(target).exists())) {
+      const data = await portal.pullFile(kiosk.PackageFullName, name, remote);
+      await Bun.write(target, data);
+      console.log(`<- ${target} (${human(data.byteLength)})`);
+    } else {
+      console.log(`= ${target}`);
+    }
+    if (clean) await portal.deleteFile(kiosk.PackageFullName, name, remote);
   }
 }
 

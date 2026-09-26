@@ -152,6 +152,10 @@ namespace Kiosk
         public ObservableCollection<Tile> Emulators { get; } =
             new ObservableCollection<Tile>();
 
+        /// <summary>Every game on the shelf, laid out as a grid by the All games screen.</summary>
+        public ObservableCollection<Tile> AllGames { get; } =
+            new ObservableCollection<Tile>();
+
         /// <summary>The Downloads screen's rows, refreshed while it is open.</summary>
         public ObservableCollection<DownloadRow> Downloads { get; } =
             new ObservableCollection<DownloadRow>();
@@ -206,6 +210,15 @@ namespace Kiosk
         {
             if (gameLaunchPending && !Native.NativeProbe.GameRunning)
             {
+                e.Handled = true;
+                return;
+            }
+            if (!Native.NativeProbe.GameRunning
+                && AllGamesScreen.Visibility == Visibility.Visible
+                && (e.OriginalKey == Windows.System.VirtualKey.GamepadB || e.OriginalKey == Windows.System.VirtualKey.Escape))
+            {
+                OnDockClicked(DockLibrary, null);
+                FocusShelf();
                 e.Handled = true;
                 return;
             }
@@ -400,6 +413,7 @@ namespace Kiosk
                 GamePointerTransform.X = Native.PointerBridge.X;
                 GamePointerTransform.Y = Native.PointerBridge.Y;
                 GamePointer.Visibility = Native.ControllerMode.Desktop ? Visibility.Visible : Visibility.Collapsed;
+                RecordingBadge.Visibility = Native.Recorder.Active ? Visibility.Visible : Visibility.Collapsed;
                 // The notice shows like a notification: the first 15 seconds of a
                 // game, and 5 seconds after each switch, unless turned off.
                 var now = Environment.TickCount;
@@ -417,6 +431,7 @@ namespace Kiosk
             };
             Native.GraphicsBridge.OnUi = Dispatcher;
             Native.ThreadRank.RaiseThisThread();
+            Native.Recorder.Watch();
 
             try
             {
@@ -940,6 +955,7 @@ namespace Kiosk
                 where == "emulators" ? Visibility.Visible : Visibility.Collapsed;
             DownloadsScreen.Visibility =
                 where == "downloads" ? Visibility.Visible : Visibility.Collapsed;
+            AllGamesScreen.Visibility = Visibility.Collapsed;
             if (where == "downloads") ShowDownloads();
 
             var built = where == "library" || where == "emulators" || where == "downloads";
@@ -1092,6 +1108,28 @@ namespace Kiosk
         /// are made by a template, so there is nothing to hold on to until
         /// the layout has actually produced them.
         /// </summary>
+        /// <summary>
+        /// The whole library as a grid. The shelf is one row that scrolls;
+        /// past a handful of games, finding one means walking the row, so the
+        /// last tile on it opens this instead.
+        /// </summary>
+        private void ShowAllGames()
+        {
+            AllGames.Clear();
+            foreach (var tile in Tiles)
+                if (!tile.IsAllGames) AllGames.Add(tile);
+            AllGamesTitle.Text = Texts.Get("tile.allgames", AllGames.Count);
+            Light("library");
+            LibraryScreen.Visibility = Visibility.Collapsed;
+            EmulatorScreen.Visibility = Visibility.Collapsed;
+            DownloadsScreen.Visibility = Visibility.Collapsed;
+            AllGamesScreen.Visibility = Visibility.Visible;
+            StatusText.Text = string.Empty;
+            AllGamesGrid.UpdateLayout();
+            var first = FirstButton(AllGamesGrid);
+            if (first != null) first.Focus(FocusState.Programmatic);
+        }
+
         private void FocusShelf()
         {
             var first = FirstButton(AppRail);
@@ -1196,6 +1234,11 @@ namespace Kiosk
             if (tile.Route == "steam")
             {
                 Frame.Navigate(typeof(SteamPage));
+                return;
+            }
+            if (tile.Route == "allgames")
+            {
+                ShowAllGames();
                 return;
             }
             if (tile.Route != null && tile.Route.StartsWith("game:", StringComparison.Ordinal))

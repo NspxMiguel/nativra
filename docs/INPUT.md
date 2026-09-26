@@ -35,6 +35,15 @@ This does not implement typematic repeats, text/IME input or additional physical
 keyboard keys. Local behavioral tests cover this encoding; build 208 also
 passed the bounded remote-input gameplay check described below.
 
+## SDL2 games
+
+SDL2 prefers Windows.Gaming.Input for an Xbox pad, which bypasses the XInput
+bridge: in Hades (SDL2), `XInput reads` stayed at 0, Device Portal input did not
+reach the game and PC mode did not mute the pad. From build 357 Nativra sets
+`SDL_JOYSTICK_WGI=0`, `SDL_JOYSTICK_RAWINPUT=0`, `SDL_JOYSTICK_HIDAPI=0` and
+`SDL_XINPUT_ENABLED=1` in the process environment before a game loads, so SDL
+reads the pad through the bridge. Games without SDL ignore these names.
+
 ## Validation
 
 Run the platform-independent chord behavior checks on a machine with .NET 8:

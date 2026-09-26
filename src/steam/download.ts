@@ -134,7 +134,10 @@ export async function downloadDepot(
 
     const handle = await open(target, "w+");
     try {
-      const queue = [...file.chunks];
+      // In file order: sequential writes, and a file cut short is shorter.
+      const queue = [...file.chunks].sort((a, b) =>
+        a.offset < b.offset ? -1 : a.offset > b.offset ? 1 : 0,
+      );
       while (queue.length > 0) {
         const batch = queue.splice(0, parallel);
         await Promise.all(

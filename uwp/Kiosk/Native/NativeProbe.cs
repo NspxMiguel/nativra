@@ -657,6 +657,11 @@ namespace Kiosk.Native
                                         foreach (var f in CrtFiles.Failed) beat.Add("crt " + f);
                                     }
                                     beat.Add(FileWatch.BrokerReport());
+                                    lock (LoaderStubs.Asked)
+                                    {
+                                        var start = Math.Max(0, LoaderStubs.Asked.Count - 12);
+                                        for (var i = start; i < LoaderStubs.Asked.Count; i++) beat.Add("asked " + LoaderStubs.Asked[i]);
+                                    }
                                     lock (GraphicsBridge.Notes)
                                     {
                                         foreach (var note in GraphicsBridge.Notes)

@@ -6,9 +6,8 @@ using Nativra.X86.Cpu;
 namespace Nativra.X86.Loader
 {
     /// <summary>
-    /// The guest C runtime was built with a stop raising <c>RaiseException</c>
-    /// (a C++ throw, a failed assertion) before structured exception dispatch
-    /// exists in the layer: the run ends with the exception code instead.
+    /// A software exception no frame handled (or one the dispatcher could not
+    /// continue): the run ends with its code, as the process would crash.
     /// </summary>
     public sealed class GuestRaisedException : Exception
     {
@@ -95,7 +94,6 @@ namespace Nativra.X86.Loader
             i.Register(k, "UnhandledExceptionFilter", CallConv.Stdcall, 1, c => 0 /* EXCEPTION_CONTINUE_SEARCH */);
             i.Register(k, "SetErrorMode", CallConv.Stdcall, 1, c => 0);
             i.Register(k, "GetErrorMode", CallConv.Stdcall, 0, c => 0);
-            i.Register(k, "RaiseException", CallConv.Stdcall, 4, c => throw new GuestRaisedException(c.Arg(0)));
             i.Register(k, "IsWow64Process", CallConv.Stdcall, 2, c =>
             {
                 if (c.Arg(1) != 0) memory.Write32(c.Arg(1), 0);

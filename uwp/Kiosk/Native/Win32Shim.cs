@@ -78,7 +78,9 @@ namespace Kiosk.Native
         /// name once, which hides the one a program dies on when it has been
         /// called before.
         /// </summary>
-        private readonly int[] recent = new int[64];
+        // Long enough to see past a burst of allocations: Adobe AIR's
+        // ActionScript VM fills 64 slots with HeapAlloc and TlsGetValue alone.
+        private readonly int[] recent = new int[4096];
         private int recentAt;
 
         /// <summary>
@@ -100,10 +102,14 @@ namespace Kiosk.Native
         private readonly long[] threadCount = new long[Slots];
         private readonly int[] threadWhen = new int[Slots];
 
-        public List<string> Recent()
+        public List<string> Recent() => Recent(64);
+
+        /// <summary>The last calls in order, oldest first, up to take of them.</summary>
+        public List<string> Recent(int take)
         {
             var out_ = new List<string>();
-            for (var i = 0; i < recent.Length; i++)
+            take = Math.Min(take, recent.Length);
+            for (var i = recent.Length - take; i < recent.Length; i++)
             {
                 var slot = recent[(recentAt + i) % recent.Length];
                 if (slot > 0 && slot - 1 < names.Count) out_.Add(names[slot - 1]);

@@ -534,8 +534,37 @@ namespace Kiosk.Native
                         SuspendWatch.ThisThreadIsOurs();
                         GameRunning = true;
 
+                        // A watcher of its own: every second, where each
+                        // thread is, written with nothing but the sampler and
+                        // a plain file call. The pulse reads the bridges, and
+                        // a game thread holding one of their locks stops it;
+                        // this one keeps reporting through that.
+                        if (StackSampler.Enabled)
+                        {
+                            var watch = new System.Threading.Thread(() =>
+                            {
+                                var path = System.IO.Path.Combine(local.Path, "native-watch.txt");
+                                while (true)
+                                {
+                                    try
+                                    {
+                                        var seen = new List<string> { "at=" + DateTime.Now.ToString("HH:mm:ss.fff") };
+                                        seen.AddRange(StackSampler.Sample());
+                                        System.IO.File.WriteAllLines(path, seen);
+                                    }
+                                    catch
+                                    {
+                                    }
+                                    System.Threading.Thread.Sleep(1000);
+                                }
+                            });
+                            watch.IsBackground = true;
+                            watch.Start();
+                        }
+
                         var pulse = new System.Threading.Thread(() =>
                         {
+                            StackSampler.TrackCurrent("pulse");
                             var wasFrames = 0L;
                             var wasAt = Environment.TickCount;
                             var rate = 0.0;
@@ -617,7 +646,6 @@ namespace Kiosk.Native
                                     {
                                         foreach (var f in CrtFiles.Failed) beat.Add("crt " + f);
                                     }
-                                    beat.AddRange(StackSampler.Sample());
                                     beat.Add(FileWatch.BrokerReport());
                                     lock (GraphicsBridge.Notes)
                                     {

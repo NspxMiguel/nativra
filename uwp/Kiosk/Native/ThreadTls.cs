@@ -73,6 +73,31 @@ namespace Kiosk.Native
         public static void Restore() { }
         public static void Release() { }
 
+        private static SystemImports images;
+
+        /// <summary>
+        /// A new thread made ready the way Windows would: static TLS copied,
+        /// then every mapped module told DLL_THREAD_ATTACH, in load order.
+        /// </summary>
+        public static bool AdoptAndAttach()
+        {
+            if (!Adopt()) return false;
+            var all = images?.LoadOrder();
+            if (all == null) return true;
+            foreach (var image in all)
+            {
+                try
+                {
+                    image.ThreadAttach();
+                }
+                catch
+                {
+                    // One module's thread hook failing is not the thread failing.
+                }
+            }
+            return true;
+        }
+
         public static bool Adopt()
         {
             try
@@ -97,8 +122,84 @@ namespace Kiosk.Native
             }
         }
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate IntPtr BeginThreadExDelegate(IntPtr security, uint stack, IntPtr start, IntPtr argument, uint flags, IntPtr id);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate IntPtr BeginThreadDelegate(IntPtr start, uint stack, IntPtr argument);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void CdeclStartDelegate(IntPtr parameter);
+
+        private static BeginThreadExDelegate realBeginEx, beginEx;
+        private static BeginThreadDelegate realBegin, begin;
+        private static StartDelegate crtTrampoline;
+        private static CdeclStartDelegate crtPlainTrampoline;
+
+        /// <summary>
+        /// Threads the C runtime starts (_beginthreadex, and std::thread on top
+        /// of it) are made inside ucrtbase, where the CreateThread hook does not
+        /// reach: they got neither the game's TLS nor DLL_THREAD_ATTACH.
+        /// </summary>
+        private static void InstallCrtThreads(SystemImports imports)
+        {
+            const string Runtime = "api-ms-win-crt-runtime-l1-1-0.dll";
+            var exAddress = imports.SystemAddress(Runtime, "_beginthreadex");
+            var plainAddress = imports.SystemAddress(Runtime, "_beginthread");
+            if (exAddress == IntPtr.Zero) return;
+            realBeginEx = Marshal.GetDelegateForFunctionPointer<BeginThreadExDelegate>(exAddress);
+            crtTrampoline = parameter =>
+            {
+                var start = Marshal.ReadIntPtr(parameter);
+                var given = Marshal.ReadIntPtr(parameter, IntPtr.Size);
+                Marshal.FreeHGlobal(parameter);
+                AdoptAndAttach();
+                return Marshal.GetDelegateForFunctionPointer<StartDelegate>(start)(given);
+            };
+            var trampolineAddress = Marshal.GetFunctionPointerForDelegate(crtTrampoline);
+            beginEx = (security, stack, start, argument, flags, id) =>
+            {
+                if (start == IntPtr.Zero) return realBeginEx(security, stack, start, argument, flags, id);
+                var carried = Marshal.AllocHGlobal(IntPtr.Size * 2);
+                Marshal.WriteIntPtr(carried, start);
+                Marshal.WriteIntPtr(carried, IntPtr.Size, argument);
+                var made = realBeginEx(security, stack, trampolineAddress, carried, flags, id);
+                if (made == IntPtr.Zero) Marshal.FreeHGlobal(carried);
+                else StackSampler.Track(made, "crt");
+                return made;
+            };
+            if (plainAddress != IntPtr.Zero)
+            {
+                realBegin = Marshal.GetDelegateForFunctionPointer<BeginThreadDelegate>(plainAddress);
+                crtPlainTrampoline = parameter =>
+                {
+                    var start = Marshal.ReadIntPtr(parameter);
+                    var given = Marshal.ReadIntPtr(parameter, IntPtr.Size);
+                    Marshal.FreeHGlobal(parameter);
+                    AdoptAndAttach();
+                    Marshal.GetDelegateForFunctionPointer<CdeclStartDelegate>(start)(given);
+                };
+                var plainTrampoline = Marshal.GetFunctionPointerForDelegate(crtPlainTrampoline);
+                begin = (start, stack, argument) =>
+                {
+                    if (start == IntPtr.Zero) return realBegin(start, stack, argument);
+                    var carried = Marshal.AllocHGlobal(IntPtr.Size * 2);
+                    Marshal.WriteIntPtr(carried, start);
+                    Marshal.WriteIntPtr(carried, IntPtr.Size, argument);
+                    var made = realBegin(plainTrampoline, stack, carried);
+                    if (made == new IntPtr(-1)) Marshal.FreeHGlobal(carried);
+                    return made;
+                };
+            }
+            foreach (var module in new[] { Runtime, "ucrtbase.dll", "UCRTBASE.dll" })
+            {
+                imports.Overrides[module + "!_beginthreadex"] = Marshal.GetFunctionPointerForDelegate(beginEx);
+                if (begin != null) imports.Overrides[module + "!_beginthread"] = Marshal.GetFunctionPointerForDelegate(begin);
+            }
+        }
+
         public static void Install(SystemImports imports)
         {
+            images = imports;
+            InstallCrtThreads(imports);
             var real = imports.Overrides.TryGetValue("kernel32.dll!CreateThread", out var previous)
                 ? previous : imports.SystemAddress("kernel32.dll", "CreateThread");
             if (real == IntPtr.Zero) return;
@@ -108,7 +209,7 @@ namespace Kiosk.Native
                 var start = Marshal.ReadIntPtr(parameter);
                 var given = Marshal.ReadIntPtr(parameter, IntPtr.Size);
                 Marshal.FreeHGlobal(parameter);
-                if (!Adopt()) return 8;
+                if (!AdoptAndAttach()) return 8;
                 return Marshal.GetDelegateForFunctionPointer<StartDelegate>(start)(given);
             };
             var trampolineAddress = Marshal.GetFunctionPointerForDelegate(trampoline);

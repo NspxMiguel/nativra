@@ -398,6 +398,33 @@ namespace Kiosk.Native
         public bool ExceptionsRegistered { get; private set; }
         public int TlsCallbacksRun { get; private set; }
 
+        private readonly System.Collections.Generic.List<TlsCallback> tlsCallbacks =
+            new System.Collections.Generic.List<TlsCallback>();
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ThreadMainDelegate(IntPtr instance, uint reason, IntPtr reserved);
+        private ThreadMainDelegate threadMain;
+
+        /// <summary>A DLL, whose entry point is DllMain; a program's is not called per thread.</summary>
+        public bool IsLibrary => !Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// What Windows does for every loaded module when a thread starts: the
+        /// TLS callbacks, then DllMain, with DLL_THREAD_ATTACH. Windows does not
+        /// know these modules, so nobody did it, and C++ thread_local objects
+        /// with constructors were never built on any thread but the loader's:
+        /// Hades' random generator ran from an all-zero state and its "draw
+        /// until one fits" loop never ended.
+        /// </summary>
+        public void ThreadAttach()
+        {
+            foreach (var callback in tlsCallbacks) callback(baseAddress, 2, IntPtr.Zero);
+            if (EntryPoint == IntPtr.Zero || !IsLibrary) return;
+            if (threadMain == null)
+                threadMain = Marshal.GetDelegateForFunctionPointer<ThreadMainDelegate>(EntryPoint);
+            threadMain(baseAddress, 2, IntPtr.Zero);
+        }
+
         /// <summary>
         /// Thread-local storage, which the real loader sets up and which a
         /// module compiled with __declspec(thread) cannot live without.
@@ -492,6 +519,7 @@ namespace Kiosk.Native
                     var entry = Marshal.ReadIntPtr((IntPtr)(callbacks + i * 8));
                     if (entry == IntPtr.Zero) break;
                     var callback = Marshal.GetDelegateForFunctionPointer<TlsCallback>(entry);
+                    tlsCallbacks.Add(callback);
                     callback(baseAddress, 1, IntPtr.Zero);
                     TlsCallbacksRun++;
                 }

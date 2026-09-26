@@ -97,10 +97,19 @@ namespace Kiosk.Native
         /// <summary>Stands in for what the console does not provide.</summary>
         public Win32Shim Shim { get; } = new Win32Shim();
 
+        private readonly List<PeImage> inOrder = new List<PeImage>();
+
         public void Add(PeImage image)
         {
             loaded[image.Name] = image;
+            lock (inOrder) inOrder.Add(image);
             ImageLookup.Track(image);
+        }
+
+        /// <summary>The mapped images in the order they were loaded, which is dependency order.</summary>
+        public PeImage[] LoadOrder()
+        {
+            lock (inOrder) return inOrder.ToArray();
         }
 
         /// <summary>The system's own version of a function, for falling back to.</summary>

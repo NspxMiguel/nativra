@@ -666,7 +666,9 @@ namespace Kiosk.Native
                         {
                             try
                             {
-                                ThreadTls.Adopt();
+                                // A new thread to every module mapped on the
+                                // loader's: TLS copied and DLL_THREAD_ATTACH.
+                                ThreadTls.AdoptAndAttach();
                                 StackSampler.TrackCurrent("main");
                                 var main = Marshal.GetDelegateForFunctionPointer<UnityMainDelegate>(
                                     entry);

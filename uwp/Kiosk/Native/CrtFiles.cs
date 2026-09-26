@@ -115,7 +115,11 @@ namespace Kiosk.Native
         {
             if (string.IsNullOrEmpty(path) || openHandle == null) return -1;
             var handle = CreateFileFromAppW(path, access, ShareAll, IntPtr.Zero, disposition, 0x80, IntPtr.Zero);
-            if (handle == Invalid || handle == IntPtr.Zero) return -1;
+            if (handle == Invalid || handle == IntPtr.Zero)
+            {
+                lastError = Marshal.GetLastWin32Error();
+                return -1;
+            }
             var descriptor = openHandle(handle, flags & (O_WRONLY | O_RDWR | O_APPEND | O_TEXT | O_BINARY));
             if (descriptor < 0) CloseHandle(handle);
             else System.Threading.Interlocked.Increment(ref Rescued);
@@ -141,14 +145,25 @@ namespace Kiosk.Native
             }
         }
 
-        /// <summary>Runs the rescue with errno kept as the first failure left it.</summary>
+        [ThreadStatic] private static int lastError;
+        private const int ENOENT = 2;
+
+        /// <summary>
+        /// Runs the rescue. When it fails too, errno is what the first attempt
+        /// left, except that a file the broker says does not exist is ENOENT:
+        /// outside the app's folders the runtime says EACCES for everything,
+        /// and a game that creates a missing file only does so on ENOENT.
+        /// </summary>
         private static T KeepingErrno<T>(Func<T> attempt, Func<T, bool> worked, T failed)
         {
             var at = errno == null ? IntPtr.Zero : errno();
             var saved = at == IntPtr.Zero ? 0 : Marshal.ReadInt32(at);
+            lastError = 0;
             var result = attempt();
-            if (!worked(result) && at != IntPtr.Zero) Marshal.WriteInt32(at, saved);
-            return worked(result) ? result : failed;
+            if (worked(result)) return result;
+            if (at != IntPtr.Zero)
+                Marshal.WriteInt32(at, lastError == 2 || lastError == 3 ? ENOENT : saved);
+            return failed;
         }
 
         private static int OpenFlagsToDescriptor(string path, int flags)

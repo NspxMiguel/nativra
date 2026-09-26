@@ -1147,6 +1147,14 @@ namespace Kiosk
             foreach (var item in items) ShopItems.Add(item);
             ShopTitle.Text = Texts.Get("shop.title");
             ShopTitle.Visibility = ShopItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // Moving up from the dock does not find these buttons (they sit at
+            // the left edge of each card, away from the dock icon's column),
+            // so the screen takes the focus itself, as the All games grid does.
+            if (EmulatorScreen.Visibility != Visibility.Visible) return;
+            EmulatorScreen.UpdateLayout();
+            var first = FirstButton(EmulatorScreen);
+            if (first != null) first.Focus(FocusState.Programmatic);
         }
 
         private async void OnInstallClicked(object sender, RoutedEventArgs e)

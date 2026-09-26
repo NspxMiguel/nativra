@@ -76,6 +76,10 @@ namespace Kiosk.Native
                 // The same input the 64-bit path reads (pad as mouse and keys),
                 // delivered as messages on the game's window.
                 kernel.Input = new ConsoleInput();
+                // Documents, Saved Games, AppData...: the same profile folders a
+                // 64-bit game gets, so saves live in one place whatever the game's bitness.
+                if (UserFolders.Root == null) UserFolders.Root = System.IO.Path.Combine(local.Path, "profile");
+                kernel.KnownFolder = name => UserFolders.PathFor(ProfileFolder(name));
                 kernel.Install();
                 // Direct3D 9 through the packaged 64-bit layer.
                 var com = new GuestCom(process, kernel);
@@ -153,6 +157,20 @@ namespace Kiosk.Native
             catch
             {
                 return null;
+            }
+        }
+
+        /// <summary>The profile folder (as UserFolders names it) for one of the guest kernel's known folders.</summary>
+        private static string ProfileFolder(string name)
+        {
+            switch (name)
+            {
+                case "SavedGames": return "Saved Games";
+                case "AppData": return @"AppData\Roaming";
+                case "LocalAppData": return @"AppData\Local";
+                case "LocalAppDataLow": return @"AppData\LocalLow";
+                case "PublicDocuments": return @"Public\Documents";
+                default: return name;   // Documents, Desktop, Music, Pictures, Videos, ProgramData, "" (the profile)
             }
         }
 

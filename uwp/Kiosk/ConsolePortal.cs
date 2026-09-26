@@ -23,6 +23,7 @@ namespace Kiosk
         private readonly string auth;
         private HttpClient http;
         private string csrf;
+        private HttpBaseProtocolFilter filter;
 
         /// <summary>Why the last attempt failed, which is the whole diagnosis.</summary>
         public string LastError { get; private set; }
@@ -63,7 +64,7 @@ namespace Kiosk
         private HttpClient Client()
         {
             if (http != null) return http;
-            var filter = new HttpBaseProtocolFilter();
+            filter = new HttpBaseProtocolFilter();
             // Dev Mode always presents a certificate signed by nobody.
             filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
             filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
@@ -104,12 +105,35 @@ namespace Kiosk
         private void CaptureCsrf(HttpResponseMessage response)
         {
             if (csrf != null) return;
-            if (!response.Headers.TryGetValue("Set-Cookie", out var cookie)) return;
-            var index = cookie.IndexOf("CSRF-Token=", StringComparison.OrdinalIgnoreCase);
-            if (index < 0) return;
-            var rest = cookie.Substring(index + "CSRF-Token=".Length);
-            var end = rest.IndexOfAny(new[] { ';', ',', ' ' });
-            csrf = end < 0 ? rest : rest.Substring(0, end);
+            if (response.Headers.TryGetValue("Set-Cookie", out var cookie))
+            {
+                var index = cookie.IndexOf("CSRF-Token=", StringComparison.OrdinalIgnoreCase);
+                if (index >= 0)
+                {
+                    var rest = cookie.Substring(index + "CSRF-Token=".Length);
+                    var end = rest.IndexOfAny(new[] { ';', ',', ' ' });
+                    csrf = end < 0 ? rest : rest.Substring(0, end);
+                    return;
+                }
+            }
+            // Windows.Web.Http gives Set-Cookie to the filter's cookie manager,
+            // which can keep it out of the response headers. Without the token
+            // the portal refuses a POST, which is the suspected reason the app
+            // could not install its own update; the jar still has it.
+            try
+            {
+                if (filter == null) return;
+                foreach (var jar in filter.CookieManager.GetCookies(new Uri(baseUrl)))
+                {
+                    if (!string.Equals(jar.Name, "CSRF-Token", StringComparison.OrdinalIgnoreCase)) continue;
+                    csrf = jar.Value;
+                    return;
+                }
+            }
+            catch
+            {
+                // No jar to read: the install reports what the portal answered.
+            }
         }
 
         public async Task<List<Tuple<string, string, string>>> PackagesAsync()

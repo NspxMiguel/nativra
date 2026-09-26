@@ -417,6 +417,7 @@ namespace Kiosk
             };
             Native.GraphicsBridge.OnUi = Dispatcher;
             Native.ThreadRank.RaiseThisThread();
+            Native.Recorder.Watch();
 
             try
             {

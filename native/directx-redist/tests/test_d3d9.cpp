@@ -182,15 +182,18 @@ int main()
     if (!dev) return 1;
 
     Readback rb;
+    bool readOk = false;
 
     // --- clear -------------------------------------------------------------
     dev->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(255, 0, 0), 1.0f, 0);
-    Check(ReadBackBuffer(dev, rb) && rb.At(0, 0) == 0xFF0000 && rb.At(63, 63) == 0xFF0000, "Clear fills the target",
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && rb.At(0, 0) == 0xFF0000 && rb.At(63, 63) == 0xFF0000, "Clear fills the target",
           rb.pixels.empty() ? "no readback" : Hex(rb.At(0, 0)));
 
     D3DRECT part = { 0, 0, 32, 64 };
     dev->Clear(1, &part, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 255), 1.0f, 0);
-    Check(ReadBackBuffer(dev, rb) && rb.At(10, 10) == 0x0000FF && rb.At(50, 10) == 0xFF0000, "Clear honours rectangles",
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && rb.At(10, 10) == 0x0000FF && rb.At(50, 10) == 0xFF0000, "Clear honours rectangles",
           Hex(rb.At(10, 10)) + " / " + Hex(rb.At(50, 10)));
 
     // --- shaders and a coloured quad -----------------------------------------
@@ -228,7 +231,8 @@ int main()
     dev->BeginScene();
     dev->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, 2);
     dev->EndScene();
-    Check(ReadBackBuffer(dev, rb) && rb.At(32, 32) == 0x00FF00 && rb.At(0, 0) == 0x00FF00 && rb.At(63, 63) == 0x00FF00,
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && rb.At(32, 32) == 0x00FF00 && rb.At(0, 0) == 0x00FF00 && rb.At(63, 63) == 0x00FF00,
           "programmable quad covers the target", Hex(rb.At(32, 32)));
 
     // --- textures and the half-pixel convention --------------------------------
@@ -277,7 +281,8 @@ int main()
     dev->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_GREATER);
     dev->SetRenderState(D3DRS_ALPHAREF, 128);
     dev->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, 2);
-    Check(ReadBackBuffer(dev, rb) && rb.At(8, 32) == 0xFF0000 && rb.At(56, 32) == 0x0000FF,
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && rb.At(8, 32) == 0xFF0000 && rb.At(56, 32) == 0x0000FF,
           "alpha test discards below the reference", Hex(rb.At(8, 32)) + " / " + Hex(rb.At(56, 32)));
     dev->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
 
@@ -288,7 +293,8 @@ int main()
     dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
     dev->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, 2);
     // At x = 32 alpha is ~0.5: half red, half blue.
-    Check(ReadBackBuffer(dev, rb) && Near(rb.At(32, 32), 0x7F0080, 6), "alpha blending", Hex(rb.At(32, 32)));
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && Near(rb.At(32, 32), 0x7F0080, 6), "alpha blending", Hex(rb.At(32, 32)));
     dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 
     // --- depth ---------------------------------------------------------------------
@@ -301,7 +307,8 @@ int main()
     Quad(far_, 0.8f, D3DCOLOR_XRGB(0, 255, 0));
     dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, near_, sizeof(Vertex));
     dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, far_, sizeof(Vertex));
-    Check(ReadBackBuffer(dev, rb) && rb.At(32, 32) == 0xFF0000, "depth test keeps the nearer quad", Hex(rb.At(32, 32)));
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && rb.At(32, 32) == 0xFF0000, "depth test keeps the nearer quad", Hex(rb.At(32, 32)));
     dev->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
 
     // --- triangle fan through a user pointer ----------------------------------------
@@ -313,7 +320,8 @@ int main()
         {  1, -1, 0.5f, 1, D3DCOLOR_XRGB(255, 255, 0), 1, 1 },
     };
     dev->DrawPrimitiveUP(D3DPT_TRIANGLEFAN, 2, fan, sizeof(Vertex));
-    Check(ReadBackBuffer(dev, rb) && rb.At(5, 5) == 0xFFFF00 && rb.At(58, 58) == 0xFFFF00 && rb.At(58, 5) == 0xFFFF00,
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && rb.At(5, 5) == 0xFFFF00 && rb.At(58, 58) == 0xFFFF00 && rb.At(58, 5) == 0xFFFF00,
           "triangle fan (DrawPrimitiveUP)", Hex(rb.At(58, 58)));
     IDirect3DVertexBuffer9* after = reinterpret_cast<IDirect3DVertexBuffer9*>(1);
     UINT offset = 1, stride = 1;
@@ -335,7 +343,8 @@ int main()
     dev->SetStreamSource(0, vb, 0, sizeof(Vertex));
     dev->SetIndices(ib);
     dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, 4, 0, 2);
-    Check(ReadBackBuffer(dev, rb) && rb.At(32, 32) == 0x00FFFF && rb.At(2, 61) == 0x00FFFF,
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && rb.At(32, 32) == 0x00FFFF && rb.At(2, 61) == 0x00FFFF,
           "indexed triangle list", Hex(rb.At(32, 32)));
 
     // --- render to texture and StretchRect ---------------------------------------------
@@ -350,7 +359,8 @@ int main()
     dev->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0);
     RECT dst = { 0, 0, 32, 32 };
     const HRESULT stretched = dev->StretchRect(rtSurface, nullptr, backBuffer, &dst, D3DTEXF_LINEAR);
-    Check(SUCCEEDED(stretched) && ReadBackBuffer(dev, rb) && Near(rb.At(10, 10), 0x0AC81E) && rb.At(50, 50) == 0,
+    readOk = ReadBackBuffer(dev, rb);
+    Check(SUCCEEDED(stretched) && readOk && Near(rb.At(10, 10), 0x0AC81E) && rb.At(50, 50) == 0,
           "StretchRect scales into a sub-rectangle", Hex(rb.At(10, 10)));
 
     // --- state blocks ---------------------------------------------------------------------
@@ -366,6 +376,8 @@ int main()
     dev->GetRenderState(D3DRS_CULLMODE, &cull);
     Check(cull == D3DCULL_CW, "a recorded block applies its states");
     block->Release();
+    dev->SetRenderState(D3DRS_FOGENABLE, FALSE);
+    dev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 
     // --- fixed function ---------------------------------------------------------------------
     dev->SetVertexShader(nullptr);
@@ -408,7 +420,8 @@ int main()
     dev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TFACTOR);
     dev->SetRenderState(D3DRS_TEXTUREFACTOR, D3DCOLOR_XRGB(12, 34, 56));
     dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, sprite, sizeof(TlVertex));
-    Check(ReadBackBuffer(dev, rb) && rb.At(20, 20) == 0x0C2238, "fixed function: texture stage selects TFACTOR",
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && rb.At(20, 20) == 0x0C2238, "fixed function: texture stage selects TFACTOR",
           Hex(rb.At(20, 20)));
     dev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
     dev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
@@ -438,7 +451,8 @@ int main()
     dev->SetFVF(D3DFVF_XYZ | D3DFVF_NORMAL);
     dev->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0);
     dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, lit, sizeof(LitVertex));
-    Check(ReadBackBuffer(dev, rb) && Near(rb.At(32, 32), 0x80FF40), "fixed function: directional light x material",
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && Near(rb.At(32, 32), 0x80FF40), "fixed function: directional light x material",
           Hex(rb.At(32, 32)));
 
     // Linear vertex fog: depth 0.5 between start 0 and end 1 is half fogged.
@@ -451,7 +465,8 @@ int main()
     std::memcpy(&bits, &fogEnd, 4); dev->SetRenderState(D3DRS_FOGEND, bits);
     dev->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0);
     dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, lit, sizeof(LitVertex));
-    Check(ReadBackBuffer(dev, rb) && Near(rb.At(32, 32), 0x4080A0, 3), "fixed function: linear vertex fog",
+    readOk = ReadBackBuffer(dev, rb);
+    Check(readOk && Near(rb.At(32, 32), 0x4080A0, 3), "fixed function: linear vertex fog",
           Hex(rb.At(32, 32)));
     dev->SetRenderState(D3DRS_FOGENABLE, FALSE);
     dev->SetRenderState(D3DRS_LIGHTING, FALSE);

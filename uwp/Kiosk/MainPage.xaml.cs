@@ -406,6 +406,20 @@ namespace Kiosk
 
             try
             {
+                // No arrow on a TV: the shelf is driven by the pad, and a game
+                // that wants a pointer gets the app-drawn GamePointer instead.
+                // Hiding the system cursor stops the stray mouse arrow the user
+                // saw on top of everything in controller mode.
+                var window = Windows.UI.Core.CoreWindow.GetForCurrentThread();
+                if (window != null) window.PointerCursor = null;
+            }
+            catch
+            {
+                // Not every host lets the cursor go; the pad still drives the shelf.
+            }
+
+            try
+            {
                 Native.GraphicsBridge.ConsoleWindow =
                     System.Runtime.InteropServices.Marshal.GetIUnknownForObject(
                         Windows.UI.Core.CoreWindow.GetForCurrentThread());

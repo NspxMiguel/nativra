@@ -318,6 +318,19 @@ namespace Kiosk.Native
                 // first page is an ordinal, not a pointer to a string.
                 if (name.ToInt64() > 0 && name.ToInt64() < 0x10000)
                 {
+                    // The bridge answers some by number: SDL asks XInput for
+                    // ordinal 100, XInputGetStateEx, before the named one, and
+                    // the console's own copy of it never sees a pad.
+                    string owner;
+                    named.TryGetValue(module.ToInt64(), out owner);
+                    if (owner != null)
+                    {
+                        var key = owner + "!#" + name.ToInt64();
+                        Remember(key);
+                        if (imports.Overrides.TryGetValue(key, out var byNumber)) return byNumber;
+                        var shipped = imports.Find(owner)?.Export("#" + name.ToInt64()) ?? IntPtr.Zero;
+                        if (shipped != IntPtr.Zero) return shipped;
+                    }
                     return GetProcAddressByOrdinal(module, name);
                 }
 

@@ -50,6 +50,7 @@ namespace Kiosk.Native
         private static readonly Dictionary<string, IntPtr> strings = new Dictionary<string, IntPtr>();
         private static readonly Dictionary<string, IntPtr> interfaces = new Dictionary<string, IntPtr>();
         private static readonly Queue<KeyValuePair<int, byte[]>> pending = new Queue<KeyValuePair<int, byte[]>>();
+        private const int MaxPending = 256;
         private static readonly Dictionary<string, long> achieved = new Dictionary<string, long>();
         private static readonly Dictionary<string, int> intStats = new Dictionary<string, int>();
         private static readonly Dictionary<string, float> floatStats = new Dictionary<string, float>();
@@ -111,7 +112,13 @@ namespace Kiosk.Native
 
         private static void Post(int id, byte[] payload)
         {
-            lock (pending) pending.Enqueue(new KeyValuePair<int, byte[]>(id, payload));
+            lock (pending)
+            {
+                // A game that never pumps callbacks would grow this forever;
+                // the oldest results are the ones it has stopped waiting for.
+                while (pending.Count >= MaxPending) pending.Dequeue();
+                pending.Enqueue(new KeyValuePair<int, byte[]>(id, payload));
+            }
         }
 
         internal static byte[] StatsReceived()

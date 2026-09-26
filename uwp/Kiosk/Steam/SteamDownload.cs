@@ -136,7 +136,13 @@ namespace Kiosk.Steam
                         Human((ulong)needed - free.Value), Human(free.Value)));
                 }
 
+                // A folder a build that wrote chunks out of order started can
+                // hold full-size files with holes in them; those are checked
+                // chunk by chunk before they are trusted. ".ordered" marks a
+                // folder written in order from the start.
+                var trusted = !resuming || await folder.TryGetItemAsync(".ordered") != null;
                 var pending = await folder.CreateFileAsync(".downloading", CreationCollisionOption.ReplaceExisting);
+                if (!resuming) await folder.CreateFileAsync(".ordered", CreationCollisionOption.OpenIfExists);
 
                 var licensed = 0;
                 try
@@ -171,6 +177,13 @@ namespace Kiosk.Steam
                             var target = await CreateAsync(folder, name.Replace('\\', '/'));
 
                             var existing = await target.GetBasicPropertiesAsync();
+                            if ((long)existing.Size == file.Size && !trusted)
+                            {
+                                // Checked against the manifest; only what is
+                                // wrong is fetched again.
+                                onProgress?.Invoke(new DownloadProgress { File = name, Done = done, Total = manifest.TotalBytes });
+                                await RepairAsync(target, file, servers, depot.Id, key);
+                            }
                             if ((long)existing.Size == file.Size)
                             {
                                 done += file.Size;
@@ -193,12 +206,21 @@ namespace Kiosk.Steam
                             });
                             using (var stream = await target.OpenStreamForWriteAsync())
                             {
-                                for (var i = 0; i < file.Chunks.Count; i += parallel)
+                                // In file order. The manifest lists chunks in no
+                                // particular order, and writing them where they
+                                // fall made a USB stick seek for every megabyte
+                                // (0.5 MB/s). In order, a file cut short is always
+                                // shorter than it should be, which is what the
+                                // size check above relies on: out of order, it
+                                // could reach full size with holes still in it.
+                                var chunks = new List<Chunk>(file.Chunks);
+                                chunks.Sort((a, b) => a.Offset.CompareTo(b.Offset));
+                                for (var i = 0; i < chunks.Count; i += parallel)
                                 {
                                     var batch = new List<Task<KeyValuePair<Chunk, byte[]>>>();
-                                    for (var j = i; j < Math.Min(i + parallel, file.Chunks.Count); j++)
+                                    for (var j = i; j < Math.Min(i + parallel, chunks.Count); j++)
                                     {
-                                        var chunk = file.Chunks[j];
+                                        var chunk = chunks[j];
                                         batch.Add(FetchOneAsync(servers, depot.Id, chunk, key));
                                     }
                                     foreach (var task in batch)
@@ -229,6 +251,52 @@ namespace Kiosk.Steam
                 await folder.CreateFileAsync(".downloaded", CreationCollisionOption.ReplaceExisting);
                 await pending.DeleteAsync();
             }
+        }
+
+        /// <summary>
+        /// Reads each chunk of a full-size file back, compares its SHA-1 with
+        /// the manifest's, and writes the ones that differ again: Steam's
+        /// "verify files", for a file that may have holes.
+        /// </summary>
+        private static async Task RepairAsync(
+            StorageFile target, ManifestFile file, List<ContentServer> servers, uint depotId, byte[] key)
+        {
+            var wrong = new List<Chunk>();
+            using (var sha = System.Security.Cryptography.SHA1.Create())
+            using (var stream = await target.OpenStreamForReadAsync())
+            {
+                foreach (var chunk in file.Chunks)
+                {
+                    var buffer = new byte[chunk.Original];
+                    stream.Seek(chunk.Offset, SeekOrigin.Begin);
+                    var read = 0;
+                    while (read < buffer.Length)
+                    {
+                        var got = await stream.ReadAsync(buffer, read, buffer.Length - read);
+                        if (got == 0) break;
+                        read += got;
+                    }
+                    var hash = sha.ComputeHash(buffer, 0, read);
+                    if (read != buffer.Length || !Same(hash, chunk.Sha)) wrong.Add(chunk);
+                }
+            }
+            if (wrong.Count == 0) return;
+            using (var stream = await target.OpenStreamForWriteAsync())
+            {
+                foreach (var chunk in wrong)
+                {
+                    var result = await FetchOneAsync(servers, depotId, chunk, key);
+                    stream.Seek(result.Key.Offset, SeekOrigin.Begin);
+                    await stream.WriteAsync(result.Value, 0, result.Value.Length);
+                }
+            }
+        }
+
+        private static bool Same(byte[] a, byte[] b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            for (var i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+            return true;
         }
 
         private static async Task<KeyValuePair<Chunk, byte[]>> FetchOneAsync(

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Nativra.X86.Cpu;
 
@@ -26,6 +27,13 @@ namespace Nativra.X86.Jit
         public bool FullyTranslated { get; private set; }
         public int InstructionCount { get; private set; }
 
+        /// <summary>Host code offset where each guest instruction's translation starts, in order.</summary>
+        public List<int> HostOffsets { get; } = new List<int>();
+        /// <summary>The guest EIP of each entry in <see cref="HostOffsets"/>.</summary>
+        public List<uint> GuestEips { get; } = new List<uint>();
+        /// <summary>Offset of the fault exit: resuming there ends the block with <see cref="Ctx.ReasonFault"/>.</summary>
+        public int FaultExitOffset { get; private set; }
+
         private X64Emit e;
 
         /// <summary>
@@ -39,6 +47,8 @@ namespace Nativra.X86.Jit
             e = new X64Emit();
             FullyTranslated = true;
             InstructionCount = 0;
+            HostOffsets.Clear();
+            GuestEips.Clear();
             EmitPrologue();
 
             var eip = startEip;
@@ -51,6 +61,8 @@ namespace Nativra.X86.Jit
                 try { ins = Decoder.Decode(code, eip); }
                 catch { EmitExit(eip, Ctx.ReasonFallback); FullyTranslated = false; terminated = true; break; }
 
+                HostOffsets.Add(e.Here);
+                GuestEips.Add(eip);
                 if (!ins.Valid || ins.Rep != 0 || ins.Lock || !TryEmit(ins))
                 {
                     EmitExit(eip, Ctx.ReasonFallback);
@@ -62,6 +74,12 @@ namespace Nativra.X86.Jit
                 eip = ins.Next;
             }
             if (!terminated) EmitExit(eip, Ctx.ReasonNext);
+
+            // The fault exit: a guest memory access that faulted resumes here
+            // (see JitFaults) with the guest registers still in their host
+            // registers, and leaves through the normal epilogue.
+            FaultExitOffset = e.Here;
+            e.MovMemImm(Ctxr, -1, 1, Ctx.ExitReason, (uint)Ctx.ReasonFault);
 
             e.Label("exit");
             EmitEpilogue();

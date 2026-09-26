@@ -137,7 +137,7 @@ namespace Kiosk.Native
                 held = MakeTexture(d3dDevice, width, height, format);
                 if (held == IntPtr.Zero)
                 {
-                    Note = "no back buffer";
+                    Note = "no back buffer (0x" + LastCode.ToString("X8") + ", " + width + "x" + height + " format " + format + ")";
                     return IntPtr.Zero;
                 }
 
@@ -199,6 +199,9 @@ namespace Kiosk.Native
         }
 
         /// <summary>A texture a game can draw into and this app can read.</summary>
+        /// <summary>What the device answered the last texture request.</summary>
+        private static int LastCode;
+
         private static IntPtr MakeTexture(IntPtr d3dDevice, int w, int h, int f)
         {
             var desc = Marshal.AllocHGlobal(44);
@@ -220,9 +223,8 @@ namespace Kiosk.Native
 
                 var make = Marshal.GetDelegateForFunctionPointer<MakeTextureDelegate>(
                     ComProxy.Method(d3dDevice, CreateTexture2DSlot));
-                return make(d3dDevice, desc, IntPtr.Zero, slot) == S_OK
-                    ? Marshal.ReadIntPtr(slot)
-                    : IntPtr.Zero;
+                LastCode = make(d3dDevice, desc, IntPtr.Zero, slot);
+                return LastCode == S_OK ? Marshal.ReadIntPtr(slot) : IntPtr.Zero;
             }
             finally
             {

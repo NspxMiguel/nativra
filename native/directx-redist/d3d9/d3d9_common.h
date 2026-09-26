@@ -17,6 +17,9 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX   // windows.h's min/max macros break std::min/std::max under MSVC
+#endif
 #include <windows.h>
 #include <d3d9.h>
 #include <d3d11_1.h>

@@ -110,6 +110,7 @@ namespace Kiosk.Native
                     ? process.Jit.BlocksCompiled + " compiled, " + process.Jit.BlocksExecuted + " run, " +
                       process.Jit.InterpreterFallbacks + " interpreted"
                     : "interpreter"));
+                lines.Add("x86.recent=" + string.Join(" ", process.RecentImports));
                 if (process.JitRefusal != null) lines.Add("x86.jit.refused=" + process.JitRefusal);
                 if (kernel.ProbedAbsent.Count > 0)
                     lines.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));

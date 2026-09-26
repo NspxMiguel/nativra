@@ -426,6 +426,8 @@ namespace Nativra.X86.Loader
             var esp = Cpu.Esp;
             var returnAddress = Memory.Read32(esp);
             var call = new GuestCall(this, returnAddress, esp + 4, Cpu.Ecx);
+            recent.Enqueue(import.ToString());
+            if (recent.Count > RecentImportCount) recent.Dequeue();
             jumped = false;
             var result = import.Handler.Body(call);
             if (jumped) return;   // the handler set the whole CPU state itself
@@ -437,6 +439,11 @@ namespace Nativra.X86.Loader
         }
 
         private bool jumped;
+        private const int RecentImportCount = 24;
+        private readonly Queue<string> recent = new Queue<string>();
+
+        /// <summary>The last imports the guest called, oldest first: where a stuck or crashed run was.</summary>
+        public IReadOnlyCollection<string> RecentImports => recent;
 
         /// <summary>
         /// Called by a host handler that has set EIP, ESP and the registers

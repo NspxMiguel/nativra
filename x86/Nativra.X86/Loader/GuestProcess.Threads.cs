@@ -111,9 +111,9 @@ namespace Nativra.X86.Loader
         /// A new thread that will call <paramref name="start"/>(<paramref name="parameter"/>)
         /// as a stdcall thread routine; its return value is its exit code.
         /// </summary>
-        public GuestThread CreateThread(uint start, uint parameter, uint stackSize, bool suspended)
+        public GuestThread CreateThread(uint start, uint parameter, uint stackSize, bool suspended, bool attach = true)
         {
-            var thread = new GuestThread(nextThreadId);
+            var thread = new GuestThread(nextThreadId) { Attached = !attach };
             nextThreadId += 4;
             // 256 KB unless the program asks for more: guest threads share the
             // app's 5 GB with everything else, and most worker threads need

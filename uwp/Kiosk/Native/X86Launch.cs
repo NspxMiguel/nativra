@@ -80,6 +80,9 @@ namespace Kiosk.Native
                 // Direct3D 9 through the packaged 64-bit layer.
                 var com = new GuestCom(process, kernel);
                 X86Direct3D9.Install(process, kernel, com);
+                // XAudio 2.7 through the packaged 64-bit shim, as for a 64-bit game.
+                var xaudio = new XAudio27Com(process, kernel, com);
+                xaudio.Install((clsid, iid, result) => XAudio27Route.Create(clsid, iid, result));
 
                 var packaged = System.IO.Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "x86");
                 var fromPackage = new List<string>();
@@ -126,6 +129,10 @@ namespace Kiosk.Native
                 lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
                 lines.Add("x86.window=0x" + kernel.InputWindow.ToString("X") + " dispatched=" + kernel.MessagesDispatched);
                 lines.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
+                lines.Add("x86.xaudio=" + XAudio27Route.Note + " callbacks=" + xaudio.CallbacksDelivered +
+                          " dropped=" + xaudio.CallbacksDropped + " effect-chains-dropped=" + xaudio.EffectChainsDropped);
+                if (com.MissingClasses.Count > 0)
+                    lines.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
                 foreach (var call in com.Calls.OrderByDescending(pair => pair.Value).Take(40))
                     lines.Add("x86.com " + call.Value + "x " + call.Key);
                 lines.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));

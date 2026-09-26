@@ -55,6 +55,11 @@ namespace Nativra.X86.Loader
         private uint unhandledFilter;
         private uint nextHandle = 0x100;
 
+        private int comInitialized;
+
+        /// <summary>CoCreateInstance(clsid, iid, ppv): the COM bridge installs itself here.</summary>
+        public Func<uint, uint, uint, uint> CoCreateInstance { get; set; } = (clsid, iid, result) => 0x80040154;   // REGDB_E_CLASSNOTREG
+
         /// <summary>Where OutputDebugString and writes to the standard handles go.</summary>
         public Action<string> Log { get; set; }
 
@@ -351,6 +356,28 @@ namespace Nativra.X86.Loader
                 Sign(string.Compare(ReadText(c.Arg(0), false), ReadText(c.Arg(1), false), StringComparison.OrdinalIgnoreCase)));
             i.Register(k, "lstrcmpiW", CallConv.Stdcall, 2, c =>
                 Sign(string.Compare(ReadText(c.Arg(0), true), ReadText(c.Arg(1), true), StringComparison.OrdinalIgnoreCase)));
+
+            // ole32: apartments are a formality here; classes come from the
+            // COM bridge (CoCreateInstance), memory from the process heap.
+            const string o = "ole32.dll";
+            i.Register(o, "CoInitialize", CallConv.Stdcall, 1, c => comInitialized++ == 0 ? 0u : 1u);
+            i.Register(o, "CoInitializeEx", CallConv.Stdcall, 2, c => comInitialized++ == 0 ? 0u : 1u);
+            i.Register(o, "OleInitialize", CallConv.Stdcall, 1, c => comInitialized++ == 0 ? 0u : 1u);
+            i.Register(o, "CoUninitialize", CallConv.Stdcall, 0, c => { if (comInitialized > 0) comInitialized--; return 0; });
+            i.Register(o, "OleUninitialize", CallConv.Stdcall, 0, c => { if (comInitialized > 0) comInitialized--; return 0; });
+            i.Register(o, "CoCreateInstance", CallConv.Stdcall, 5, c => CoCreateInstance(c.Arg(0), c.Arg(3), c.Arg(4)));
+            i.Register(o, "CoTaskMemAlloc", CallConv.Stdcall, 1, c => heap.Alloc(Math.Max(c.Arg(0), 1u)));
+            i.Register(o, "CoTaskMemRealloc", CallConv.Stdcall, 2, c => heap.ReAlloc(c.Arg(0), c.Arg(1)));
+            i.Register(o, "CoTaskMemFree", CallConv.Stdcall, 1, c => { heap.Free(c.Arg(0)); return 0; });
+            i.Register(o, "CoCreateGuid", CallConv.Stdcall, 1, c => { memory.WriteBytes(c.Arg(0), Guid.NewGuid().ToByteArray()); return 0; });
+            i.Register(o, "PropVariantClear", CallConv.Stdcall, 1, c => { memory.WriteBytes(c.Arg(0), new byte[16]); return 0; });
+            i.Register(o, "StringFromGUID2", CallConv.Stdcall, 3, c =>
+            {
+                var text = new Guid(memory.ReadBytes(c.Arg(0), 16)).ToString("B").ToUpperInvariant();
+                if (c.Arg(2) < text.Length + 1) return 0;
+                memory.WriteUnicode(c.Arg(1), text);
+                return (uint)text.Length + 1;
+            });
 
             // winmm's clock, which most games of the era pace their frames by.
             const string w = "winmm.dll";

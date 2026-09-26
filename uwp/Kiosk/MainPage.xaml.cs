@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
@@ -151,6 +152,10 @@ namespace Kiosk
         /// </summary>
         public ObservableCollection<Tile> Emulators { get; } =
             new ObservableCollection<Tile>();
+
+        /// <summary>Catalogue entries not installed yet, offered on the emulator screen.</summary>
+        public ObservableCollection<CatalogItem> ShopItems { get; } =
+            new ObservableCollection<CatalogItem>();
 
         /// <summary>Every game on the shelf, laid out as a grid by the All games screen.</summary>
         public ObservableCollection<Tile> AllGames { get; } =
@@ -432,6 +437,7 @@ namespace Kiosk
             Native.GraphicsBridge.OnUi = Dispatcher;
             Native.ThreadRank.RaiseThisThread();
             Native.Recorder.Watch();
+            EmulatorShop.Attach(Dispatcher);
 
             try
             {
@@ -957,6 +963,7 @@ namespace Kiosk
                 where == "downloads" ? Visibility.Visible : Visibility.Collapsed;
             AllGamesScreen.Visibility = Visibility.Collapsed;
             if (where == "downloads") ShowDownloads();
+            if (where == "emulators") { var shop = ShowShopAsync(); }
 
             var built = where == "library" || where == "emulators" || where == "downloads";
             StatusText.Text = built ? string.Empty : Texts.Get("status.notyet", where);
@@ -1128,6 +1135,37 @@ namespace Kiosk
             AllGamesGrid.UpdateLayout();
             var first = FirstButton(AllGamesGrid);
             if (first != null) first.Focus(FocusState.Programmatic);
+        }
+
+        private async Task ShowShopAsync()
+        {
+            var items = await EmulatorShop.AvailableAsync();
+            // An install in flight keeps its card: rebuilding would drop its progress.
+            foreach (var busy in ShopItems.Where(i => i.Busy).ToList())
+                items.RemoveAll(i => i.Slug == busy.Slug);
+            foreach (var idle in ShopItems.Where(i => !i.Busy).ToList()) ShopItems.Remove(idle);
+            foreach (var item in items) ShopItems.Add(item);
+            ShopTitle.Text = Texts.Get("shop.title");
+            ShopTitle.Visibility = ShopItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // Moving up from the dock does not find these buttons (they sit at
+            // the left edge of each card, away from the dock icon's column),
+            // so the screen takes the focus itself, as the All games grid does.
+            if (EmulatorScreen.Visibility != Visibility.Visible) return;
+            EmulatorScreen.UpdateLayout();
+            var first = FirstButton(EmulatorScreen);
+            if (first != null) first.Focus(FocusState.Programmatic);
+        }
+
+        private async void OnInstallClicked(object sender, RoutedEventArgs e)
+        {
+            var item = (sender as FrameworkElement)?.Tag as CatalogItem;
+            if (item == null || item.Busy) return;
+            var failed = await EmulatorShop.InstallAsync(item);
+            item.Status = failed == null
+                ? Texts.Get("shop.installed")
+                : Texts.Get("shop.failed", failed);
+            StatusText.Text = failed == null ? Texts.Get("shop.installed.long", item.Name) : string.Empty;
         }
 
         private void FocusShelf()

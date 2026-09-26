@@ -23,7 +23,9 @@ namespace Nativra.X86.Loader
     /// <item><c>P</c> D3DPRESENT_PARAMETERS in/out; <c>C</c> D3DDEVICE_CREATION_PARAMETERS out</item>
     /// <item><c>L</c> D3DLOCKED_RECT out; <c>B</c> D3DLOCKED_BOX out; <c>V</c> void** data out</item>
     /// </list>
-    /// A method name ending in <c>:F</c> returns a float (in ST0 for the guest).
+    /// A method name ending in <c>:F</c> returns a float (in ST0 for the guest);
+    /// <c>:skip</c> answers S_OK without calling the host. Other single
+    /// letters can be added with <see cref="GuestCom.AddArgument"/>.
     /// </summary>
     public sealed class ComInterface
     {
@@ -64,14 +66,16 @@ namespace Nativra.X86.Loader
         public int Slot { get; }
         internal readonly string[] Args;
         internal readonly bool FloatReturn;
+        internal readonly bool Skip;
         internal readonly int GuestDwords;
 
-        internal ComMethod(string name, int slot, string[] args, bool floatReturn)
+        internal ComMethod(string name, int slot, string[] args, bool floatReturn, bool skip)
         {
             Name = name;
             Slot = slot;
             Args = args;
             FloatReturn = floatReturn;
+            Skip = skip;
             var dwords = 0;
             foreach (var a in args) dwords += a == "q" ? 2 : 1;
             GuestDwords = dwords;
@@ -111,6 +115,18 @@ namespace Nativra.X86.Loader
             public ComInterface Interface;
         }
 
+        /// <summary>
+        /// Translates one guest argument that the built-in codes do not cover.
+        /// <paramref name="slot"/> hands out zeroed 8-byte host slots from the
+        /// call's scratch space; actions added to <paramref name="after"/> run
+        /// once the host method has returned.
+        /// </summary>
+        public delegate IntPtr ArgumentTranslator(uint guest, Func<int, IntPtr> slot, List<Action> after);
+
+        private readonly Dictionary<char, ArgumentTranslator> translators = new Dictionary<char, ArgumentTranslator>();
+
+        public void AddArgument(char code, ArgumentTranslator translator) => translators[code] = translator;
+
         /// <summary>Calls made through proxies, by interface and method (the probe reports them).</summary>
         public Dictionary<string, long> Calls { get; } = new Dictionary<string, long>(StringComparer.Ordinal);
 
@@ -121,6 +137,7 @@ namespace Nativra.X86.Loader
             this.process = process;
             this.kernel = kernel;
             scratch = Marshal.AllocHGlobal(ScratchSize);
+            kernel.CoCreateInstance = CreateInstance;
         }
 
         private GuestMemory Memory => process.Memory;
@@ -153,15 +170,60 @@ namespace Nativra.X86.Loader
 
         public ComInterface Find(string name) => byName.TryGetValue(name, out var face) ? face : null;
 
+        /// <summary>A class the host can make: given host pointers to the CLSID and IID and a result slot, an HRESULT.</summary>
+        public delegate int ClassFactory(IntPtr clsid, IntPtr iid, IntPtr result);
+
+        private readonly Dictionary<Guid, KeyValuePair<ClassFactory, ComInterface>> classes =
+            new Dictionary<Guid, KeyValuePair<ClassFactory, ComInterface>>();
+
+        /// <summary>Serves CoCreateInstance of <paramref name="clsid"/> from the host.</summary>
+        public void RegisterClass(Guid clsid, ClassFactory create, ComInterface face) =>
+            classes[clsid] = new KeyValuePair<ClassFactory, ComInterface>(create, face);
+
+        /// <summary>
+        /// ole32's CoCreateInstance for the guest: a host class wrapped, or
+        /// REGDB_E_CLASSNOTREG (and the CLSID noted) for anything else.
+        /// </summary>
+        public uint CreateInstance(uint clsid, uint iid, uint result)
+        {
+            if (result != 0) Memory.Write32(result, 0);
+            var id = new Guid(Memory.ReadBytes(clsid, 16));
+            if (!classes.TryGetValue(id, out var entry))
+            {
+                MissingClasses.Add(id);
+                return 0x80040154;   // REGDB_E_CLASSNOTREG
+            }
+            var at = Marshal.AllocHGlobal(8);
+            try
+            {
+                Marshal.WriteInt64(at, 0);
+                var hr = entry.Key(GuestToHost(clsid), GuestToHost(iid), at);
+                var made = Marshal.ReadIntPtr(at);
+                if (hr >= 0 && made != IntPtr.Zero && result != 0) Memory.Write32(result, Wrap(made, entry.Value));
+                return (uint)hr;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(at);
+            }
+        }
+
+        /// <summary>CLSIDs the guest asked for that nothing serves.</summary>
+        public HashSet<Guid> MissingClasses { get; } = new HashSet<Guid>();
+
         private static void AddMethod(ComInterface face, string text)
         {
             var floatReturn = text.EndsWith(":F", StringComparison.Ordinal);
             if (floatReturn) text = text.Substring(0, text.Length - 2);
+            // ":skip" answers S_OK without reaching the host (a registration
+            // the host must not see, such as a guest engine callback).
+            var skip = text.EndsWith(":skip", StringComparison.Ordinal);
+            if (skip) text = text.Substring(0, text.Length - 5);
             var open = text.IndexOf('(');
             var name = text.Substring(0, open);
             var inside = text.Substring(open + 1, text.Length - open - 2);
             var args = inside.Length == 0 ? new string[0] : inside.Split(',');
-            face.methods.Add(new ComMethod(name, face.methods.Count, args, floatReturn));
+            face.methods.Add(new ComMethod(name, face.methods.Count, args, floatReturn, skip));
         }
 
         /// <summary>
@@ -244,6 +306,7 @@ namespace Nativra.X86.Loader
             var key = proxy.Interface.Name + "::" + method.Name;
             Calls.TryGetValue(key, out var n);
             Calls[key] = n + 1;
+            if (method.Skip) return 0;
 
             var host = proxy.Host;
             var function = Marshal.ReadIntPtr(Marshal.ReadIntPtr(host), method.Slot * IntPtr.Size);
@@ -357,7 +420,21 @@ namespace Nativra.X86.Loader
                         break;
                     }
                     default:
-                        throw new InvalidOperationException("bad signature code " + code + " in " + key);
+                    {
+                        if (!translators.TryGetValue(code[0], out var translate))
+                            throw new InvalidOperationException("bad signature code " + code + " in " + key);
+                        var taken = slot;
+                        args.Add(translate(value, count =>
+                        {
+                            var at = scratch + taken * 8;
+                            taken += count;
+                            if (taken * 8 > ScratchSize) throw new InvalidOperationException("COM bridge scratch exhausted");
+                            for (var k = 0; k < count; k++) Marshal.WriteInt64(at, k * 8, 0);
+                            return at;
+                        }, outs));
+                        slot = taken;
+                        break;
+                    }
                 }
             }
 

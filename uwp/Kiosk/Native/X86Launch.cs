@@ -75,7 +75,16 @@ namespace Kiosk.Native
                 kernel.Log = text => { if (guestLog.Count < LogLines) guestLog.Add(text); };
                 kernel.Install();
 
-                process.ModuleSource = name => ReadGameModule(folderPath, name);
+                var packaged = System.IO.Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "x86");
+                var fromPackage = new List<string>();
+                process.ModuleSource = name =>
+                {
+                    var bytes = ReadGameModule(folderPath, name);
+                    if (bytes != null) return bytes;
+                    bytes = ReadPackagedModule(packaged, name);
+                    if (bytes != null) fromPackage.Add(name);
+                    return bytes;
+                };
 
                 var image = process.LoadExecutable(exeName, exeBytes);
                 lines.Add("x86.image=" + exeName +
@@ -85,6 +94,7 @@ namespace Kiosk.Native
                           " size=0x" + image.ImageSize.ToString("X"));
                 lines.Add("x86.jit=" + (process.UsesJit ? "on" : interpreterOnly ? "off (x86interp.txt)" : "unavailable"));
                 lines.Add("x86.modules=" + string.Join(",", process.Images.Select(i => i.Name)));
+                if (fromPackage.Count > 0) lines.Add("x86.packaged=" + string.Join(",", fromPackage));
                 ReportImports(process, lines);
 
                 result = process.InitializeModules(BlockBudget);
@@ -120,6 +130,23 @@ namespace Kiosk.Native
             {
                 var path = System.IO.Path.Combine(folderPath, name);
                 return FileWatch.PathExists(path) ? FileWatch.ReadAll(path) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// A 32-bit DLL the package carries for games that do not bring their
+        /// own: the redist shims and the redistributable C runtime.
+        /// </summary>
+        private static byte[] ReadPackagedModule(string packaged, string name)
+        {
+            try
+            {
+                var path = System.IO.Path.Combine(packaged, name);
+                return System.IO.File.Exists(path) ? System.IO.File.ReadAllBytes(path) : null;
             }
             catch
             {

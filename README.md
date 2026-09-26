@@ -157,36 +157,37 @@ has no windows.
 
 ## What works today
 
-- **Sign in to Steam** on the console, by QR code, natively.
+- **Sign in to Steam** on the console, by QR code, natively; the session
+  survives app updates.
 - **The full library**: owned games and family-shared ones, with the account's
-  real collections, filters and search.
-- **Downloading on the console**, from Steam's own content servers: the client
-  protocol, depot keys, manifests, chunks, and all three container formats.
-- **A game detail screen** with artwork, playtime, and an install dialog that
-  asks where to put it.
-- **Loading a game's binaries** — the engine of a commercial Unity game maps,
-  relocates, resolves and runs inside the app.
-- **Seraph gameplay tests** with movement, jumping and shooting through remote
-  input. In build 194, the owner also confirmed audible menu sound on the Xbox.
-  This is not yet a full physical-controller or long-session certification.
+  real collections, filters and search. Games borrowed through Steam Families
+  download like owned ones.
+- **Downloading on the console**, from Steam's own content servers, to the
+  console or to a USB drive, with progress on the home screen, resuming after an
+  interruption, moving to the roomier drive when a disk fills, and a check of
+  every chunk against the manifest for files an interrupted download left.
+- **Running games from their own files**, on the console or a USB drive, through
+  a loader that maps, relocates and links the game's DLLs in dependency order,
+  gives every thread its TLS and `DLL_THREAD_ATTACH`, and answers the Windows
+  APIs the console lacks (user folders, the C runtime's file calls on a USB
+  drive, raw input, DirectInput, the HLSL compiler).
+- **Verified**: Seraph's Last Stand (Unity) plays at 60 fps with the controller,
+  and shows "In-Game" to Steam friends.
+- **Hades** (Supergiant's own engine, D3D11, SDL2, FMOD) reaches its main menu at
+  60 fps from a USB drive.
 - **Remote control of the console** from a terminal, for testing.
+
+See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for every game tried.
 
 ## What does not work yet
 
-**Experimental, not a finished PC-game compatibility layer.** Seraph's Last
-Stand's actual main menu has rendered on Xbox Series X. This is not yet proof
-of a stable, playable match. See the [console milestone and original
-screenshot](docs/progress/2026-09-23.md).
-
-The earlier 20-update/s mirror cap has been removed. Subsequent console tests
-reached roughly 59 frame submissions and XAML updates per second; these counters
-are not a measurement of physical TV refresh or frame pacing. Launching Seraph
-from its library tile and short gameplay sessions have been tested. Long-session
-stability, focus consistency and complete physical-controller play still need
-validation. Build 194 acquired the real audio client without the earlier FMOD
-initialization errors, and the owner confirmed audible menu sound. SteamAPI initialization fails.
-Multiplayer, achievements, friend invitations and LEGO Jurassic World are not
-validated. No license or authentication checks are bypassed.
+**Experimental, not a finished PC-game compatibility layer.** Hades' controller
+and sound in its menus are not confirmed yet. Games using the classic
+Steamworks C++ interfaces (LEGO Jurassic World) stop at Steam's start-up, 32-bit
+games are not supported, Direct3D 9 games have no renderer, and Adobe AIR
+(Brawlhalla) does not find its application descriptor. Multiplayer and friend
+invitations are not validated. No license or authentication checks are
+bypassed: games run from the signed-in account's own licenses.
 
 See [docs/ISSUES.md](docs/ISSUES.md) — the rest of the work is partitioned, and
 a lot of it needs no console.

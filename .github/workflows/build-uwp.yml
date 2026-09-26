@@ -7,6 +7,10 @@ on:
   push:
     paths:
       - "uwp/**"
+      # The app compiles the x86 layer (ProjectReference) and packages the
+      # redist shims, so changes there must go through .NET Native too.
+      - "x86/Nativra.X86/**"
+      - "native/directx-redist/**"
       - ".github/workflows/build-uwp.yml"
   workflow_dispatch:
 

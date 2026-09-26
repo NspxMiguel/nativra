@@ -423,11 +423,17 @@ namespace Kiosk
             Native.ControllerMode.Desktop = Settings.DesktopInput;
             Native.ControllerMode.Changes++;
             gameLaunchPending = true;
+            // The pad's A reaches this page too, and XAML answered it with the
+            // console's navigation click over the game's own sound. The game
+            // owns the pad from here; the app's sounds stay off while it runs.
+            ElementSoundPlayer.State = ElementSoundPlayerState.Off;
             GameLoading.Visibility = Visibility.Visible;
             GameLoadingRing.IsActive = true;
+            var started = false;
             try
             {
                 await Native.NativeProbe.RunAsync(appId);
+                started = true;
             }
             catch (PlatformNotSupportedException)
             {

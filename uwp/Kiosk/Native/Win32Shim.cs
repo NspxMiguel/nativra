@@ -47,6 +47,8 @@ namespace Kiosk.Native
         // table, which the program calls and dies on. Address space is free
         // until it is written to, so the ceiling is now far above the need.
         private const int Capacity = 4096;
+        private const int OwnPage = 4096;
+        private bool sealedPage;
 
         private readonly List<string> names = new List<string>();
 
@@ -243,7 +245,20 @@ namespace Kiosk.Native
 
                 index = names.Count;
                 names.Add(name);
-                at = page + used * ThunkSize;
+                if (sealedPage)
+                {
+                    // Once the game runs, the shared page is being executed
+                    // by its threads: making it writable for a new thunk made
+                    // it unexecutable for them too, for that instant. A thunk
+                    // made now gets a page of its own, written once.
+                    at = VirtualAllocFromApp(
+                        IntPtr.Zero, (UIntPtr)OwnPage, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+                    if (at == IntPtr.Zero) return false;
+                }
+                else
+                {
+                    at = page + used * ThunkSize;
+                }
                 used++;
                 return true;
             }
@@ -378,6 +393,14 @@ namespace Kiosk.Native
         /// </summary>
         private void Write(IntPtr at, byte[] code)
         {
+            var start = page.ToInt64();
+            if (page == IntPtr.Zero || at.ToInt64() < start || at.ToInt64() >= start + (long)ThunkSize * Capacity)
+            {
+                // A page of its own: nothing runs from it yet.
+                Marshal.Copy(code, 0, at, code.Length);
+                VirtualProtectFromApp(at, (UIntPtr)OwnPage, PAGE_EXECUTE_READ, out _);
+                return;
+            }
             lock (names)
             {
                 VirtualProtectFromApp(
@@ -391,6 +414,7 @@ namespace Kiosk.Native
         /// <summary>Marks the end of setup; each write seals the page itself.</summary>
         public void Seal()
         {
+            sealedPage = true;
             if (page == IntPtr.Zero) return;
             VirtualProtectFromApp(
                 page, (UIntPtr)(ThunkSize * Capacity), PAGE_EXECUTE_READ, out _);

@@ -174,6 +174,12 @@ namespace Nativra.X86.Jit
             var op = ins.Op;
             var size = OpSize(ins);
 
+            // Byte registers 4-7 are AH, CH, DH and BH. Their host homes (rdi,
+            // r12-r14) have no high byte, and AH-style encodings cannot sit in
+            // an instruction that needs a REX prefix, which every memory
+            // operand here does. Leave those forms to the interpreter.
+            if (UsesHighByteRegister(ins)) return false;
+
             // ALU r/m,r and r,r/m and the AL/eAX immediate forms.
             if (op < 0x40 && (op & 7) < 6)
             {
@@ -221,12 +227,14 @@ namespace Nativra.X86.Jit
                 {
                     var width = op == 0x86 ? 8 : size;
                     if (IsMem(ins)) return false; // memory xchg carries an implicit lock; leave it to the interpreter
+                    // Partial-register swaps are rare; decided before anything is
+                    // emitted, or the interpreter would swap them a second time.
+                    if (width != 32) return false;
                     if (ins.Rm != ins.RegField)
                     {
                         e.MovRegReg(S1, G[ins.Rm], true);
-                        e.MovRegReg(G[ins.Rm], G[ins.RegField], width == 32);
-                        e.MovRegReg(G[ins.RegField], S1, width == 32);
-                        if (width != 32) return false; // partial-register swap: rare, leave to interpreter
+                        e.MovRegReg(G[ins.Rm], G[ins.RegField], true);
+                        e.MovRegReg(G[ins.RegField], S1, true);
                     }
                     return true;
                 }
@@ -332,6 +340,35 @@ namespace Nativra.X86.Jit
             }
 
             return false;
+        }
+
+        /// <summary>An 8-bit operand that names AH, CH, DH or BH (register numbers 4-7).</summary>
+        private bool UsesHighByteRegister(in Instruction ins)
+        {
+            var op = ins.Op;
+            bool rmIsByte, regIsByte;
+            if (op < 0x40 && (op & 7) < 4)
+            {
+                rmIsByte = regIsByte = (op & 1) == 0;               // ALU r/m8,r8 and r8,r/m8
+            }
+            else
+            {
+                switch (op)
+                {
+                    case 0x84: case 0x86: case 0x88: case 0x8A:     // test/xchg/mov with r8
+                        rmIsByte = regIsByte = true; break;
+                    case 0x80: case 0x82: case 0xC6: case 0xF6: case 0xFE:
+                    case 0xC0: case 0xD0: case 0xD2:                 // r/m8 with an opcode extension
+                        rmIsByte = true; regIsByte = false; break;
+                    case 0x0FB6: case 0x0FBE:                        // movzx/movsx from r/m8
+                        rmIsByte = true; regIsByte = false; break;
+                    default:
+                        rmIsByte = op >= 0x0F90 && op <= 0x0F9F;     // setcc r/m8
+                        regIsByte = false;
+                        break;
+                }
+            }
+            return (rmIsByte && ins.Mod == 3 && ins.Rm >= 4) || (regIsByte && ins.RegField >= 4);
         }
 
         // ---------------------------------------------------------- ALU helpers

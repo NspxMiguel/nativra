@@ -202,6 +202,9 @@ namespace Nativra.X86.Loader
             InstallUser32(i);
             InstallKernel32(i);
             InstallMsvcrt(i);
+            InstallGdi(i);
+            InstallUser32More(i);
+            InstallLibraries(i);
         }
 
         // --- handler bodies -----------------------------------------------

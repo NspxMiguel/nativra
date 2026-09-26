@@ -29,6 +29,7 @@ namespace Kiosk.Native
     {
         private const string ImportsReport = "x86-imports.txt";
         private const long BlockBudget = 200_000_000;
+        private const int LogLines = 50;
 
         /// <summary>
         /// Loads and runs the program. True when the game ended by itself (it
@@ -70,6 +71,8 @@ namespace Kiosk.Native
                 var kernel = new GuestKernel(process);
                 kernel.ExePath = folderPath.TrimEnd('\\') + "\\" + exeName;
                 kernel.SetCommandLine("\"" + kernel.ExePath + "\"");
+                var guestLog = new List<string>();
+                kernel.Log = text => { if (guestLog.Count < LogLines) guestLog.Add(text); };
                 kernel.Install();
 
                 process.ModuleSource = name => ReadGameModule(folderPath, name);
@@ -100,6 +103,9 @@ namespace Kiosk.Native
                 if (process.JitRefusal != null) lines.Add("x86.jit.refused=" + process.JitRefusal);
                 if (kernel.ProbedAbsent.Count > 0)
                     lines.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));
+                if (kernel.FilesNotFound.Count > 0)
+                    lines.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(LogLines)));
+                foreach (var text in guestLog) lines.Add("x86.log=" + text);
                 lines.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
 
                 await WriteImportsAsync(process, kernel);

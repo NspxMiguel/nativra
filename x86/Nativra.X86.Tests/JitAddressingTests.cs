@@ -61,5 +61,32 @@ namespace Nativra.X86.Tests
                 Assert.Equal(14u * 24u + 14u * 1000u, eax);
             }
         }
+
+        // xchg al,ah / movzx ecx,ah / mov dh,0x30 / add cl,dh / test ah,2 /
+        // setnz dl — AH-style byte registers, which the JIT must not map onto
+        // its host homes for EBP..EDI, and an 8-bit xchg it once performed
+        // twice (emitted, then handed to the interpreter as well).
+        private static readonly byte[] HighBytes =
+        {
+            0xB8, 0x02, 0x41, 0x00, 0x00, 0x86, 0xC4, 0x0F, 0xB6, 0xCC, 0xB6, 0x30, 0x00, 0xF1, 0xF6, 0xC4,
+            0x02, 0x0F, 0x95, 0xC2, 0x0F, 0xB6, 0xD2, 0xC1, 0xE2, 0x10, 0x01, 0xD0, 0xC1, 0xE1, 0x18, 0x01,
+            0xC8, 0xC3,
+        };
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void HighByteRegistersAndByteSwapsMatchTheInterpreter(bool jit)
+        {
+            using (var p = new GuestProcess(new GuestMemory(native: jit), useJit: jit))
+            {
+                Assert.Equal(jit, p.UsesJit);
+                p.Memory.Map(0x00600000, 0x1000);
+                p.Memory.WriteBytes(0x00600000, HighBytes);
+                var result = p.Call(0x00600000, out var eax, 1000);
+                Assert.True(result.Ok, result.ToString());
+                Assert.Equal(0x32010241u, eax);
+            }
+        }
     }
 }

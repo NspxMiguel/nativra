@@ -335,6 +335,49 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void ExceptHandler3RunsTheFilterAndTheExceptBlock()
+        {
+            // A VC-style __try/__except frame registered with _except_handler3;
+            // the __try body raises, the filter answers EXCEPTION_EXECUTE_HANDLER,
+            // and the __except block returns 42.
+            p.Memory.Write32(Data, p.Imports.Bind("msvcrt.dll", "_except_handler3", -1));
+            p.Memory.Write32(Data + 4, p.Imports.Bind("kernel32.dll", "RaiseException", -1));
+            p.Memory.Write32(Data + 0x40, 0xFFFFFFFF);    // scope 0: enclosing level -1,
+            p.Memory.Write32(Data + 0x44, Code + 86);     //   filter,
+            p.Memory.Write32(Data + 0x48, Code + 64);     //   __except block
+            p.Memory.WriteBytes(Code, new byte[]
+            {
+                0x55, 0x8B, 0xEC,                               // push ebp; mov ebp, esp
+                0x6A, 0xFF,                                     // push -1 (try level)
+                0x68, 0x40, 0x10, 0x60, 0x00,                   // push scope table
+                0xFF, 0x35, 0x00, 0x10, 0x60, 0x00,             // push [_except_handler3]
+                0x64, 0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,       // push fs:[0]
+                0x64, 0x89, 0x25, 0x00, 0x00, 0x00, 0x00,       // mov fs:[0], esp
+                0x83, 0xEC, 0x08,                               // sub esp, 8
+                0x89, 0x65, 0xE8,                               // mov [ebp-18h], esp
+                0xC7, 0x45, 0xFC, 0x00, 0x00, 0x00, 0x00,       // mov dword [ebp-4], 0: enter __try
+                0x6A, 0x00, 0x6A, 0x00, 0x6A, 0x00,             // RaiseException(0xE0000001, 0, 0, 0)
+                0x68, 0x01, 0x00, 0x00, 0xE0,
+                0xFF, 0x15, 0x04, 0x10, 0x60, 0x00,
+                0x33, 0xC0,                                     // xor eax, eax (not reached)
+                0xEB, 0x08,                                     // jmp out
+                0x8B, 0x65, 0xE8,                               // __except: mov esp, [ebp-18h]
+                0xB8, 0x2A, 0x00, 0x00, 0x00,                   // mov eax, 42
+                0x8B, 0x4D, 0xF0,                               // out: mov ecx, [ebp-10h]
+                0x64, 0x89, 0x0D, 0x00, 0x00, 0x00, 0x00,       // mov fs:[0], ecx
+                0x8B, 0xE5, 0x5D, 0xC3,                         // mov esp, ebp; pop ebp; ret
+                0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3,             // filter: return EXCEPTION_EXECUTE_HANDLER
+            });
+            var chain = p.Memory.Read32(p.TebBase);
+            var esp = p.Cpu.Esp;
+            var result = p.Call(Code, out var eax, 1_000_000);
+            Assert.True(result.Ok, result.ToString());
+            Assert.Equal(42u, eax);
+            Assert.Equal(chain, p.Memory.Read32(p.TebBase));
+            Assert.Equal(esp, p.Cpu.Esp);
+        }
+
+        [Fact]
         public void QsortCallsTheGuestComparator()
         {
             // cmp(a, b): return *a - *b

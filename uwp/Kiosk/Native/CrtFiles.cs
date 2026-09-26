@@ -117,7 +117,7 @@ namespace Kiosk.Native
             var handle = CreateFileFromAppW(path, access, ShareAll, IntPtr.Zero, disposition, 0x80, IntPtr.Zero);
             if (handle == Invalid || handle == IntPtr.Zero)
             {
-                lastError = Marshal.GetLastWin32Error();
+                lastMissing = !FileWatch.PathExists(path);
                 return -1;
             }
             var descriptor = openHandle(handle, flags & (O_WRONLY | O_RDWR | O_APPEND | O_TEXT | O_BINARY));
@@ -145,24 +145,26 @@ namespace Kiosk.Native
             }
         }
 
-        [ThreadStatic] private static int lastError;
+        /// <summary>The last brokered open failed on a path that does not exist.</summary>
+        [ThreadStatic] private static bool lastMissing;
         private const int ENOENT = 2;
 
         /// <summary>
         /// Runs the rescue. When it fails too, errno is what the first attempt
-        /// left, except that a file the broker says does not exist is ENOENT:
-        /// outside the app's folders the runtime says EACCES for everything,
-        /// and a game that creates a missing file only does so on ENOENT.
+        /// left, except that a path that does not exist is ENOENT: outside the
+        /// app's folders the runtime, and the broker, say EACCES for
+        /// everything, and games treat the two differently. Hades looks for
+        /// InGameUI.sjson in one folder, and on ENOENT tries the next; on
+        /// EACCES it stopped.
         /// </summary>
         private static T KeepingErrno<T>(Func<T> attempt, Func<T, bool> worked, T failed)
         {
             var at = errno == null ? IntPtr.Zero : errno();
             var saved = at == IntPtr.Zero ? 0 : Marshal.ReadInt32(at);
-            lastError = 0;
+            lastMissing = false;
             var result = attempt();
             if (worked(result)) return result;
-            if (at != IntPtr.Zero)
-                Marshal.WriteInt32(at, lastError == 2 || lastError == 3 ? ENOENT : saved);
+            if (at != IntPtr.Zero) Marshal.WriteInt32(at, lastMissing ? ENOENT : saved);
             return failed;
         }
 
@@ -248,10 +250,10 @@ namespace Kiosk.Native
                 {
                     var error = real(result, name, mode);
                     if (error == 0 || result == IntPtr.Zero) return error;
-                    lastError = 0;
+                    lastMissing = false;
                     var stream = wide ? Stream(Wide(name), Wide(mode), true) : Stream(Narrow(name), Narrow(mode), false);
                     // The _s forms return the error rather than set errno.
-                    if (stream == IntPtr.Zero) return lastError == 2 || lastError == 3 ? ENOENT : error;
+                    if (stream == IntPtr.Zero) return lastMissing ? ENOENT : error;
                     Marshal.WriteIntPtr(result, stream);
                     return 0;
                 }));
@@ -277,9 +279,9 @@ namespace Kiosk.Native
                 {
                     var error = real(result, name, flags, share, permission);
                     if (error == 0 || result == IntPtr.Zero) return error;
-                    lastError = 0;
+                    lastMissing = false;
                     var descriptor = OpenFlagsToDescriptor(wide ? Wide(name) : Narrow(name), flags);
-                    if (descriptor < 0) return lastError == 2 || lastError == 3 ? ENOENT : error;
+                    if (descriptor < 0) return lastMissing ? ENOENT : error;
                     Marshal.WriteInt32(result, descriptor);
                     return 0;
                 }));
@@ -365,7 +367,8 @@ namespace Kiosk.Native
                     if (stream != IntPtr.Zero) return stream;
                     var text = FilebufMode(mode);
                     if (text == null) return IntPtr.Zero;
-                    stream = Stream(wide ? Wide(name) : Narrow(name), text, false);
+                    stream = KeepingErrno(() => Stream(wide ? Wide(name) : Narrow(name), text, false),
+                        s => s != IntPtr.Zero, IntPtr.Zero);
                     // ios_base::ate: opened, then placed at the end.
                     if (stream != IntPtr.Zero && (mode & 0x04) != 0 && seek != null) seek(stream, 0, 2);
                     return stream;

@@ -105,7 +105,12 @@ namespace Nativra.X86.Loader
         private const uint PebOsMinorVersion = 0xA8;
         private const uint PebOsBuildNumber = 0xAC;   // 16-bit
 
+        private const uint PebLdrData = 0x800;   // PEB_LDR_DATA, inside the PEB page past the PEB itself
+
         private const uint BlockSize = 0x1000;
+        private const uint MaxTlsModules = BlockSize / 4;
+        private uint tlsArray;
+        private uint tlsModules;
         private const uint DefaultStack = 0x00100000;   // 1 MB
 
         private const uint DllProcessAttach = 1;
@@ -195,13 +200,24 @@ namespace Nativra.X86.Loader
             Memory.Write32(TebBase + TebSelf, TebBase);
             Memory.Write32(TebBase + TebClientId, 0x1234);        // process id
             Memory.Write32(TebBase + TebClientId + 4, 0x1000);    // thread id
-            Memory.Write32(TebBase + TebTlsPointer, 0);
+            tlsArray = Alloc(BlockSize, TebBase + BlockSize);   // static TLS: one block pointer per module
+            Memory.Write32(TebBase + TebTlsPointer, tlsArray);
             Memory.Write32(TebBase + TebPeb, PebBase);
             Memory.Write32(TebBase + TebLastError, 0);
 
             Memory.Write8(PebBase + PebBeingDebugged, 0);
             Memory.Write32(PebBase + PebImageBase, 0);   // filled by the main image
-            Memory.Write32(PebBase + PebLdr, 0);
+            // PEB_LDR_DATA with its three module lists empty (each head points
+            // at itself): code that walks them finds nothing instead of a null.
+            var ldr = PebBase + PebLdrData;
+            Memory.Write32(ldr + 0x00, 0x30);   // Length
+            Memory.Write32(ldr + 0x04, 1);      // Initialized
+            for (uint head = 0x0C; head <= 0x1C; head += 8)
+            {
+                Memory.Write32(ldr + head, ldr + head);
+                Memory.Write32(ldr + head + 4, ldr + head);
+            }
+            Memory.Write32(PebBase + PebLdr, ldr);
             Memory.Write32(PebBase + PebProcessParameters, 0);
             Memory.Write32(PebBase + PebProcessHeap, 0);
             Memory.Write32(PebBase + PebNumberOfProcessors, 4);
@@ -261,6 +277,7 @@ namespace Nativra.X86.Loader
             try
             {
                 var image = Pe32Image.Load(name, bytes, Memory, ResolveImport);
+                SetUpStaticTls(image);
                 images.Add(image);
                 modulesByName[key] = image;
                 return image;
@@ -315,11 +332,60 @@ namespace Nativra.X86.Loader
         {
             foreach (var image in images.ToArray())
             {
-                if (image == MainImage || !image.IsDll || image.EntryPoint == 0) continue;
-                var result = Call(image.EntryPoint, out _, maxBlocks, image.BaseAddress, DllProcessAttach, 0);
+                if (image == MainImage) continue;
+                var result = AttachModule(image, maxBlocks);
                 if (!result.Ok) return result;
             }
+            // The program's own TLS callbacks run last, just before its entry point.
+            return MainImage != null ? RunTlsCallbacks(MainImage, maxBlocks) : new GuestRunResult(GuestStop.Returned);
+        }
+
+        /// <summary>
+        /// DLL_PROCESS_ATTACH for one DLL: its TLS callbacks, then DllMain,
+        /// as the Windows loader runs them.
+        /// </summary>
+        public GuestRunResult AttachModule(Pe32Image image, long maxBlocks = 50_000_000)
+        {
+            var result = RunTlsCallbacks(image, maxBlocks);
+            if (!result.Ok || !image.IsDll || image.EntryPoint == 0) return result;
+            return Call(image.EntryPoint, out _, maxBlocks, image.BaseAddress, DllProcessAttach, 0);
+        }
+
+        private GuestRunResult RunTlsCallbacks(Pe32Image image, long maxBlocks)
+        {
+            var tls = image.Tls;
+            if (tls != null && tls.CallbacksAddress != 0)
+            {
+                for (var at = tls.CallbacksAddress; ; at += 4)
+                {
+                    var callback = Memory.Read32(at);
+                    if (callback == 0) break;
+                    var result = Call(callback, out _, maxBlocks, image.BaseAddress, DllProcessAttach, 0);
+                    if (!result.Ok) return result;
+                }
+            }
             return new GuestRunResult(GuestStop.Returned);
+        }
+
+        /// <summary>
+        /// Gives a module with a TLS directory its slot in the static TLS
+        /// array (written to its _tls_index) and a block initialised from its
+        /// template, which is what __declspec(thread) and thread_local read
+        /// through fs:[2Ch].
+        /// </summary>
+        private void SetUpStaticTls(Pe32Image image)
+        {
+            var tls = image.Tls;
+            if (tls == null) return;
+            if (tlsModules >= MaxTlsModules) throw new InvalidOperationException("too many modules with static TLS");
+
+            var index = tlsModules++;
+            var template = tls.RawDataEnd > tls.RawDataStart ? tls.RawDataEnd - tls.RawDataStart : 0;
+            var size = template + tls.ZeroFill;
+            var block = Alloc(Math.Max(size, 16u), 0x00300000);
+            if (template > 0) Memory.WriteBytes(block, Memory.ReadBytes(tls.RawDataStart, (int)template));
+            Memory.Write32(tlsArray + index * 4, block);
+            if (tls.IndexAddress != 0) Memory.Write32(tls.IndexAddress, index);
         }
 
         private static string ModuleKey(string name)

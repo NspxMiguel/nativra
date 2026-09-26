@@ -101,6 +101,19 @@ namespace Nativra.X86.Loader
             i.Register(k, "CreateDirectoryW", CallConv.Stdcall, 2, c => CreateDirectory(c.Arg(0), true));
             i.Register(k, "DeleteFileA", CallConv.Stdcall, 1, c => DeleteFile(c.Arg(0), false));
             i.Register(k, "DeleteFileW", CallConv.Stdcall, 1, c => DeleteFile(c.Arg(0), true));
+            i.Register(k, "AreFileApisANSI", CallConv.Stdcall, 0, c => 1);
+            i.Register(k, "SetFileApisToANSI", CallConv.Stdcall, 0, c => 0);
+            // Temporary files go to the game's own folder, which the file
+            // system serves; the console has no C:\Temp for it.
+            i.Register(k, "GetTempPathA", CallConv.Stdcall, 2, c => CopyPath(Folder(ExePath), c.Arg(1), c.Arg(0), false));
+            i.Register(k, "GetTempPathW", CallConv.Stdcall, 2, c => CopyPath(Folder(ExePath), c.Arg(1), c.Arg(0), true));
+            i.Register(k, "GetFileInformationByHandle", CallConv.Stdcall, 2, c => FileInformation(c.Arg(0), c.Arg(1)));
+            i.Register(k, "DuplicateHandle", CallConv.Stdcall, 7, c =>
+            {
+                // Same process, one thread: the duplicate is the handle itself.
+                if (c.Arg(3) != 0) memory.Write32(c.Arg(3), c.Arg(1));
+                return 1;
+            });
             i.Register(k, "GetDriveTypeA", CallConv.Stdcall, 1, c => 3);   // DRIVE_FIXED
             i.Register(k, "GetDriveTypeW", CallConv.Stdcall, 1, c => 3);
         }
@@ -348,6 +361,26 @@ namespace Nativra.X86.Loader
             }
             if (CloseRuntimeHandle(handle)) return 1;
             // Standard handles, pseudo handles and anything else the guest holds.
+            return 1;
+        }
+
+        private uint FileInformation(uint handle, uint info)
+        {
+            if (!files.TryGetValue(handle, out var f)) { process.LastError = ErrorInvalidHandle; return 0; }
+            var entry = Files.Stat(f.Path);
+            memory.WriteBytes(info, new byte[52]);
+            var size = f.Stream != null ? f.Stream.Length : entry?.Size ?? 0;
+            var time = (ulong)(entry?.WriteTimeUtc ?? DateTime.UtcNow).ToFileTimeUtc();
+            memory.Write32(info + 0, entry != null ? Win32Attributes(entry) : 0x80);
+            memory.Write64(info + 4, time);
+            memory.Write64(info + 12, time);
+            memory.Write64(info + 20, time);
+            memory.Write32(info + 28, 0x4E415456);   // volume serial
+            memory.Write32(info + 32, (uint)(size >> 32));
+            memory.Write32(info + 36, (uint)size);
+            memory.Write32(info + 40, 1);            // links
+            var id = (uint)f.Path.ToLowerInvariant().GetHashCode();
+            memory.Write32(info + 48, id);           // file index: stable per path
             return 1;
         }
 

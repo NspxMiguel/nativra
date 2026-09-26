@@ -75,18 +75,90 @@ namespace Nativra.X86.Tests
             Assert.Equal(0x12345678u, p.Memory.Read32(region + 0x1FFC));
         }
 
+        private static uint Ansi(GuestKernel kernel, GuestProcess p, string text)
+        {
+            var ptr = kernel.Heap.Alloc((uint)text.Length + 1);
+            p.Memory.WriteAnsi(ptr, text);
+            return ptr;
+        }
+
         [Fact]
         public void GetModuleHandleAnswersForTheLoadedImageAndByName()
         {
             var p = NewProcess(out var kernel);
-            var image = p.LoadImage("waveshaper.exe", TestPe32.Minimal());
-            kernel.RegisterModule("waveshaper.exe", image.BaseAddress);
+            var image = p.LoadExecutable("waveshaper.exe", TestPe32.Minimal());
 
             Assert.Equal(image.BaseAddress, CallK(p, "GetModuleHandleA", 0)); // null -> the exe
+            Assert.Equal(image.BaseAddress,
+                CallK(p, "GetModuleHandleA", Ansi(kernel, p, "C:\\Games\\WaveShaper.exe"))); // path, any case
 
-            var namePtr = kernel.Heap.Alloc(32);
-            p.Memory.WriteAnsi(namePtr, "WaveShaper.exe");
-            Assert.Equal(image.BaseAddress, CallK(p, "GetModuleHandleA", namePtr)); // case-insensitive
+            // kernel32 is in every process; a DLL nothing references is not.
+            Assert.NotEqual(0u, CallK(p, "GetModuleHandleA", Ansi(kernel, p, "KERNEL32")));
+            Assert.Equal(0u, CallK(p, "GetModuleHandleA", Ansi(kernel, p, "nothere.dll")));
+            Assert.Equal(126u, CallK(p, "GetLastError"));   // ERROR_MOD_NOT_FOUND
+        }
+
+        [Fact]
+        public void ExitProcessEndsTheRunWithItsCode()
+        {
+            var p = NewProcess(out _);
+            var sentinel = p.Imports.Bind("kernel32.dll", "ExitProcess", -1);
+            var result = p.Call(sentinel, out _, 1000, 42);
+            Assert.Equal(GuestStop.Exited, result.Stop);
+            Assert.Equal(42u, result.ExitCode);
+        }
+
+        [Fact]
+        public void LoadLibraryMapsAGameDllRunsDllMainAndGetProcAddressFindsItsExport()
+        {
+            var p = NewProcess(out var kernel);
+            var dllBytes = TestPe32.Minimal(dll: true, dllMain: true);
+            p.ModuleSource = name => name == "fmod.dll" ? dllBytes : null;
+            p.LoadExecutable("waveshaper.exe", TestPe32.Minimal());
+
+            var module = CallK(p, "LoadLibraryA", Ansi(kernel, p, "fmod"));   // ".dll" implied
+            var dll = p.FindModule("fmod.dll");
+            Assert.NotNull(dll);
+            Assert.Equal(dll.BaseAddress, module);
+            Assert.Equal(TestPe32.DllMainMark, p.Memory.Read32(dll.BaseAddress + TestPe32.DllMainMarkRva));
+
+            Assert.Equal(dll.Export("Start"), CallK(p, "GetProcAddress", module, Ansi(kernel, p, "Start")));
+            Assert.Equal(dll.Export("Start"), CallK(p, "GetProcAddress", module, 1));   // by ordinal
+        }
+
+        [Fact]
+        public void GetProcAddressOnASystemDllServesOnlyWhatTheHostImplements()
+        {
+            var p = NewProcess(out var kernel);
+            var kernel32 = CallK(p, "LoadLibraryA", Ansi(kernel, p, "kernel32.dll"));
+            Assert.NotEqual(0u, kernel32);
+
+            // HeapAlloc has a handler: the address it hands back is callable.
+            var heapAlloc = CallK(p, "GetProcAddress", kernel32, Ansi(kernel, p, "HeapAlloc"));
+            Assert.True(GuestImports.InRegion(heapAlloc));
+            var result = p.Call(heapAlloc, out var ptr, 1000, 0, 0, 64);
+            Assert.True(result.Ok);
+            Assert.True(kernel.Heap.Owns(ptr));
+
+            // FlsAlloc has none: the program is told it does not exist, and we note it.
+            Assert.Equal(0u, CallK(p, "GetProcAddress", kernel32, Ansi(kernel, p, "FlsAlloc")));
+            Assert.Equal(127u, CallK(p, "GetLastError"));   // ERROR_PROC_NOT_FOUND
+            Assert.Contains("kernel32.dll!FlsAlloc", kernel.ProbedAbsent);
+        }
+
+        [Fact]
+        public void GetModuleFileNameReportsTheProgramPathTruncatedToTheBuffer()
+        {
+            var p = NewProcess(out var kernel);
+            kernel.ExePath = "E:\\Games\\WAVESHAPER\\WAVESHAPER.exe";
+            p.LoadExecutable("waveshaper.exe", TestPe32.Minimal());
+
+            var buffer = kernel.Heap.Alloc(260);
+            Assert.Equal((uint)kernel.ExePath.Length, CallK(p, "GetModuleFileNameA", 0, buffer, 260));
+            Assert.Equal(kernel.ExePath, p.Memory.ReadAnsi(buffer));
+
+            Assert.Equal(7u, CallK(p, "GetModuleFileNameA", 0, buffer, 8));   // 7 chars + NUL
+            Assert.Equal("E:\\Game", p.Memory.ReadAnsi(buffer));
         }
 
         [Fact]

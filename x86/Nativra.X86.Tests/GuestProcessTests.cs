@@ -73,8 +73,56 @@ namespace Nativra.X86.Tests
             using (var memory = new GuestMemory())
             using (var p = new GuestProcess(memory, useJit: false))
             {
-                var image = p.LoadImage("test.exe", TestPe32.Minimal());
+                var image = p.LoadExecutable("test.exe", TestPe32.Minimal());
                 Assert.Equal(image.BaseAddress, memory.Read32(p.PebBase + 0x08));
+                Assert.Same(image, p.MainImage);
+            }
+        }
+
+        [Fact]
+        public void LinksAGameDllIntoTheGuestAndFallsBackToSentinels()
+        {
+            using (var memory = new GuestMemory())
+            using (var p = new GuestProcess(memory, useJit: false))
+            {
+                var requested = new System.Collections.Generic.List<string>();
+                var dllBytes = TestPe32.Minimal(dll: true);
+                p.ModuleSource = name =>
+                {
+                    requested.Add(name);
+                    return name == "game.dll" ? dllBytes : null;   // the game carries game.dll only
+                };
+
+                var exe = p.LoadExecutable("waveshaper.exe", TestPe32.Minimal("game.dll", "Start"));
+                var dll = p.FindModule("GAME.DLL");
+
+                Assert.NotNull(dll);
+                Assert.NotEqual(exe.BaseAddress, dll.BaseAddress);           // one of them had to move
+                // By-name import bound straight to the DLL's real export...
+                Assert.Equal(dll.Export("Start"), memory.Read32(exe.BaseAddress + TestPe32.IatRva));
+                // ...ordinal 5 is not exported, so it falls back to a host sentinel.
+                Assert.True(GuestImports.InRegion(memory.Read32(exe.BaseAddress + TestPe32.IatRva + 4)));
+                // kernel32 is asked for once (the host said no), not once per import.
+                Assert.Single(requested, n => n == "kernel32.dll");
+                Assert.Equal(new[] { dll, exe }, p.Images);                  // dependencies first
+            }
+        }
+
+        [Fact]
+        public void InitializeModulesRunsDllMainWithProcessAttach()
+        {
+            using (var memory = new GuestMemory())
+            using (var p = new GuestProcess(memory, useJit: false))
+            {
+                var dllBytes = TestPe32.Minimal(dll: true, dllMain: true);
+                p.ModuleSource = name => name == "game.dll" ? dllBytes : null;
+                p.LoadExecutable("waveshaper.exe", TestPe32.Minimal("game.dll", "Start"));
+                var dll = p.FindModule("game.dll");
+
+                Assert.Equal(0u, memory.Read32(dll.BaseAddress + TestPe32.DllMainMarkRva));
+                var result = p.InitializeModules(100000);
+                Assert.True(result.Ok, result.ToString());
+                Assert.Equal(TestPe32.DllMainMark, memory.Read32(dll.BaseAddress + TestPe32.DllMainMarkRva));
             }
         }
 

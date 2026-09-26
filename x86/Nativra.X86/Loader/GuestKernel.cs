@@ -24,6 +24,17 @@ namespace Nativra.X86.Loader
         private const uint TlsOutOfIndexes = 0xFFFFFFFF;
         private const uint PseudoCurrentProcess = 0xFFFFFFFF;
         private const uint PseudoCurrentThread = 0xFFFFFFFE;
+        private const uint ErrorModNotFound = 126;
+        private const uint ErrorProcNotFound = 127;
+
+        // Stand-in HMODULEs for system DLLs that are served by host handlers
+        // rather than mapped into the guest. Unmapped on purpose: they are
+        // handles, not something the guest should read through.
+        private const uint FakeModuleBase = 0x7E800000;
+        private const uint FakeModuleStride = 0x00010000;
+
+        // Loaded in every Windows process whether or not the program imports them.
+        private static readonly string[] AlwaysLoaded = { "kernel32.dll", "kernelbase.dll", "ntdll.dll" };
 
         private readonly GuestProcess process;
         private readonly GuestMemory memory;
@@ -31,15 +42,28 @@ namespace Nativra.X86.Loader
 
         private readonly Dictionary<string, uint> modules =
             new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<uint, string> fakeHandles = new Dictionary<uint, string>();
+        private readonly Dictionary<string, uint> fakeByName =
+            new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> probedAbsent = new List<string>();
         private readonly bool[] tlsUsed = new bool[64];
 
         private uint commandLineAnsi;
         private uint commandLineWide;
-        private uint lastError;
         private uint virtualCursor = 0x20000000;   // where anonymous VirtualAlloc lands
         private long ticks = 1;
 
         public GuestHeap Heap => heap;
+
+        /// <summary>The program's full path, as GetModuleFileName reports it.</summary>
+        public string ExePath { get; set; } = "C:\\game\\game.exe";
+
+        /// <summary>
+        /// Functions the guest looked up with GetProcAddress that have no host
+        /// implementation; it was told they do not exist, and these are the
+        /// first candidates when a game takes a fallback path it should not.
+        /// </summary>
+        public IReadOnlyList<string> ProbedAbsent => probedAbsent;
 
         public GuestKernel(GuestProcess process, uint heapBase = 0x30000000, uint heapSize = 0x10000000)
         {
@@ -70,8 +94,26 @@ namespace Nativra.X86.Loader
             var i = process.Imports;
             const string k = "kernel32.dll";
 
-            i.Register(k, "GetLastError", CallConv.Stdcall, 0, c => lastError);
-            i.Register(k, "SetLastError", CallConv.Stdcall, 1, c => { lastError = c.Arg(0); return 0; });
+            i.Register(k, "GetLastError", CallConv.Stdcall, 0, c => process.LastError);
+            i.Register(k, "SetLastError", CallConv.Stdcall, 1, c => { process.LastError = c.Arg(0); return 0; });
+
+            i.Register(k, "ExitProcess", CallConv.Stdcall, 1, c => throw new GuestExitException(c.Arg(0)));
+            i.Register(k, "TerminateProcess", CallConv.Stdcall, 2, c =>
+            {
+                if (c.Arg(0) == PseudoCurrentProcess) throw new GuestExitException(c.Arg(1));
+                return 1;
+            });
+
+            i.Register(k, "LoadLibraryA", CallConv.Stdcall, 1, c => LoadLibrary(c.Arg(0), false));
+            i.Register(k, "LoadLibraryW", CallConv.Stdcall, 1, c => LoadLibrary(c.Arg(0), true));
+            i.Register(k, "LoadLibraryExA", CallConv.Stdcall, 3, c => LoadLibrary(c.Arg(0), false));
+            i.Register(k, "LoadLibraryExW", CallConv.Stdcall, 3, c => LoadLibrary(c.Arg(0), true));
+            i.Register(k, "FreeLibrary", CallConv.Stdcall, 1, c => 1);
+            i.Register(k, "GetProcAddress", CallConv.Stdcall, 2, c => GetProcAddress(c.Arg(0), c.Arg(1)));
+            i.Register(k, "GetModuleFileNameA", CallConv.Stdcall, 3, c =>
+                ModuleFileName(c.Arg(0), c.Arg(1), c.Arg(2), false));
+            i.Register(k, "GetModuleFileNameW", CallConv.Stdcall, 3, c =>
+                ModuleFileName(c.Arg(0), c.Arg(1), c.Arg(2), true));
             i.Register(k, "GetCurrentThreadId", CallConv.Stdcall, 0, c => 0x1000);
             i.Register(k, "GetCurrentProcessId", CallConv.Stdcall, 0, c => 0x1234);
             i.Register(k, "GetCurrentProcess", CallConv.Stdcall, 0, c => PseudoCurrentProcess);
@@ -174,12 +216,142 @@ namespace Nativra.X86.Loader
             return 1;
         }
 
+        private uint MainBase =>
+            process.MainImage != null ? process.MainImage.BaseAddress
+            : process.Images.Count > 0 ? process.Images[0].BaseAddress : 0;
+
+        /// <summary>
+        /// GetModuleHandle: a guest image answers with its base; a system DLL the
+        /// program links against (or that every process has) answers with a
+        /// stand-in handle; anything else is not loaded.
+        /// </summary>
         private uint ModuleHandle(uint namePtr, bool wide)
         {
-            if (namePtr == 0)
-                return process.Images.Count > 0 ? process.Images[0].BaseAddress : 0;
-            var name = wide ? memory.ReadUnicode(namePtr) : memory.ReadAnsi(namePtr);
-            return modules.TryGetValue(Trim(name), out var baseAddress) ? baseAddress : 0;
+            if (namePtr == 0) return MainBase;
+            var name = Trim(wide ? memory.ReadUnicode(namePtr) : memory.ReadAnsi(namePtr));
+
+            var image = process.FindModule(name);
+            if (image != null) return image.BaseAddress;
+            if (modules.TryGetValue(name, out var registered)) return registered;
+            if (IsAlwaysLoaded(name) || process.Imports.KnowsModule(name)) return FakeHandle(name);
+
+            process.LastError = ErrorModNotFound;
+            return 0;
+        }
+
+        /// <summary>
+        /// LoadLibrary: maps a DLL the game carries into the guest (running its
+        /// DllMain), or hands back a stand-in handle for a system DLL, whose
+        /// functions then resolve to host handlers through GetProcAddress.
+        /// </summary>
+        private uint LoadLibrary(uint namePtr, bool wide)
+        {
+            if (namePtr == 0) { process.LastError = ErrorModNotFound; return 0; }
+            var name = Trim(wide ? memory.ReadUnicode(namePtr) : memory.ReadAnsi(namePtr));
+
+            var alreadyMapped = process.FindModule(name) != null;
+            var image = process.LoadModule(name);
+            if (image != null)
+            {
+                if (!alreadyMapped && image.IsDll && image.EntryPoint != 0)
+                {
+                    // A nested run on the same stack, as the real loader does:
+                    // LoadLibrary returns only after DllMain(PROCESS_ATTACH).
+                    var saved = SaveRegisters();
+                    var result = process.Call(image.EntryPoint, out _, 50_000_000, image.BaseAddress, 1, 0);
+                    RestoreRegisters(saved);
+                    if (!result.Ok) return 0;
+                }
+                return image.BaseAddress;
+            }
+            if (modules.TryGetValue(name, out var registered)) return registered;
+            return FakeHandle(name);
+        }
+
+        /// <summary>GetProcAddress by name or ordinal (a "name" below 0x10000 is an ordinal).</summary>
+        private uint GetProcAddress(uint module, uint nameOrOrdinal)
+        {
+            var byOrdinal = nameOrOrdinal < 0x10000;
+            var function = byOrdinal ? null : memory.ReadAnsi(nameOrOrdinal);
+            var ordinal = byOrdinal ? (int)nameOrOrdinal : -1;
+
+            foreach (var image in process.Images)
+            {
+                if (image.BaseAddress != module) continue;
+                var va = byOrdinal ? image.ExportByOrdinal(ordinal) : image.Export(function);
+                if (va == 0) process.LastError = ErrorProcNotFound;
+                return va;
+            }
+
+            if (fakeHandles.TryGetValue(module, out var moduleName))
+            {
+                // Only hand out functions we can actually serve: a program that
+                // probes for an optional API takes its fallback when told the
+                // function does not exist, which beats trapping on it later.
+                if (!byOrdinal && process.Imports.HasHandler(moduleName, function))
+                    return process.Imports.Bind(moduleName, function, -1);
+                probedAbsent.Add(byOrdinal ? $"{moduleName}#{ordinal}" : $"{moduleName}!{function}");
+            }
+            process.LastError = ErrorProcNotFound;
+            return 0;
+        }
+
+        /// <summary>GetModuleFileName: the program's path, or its folder plus a DLL's name.</summary>
+        private uint ModuleFileName(uint module, uint buffer, uint size, bool wide)
+        {
+            string path;
+            if (module == 0 || module == MainBase) path = ExePath;
+            else
+            {
+                path = null;
+                foreach (var image in process.Images)
+                    if (image.BaseAddress == module) { path = Folder(ExePath) + image.Name; break; }
+                if (path == null && fakeHandles.TryGetValue(module, out var system))
+                    path = "C:\\Windows\\System32\\" + system;
+                if (path == null) { process.LastError = ErrorModNotFound; return 0; }
+            }
+            if (buffer == 0 || size == 0) return 0;
+
+            // Truncate to the buffer, always NUL-terminated, as Windows does.
+            var length = (uint)Math.Min(path.Length, (int)size - 1);
+            var text = path.Substring(0, (int)length);
+            if (wide) memory.WriteUnicode(buffer, text); else memory.WriteAnsi(buffer, text);
+            return length;
+        }
+
+        private uint FakeHandle(string name)
+        {
+            if (fakeByName.TryGetValue(name, out var existing)) return existing;
+            var handle = FakeModuleBase + (uint)fakeByName.Count * FakeModuleStride;
+            fakeByName[name] = handle;
+            fakeHandles[handle] = name;
+            return handle;
+        }
+
+        private static bool IsAlwaysLoaded(string name)
+        {
+            foreach (var n in AlwaysLoaded) if (n == name) return true;
+            return false;
+        }
+
+        private static string Folder(string path)
+        {
+            var slash = path.LastIndexOf('\\');
+            return slash >= 0 ? path.Substring(0, slash + 1) : "";
+        }
+
+        private uint[] SaveRegisters()
+        {
+            var saved = new uint[9];
+            Array.Copy(process.Cpu.R, saved, 8);
+            saved[8] = process.Cpu.Eip;
+            return saved;
+        }
+
+        private void RestoreRegisters(uint[] saved)
+        {
+            Array.Copy(saved, process.Cpu.R, 8);
+            process.Cpu.Eip = saved[8];
         }
 
         private void FillSystemInfo(uint p)
@@ -200,12 +372,14 @@ namespace Nativra.X86.Loader
         private static uint RoundPage(uint value) =>
             (value + GuestMemory.PageSize - 1) / GuestMemory.PageSize * GuestMemory.PageSize;
 
+        /// <summary>A module name as Windows matches it: file name only, lower case, ".dll" implied.</summary>
         private static string Trim(string name)
         {
             if (string.IsNullOrEmpty(name)) return "";
             var slash = name.LastIndexOfAny(new[] { '\\', '/' });
             if (slash >= 0) name = name.Substring(slash + 1);
-            return name.ToLowerInvariant();
+            name = name.ToLowerInvariant();
+            return name.IndexOf('.') < 0 ? name + ".dll" : name;
         }
     }
 }

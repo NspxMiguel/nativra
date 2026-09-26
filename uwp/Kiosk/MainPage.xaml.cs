@@ -253,7 +253,19 @@ namespace Kiosk
 
             // Games pulled from Steam sit beside the emulators: he asked for one
             // home screen, not two places to look.
+            // On the shelf exactly when it is downloaded: a name in games.json
+            // for a game that is not on any drive would open into nothing.
+            var shelved = new HashSet<uint>();
             foreach (var game in await ReadGamesAsync())
+            {
+                if (!await GameStorage.IsDownloadedAsync(game.SteamAppId)) continue;
+                Tiles.Add(game);
+                shelved.Add(game.SteamAppId);
+            }
+            // And every game the app downloaded itself, wherever it went (the
+            // console, the share, a USB drive): games.json is written from the
+            // Mac, so Hades and LEGO, downloaded here, never reached the shelf.
+            foreach (var game in await DownloadedTilesAsync(shelved))
             {
                 Tiles.Add(game);
             }
@@ -593,6 +605,46 @@ namespace Kiosk
             }
         }
 
+        private static Tile GameTile(uint appId, string title) => new Tile
+        {
+            Title = title,
+            Subtitle = Texts.Get("tile.game.sub"),
+            Route = "game:" + appId,
+            Initial = title.Substring(0, 1).ToUpperInvariant(),
+            Accent = new SolidColorBrush(Accents[(int)(appId % 6)]),
+            SteamAppId = appId,
+            Icon = Artwork(
+                "https://cdn.cloudflare.steamstatic.com/steam/apps/"
+                + appId + "/library_600x900.jpg"),
+        };
+
+        /// <summary>Finished downloads in every game folder, as shelf tiles.</summary>
+        private async Task<List<Tile>> DownloadedTilesAsync(HashSet<uint> skip)
+        {
+            var list = new List<Tile>();
+            try
+            {
+                var found = new List<uint>();
+                foreach (var place in await GameStorage.GamesFoldersAsync())
+                    foreach (var folder in await place.Value.GetFoldersAsync())
+                        if (uint.TryParse(folder.Name, out var appId) && !skip.Contains(appId) && !found.Contains(appId)
+                            && await GameStorage.IsReadyAsync(folder))
+                            found.Add(appId);
+                if (found.Count == 0) return list;
+                var session = await SteamSession.LoadAsync();
+                foreach (var appId in found)
+                {
+                    var name = session.IsSignedIn ? await GameNameAsync(session, appId) : null;
+                    list.Add(GameTile(appId, name ?? appId.ToString()));
+                }
+            }
+            catch
+            {
+                // A drive that went away takes its games off the shelf, nothing more.
+            }
+            return list;
+        }
+
         /// <summary>Reads games.json: what has been downloaded from Steam.</summary>
         private static async Task<List<Tile>> ReadGamesAsync()
         {
@@ -612,18 +664,7 @@ namespace Kiosk
                     var title = item.GetNamedString("name", string.Empty);
                     if (string.IsNullOrWhiteSpace(title)) continue;
                     var appId = (uint)item.GetNamedNumber("appid", 0);
-                    list.Add(new Tile
-                    {
-                        Title = title,
-                        Subtitle = Texts.Get("tile.game.sub"),
-                        Route = "game:" + appId,
-                        Initial = title.Substring(0, 1).ToUpperInvariant(),
-                        Accent = new SolidColorBrush(Accents[(int)(appId % 6)]),
-                        SteamAppId = appId,
-                        Icon = Artwork(
-                            "https://cdn.cloudflare.steamstatic.com/steam/apps/"
-                            + appId + "/library_600x900.jpg"),
-                    });
+                    list.Add(GameTile(appId, title));
                 }
             }
             catch

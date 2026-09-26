@@ -221,8 +221,9 @@ namespace Kiosk.Native
                     exeName = pick.Item2.Name;
                 }
                 lines.Add("exe.folder=" + folder.Path);
-                // Reject unsupported architecture before mapping any dependency.
-                // A 32-bit image needs a separate execution/ABI path, not x64 thunks.
+                // Route by architecture before mapping any dependency. A 32-bit
+                // image cannot run on this 64-bit host, so it takes the x86
+                // layer's own path (an emulated guest space), not x64 thunks.
                 var executable = await folder.GetFileAsync(exeName);
                 var executableBytes = (await FileIO.ReadBufferAsync(executable)).ToArray();
                 if (executableBytes.Length < 64)
@@ -231,8 +232,17 @@ namespace Kiosk.Native
                 if (peOffset < 0 || peOffset > executableBytes.Length - 26 ||
                     BitConverter.ToUInt32(executableBytes, peOffset) != 0x00004550)
                     throw new BadImageFormatException("The executable has no valid PE header.");
-                if (BitConverter.ToUInt16(executableBytes, peOffset + 4) != 0x8664 ||
-                    BitConverter.ToUInt16(executableBytes, peOffset + 24) != 0x20B)
+                var machine = BitConverter.ToUInt16(executableBytes, peOffset + 4);
+                var magic = BitConverter.ToUInt16(executableBytes, peOffset + 24);
+                if (machine == 0x014C && magic == 0x10B)
+                {
+                    var finished = await X86Launch.RunAsync(folder.Path, exeName, executableBytes, lines);
+                    await WriteAsync(lines);
+                    if (!finished)
+                        throw new PlatformNotSupportedException("The 32-bit layer stopped before the game finished; see x86.* in the probe report.");
+                    return;
+                }
+                if (machine != 0x8664 || magic != 0x20B)
                     throw new PlatformNotSupportedException("The native loader currently requires an AMD64 PE32+ executable.");
                 ModuleFileName.Install(imports, folder.Path + "\\" + exeName);
                 LoaderStubs.GameFolder = folder.Path;
@@ -283,6 +293,7 @@ namespace Kiosk.Native
                 RawInputBridge.Install(imports);
                 HidBridge.Install(imports);
                 GraphicsBridge.Install(imports);
+                D3D9Bridge.Install();
                 LoaderStubs.Install(imports);
                 // Wrap the loader's priority hook rather than letting it
                 // replace TLS initialization on every game-created thread.

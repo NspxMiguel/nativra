@@ -50,6 +50,7 @@ namespace Nativra.X86.Jit
 
         private void Rex(bool w, int reg, int index, int rmBase)
         {
+            if (index < 0) index = 0;   // "no index": -1 & 8 would set REX.X and turn SIB index 100 into r12
             var value = 0x40 | (w ? 8 : 0) | ((reg & 8) >> 1) | ((index & 8) >> 2) | ((rmBase & 8) >> 3);
             if (value != 0x40 || NeedRex(reg) || NeedRex(rmBase)) U8(value);
         }
@@ -60,6 +61,11 @@ namespace Nativra.X86.Jit
         /// <summary>Emits REX only when some high register or W bit requires it.</summary>
         private void MaybeRex(bool w, int reg, int index, int rmBase)
         {
+            // "No index" arrives as -1, whose bit 3 is set: left alone it sets
+            // REX.X, and a SIB byte's "no index" (100) then means r12 — so a
+            // guest [ebp+disp] (ebp lives in r12, which always needs a SIB)
+            // became [ebp+ebp+disp].
+            if (index < 0) index = 0;
             if (w || (reg & 8) != 0 || (index & 8) != 0 || (rmBase & 8) != 0)
                 U8(0x40 | (w ? 8 : 0) | ((reg & 8) >> 1) | ((index & 8) >> 2) | ((rmBase & 8) >> 3));
         }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Nativra.X86.Cpu;
 
@@ -26,6 +27,13 @@ namespace Nativra.X86.Jit
         public bool FullyTranslated { get; private set; }
         public int InstructionCount { get; private set; }
 
+        /// <summary>Host code offset where each guest instruction's translation starts, in order.</summary>
+        public List<int> HostOffsets { get; } = new List<int>();
+        /// <summary>The guest EIP of each entry in <see cref="HostOffsets"/>.</summary>
+        public List<uint> GuestEips { get; } = new List<uint>();
+        /// <summary>Offset of the fault exit: resuming there ends the block with <see cref="Ctx.ReasonFault"/>.</summary>
+        public int FaultExitOffset { get; private set; }
+
         private X64Emit e;
 
         /// <summary>
@@ -39,6 +47,8 @@ namespace Nativra.X86.Jit
             e = new X64Emit();
             FullyTranslated = true;
             InstructionCount = 0;
+            HostOffsets.Clear();
+            GuestEips.Clear();
             EmitPrologue();
 
             var eip = startEip;
@@ -51,6 +61,8 @@ namespace Nativra.X86.Jit
                 try { ins = Decoder.Decode(code, eip); }
                 catch { EmitExit(eip, Ctx.ReasonFallback); FullyTranslated = false; terminated = true; break; }
 
+                HostOffsets.Add(e.Here);
+                GuestEips.Add(eip);
                 if (!ins.Valid || ins.Rep != 0 || ins.Lock || !TryEmit(ins))
                 {
                     EmitExit(eip, Ctx.ReasonFallback);
@@ -62,6 +74,12 @@ namespace Nativra.X86.Jit
                 eip = ins.Next;
             }
             if (!terminated) EmitExit(eip, Ctx.ReasonNext);
+
+            // The fault exit: a guest memory access that faulted resumes here
+            // (see JitFaults) with the guest registers still in their host
+            // registers, and leaves through the normal epilogue.
+            FaultExitOffset = e.Here;
+            e.MovMemImm(Ctxr, -1, 1, Ctx.ExitReason, (uint)Ctx.ReasonFault);
 
             e.Label("exit");
             EmitEpilogue();
@@ -156,6 +174,12 @@ namespace Nativra.X86.Jit
             var op = ins.Op;
             var size = OpSize(ins);
 
+            // Byte registers 4-7 are AH, CH, DH and BH. Their host homes (rdi,
+            // r12-r14) have no high byte, and AH-style encodings cannot sit in
+            // an instruction that needs a REX prefix, which every memory
+            // operand here does. Leave those forms to the interpreter.
+            if (UsesHighByteRegister(ins)) return false;
+
             // ALU r/m,r and r,r/m and the AL/eAX immediate forms.
             if (op < 0x40 && (op & 7) < 6)
             {
@@ -173,8 +197,10 @@ namespace Nativra.X86.Jit
             switch (op)
             {
                 case 0x69: case 0x6B:
-                    if (IsMem(ins)) { EmitAddress(ins); e.ImulRegMem(G[ins.RegField], Mem, S1, 1, 0, size); }
-                    // 3-operand imul: dst = src * imm. Compute into dst directly.
+                    // 3-operand imul: dst = src * imm. The source goes into dst
+                    // first (a load for a memory source, not dst *= mem, which
+                    // multiplied dst's old value in), then dst *= imm.
+                    if (IsMem(ins)) { EmitAddress(ins); e.LoadMem(G[ins.RegField], Mem, S1, 1, 0, size); }
                     else e.MovRegReg(G[ins.RegField], G[ins.Rm], false);
                     e.ImulRegRegImm(G[ins.RegField], G[ins.RegField],
                         op == 0x6B ? (uint)(sbyte)ins.Imm : ins.Imm, size, op == 0x6B);
@@ -201,12 +227,14 @@ namespace Nativra.X86.Jit
                 {
                     var width = op == 0x86 ? 8 : size;
                     if (IsMem(ins)) return false; // memory xchg carries an implicit lock; leave it to the interpreter
+                    // Partial-register swaps are rare; decided before anything is
+                    // emitted, or the interpreter would swap them a second time.
+                    if (width != 32) return false;
                     if (ins.Rm != ins.RegField)
                     {
                         e.MovRegReg(S1, G[ins.Rm], true);
-                        e.MovRegReg(G[ins.Rm], G[ins.RegField], width == 32);
-                        e.MovRegReg(G[ins.RegField], S1, width == 32);
-                        if (width != 32) return false; // partial-register swap: rare, leave to interpreter
+                        e.MovRegReg(G[ins.Rm], G[ins.RegField], true);
+                        e.MovRegReg(G[ins.RegField], S1, true);
                     }
                     return true;
                 }
@@ -312,6 +340,35 @@ namespace Nativra.X86.Jit
             }
 
             return false;
+        }
+
+        /// <summary>An 8-bit operand that names AH, CH, DH or BH (register numbers 4-7).</summary>
+        private bool UsesHighByteRegister(in Instruction ins)
+        {
+            var op = ins.Op;
+            bool rmIsByte, regIsByte;
+            if (op < 0x40 && (op & 7) < 4)
+            {
+                rmIsByte = regIsByte = (op & 1) == 0;               // ALU r/m8,r8 and r8,r/m8
+            }
+            else
+            {
+                switch (op)
+                {
+                    case 0x84: case 0x86: case 0x88: case 0x8A:     // test/xchg/mov with r8
+                        rmIsByte = regIsByte = true; break;
+                    case 0x80: case 0x82: case 0xC6: case 0xF6: case 0xFE:
+                    case 0xC0: case 0xD0: case 0xD2:                 // r/m8 with an opcode extension
+                        rmIsByte = true; regIsByte = false; break;
+                    case 0x0FB6: case 0x0FBE:                        // movzx/movsx from r/m8
+                        rmIsByte = true; regIsByte = false; break;
+                    default:
+                        rmIsByte = op >= 0x0F90 && op <= 0x0F9F;     // setcc r/m8
+                        regIsByte = false;
+                        break;
+                }
+            }
+            return (rmIsByte && ins.Mod == 3 && ins.Rm >= 4) || (regIsByte && ins.RegField >= 4);
         }
 
         // ---------------------------------------------------------- ALU helpers

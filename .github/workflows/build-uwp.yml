@@ -7,6 +7,10 @@ on:
   push:
     paths:
       - "uwp/**"
+      # The app compiles the x86 layer (ProjectReference) and packages the
+      # redist shims, so changes there must go through .NET Native too.
+      - "x86/Nativra.X86/**"
+      - "native/directx-redist/**"
       - ".github/workflows/build-uwp.yml"
   workflow_dispatch:
 
@@ -74,6 +78,32 @@ jobs:
       - name: Build the DirectX redist shims for the package
         shell: cmd
         run: native\directx-redist\build-app.cmd
+
+      # 32-bit games run under the x86 layer, which maps DLLs into the guest
+      # rather than loading them: the 32-bit shims and the redistributable
+      # 32-bit C runtime go to uwp\Redist\x86, packaged as x86\ and served to
+      # the guest when the game does not carry its own copy.
+      - name: Build the 32-bit guest DLLs for the package
+        shell: cmd
+        run: native\directx-redist\build-x86.cmd "%CD%\uwp\Redist\x86"
+
+      - name: Take the redistributable 32-bit C runtime
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+          $crt = Get-ChildItem "$vs\VC\Redist\MSVC" -Recurse -Directory -Filter "Microsoft.VC*.CRT" |
+            Where-Object { $_.Parent.Name -eq 'x86' -and $_.FullName -notmatch '\\onecore\\|\\debug_nonredist\\' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $crt) { throw "no x86 VC runtime redistributable found" }
+          $ucrt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Redist" -Recurse -Filter ucrtbase.dll |
+            Where-Object { $_.FullName -match '\\x86\\' } | Select-Object -First 1
+          if (-not $ucrt) { throw "no x86 ucrtbase.dll found in the Windows SDK redist folder" }
+          $out = "uwp\Redist\x86"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Get-ChildItem $crt.FullName -Filter *.dll | Copy-Item -Destination $out
+          Copy-Item $ucrt.FullName $out
+          Write-Host "C runtime from $($crt.FullName) and $($ucrt.DirectoryName)"
+          Get-ChildItem $out | Select-Object Name, Length | Format-Table -AutoSize
 
       - name: Restore
         run: msbuild uwp\Kiosk.sln /t:Restore /p:Configuration=Release /p:Platform=x64

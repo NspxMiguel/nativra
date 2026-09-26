@@ -21,5 +21,12 @@ cl /nologo /LD /EHsc /O2 /MT xapofx1_5\xapofx1_5.cpp /Fo:obj-app\ /Fe:"%OUT%\xap
 if errorlevel 1 exit /b 1
 cl /nologo /LD /EHsc /O2 /MT d3dx9_43\d3dx9_43.cpp /Fo:obj-app\ /Fe:"%OUT%\d3dx9_43.dll" /link /APPCONTAINER
 if errorlevel 1 exit /b 1
+rem Direct3D 9 on Direct3D 11. Imports only d3d11, d3dcompiler_47 (packaged
+rem beside it) and kernel32: nothing from user32, which a natively loaded DLL
+rem does not get in the console's app container.
+cl /nologo /LD /EHsc /O2 /MT /std:c++17 d3d9\d3d9_main.cpp d3d9\d3d9_device.cpp d3d9\d3d9_draw.cpp ^
+   d3d9\d3d9_resources.cpp d3d9\d3d9_ff.cpp d3d9\d3d9_format.cpp d3d9\dxso.cpp ^
+   /Fo:obj-app\ /Fe:"%OUT%\d3d9.dll" /link /APPCONTAINER /DEF:d3d9\d3d9.def d3d11.lib d3dcompiler.lib dxguid.lib uuid.lib
+if errorlevel 1 exit /b 1
 del /q "%OUT%\*.exp" "%OUT%\*.lib" 2>nul
 dir /b "%OUT%"

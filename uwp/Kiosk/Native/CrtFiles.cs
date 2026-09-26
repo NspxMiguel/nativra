@@ -126,7 +126,11 @@ namespace Kiosk.Native
         private static int Descriptor(string path, uint access, uint disposition, int flags)
         {
             if (string.IsNullOrEmpty(path) || openHandle == null) return -1;
+            if ((access & GenericWrite) != 0 || disposition != OpenExisting) FileWatch.Invalidate();
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
             var handle = CreateFileFromAppW(path, access, ShareAll, IntPtr.Zero, disposition, 0x80, IntPtr.Zero);
+            System.Threading.Interlocked.Increment(ref FileWatch.BrokerCalls);
+            System.Threading.Interlocked.Add(ref FileWatch.BrokerTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started);
             if (handle == Invalid || handle == IntPtr.Zero)
             {
                 lastMissing = !FileWatch.PathExists(path);
@@ -339,10 +343,16 @@ namespace Kiosk.Native
             var directories = new Dictionary<string, IntPtr>();
             if (mkdir != null)
                 directories["_mkdir"] = Keep(new MakeDirectory(name =>
-                    mkdir(name) == 0 || CreateDirectoryFromAppW(Narrow(name), IntPtr.Zero) ? 0 : -1));
+                {
+                    FileWatch.Invalidate();
+                    return mkdir(name) == 0 || CreateDirectoryFromAppW(Narrow(name), IntPtr.Zero) ? 0 : -1;
+                }));
             if (wmkdir != null)
                 directories["_wmkdir"] = Keep(new MakeDirectory(name =>
-                    wmkdir(name) == 0 || CreateDirectoryFromAppW(Wide(name), IntPtr.Zero) ? 0 : -1));
+                {
+                    FileWatch.Invalidate();
+                    return wmkdir(name) == 0 || CreateDirectoryFromAppW(Wide(name), IntPtr.Zero) ? 0 : -1;
+                }));
 
             // stat on a path: opened through the broker for its attributes,
             // then answered by the runtime's own fstat from the descriptor.

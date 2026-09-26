@@ -202,6 +202,7 @@ namespace Kiosk.Native
                 // Hades, Binaries\Win64 for Unreal); the folder it is in is
                 // the game's own from here on, as it would be on a PC.
                 var exeName = "game.exe";
+                FileWatch.CacheRoot = folder.Path.TrimEnd('\\') + "\\";
                 var pick = await GameStorage.ExecutableAsync(folder);
                 if (pick != null)
                 {
@@ -601,6 +602,8 @@ namespace Kiosk.Native
                                         foreach (var f in CrtFiles.Failed) beat.Add("crt " + f);
                                     }
                                     beat.AddRange(StackSampler.Sample());
+                                    beat.Add("broker calls=" + FileWatch.BrokerCalls + " ms="
+                                        + (FileWatch.BrokerTicks * 1000 / System.Diagnostics.Stopwatch.Frequency));
                                     lock (GraphicsBridge.Notes)
                                     {
                                         foreach (var note in GraphicsBridge.Notes)

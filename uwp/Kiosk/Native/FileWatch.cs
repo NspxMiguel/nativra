@@ -85,15 +85,90 @@ namespace Kiosk.Native
         private const uint MoveReplaceExisting = 0x1;
         private const uint MoveCopyAllowed = 0x2;
 
+        // ----------------------------------------------------------- broker
+
+        /// <summary>Calls that went to the file broker, and the time they took.</summary>
+        public static long BrokerCalls, BrokerTicks;
+
+        /// <summary>
+        /// The game's own download folder. Every file call for a game on a USB
+        /// drive is a round trip to the broker in another process, and Hades
+        /// spent its frames there, asking about the same files again and again.
+        /// What is in the game's folder does not change unless the game
+        /// writes, so the answers there are kept.
+        /// </summary>
+        public static string CacheRoot;
+
+        private const int AttributeData = 36;
+        private static readonly Dictionary<string, byte[]> attributeCache =
+            new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        private static readonly byte[] Missing = new byte[0];
+
+        /// <summary>Forgets every cached answer; called on anything that writes.</summary>
+        public static void Invalidate()
+        {
+            lock (attributeCache) attributeCache.Clear();
+        }
+
+        private static bool Cacheable(string path) =>
+            CacheRoot != null && path != null && path.StartsWith(CacheRoot, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>GetFileAttributesEx through the broker, answered from the cache when it can be.</summary>
+        private static bool Attributes(string path, IntPtr data)
+        {
+            var cacheable = Cacheable(path);
+            if (cacheable)
+            {
+                byte[] known;
+                lock (attributeCache) attributeCache.TryGetValue(path, out known);
+                if (known != null)
+                {
+                    if (known.Length == 0)
+                    {
+                        SetLastError(2);
+                        return false;
+                    }
+                    if (data != IntPtr.Zero) Marshal.Copy(known, 0, data, AttributeData);
+                    return true;
+                }
+            }
+            var buffer = Marshal.AllocHGlobal(40);
+            try
+            {
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                var ok = GetFileAttributesExFromAppW(path, 0, buffer);
+                var error = Marshal.GetLastWin32Error();
+                System.Threading.Interlocked.Increment(ref BrokerCalls);
+                System.Threading.Interlocked.Add(ref BrokerTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                byte[] answer = Missing;
+                if (ok)
+                {
+                    answer = new byte[AttributeData];
+                    Marshal.Copy(buffer, answer, 0, AttributeData);
+                    if (data != IntPtr.Zero) Marshal.Copy(answer, 0, data, AttributeData);
+                }
+                // Only "not there" is worth remembering among failures.
+                if (cacheable && (ok || error == 2 || error == 3))
+                    lock (attributeCache) attributeCache[path] = answer;
+                if (!ok) SetLastError((uint)error);
+                return ok;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+
+        [DllImport("api-ms-win-core-errorhandling-l1-1-0.dll")]
+        private static extern void SetLastError(uint code);
+
         private static uint GetFileAttributesW(string name)
         {
-            // WIN32_FILE_ATTRIBUTE_DATA is 36 bytes; the attributes lead it.
             var data = Marshal.AllocHGlobal(40);
             try
             {
-                return GetFileAttributesExFromAppW(name, 0, data)
-                    ? (uint)Marshal.ReadInt32(data)
-                    : InvalidAttributes;
+                // WIN32_FILE_ATTRIBUTE_DATA: the attributes lead it.
+                return Attributes(name, data) ? (uint)Marshal.ReadInt32(data) : InvalidAttributes;
             }
             finally
             {
@@ -102,7 +177,18 @@ namespace Kiosk.Native
         }
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int AttributesExDelegate(IntPtr name, int level, IntPtr data);
+        private static AttributesExDelegate attributesEx;
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int WritePathDelegate(IntPtr name, IntPtr extra);
+        private static readonly List<Delegate> writers = new List<Delegate>();
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int MoveExDelegate(IntPtr from, IntPtr to, uint flags);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int Func1Delegate(IntPtr name);
         private static MoveExDelegate moveEx;
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
@@ -226,7 +312,10 @@ namespace Kiosk.Native
             findFirstEx = (name, level, data, search, filter, flags) =>
             {
                 var path = name == IntPtr.Zero ? null : Marshal.PtrToStringUni(name);
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var found = FindFirstFileExW(path, level, data, search, filter, flags);
+                System.Threading.Interlocked.Increment(ref BrokerCalls);
+                System.Threading.Interlocked.Add(ref BrokerTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started);
                 if (found == InvalidHandle) Say("find failed " + (path ?? "?") + " (" + Marshal.GetLastWin32Error() + ")");
                 else Say("find " + (path ?? "?"));
                 return found;
@@ -270,8 +359,13 @@ namespace Kiosk.Native
                 if (ours != IntPtr.Zero) return ours;
                 if (real == null) return InvalidHandle;
 
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var handle = real(
                     name, access, share, security, disposition, flags, template);
+                System.Threading.Interlocked.Increment(ref BrokerCalls);
+                System.Threading.Interlocked.Add(ref BrokerTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                // Anything that can create or change a file changes the answers.
+                if ((access & 0x40000000) != 0 || (disposition != 3 && disposition != 0)) Invalidate();
 
                 // Reading the name costs a copy, so it is only read when there
                 // is a reason to: the open failed, or there is still room and
@@ -324,10 +418,6 @@ namespace Kiosk.Native
         {
             var same = new[]
             {
-                new[] { "CreateDirectoryW", "CreateDirectoryFromAppW" },
-                new[] { "RemoveDirectoryW", "RemoveDirectoryFromAppW" },
-                new[] { "DeleteFileW", "DeleteFileFromAppW" },
-                new[] { "GetFileAttributesExW", "GetFileAttributesExFromAppW" },
                 new[] { "SetFileAttributesW", "SetFileAttributesFromAppW" },
                 new[] { "MoveFileW", "MoveFileFromAppW" },
                 new[] { "CopyFileW", "CopyFileFromAppW" },
@@ -336,6 +426,7 @@ namespace Kiosk.Native
             };
             moveEx = (from, to, flags) =>
             {
+                Invalidate();
                 var source = from == IntPtr.Zero ? null : Marshal.PtrToStringUni(from);
                 var target = to == IntPtr.Zero ? null : Marshal.PtrToStringUni(to);
                 if (source == null) return 0;
@@ -349,6 +440,32 @@ namespace Kiosk.Native
                 return 1;
             };
             var moveExAddress = Marshal.GetFunctionPointerForDelegate(moveEx);
+            attributesEx = (name, level, data) =>
+                Attributes(name == IntPtr.Zero ? null : Marshal.PtrToStringUni(name), data) ? 1 : 0;
+            var attributesExAddress = Marshal.GetFunctionPointerForDelegate(attributesEx);
+            // Calls that change the folder: made through the broker, and the
+            // cache is forgotten first.
+            var changing = new Dictionary<string, IntPtr>();
+            foreach (var pair in new[]
+                     {
+                         new[] { "CreateDirectoryW", "CreateDirectoryFromAppW" },
+                         new[] { "RemoveDirectoryW", "RemoveDirectoryFromAppW" },
+                         new[] { "DeleteFileW", "DeleteFileFromAppW" },
+                     })
+            {
+                var target = imports.SystemAddress(FromApp, pair[1]);
+                if (target == IntPtr.Zero) continue;
+                var takesTwo = pair[0] == "CreateDirectoryW";
+                var twoArgs = takesTwo ? Marshal.GetDelegateForFunctionPointer<WritePathDelegate>(target) : null;
+                var oneArg = takesTwo ? null : Marshal.GetDelegateForFunctionPointer<Func1Delegate>(target);
+                WritePathDelegate wrapper = (name, extra) =>
+                {
+                    Invalidate();
+                    return takesTwo ? twoArgs(name, extra) : oneArg(name);
+                };
+                writers.Add(wrapper);
+                changing[pair[0]] = Marshal.GetFunctionPointerForDelegate(wrapper);
+            }
             foreach (var module in new[]
                      {
                          "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll",
@@ -365,6 +482,8 @@ namespace Kiosk.Native
                     if (target != IntPtr.Zero) imports.Overrides[module + "!" + pair[0]] = target;
                 }
                 imports.Overrides[module + "!MoveFileExW"] = moveExAddress;
+                imports.Overrides[module + "!GetFileAttributesExW"] = attributesExAddress;
+                foreach (var pair in changing) imports.Overrides[module + "!" + pair.Key] = pair.Value;
             }
         }
 

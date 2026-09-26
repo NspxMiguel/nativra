@@ -85,6 +85,8 @@ namespace Nativra.X86.Loader
                 return handle;
             });
             i.Register(k, "ExitThread", CallConv.Stdcall, 1, c => { process.ExitCurrentThread(c.Arg(0)); return 0; });
+            // _endthreadex on a thread started by a DLL: modules stay loaded, so only the exit is real.
+            i.Register(k, "FreeLibraryAndExitThread", CallConv.Stdcall, 2, c => { process.ExitCurrentThread(c.Arg(1)); return 0; });
             i.Register(k, "TerminateThread", CallConv.Stdcall, 2, c =>
             {
                 var t = ThreadFor(c.Arg(0));

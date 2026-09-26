@@ -1,3 +1,4 @@
+using System;
 using Nativra.X86.Cpu;
 using Nativra.X86.Loader;
 using Xunit;
@@ -24,6 +25,7 @@ namespace Nativra.X86.Tests
             p.Memory.Write32(Data + 0, p.Imports.Bind("kernel32.dll", "CreateThread", -1));
             p.Memory.Write32(Data + 4, p.Imports.Bind("kernel32.dll", "WaitForSingleObject", -1));
             p.Memory.Write32(Data + 8, p.Imports.Bind("kernel32.dll", "GetExitCodeThread", -1));
+            p.Memory.Write32(Data + 12, p.Imports.Bind("kernel32.dll", "FreeLibraryAndExitThread", -1));
             return p;
         }
 
@@ -75,6 +77,21 @@ namespace Nativra.X86.Tests
             var result = p.Call(Code, out var eax, 10_000_000);
             Assert.True(result.Ok, result.ToString());
             Assert.Equal(5u, eax);
+        }
+
+        [Fact]
+        public void FreeLibraryAndExitThreadEndsTheThreadWithItsCode()
+        {
+            // WaitForWorker's main with a worker that leaves the way _endthreadex
+            // does for a thread a DLL started: FreeLibraryAndExitThread(module, 9).
+            var program = new byte[0x3D + 10];
+            Array.Copy(WaitForWorker, program, 0x3D);
+            Array.Copy(new byte[] { 0x6A, 0x09, 0x6A, 0x00, 0xFF, 0x15, 0x0C, 0x10, 0x60, 0x00 }, 0, program, 0x3D, 10);
+            var p = Load(program, false, out _);
+            var result = p.Call(Code, out var eax, 10_000_000);
+            Assert.True(result.Ok, result.ToString());
+            Assert.Equal(9u, eax);
+            Assert.True(p.Threads[1].IsDone);
         }
 
         [Fact]

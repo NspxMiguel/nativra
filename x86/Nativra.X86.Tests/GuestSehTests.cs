@@ -89,6 +89,63 @@ namespace Nativra.X86.Tests
             Assert.Equal(0xFFFFFFFFu, p.Memory.Read32(p.TebBase));
         }
 
+        // A frame whose handler records the code and the faulting address,
+        // then skips the 5-byte `mov eax,[0x12345678]` in the CONTEXT and
+        // continues. Returns code + EBX (7).
+        private static readonly byte[] AccessViolationProgram =
+        {
+            0x53, 0x68, 0x31, 0x00, 0x60, 0x00, 0x64, 0xFF, 0x35, 0x00, 0x00, 0x00, 0x00, 0x64, 0x89, 0x25,
+            0x00, 0x00, 0x00, 0x00, 0xBB, 0x07, 0x00, 0x00, 0x00, 0xA1, 0x78, 0x56, 0x34, 0x12, 0xA1, 0x10,
+            0x10, 0x60, 0x00, 0x01, 0xD8, 0x64, 0x8F, 0x05, 0x00, 0x00, 0x00, 0x00, 0x83, 0xC4, 0x04, 0x5B,
+            0xC3, 0x8B, 0x44, 0x24, 0x04, 0x8B, 0x08, 0x89, 0x0D, 0x10, 0x10, 0x60, 0x00, 0x8B, 0x48, 0x18,
+            0x89, 0x0D, 0x14, 0x10, 0x60, 0x00, 0x8B, 0x44, 0x24, 0x0C, 0x83, 0x80, 0xB8, 0x00, 0x00, 0x00,
+            0x05, 0x31, 0xC0, 0xC3,
+        };
+
+        // mov ebx,7 / inc ebx / mov eax,[0x12345678] (at +6) / ret — no handler.
+        private static readonly byte[] PlainFaultProgram =
+        {
+            0xBB, 0x07, 0x00, 0x00, 0x00, 0x43, 0xA1, 0x78, 0x56, 0x34, 0x12, 0xC3,
+        };
+
+        // Under the JIT a guest fault is a host access violation, which only
+        // the Windows vectored handler turns back into a guest fault;
+        // elsewhere it would end the test host.
+        private static bool CanRun(bool jit) =>
+            !jit || System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void AccessViolationReachesTheGuestHandlerWhichSkipsTheInstruction(bool jit)
+        {
+            if (!CanRun(jit)) return;
+            var p = Load(AccessViolationProgram, jit, out var kernel);
+            var result = p.Call(Code, out var eax, 100_000);
+            Assert.True(result.Ok, result.ToString());
+            Assert.Equal(0xC0000005u + 7u, eax);
+            Assert.Equal(0x12345678u, p.Memory.Read32(Data + 0x14));   // ExceptionInformation[1]
+            Assert.Equal(new[] { 0xC0000005u }, kernel.ExceptionsRaised);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void UnhandledFaultStopsAtTheFaultingInstructionWithItsState(bool jit)
+        {
+            if (!CanRun(jit)) return;
+            var p = Load(PlainFaultProgram, jit, out _);
+            var result = p.Call(Code, out _, 100_000);
+            Assert.Equal(GuestStop.Fault, result.Stop);
+            Assert.Equal(0x12345678u, result.FaultAddress);
+            Assert.Equal(Code + 6, p.Cpu.Eip);
+            Assert.Equal(8u, p.Cpu.Ebx);
+
+            // The process is intact: it runs guest code again afterwards.
+            var again = p.Call(Code + 11, out _, 1000);   // just the ret
+            Assert.True(again.Ok, again.ToString());
+        }
+
         [Fact]
         public void UnhandledExceptionStopsTheRun()
         {

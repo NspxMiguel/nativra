@@ -490,6 +490,9 @@ namespace Nativra.X86.Loader
                 }
                 catch (GuestException ge)
                 {
+                    // A processor exception: the guest's own SEH handlers get it
+                    // first (a game that probes memory under __try expects that).
+                    if (HardwareException != null && HardwareException(ge)) continue;
                     var addr = ge.Information != null && ge.Information.Length > 1
                         ? ge.Information[ge.Information.Length - 1] : ge.Eip;
                     return new GuestRunResult(GuestStop.Fault, addr);
@@ -516,6 +519,13 @@ namespace Nativra.X86.Loader
         }
 
         private bool jumped;
+
+        /// <summary>
+        /// Offered each processor exception (access violation, divide by zero,
+        /// int3, …) before it stops the run; true when it set the guest up to
+        /// handle it (SEH dispatch), false to stop with a fault.
+        /// </summary>
+        public Func<GuestException, bool> HardwareException { get; set; }
         private const int RecentImportCount = 24;
         private readonly Queue<string> recent = new Queue<string>();
 

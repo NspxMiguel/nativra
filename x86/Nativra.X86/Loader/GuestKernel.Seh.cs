@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using Nativra.X86.Cpu;
 
 namespace Nativra.X86.Loader
 {
@@ -65,6 +67,7 @@ namespace Nativra.X86.Loader
                 RaiseException(c);
                 return 0;
             });
+            process.HardwareException = DispatchHardware;
             HostCall unwind = c => { RtlUnwind(c); return 0; };
             i.Register("kernel32.dll", "RtlUnwind", CallConv.Stdcall, 4, unwind);
             i.Register("ntdll.dll", "RtlUnwind", CallConv.Stdcall, 4, unwind);
@@ -152,6 +155,39 @@ namespace Nativra.X86.Loader
             // Continuing resumes as if RaiseException had returned.
             WriteContext(d.Context, c.ReturnAddress, c.ArgBase + 16);
             EnterHandler(d, ChainHead);
+        }
+
+        /// <summary>
+        /// A processor exception at <see cref="GuestException.Eip"/>: the
+        /// same dispatch as RaiseException, with the context of the faulting
+        /// instruction (continuing re-executes it, as on Windows). False when
+        /// no frame is there to take it, so the run stops with the fault.
+        /// </summary>
+        private bool DispatchHardware(GuestException fault)
+        {
+            var cpu = process.Cpu;
+            if (IsEnd(ChainHead)) return false;
+            ExceptionsRaised.Add(fault.Code);
+            var d = NewDispatch(cpu.Esp);
+
+            memory.WriteBytes(d.Record, new byte[RecordSize]);
+            memory.Write32(d.Record + 0, fault.Code);
+            memory.Write32(d.Record + 12, fault.Eip);
+            var info = fault.Information ?? new uint[0];
+            var count = (uint)Math.Min(info.Length, 15);
+            memory.Write32(d.Record + 16, count);
+            for (uint n = 0; n < count; n++) memory.Write32(d.Record + 20 + n * 4, info[n]);
+
+            WriteContext(d.Context, fault.Eip, cpu.Esp);
+            try
+            {
+                EnterHandler(d, ChainHead);
+            }
+            catch (GuestRaisedException)
+            {
+                return false;
+            }
+            return true;
         }
 
         private void RtlUnwind(GuestCall c)

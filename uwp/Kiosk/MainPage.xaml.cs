@@ -21,8 +21,27 @@ namespace Kiosk
     /// other packages, so this list is written into our own folder from the Mac
     /// (xbdev sync) and read from there.
     /// </summary>
-    public sealed class Tile
+    public sealed class Tile : System.ComponentModel.INotifyPropertyChanged
     {
+        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+
+        private int progress = -1;
+
+        /// <summary>Download progress in percent while the game downloads; -1 when it does not.</summary>
+        public int Progress
+        {
+            get => progress;
+            set
+            {
+                if (progress == value) return;
+                progress = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Progress)));
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ProgressShown)));
+            }
+        }
+
+        public Visibility ProgressShown => progress >= 0 ? Visibility.Visible : Visibility.Collapsed;
+
         public string Title { get; set; }
         public string Subtitle { get; set; }
         public string Initial { get; set; }
@@ -628,14 +647,21 @@ namespace Kiosk
                 foreach (var place in await GameStorage.GamesFoldersAsync())
                     foreach (var folder in await place.Value.GetFoldersAsync())
                         if (uint.TryParse(folder.Name, out var appId) && !skip.Contains(appId) && !found.Contains(appId)
-                            && await GameStorage.IsReadyAsync(folder))
+                            && (await GameStorage.IsReadyAsync(folder) || DownloadManager.Find(appId)?.Running == true))
                             found.Add(appId);
+                // A download started this session has a tile from its first
+                // moment, with its progress on it.
+                foreach (var job in DownloadManager.Snapshot())
+                    if (job.Running && !skip.Contains(job.AppId) && !found.Contains(job.AppId)) found.Add(job.AppId);
                 if (found.Count == 0) return list;
                 var session = await SteamSession.LoadAsync();
                 foreach (var appId in found)
                 {
                     var name = session.IsSignedIn ? await GameNameAsync(session, appId) : null;
-                    list.Add(GameTile(appId, name ?? appId.ToString()));
+                    var tile = GameTile(appId, name ?? DownloadManager.Find(appId)?.Name ?? appId.ToString());
+                    var job = DownloadManager.Find(appId);
+                    if (job != null && job.Running) tile.Progress = job.Percent;
+                    list.Add(tile);
                 }
             }
             catch
@@ -812,7 +838,42 @@ namespace Kiosk
                     else if (last?.Error != null) StatusText.Text = Texts.Get("steam.downloadfailed", last.Name, last.Error);
                 }
                 if (DownloadsScreen.Visibility == Visibility.Visible) ShowDownloads();
+
+                // The shelf follows the downloads: a tile's bar moves, a new
+                // download gets a tile, and a finished one drops its bar.
+                var shelfChanged = false;
+                foreach (var job in DownloadManager.Snapshot())
+                {
+                    Tile shown = null;
+                    foreach (var tile in Tiles) if (tile.SteamAppId == job.AppId) shown = tile;
+                    if (shown == null) { if (job.Running) shelfChanged = true; continue; }
+                    shown.Progress = job.Running ? job.Percent : -1;
+                }
+                if (shelfChanged && !refreshingShelf)
+                {
+                    refreshingShelf = true;
+                    var ____ = RefreshShelfAsync();
+                }
             });
+        }
+
+        private bool refreshingShelf;
+
+        private async Task RefreshShelfAsync()
+        {
+            try
+            {
+                var shelved = new HashSet<uint>();
+                foreach (var tile in Tiles) if (tile.SteamAppId != 0) shelved.Add(tile.SteamAppId);
+                foreach (var tile in await DownloadedTilesAsync(shelved)) Tiles.Add(tile);
+            }
+            catch
+            {
+            }
+            finally
+            {
+                refreshingShelf = false;
+            }
         }
 
         private void OnDockClicked(object sender, RoutedEventArgs e)
@@ -1099,8 +1160,14 @@ namespace Kiosk
             }
             if (tile.Route != null && tile.Route.StartsWith("game:", StringComparison.Ordinal))
             {
-                if (uint.TryParse(tile.Route.Substring(5), out var appId))
-                    await StartGameAsync(appId);
+                if (!uint.TryParse(tile.Route.Substring(5), out var appId)) return;
+                // Still downloading: its progress, not an attempt to run half a game.
+                if (DownloadManager.Find(appId)?.Running == true)
+                {
+                    OnDockClicked(DockDownloads, null);
+                    return;
+                }
+                await StartGameAsync(appId);
                 return;
             }
             StatusText.Text = Texts.Get("status.opening", tile.Title);

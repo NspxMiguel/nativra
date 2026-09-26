@@ -179,6 +179,7 @@
             </Grid.RowDefinitions>
             <TextBlock Grid.Row="0" Text="Systems" FontSize="{StaticResource SectionSize}" FontWeight="ExtraBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,28"/>
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+              <StackPanel>
               <ItemsControl ItemsSource="{x:Bind Emulators}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -200,6 +201,32 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
+              <!-- What the catalogue has that is not installed: installed by
+                   the app itself, through the package manager. -->
+              <TextBlock x:Name="ShopTitle" Visibility="Collapsed" Margin="0,48,0,24" FontSize="{StaticResource SectionSize}" FontWeight="ExtraBold" Foreground="{StaticResource TextPrimary}"/>
+              <ItemsControl ItemsSource="{x:Bind ShopItems}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <local:EvenWrapPanel Columns="3" Gap="26"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="local:CatalogItem">
+                    <Border Background="{StaticResource Surface}" CornerRadius="{StaticResource RadiusCard}" Padding="30">
+                      <StackPanel>
+                        <TextBlock Text="{x:Bind Name}" FontSize="{StaticResource ItemNameSize}" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                        <TextBlock Text="{x:Bind Note}" Margin="0,8,0,0" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" Height="56"/>
+                        <StackPanel Orientation="Horizontal" Spacing="18" Margin="0,18,0,0">
+                          <Button Content="{x:Bind InstallLabel}" IsEnabled="{x:Bind CanInstall, Mode=OneWay}" Style="{StaticResource ChipStyle}" FontSize="{StaticResource LabelSize}" Padding="20,10,20,10" Tag="{x:Bind}" Click="OnInstallClicked"/>
+                          <TextBlock Text="{x:Bind Status, Mode=OneWay}" VerticalAlignment="Center" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
+                        </StackPanel>
+                        <ProgressBar Value="{x:Bind Percent, Mode=OneWay}" Maximum="100" Visibility="{x:Bind BarShown, Mode=OneWay}" Margin="0,16,0,0" Height="6" Foreground="{StaticResource Accent}"/>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              </StackPanel>
             </ScrollViewer>
           </Grid>
           <!-- The library with nothing in it. Not an error: a start. -->

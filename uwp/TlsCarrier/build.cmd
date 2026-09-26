@@ -11,6 +11,10 @@ for /l %%i in (0,1,15) do (
   link /nologo /dll /entry:NativraTlsEntry /nodefaultlib /appcontainer /dynamicbase /nxcompat /machine:x64 /include:_tls_used /out:bin\NativraTls%%i.dll bin\TlsCarrier.obj WindowsApp.lib
   if errorlevel 1 exit /b 1
 )
+cl /nologo /c /O2 /Oi /GS- /Zl /TC /DTLS_CAPACITY=524288 /Fobin\TlsCarrierLarge.obj TlsCarrier.c
+if errorlevel 1 exit /b 1
+link /nologo /dll /entry:NativraTlsEntry /nodefaultlib /appcontainer /dynamicbase /nxcompat /machine:x64 /include:_tls_used /out:bin\NativraTlsLarge0.dll bin\TlsCarrierLarge.obj WindowsApp.lib
+if errorlevel 1 exit /b 1
 cl /nologo /W4 /Febin\TestCarrier.exe /Fobin\TestCarrier.obj TestCarrier.c
 if errorlevel 1 exit /b 1
 bin\TestCarrier.exe

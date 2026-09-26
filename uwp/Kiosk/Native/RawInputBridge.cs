@@ -107,8 +107,12 @@ namespace Kiosk.Native
                 var usage = Marshal.ReadInt16(item, 2);
                 var flags = unchecked((uint)Marshal.ReadInt32(item, 4));
                 var window = Marshal.ReadIntPtr(item, 8);
-                if (page != 1 || (usage != 2 && usage != 6)) { Fail(50); return 0; }
                 if ((flags & 1) != 0 && window != IntPtr.Zero) { Fail(87); return 0; }
+                // Joysticks, gamepads and other HID pages are accepted and not
+                // fed: pads reach games through XInput, which SDL also reads.
+                // Refusing them failed SDL_Init outright, for Hades, on the
+                // "unregister" SDL does before it registers.
+                if (page != 1 || (usage != 2 && usage != 6)) continue;
                 changes[usage == 2 ? 0 : 1] = (flags & 1) != 0 ? null : new Registration { Window = window, Flags = flags };
             }
             lock (gate)

@@ -130,10 +130,31 @@
           <!-- Emulators. Not games, so not on the shelf: this is
                          where they are set up, and where he decides which of
                          them is worth a place on the shelf at all. -->
-          <StackPanel x:Name="DownloadsScreen" Visibility="Collapsed" Margin="56,40,56,0">
-            <TextBlock x:Name="DownloadsTitle" FontSize="{StaticResource ModalTitleSize}" Foreground="{StaticResource TextPrimary}"/>
-            <TextBlock x:Name="DownloadsList" Margin="0,24,0,0" FontSize="{StaticResource BodySize}" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" LineHeight="40"/>
-          </StackPanel>
+          <Grid x:Name="DownloadsScreen" Visibility="Collapsed" Margin="56,40,56,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="DownloadsTitle" Grid.Row="0" FontSize="{StaticResource ModalTitleSize}" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,28"/>
+            <TextBlock x:Name="DownloadsEmpty" Grid.Row="1" Visibility="Collapsed" FontSize="{StaticResource BodySize}" Foreground="{StaticResource TextTertiary}" TextWrapping="Wrap"/>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+              <ItemsControl ItemsSource="{x:Bind Downloads}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="local:DownloadRow">
+                    <Border Background="{StaticResource Surface}" CornerRadius="{StaticResource RadiusCard}" Padding="30" Margin="0,0,0,16">
+                      <StackPanel>
+                        <Grid>
+                          <TextBlock Text="{x:Bind Name}" FontSize="{StaticResource ItemNameSize}" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                          <TextBlock Text="{x:Bind Status}" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource TextMuted}"/>
+                        </Grid>
+                        <ProgressBar Value="{x:Bind Percent}" Maximum="100" Visibility="{x:Bind BarShown}" Margin="0,18,0,0" Height="6"/>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Grid>
           <Grid x:Name="EmulatorScreen" Visibility="Collapsed" Margin="56,40,56,0">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/>

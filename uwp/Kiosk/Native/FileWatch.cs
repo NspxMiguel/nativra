@@ -36,6 +36,12 @@ namespace Kiosk.Native
         /// <summary>How many opens failed, whether or not each one was kept.</summary>
         public static long Failures;
 
+        /// <summary>A line in the file report from elsewhere in the loader.</summary>
+        public static void Note(string line)
+        {
+            if (watchingReads) Say(line);
+        }
+
         private static void Say(string line)
         {
             lock (Seen)
@@ -257,12 +263,51 @@ namespace Kiosk.Native
         /// Reads and sizes that fail or come back empty, which a program
         /// takes as a missing file. Opt-in (filewatch.txt): ReadFile is hot.
         /// </summary>
+        private static bool watchingReads;
+        private static readonly HashSet<long> xmlHandles = new HashSet<long>();
+
+        private static bool IsXml(IntPtr file)
+        {
+            lock (xmlHandles) return xmlHandles.Contains(file.ToInt64());
+        }
+
+        [DllImport("api-ms-win-core-file-l1-1-0.dll", SetLastError = true)]
+        private static extern uint GetFileType(IntPtr file);
+
+        [DllImport("api-ms-win-core-file-l1-1-0.dll", SetLastError = true)]
+        private static extern bool GetFileInformationByHandle(IntPtr file, IntPtr information);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint TypeDelegate(IntPtr file);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int InformationDelegate(IntPtr file, IntPtr information);
+        private static TypeDelegate fileType;
+        private static InformationDelegate fileInformation;
+
         public static void WatchReads(SystemImports imports)
         {
+            watchingReads = true;
+            fileType = file =>
+            {
+                var kind = GetFileType(file);
+                if (IsXml(file)) Say("xml type " + kind);
+                return kind;
+            };
+            fileInformation = (file, information) =>
+            {
+                var ok = GetFileInformationByHandle(file, information);
+                if (IsXml(file))
+                    Say("xml information ok=" + ok + (ok && information != IntPtr.Zero
+                        ? " attributes 0x" + Marshal.ReadInt32(information).ToString("X") + " size " + Marshal.ReadInt32(information, 36)
+                        : " (" + Marshal.GetLastWin32Error() + ")"));
+                return ok ? 1 : 0;
+            };
             readFile = (file, buffer, count, read, overlapped) =>
             {
                 var ok = ReadFile(file, buffer, count, read, overlapped);
                 var got = read == IntPtr.Zero ? -1 : Marshal.ReadInt32(read);
+                if (IsXml(file))
+                    Say("xml read asked " + count + " got " + got + " ok=" + ok + (overlapped != IntPtr.Zero ? " overlapped" : ""));
                 if (!ok || (count > 0 && got == 0 && overlapped == IntPtr.Zero))
                     Say("read " + (ok ? "empty" : "failed (" + Marshal.GetLastWin32Error() + ")") + " asked " + count + (overlapped != IntPtr.Zero ? " overlapped" : ""));
                 return ok ? 1 : 0;
@@ -270,14 +315,14 @@ namespace Kiosk.Native
             fileSize = (file, high) =>
             {
                 var size = GetFileSize(file, high);
-                if (size == 0 || size == uint.MaxValue) Say("size " + size + " (" + Marshal.GetLastWin32Error() + ")");
+                if (size == 0 || size == uint.MaxValue || IsXml(file)) Say((IsXml(file) ? "xml " : "") + "size " + size + " (" + Marshal.GetLastWin32Error() + ")");
                 return size;
             };
             fileSizeEx = (file, size) =>
             {
                 var ok = GetFileSizeEx(file, out var value);
                 if (size != IntPtr.Zero) Marshal.WriteInt64(size, value);
-                if (!ok || value == 0) Say("sizeex " + value + " ok=" + ok);
+                if (!ok || value == 0 || IsXml(file)) Say((IsXml(file) ? "xml " : "") + "sizeex " + value + " ok=" + ok);
                 return ok ? 1 : 0;
             };
             foreach (var module in new[] { "KERNEL32.dll", "kernel32.dll", "KERNELBASE.dll", "api-ms-win-core-file-l1-1-0.dll" })
@@ -285,6 +330,8 @@ namespace Kiosk.Native
                 imports.Overrides[module + "!ReadFile"] = Marshal.GetFunctionPointerForDelegate(readFile);
                 imports.Overrides[module + "!GetFileSize"] = Marshal.GetFunctionPointerForDelegate(fileSize);
                 imports.Overrides[module + "!GetFileSizeEx"] = Marshal.GetFunctionPointerForDelegate(fileSizeEx);
+                imports.Overrides[module + "!GetFileType"] = Marshal.GetFunctionPointerForDelegate(fileType);
+                imports.Overrides[module + "!GetFileInformationByHandle"] = Marshal.GetFunctionPointerForDelegate(fileInformation);
             }
         }
 
@@ -401,6 +448,14 @@ namespace Kiosk.Native
                 // is a reason to: the open failed, or there is still room and
                 // the name might be one of the few that matter.
                 var failed = handle == InvalidHandle;
+                if (!failed && watchingReads && name != IntPtr.Zero)
+                {
+                    // Descriptors are what Adobe AIR rejects after opening:
+                    // every call on an .xml handle is written down.
+                    var opened = Marshal.PtrToStringUni(name);
+                    if (opened != null && opened.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                        lock (xmlHandles) xmlHandles.Add(handle.ToInt64());
+                }
                 if (!failed && Seen.Count >= Keep) return handle;
 
                 string path = null;

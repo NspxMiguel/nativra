@@ -32,8 +32,9 @@ namespace Nativra.X86.Tests
             Directory.CreateDirectory(work);
             var system32 = Environment.GetFolderPath(Environment.SpecialFolder.SystemX86);
 
-            using (var p = new GuestProcess(new GuestMemory(), useJit: true))
+            using (var p = new GuestProcess(new GuestMemory(native: true), useJit: true))
             {
+                Assert.True(p.UsesJit, "the program tests are meant to run under the JIT");
                 var kernel = new GuestKernel(p)
                 {
                     ExePath = "C:\\guest\\" + exe,

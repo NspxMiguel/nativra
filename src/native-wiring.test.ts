@@ -189,8 +189,9 @@ test("managed entry threads adopt TLS before entering game code", () => {
   const runner = probe.slice(
     probe.indexOf("var runner = new System.Threading.Thread"),
   );
-  expect(runner.indexOf("ThreadTls.Adopt();")).toBeGreaterThan(-1);
-  expect(runner.indexOf("ThreadTls.Adopt();")).toBeLessThan(
+  // The game's own thread also gets DLL_THREAD_ATTACH for every mapped module.
+  expect(runner.indexOf("ThreadTls.AdoptAndAttach();")).toBeGreaterThan(-1);
+  expect(runner.indexOf("ThreadTls.AdoptAndAttach();")).toBeLessThan(
     runner.indexOf("main(engine.BaseAddress"),
   );
 });

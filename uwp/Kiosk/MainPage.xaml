@@ -155,6 +155,23 @@
               </ItemsControl>
             </ScrollViewer>
           </Grid>
+          <!-- Every game at once, when the one-row shelf is too long to walk. -->
+          <Grid x:Name="AllGamesScreen" Visibility="Collapsed" Margin="56,40,56,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="AllGamesTitle" Grid.Row="0" FontSize="{StaticResource SectionSize}" FontWeight="ExtraBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,8"/>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+              <ItemsControl x:Name="AllGamesGrid" ItemsSource="{x:Bind AllGames}" ItemTemplate="{StaticResource TileTemplate}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <local:EvenWrapPanel Columns="6" Gap="8"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
+            </ScrollViewer>
+          </Grid>
           <Grid x:Name="EmulatorScreen" Visibility="Collapsed" Margin="56,40,56,0">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/>
@@ -290,6 +307,11 @@
         </Path>
         <Border x:Name="GameInputHintCard" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="40,32,40,0" Padding="18,10" Background="{StaticResource DiagnosticBackground}" CornerRadius="{StaticResource RadiusCard}" Visibility="Collapsed">
           <TextBlock x:Name="GameInputHint" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource DiagnosticForeground}"/>
+        </Border>
+        <!-- While the in-app recorder runs. Drawn by the app, so it is not
+             in the recording: the recorder takes only the game's frames. -->
+        <Border x:Name="RecordingBadge" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,32,40,0" Padding="16,8" CornerRadius="{StaticResource RadiusPill}" Background="{StaticResource DiagnosticBackground}" Visibility="Collapsed">
+          <TextBlock Text="&#x25CF; REC" FontSize="{StaticResource LabelSize}" FontWeight="Bold" Foreground="{StaticResource Danger}"/>
         </Border>
         <Border x:Name="GameDiagnosticsPanel" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,100,40,0" Padding="18,12" CornerRadius="{StaticResource RadiusCard}" Background="{StaticResource DiagnosticBackground}" MaxWidth="720">
           <TextBlock x:Name="GameDiagnosticsText" Width="640" FontFamily="{StaticResource DiagnosticFontFamily}" FontSize="{StaticResource DiagnosticTextSize}" Foreground="{StaticResource DiagnosticForeground}" TextWrapping="Wrap"/>

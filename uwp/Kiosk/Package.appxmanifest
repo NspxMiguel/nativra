@@ -35,6 +35,8 @@
     <!-- Required to enumerate and launch the other sideloaded apps. Restricted,
          which sideloading allows and the Store would not. -->
     <rescap:Capability Name="packageQuery"/>
+    <!-- Lets the app install its own update: the Device Portal is out of its reach. -->
+    <rescap:Capability Name="packageManagement"/>
     <!-- Generating code at runtime. Measured as available on this console with
          JitProbe, and without it a page can be written but never executed —
          which is what took the app down every time it tried. -->

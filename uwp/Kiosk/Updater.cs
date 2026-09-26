@@ -25,8 +25,40 @@ namespace Kiosk
 
         private static bool checkedOnce;
 
-        /// <summary>What happened on the last check, for diagnostics.</summary>
-        public static string Note = "not checked";
+        private static string note = "not checked";
+        private static readonly object logGate = new object();
+        private static Task logTail = Task.CompletedTask;
+
+        /// <summary>
+        /// What happened on the last check, for diagnostics. Every change is
+        /// also appended to update-log.txt: all the screen shows of a failed
+        /// install is that it failed, and the reason — the portal's answer —
+        /// used to stay in memory where nobody could read it.
+        /// </summary>
+        public static string Note
+        {
+            get => note;
+            set
+            {
+                note = value;
+                var line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " build " + Installed + ": " + value + "\r\n";
+                lock (logGate) logTail = logTail.ContinueWith(_ => AppendAsync(line)).Unwrap();
+            }
+        }
+
+        private static async Task AppendAsync(string line)
+        {
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                    "update-log.txt", CreationCollisionOption.OpenIfExists);
+                await FileIO.AppendTextAsync(file, line);
+            }
+            catch
+            {
+                // Diagnostics only: a log that cannot be written changes nothing.
+            }
+        }
 
         public static int Installed => Package.Current.Id.Version.Build;
 
@@ -80,13 +112,6 @@ namespace Kiosk
                     return;
                 }
 
-                var portal = await ConsolePortal.LoadAsync();
-                if (portal == null)
-                {
-                    Note = "build " + newest + " available; no Device Portal access";
-                    return;
-                }
-
                 status?.Invoke(Texts.Get("update.downloading", newest));
                 var bytes = await http.GetBufferAsync(new Uri(url));
                 var file = await ApplicationData.Current.TemporaryFolder.CreateFileAsync(
@@ -102,16 +127,54 @@ namespace Kiosk
                 }
 
                 status?.Invoke(Texts.Get("update.installing", newest));
-                Note = "installing build " + newest;
-                if (!await portal.InstallAsync(file))
+                Note = "installing build " + newest + " through the package manager";
+                var refused = await InstallAsync(file);
+                if (refused == null)
                 {
-                    Note = "install of build " + newest + " failed: " + portal.LastError;
-                    status?.Invoke(Texts.Get("update.failed", newest));
+                    Note = "build " + newest + " registered by the package manager";
+                    return;
                 }
+
+                // The portal is the old route and is kept only as a fallback:
+                // from inside the app it has never connected (see InstallAsync).
+                var portal = await ConsolePortal.LoadAsync();
+                if (portal != null && await portal.InstallAsync(file)) return;
+                Note = "install of build " + newest + " failed: package manager " + refused
+                    + (portal != null ? "; portal " + portal.LastError : "; no portal.json");
+                status?.Invoke(Texts.Get("update.failed", newest));
             }
             catch (Exception error)
             {
-                Note = "check failed: " + error.GetType().Name;
+                Note = "check failed: " + error.GetType().Name + " 0x" + error.HResult.ToString("X8") + " " + error.Message;
+            }
+        }
+
+        /// <summary>
+        /// Replaces this package with the downloaded bundle; null when it went
+        /// through, otherwise why not. The Device Portal cannot do this from
+        /// here: the portal of the console an app runs on is at the console's
+        /// own address, which UWP network isolation treats as loopback and
+        /// blocks, so every install through it failed with "a connection with
+        /// the server could not be established". The package manager is the
+        /// platform's own route (packageManagement capability, allowed for a
+        /// Dev Mode app); ForceApplicationShutdown lets it replace the running
+        /// app, which usually ends this process before the call returns.
+        /// </summary>
+        private static async Task<string> InstallAsync(StorageFile bundle)
+        {
+            try
+            {
+                var manager = new Windows.Management.Deployment.PackageManager();
+                var result = await manager.AddPackageAsync(
+                    new Uri(bundle.Path), null,
+                    Windows.Management.Deployment.DeploymentOptions.ForceApplicationShutdown);
+                if (result.IsRegistered) return null;
+                var code = result.ExtendedErrorCode != null ? result.ExtendedErrorCode.HResult : 0;
+                return "0x" + code.ToString("X8") + " " + result.ErrorText;
+            }
+            catch (Exception error)
+            {
+                return error.GetType().Name + " 0x" + error.HResult.ToString("X8") + " " + error.Message;
             }
         }
     }

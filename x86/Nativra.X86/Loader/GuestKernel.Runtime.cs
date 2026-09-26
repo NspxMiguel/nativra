@@ -134,6 +134,32 @@ namespace Nativra.X86.Loader
             });
             i.Register(k, "QueryDepthSList", CallConv.Stdcall, 1, c => memory.Read16(c.Arg(0) + 4));
 
+            // Version checks (IsWindows8OrGreater and friends): the guest is on
+            // Windows 10/11, so any "at least" test passes.
+            i.Register(k, "VerSetConditionMask", CallConv.Stdcall, 4, c =>
+            {
+                var mask = c.Arg64(0);
+                uint types = c.Arg(2), condition = c.Arg(3) & 7;
+                for (var bit = 0; bit < 8; bit++)
+                    if ((types & (1u << bit)) != 0) mask |= (ulong)condition << (bit * 3);
+                return mask;
+            });
+            i.Register(k, "VerifyVersionInfoW", CallConv.Stdcall, 4, c => 1);
+            i.Register(k, "VerifyVersionInfoA", CallConv.Stdcall, 4, c => 1);
+            i.Register(k, "IsThreadAFiber", CallConv.Stdcall, 0, c => 0);
+            i.Register(k, "FlushProcessWriteBuffers", CallConv.Stdcall, 0, c => 0);
+            i.Register(k, "HeapValidate", CallConv.Stdcall, 3, c => 1);
+            i.Register(k, "HeapCompact", CallConv.Stdcall, 2, c => 0x100000);
+            i.Register(k, "HeapQueryInformation", CallConv.Stdcall, 5, c =>
+            {
+                // HeapCompatibilityInformation: 2, the low-fragmentation heap.
+                if (c.Arg(1) != 0 || c.Arg(3) < 4) { process.LastError = ErrorInsufficientBuffer; return 0; }
+                memory.Write32(c.Arg(2), 2);
+                if (c.Arg(4) != 0) memory.Write32(c.Arg(4), 4);
+                return 1;
+            });
+            i.Register(k, "HeapSetInformation", CallConv.Stdcall, 4, c => 1);
+
             // Start-up information and the environment.
             i.Register(k, "GetStartupInfoA", CallConv.Stdcall, 1, c => { StartupInfo(c.Arg(0)); return 0; });
             i.Register(k, "GetStartupInfoW", CallConv.Stdcall, 1, c => { StartupInfo(c.Arg(0)); return 0; });

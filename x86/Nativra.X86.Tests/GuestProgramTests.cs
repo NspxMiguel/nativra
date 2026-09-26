@@ -59,6 +59,8 @@ namespace Nativra.X86.Tests
                              $"; probed-absent={string.Join(",", kernel.ProbedAbsent.Distinct())}" +
                              $"; log=[{string.Join(" | ", log)}]" +
                              $"; recent=[{string.Join(" ", p.RecentImports)}]" +
+                             $"; code@eip={(p.Memory.IsMapped(p.Cpu.Eip) ? BitConverter.ToString(p.Memory.ReadBytes(p.Cpu.Eip, 16)) : "unmapped")}" +
+                             $"; stack={(p.Memory.IsMapped(p.Cpu.Esp) ? string.Join(" ", Enumerable.Range(0, 8).Select(n => p.Memory.Read32(p.Cpu.Esp + (uint)n * 4).ToString("X8"))) : "unmapped")}" +
                              $"; unserved={string.Join(",", p.Images.SelectMany(i => i.Imports).Where(i => GuestImports.InRegion(i.Bound) && !(p.Imports.TryResolve(i.Bound, out var g) && g.Handler != null)).Select(i => i.ToString()).Distinct())}";
                 Assert.True(result.Stop == GuestStop.Exited, detail);
                 Assert.True(result.ExitCode == 42, detail);

@@ -256,12 +256,12 @@ namespace Nativra.X86.Loader
             var image = process.LoadModule(name);
             if (image != null)
             {
-                if (!alreadyMapped && image.IsDll && image.EntryPoint != 0)
+                if (!alreadyMapped)
                 {
                     // A nested run on the same stack, as the real loader does:
                     // LoadLibrary returns only after DllMain(PROCESS_ATTACH).
                     var saved = SaveRegisters();
-                    var result = process.Call(image.EntryPoint, out _, 50_000_000, image.BaseAddress, 1, 0);
+                    var result = process.AttachModule(image);
                     RestoreRegisters(saved);
                     if (!result.Ok) return 0;
                 }

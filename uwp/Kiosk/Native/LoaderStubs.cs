@@ -325,9 +325,9 @@ namespace Kiosk.Native
                     named.TryGetValue(module.ToInt64(), out owner);
                     if (owner != null)
                     {
-                        var key = owner + "!#" + name.ToInt64();
-                        Remember(key);
-                        if (imports.Overrides.TryGetValue(key, out var byNumber)) return byNumber;
+                        var numbered = owner + "!#" + name.ToInt64();
+                        Remember(numbered);
+                        if (imports.Overrides.TryGetValue(numbered, out var byNumber)) return byNumber;
                         var shipped = imports.Find(owner)?.Export("#" + name.ToInt64()) ?? IntPtr.Zero;
                         if (shipped != IntPtr.Zero) return shipped;
                     }

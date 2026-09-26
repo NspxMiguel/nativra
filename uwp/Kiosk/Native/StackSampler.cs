@@ -68,7 +68,7 @@ namespace Kiosk.Native
         private const int ContextSize = 1232;
         private const int RipOffset = 0xF8;
         private const int RspOffset = 0x98;
-        private const int StackBytes = 16384;
+        private const int StackBytes = 32768;
         private const int MaxThreads = 48;
 
         private sealed class Tracked
@@ -172,7 +172,7 @@ namespace Kiosk.Native
                 var frames = new List<string>();
                 // Every word that lands in a module; the ~ ones are the
                 // system's or this app's, the rest are the game's.
-                for (var i = 0; i < got / 8 && frames.Count < 16; i++)
+                for (var i = 0; i < got / 8 && frames.Count < 40; i++)
                 {
                     var described = Describe(words[i]);
                     if (described.StartsWith("0x", StringComparison.Ordinal)) continue;

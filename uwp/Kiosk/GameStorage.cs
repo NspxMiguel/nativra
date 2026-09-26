@@ -84,7 +84,16 @@ namespace Kiosk
             StorageFolder parent;
             if (place != null && place.StartsWith(UsbPrefix, StringComparison.Ordinal))
             {
-                var drive = await StorageFolder.GetFolderFromPathAsync(place.Substring(UsbPrefix.Length));
+                // The drive as the removable-devices capability hands it over:
+                // a folder reached by path works too, but every file made
+                // through it goes to the broker (about 250 ms each, measured)
+                // where this one costs about 9.
+                var path = place.Substring(UsbPrefix.Length);
+                StorageFolder drive = null;
+                foreach (var device in await RemovableAsync())
+                    if (string.Equals(device.Path.TrimEnd('\\'), path.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                        drive = device;
+                if (drive == null) drive = await StorageFolder.GetFolderFromPathAsync(path);
                 parent = create
                     ? await drive.CreateFolderAsync(UsbFolder, CreationCollisionOption.OpenIfExists)
                     : await drive.TryGetItemAsync(UsbFolder) as StorageFolder;

@@ -665,7 +665,8 @@ private:
     void SetDefaultStates();
     bool PrepareDraw(UINT* instances);
     bool BindShaders(UINT instanceMask);
-    ID3D11InputLayout* InputLayout(ShaderVariant* vs, const VertexDeclaration* decl, UINT instanceMask);
+    ID3D11InputLayout* InputLayout(ShaderVariant* vs, const VertexDeclaration* decl, UINT instanceMask,
+                                   const std::vector<dxso::InputDecl>& inputs);
     VertexDeclaration* FvfDeclaration(DWORD fvf);
     void FlushConstants();
     void BindOutputs();
@@ -678,6 +679,11 @@ private:
     void ResetViewport();
     bool InitBlitter();
     bool Blit(Image* src, UINT srcSub, const RECT& srcRect, Image* dst, UINT dstSub, const RECT& dstRect, bool linear);
+
+    // Fixed-function pipeline (d3d9_ff.cpp): shaders generated from state.
+    ShaderVariant* FixedVertexShader(const VertexDeclaration* decl, std::vector<dxso::InputDecl>* inputs);
+    ShaderVariant* FixedPixelShader();
+    void UploadFixedConstants();
 
     Direct3D9* parent;
     UINT adapter;
@@ -713,6 +719,13 @@ private:
     D3DFORMAT boundDepthFormat = D3DFMT_UNKNOWN;
     bool warnedDepthSize = false;
     bool warnedPartialDepthClear = false;
+
+    // Fixed-function shaders by state key, and their constants (b4).
+    struct FixedVertex { ShaderVariant variant; std::vector<dxso::InputDecl> inputs; };
+    std::unordered_map<std::string, FixedVertex> fixedVs;
+    std::unordered_map<std::string, ShaderVariant> fixedPs;
+    ID3D11Buffer* cbFixed = nullptr;
+    bool usingFixed = false;
 
     // StretchRect's scaling / converting path.
     ID3D11VertexShader* blitVs = nullptr;

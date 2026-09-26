@@ -60,8 +60,16 @@ namespace Kiosk.Native
         {
             if (watching) return;
             watching = true;
-            Gamepad.GamepadAdded += (sender, pad) => { lock (known) if (!known.Contains(pad)) known.Add(pad); };
-            Gamepad.GamepadRemoved += (sender, pad) => { lock (known) known.Remove(pad); };
+            Gamepad.GamepadAdded += (sender, pad) =>
+            {
+                lock (known) if (!known.Contains(pad)) known.Add(pad);
+                if (NativeProbe.GameRunning) PointerBridge.PostDeviceChange();
+            };
+            Gamepad.GamepadRemoved += (sender, pad) =>
+            {
+                lock (known) known.Remove(pad);
+                if (NativeProbe.GameRunning) PointerBridge.PostDeviceChange();
+            };
             lock (known)
                 foreach (var pad in Gamepad.Gamepads)
                     if (!known.Contains(pad)) known.Add(pad);

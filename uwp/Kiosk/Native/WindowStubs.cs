@@ -229,6 +229,19 @@ namespace Kiosk.Native
         /// <summary>What was called just before a message box, when tracing.</summary>
         public static Func<List<string>> RecentCalls;
 
+        private static bool Noise(string call)
+        {
+            var at = call.IndexOf('!');
+            var name = at < 0 ? call : call.Substring(at + 1);
+            return name.StartsWith("Heap", StringComparison.Ordinal)
+                || name.StartsWith("Tls", StringComparison.Ordinal)
+                || name.StartsWith("Fls", StringComparison.Ordinal)
+                || name == "GetProcessHeap" || name == "GetLastError" || name == "SetLastError"
+                || name.Contains("CriticalSection") || name.Contains("SRWLock")
+                || name.StartsWith("Interlocked", StringComparison.Ordinal)
+                || name == "QueryPerformanceCounter" || name == "GetTickCount" || name == "GetTickCount64";
+        }
+
         private static int Box(string text, string caption)
         {
             lock (LoaderStubs.Said)
@@ -236,7 +249,19 @@ namespace Kiosk.Native
                 LoaderStubs.Said.Add("messagebox [" + caption + "] " + text);
                 var recent = RecentCalls?.Invoke();
                 if (recent != null)
-                    foreach (var call in recent) LoaderStubs.Said.Add("before box: " + call);
+                {
+                    // Allocation, TLS and lock calls are the noise every VM
+                    // makes; what is left is the path to the box.
+                    var telling = new List<string>();
+                    foreach (var call in recent)
+                    {
+                        if (Noise(call)) continue;
+                        if (telling.Count > 0 && telling[telling.Count - 1] == call) continue;
+                        telling.Add(call);
+                    }
+                    for (var i = Math.Max(0, telling.Count - 250); i < telling.Count; i++)
+                        LoaderStubs.Said.Add("before box: " + telling[i]);
+                }
             }
             return 1; // IDOK
         }

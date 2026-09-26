@@ -51,8 +51,13 @@ namespace Nativra.X86.Loader
         public const uint ProcessId = 0x1234;
         public const uint MainThreadId = 0x1000;
 
-        /// <summary>Blocks a thread runs before the next one gets a turn.</summary>
-        public const int SliceBlocks = 20_000;
+        /// <summary>
+        /// Blocks a thread runs before the next one gets a turn. A block is
+        /// whatever the engine translated, so the JIT and the interpreter
+        /// preempt at different points; int.MaxValue leaves only waits and
+        /// yields to switch threads, the same way under both.
+        /// </summary>
+        public int SliceBlocks { get; set; } = 20_000;
 
         /// <summary>How long every thread may wait with nothing able to wake it before the run stops.</summary>
         public int DeadlockMilliseconds { get; set; } = 30_000;

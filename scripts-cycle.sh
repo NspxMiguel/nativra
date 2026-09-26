@@ -261,6 +261,6 @@ cat native-pulse.txt 2>/dev/null | head -40
 bun src/xbdev.ts stop kiosk >/dev/null 2>&1 || true
 # Measuring switches must not outlive the measurement: a trace left behind
 # slows every game he opens afterwards.
-bun src/xbdev.ts rm kiosk trace.txt direct.txt steambridge.txt renderthread.txt workers.txt noupdate.txt autoplay.txt filewatch.txt stacks.txt brokerprobe.txt --dir LocalState >/dev/null 2>&1 || true
+bun src/xbdev.ts rm kiosk trace.txt direct.txt steambridge.txt renderthread.txt workers.txt noupdate.txt autoplay.txt filewatch.txt stacks.txt brokerprobe.txt noaudio.txt small.txt noplay.txt nochain.txt nopeb.txt --dir LocalState >/dev/null 2>&1 || true
 exit
 }

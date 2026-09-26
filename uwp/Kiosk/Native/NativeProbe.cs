@@ -297,6 +297,7 @@ namespace Kiosk.Native
                 DirectInputStub.Install(imports);
                 StackSampler.Enabled = await local.TryGetItemAsync("stacks.txt") != null;
                 StackSampler.Install(imports);
+                await UsbFiles.InstallAsync();
                 DisplayStubs.Install(imports);
                 lines.Add("as=" + folder.Path + "\\" + exeName);
 

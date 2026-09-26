@@ -123,6 +123,7 @@
     <Compile Include="Native\CrtFiles.cs" />
     <Compile Include="Native\DirectInputStub.cs" />
     <Compile Include="Native\StackSampler.cs" />
+    <Compile Include="Native\UsbFiles.cs" />
     <Compile Include="Native\SteamBridge.cs" />
     <Compile Include="Native\SuspendWatch.cs" />
     <Compile Include="Native\ThreadTls.cs" />

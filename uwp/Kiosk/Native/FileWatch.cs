@@ -99,7 +99,8 @@ namespace Kiosk.Native
             return "broker calls=" + BrokerCalls + " ms=" + (long)(BrokerTicks / perMs)
                 + " opens=" + OpenCalls + "/" + (long)(OpenTicks / perMs) + "ms"
                 + " finds=" + FindCalls + "/" + (long)(FindTicks / perMs) + "ms"
-                + " attributes=" + AttributeCalls + "/" + (long)(AttributeTicks / perMs) + "ms";
+                + " attributes=" + AttributeCalls + "/" + (long)(AttributeTicks / perMs) + "ms | "
+                + UsbFiles.Report();
         }
 
         internal static void Count(ref long calls, ref long ticks, long started)
@@ -129,6 +130,7 @@ namespace Kiosk.Native
         public static void Invalidate()
         {
             lock (attributeCache) attributeCache.Clear();
+            UsbFiles.Forget();
         }
 
         private static bool Cacheable(string path) =>
@@ -377,6 +379,16 @@ namespace Kiosk.Native
                 var ours = Intercept == null ? IntPtr.Zero : Intercept(name);
                 if (ours != IntPtr.Zero) return ours;
                 if (real == null) return InvalidHandle;
+
+                // On a USB drive, through the drive's folder: 9 ms instead
+                // of the broker's 220, and a missing file costs nothing.
+                if (name != IntPtr.Zero && UsbFiles.TryOpen(Marshal.PtrToStringUni(name), access, share,
+                        disposition, flags, out var fast, out var missing))
+                {
+                    if ((access & 0x40000000) != 0 || (disposition != 3 && disposition != 0)) Invalidate();
+                    if (fast == InvalidHandle) SetLastError((uint)missing);
+                    return fast;
+                }
 
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var handle = real(

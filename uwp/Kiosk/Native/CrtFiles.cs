@@ -127,6 +127,18 @@ namespace Kiosk.Native
         {
             if (string.IsNullOrEmpty(path) || openHandle == null) return -1;
             if ((access & GenericWrite) != 0 || disposition != OpenExisting) FileWatch.Invalidate();
+            if (UsbFiles.TryOpen(path, access, ShareAll, disposition, 0x80, out var fast, out var error))
+            {
+                if (fast == Invalid)
+                {
+                    lastMissing = error == 2 || error == 3;
+                    return -1;
+                }
+                var quick = openHandle(fast, flags & (O_WRONLY | O_RDWR | O_APPEND | O_TEXT | O_BINARY));
+                if (quick < 0) CloseHandle(fast);
+                else System.Threading.Interlocked.Increment(ref Rescued);
+                return quick;
+            }
             var started = System.Diagnostics.Stopwatch.GetTimestamp();
             var handle = CreateFileFromAppW(path, access, ShareAll, IntPtr.Zero, disposition, 0x80, IntPtr.Zero);
             FileWatch.Count(ref FileWatch.OpenCalls, ref FileWatch.OpenTicks, started);

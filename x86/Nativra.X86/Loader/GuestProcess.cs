@@ -18,8 +18,10 @@ namespace Nativra.X86.Loader
         MissingImport,
         /// <summary>The guest ended the process (ExitProcess and friends).</summary>
         Exited,
-        /// <summary>The guest raised a software exception (RaiseException; a C++ throw) that nothing dispatches yet.</summary>
+        /// <summary>The guest raised a software exception (RaiseException; a C++ throw) that nothing handled.</summary>
         Raised,
+        /// <summary>Every guest thread waits on something nothing can signal.</summary>
+        Deadlocked,
     }
 
     /// <summary>The outcome of a run, with the fault, missing-import or exit detail when relevant.</summary>
@@ -81,7 +83,7 @@ namespace Nativra.X86.Loader
     /// and drives execution with a loop that services each imported call the
     /// moment the guest reaches its sentinel.
     /// </summary>
-    public sealed class GuestProcess : IDisposable
+    public sealed partial class GuestProcess : IDisposable
     {
         // 32-bit TEB field offsets (NT_TIB and the fields games actually read).
         private const uint TebExceptionList = 0x00;
@@ -114,8 +116,10 @@ namespace Nativra.X86.Loader
 
         private const uint BlockSize = 0x1000;
         private const uint MaxTlsModules = BlockSize / 4;
-        private uint tlsArray;
         private uint tlsModules;
+        // Every module's TLS directory by slot: a new thread gets its own copy
+        // of each template.
+        private readonly List<Pe32Tls> tlsTemplates = new List<Pe32Tls>();
         private const uint DefaultStack = 0x00100000;   // 1 MB
 
         private const uint DllProcessAttach = 1;
@@ -137,10 +141,11 @@ namespace Nativra.X86.Loader
         /// </summary>
         public string JitRefusal { get; private set; }
 
-        public uint TebBase { get; private set; }
+        /// <summary>The running thread's TEB (what FS points at).</summary>
+        public uint TebBase => CurrentThread.TebBase;
         public uint PebBase { get; private set; }
-        public uint StackBase { get; private set; }   // high end of the stack
-        public uint StackLimit { get; private set; }  // low end
+        public uint StackBase => CurrentThread.StackBase;     // high end of the running thread's stack
+        public uint StackLimit => CurrentThread.StackLimit;   // low end
 
         /// <summary>
         /// Where a game's own DLLs come from: given a module name (lower-cased,
@@ -178,37 +183,31 @@ namespace Nativra.X86.Loader
             Jit = jit;
             Interpreter = jit != null ? jit.Interpreter : new Interpreter(Cpu, memory);
 
-            BuildStack(DefaultStack);
+            var main = new GuestThread(MainThreadId);
+            threads.Add(main);
+            CurrentThread = main;
+            main.Attached = true;   // the loader attaches the program's modules itself
+            BuildStack(main, DefaultStack);
             BuildTebAndPeb();
+            Cpu.Esp = (main.StackBase - 16) & ~0xFu;
+            InstallThreadSentinels();
         }
 
         // --- process setup -------------------------------------------------
 
-        private void BuildStack(uint size)
+        private void BuildStack(GuestThread thread, uint size)
         {
             var low = Memory.FindFree(size, 0x00110000);
-            if (low == 0) throw new InvalidOperationException("no room for the guest stack");
+            if (low == 0) throw new InvalidOperationException("no room for a guest stack");
             Memory.Map(low, size);
-            StackLimit = low;
-            StackBase = low + size;
-            Cpu.Esp = (StackBase - 16) & ~0xFu;
+            thread.StackLimit = low;
+            thread.StackBase = low + size;
         }
 
         private void BuildTebAndPeb()
         {
             PebBase = Alloc(BlockSize, 0x7E000000);
-            TebBase = Alloc(BlockSize, PebBase + BlockSize);
-
-            Memory.Write32(TebBase + TebExceptionList, 0xFFFFFFFF); // end of the SEH chain
-            Memory.Write32(TebBase + TebStackBase, StackBase);
-            Memory.Write32(TebBase + TebStackLimit, StackLimit);
-            Memory.Write32(TebBase + TebSelf, TebBase);
-            Memory.Write32(TebBase + TebClientId, 0x1234);        // process id
-            Memory.Write32(TebBase + TebClientId + 4, 0x1000);    // thread id
-            tlsArray = Alloc(BlockSize, TebBase + BlockSize);   // static TLS: one block pointer per module
-            Memory.Write32(TebBase + TebTlsPointer, tlsArray);
-            Memory.Write32(TebBase + TebPeb, PebBase);
-            Memory.Write32(TebBase + TebLastError, 0);
+            BuildTeb(CurrentThread);
 
             Memory.Write8(PebBase + PebBeingDebugged, 0);
             Memory.Write32(PebBase + PebImageBase, 0);   // filled by the main image
@@ -237,6 +236,23 @@ namespace Nativra.X86.Loader
             Memory.Write16(PebBase + PebOsBuildNumber, 26100);
 
             Cpu.FsBase = TebBase;
+        }
+
+        /// <summary>A thread's TEB and its static-TLS array, both one page.</summary>
+        private void BuildTeb(GuestThread thread)
+        {
+            var teb = Alloc(BlockSize, PebBase + BlockSize);
+            thread.TebBase = teb;
+            Memory.Write32(teb + TebExceptionList, 0xFFFFFFFF); // end of the SEH chain
+            Memory.Write32(teb + TebStackBase, thread.StackBase);
+            Memory.Write32(teb + TebStackLimit, thread.StackLimit);
+            Memory.Write32(teb + TebSelf, teb);
+            Memory.Write32(teb + TebClientId, ProcessId);
+            Memory.Write32(teb + TebClientId + 4, thread.Id);
+            thread.TlsArray = Alloc(BlockSize, teb + BlockSize);   // static TLS: one block pointer per module
+            Memory.Write32(teb + TebTlsPointer, thread.TlsArray);
+            Memory.Write32(teb + TebPeb, PebBase);
+            Memory.Write32(teb + TebLastError, 0);
         }
 
         private uint Alloc(uint size, uint hint)
@@ -391,12 +407,21 @@ namespace Nativra.X86.Loader
             if (tlsModules >= MaxTlsModules) throw new InvalidOperationException("too many modules with static TLS");
 
             var index = tlsModules++;
+            tlsTemplates.Add(tls);
+            if (tls.IndexAddress != 0) Memory.Write32(tls.IndexAddress, index);
+            // Every live thread gets the module's block, as the Windows loader
+            // does for a DLL with TLS loaded while threads run.
+            foreach (var thread in threads)
+                if (!thread.IsDone) GiveTlsBlock(thread, index, tls);
+        }
+
+        private void GiveTlsBlock(GuestThread thread, uint index, Pe32Tls tls)
+        {
             var template = tls.RawDataEnd > tls.RawDataStart ? tls.RawDataEnd - tls.RawDataStart : 0;
             var size = template + tls.ZeroFill;
             var block = Alloc(Math.Max(size, 16u), 0x00300000);
             if (template > 0) Memory.WriteBytes(block, Memory.ReadBytes(tls.RawDataStart, (int)template));
-            Memory.Write32(tlsArray + index * 4, block);
-            if (tls.IndexAddress != 0) Memory.Write32(tls.IndexAddress, index);
+            Memory.Write32(thread.TlsArray + index * 4, block);
         }
 
         private static string ModuleKey(string name)
@@ -443,10 +468,29 @@ namespace Nativra.X86.Loader
         /// </summary>
         public GuestRunResult Run(uint stopEip, long maxBlocks = 50_000_000)
         {
+            var owner = CurrentThread;
+            depth++;
+            try
+            {
+                return RunLoop(owner, stopEip, maxBlocks);
+            }
+            finally
+            {
+                depth--;
+            }
+        }
+
+        private GuestRunResult RunLoop(GuestThread owner, uint stopEip, long maxBlocks)
+        {
             for (long i = 0; i < maxBlocks; i++)
             {
+                if (switchWanted || ++slice >= SliceBlocks)
+                {
+                    var stop = Schedule(owner);
+                    if (stop != null) return stop;
+                }
                 var eip = Cpu.Eip;
-                if (eip == stopEip) return new GuestRunResult(GuestStop.Returned);
+                if (eip == stopEip && CurrentThread == owner) return new GuestRunResult(GuestStop.Returned);
 
                 if (Imports.TryResolve(eip, out var import))
                 {
@@ -472,6 +516,7 @@ namespace Nativra.X86.Loader
                     continue;
                 }
 
+                blockedStreak = 0;
                 try
                 {
                     if (UsesJit) Jit.RunBlock();
@@ -509,7 +554,21 @@ namespace Nativra.X86.Loader
             recent.Enqueue(import.ToString());
             if (recent.Count > RecentImportCount) recent.Dequeue();
             jumped = false;
+            blocking = false;
             var result = import.Handler.Body(call);
+            var thread = CurrentThread;
+            if (blocking)
+            {
+                // The call waits: EIP stays on the import, so the thread asks
+                // again each time it is scheduled, until the answer is ready.
+                thread.Blocked = true;
+                switchWanted = true;
+                blockedStreak++;
+                return;
+            }
+            thread.Blocked = false;
+            thread.WaitStarted = false;
+            blockedStreak = 0;
             if (jumped) return;   // the handler set the whole CPU state itself
 
             Cpu.Eax = (uint)result;

@@ -48,17 +48,12 @@ namespace Nativra.X86.Loader
                 ["TMP"] = "C:\\Temp",
             };
 
-        private readonly Dictionary<uint, uint> fls = new Dictionary<uint, uint>();
+        // Fiber-local values per thread: key is thread id << 32 | index.
+        private readonly Dictionary<ulong, uint> fls = new Dictionary<ulong, uint>();
+        private ulong FlsKey(uint index) => ((ulong)process.CurrentThread.Id << 32) | index;
         private readonly bool[] flsUsed = new bool[128];
-        private readonly Dictionary<uint, GuestEvent> events = new Dictionary<uint, GuestEvent>();
         private uint unhandledFilter;
         private uint nextHandle = 0x100;
-
-        private sealed class GuestEvent
-        {
-            public bool ManualReset;
-            public bool Signaled;
-        }
 
         /// <summary>Where OutputDebugString and writes to the standard handles go.</summary>
         public Action<string> Log { get; set; }
@@ -300,7 +295,7 @@ namespace Nativra.X86.Loader
             i.Register(k, "FlsAlloc", CallConv.Stdcall, 1, c =>
             {
                 for (uint idx = 0; idx < flsUsed.Length; idx++)
-                    if (!flsUsed[idx]) { flsUsed[idx] = true; fls[idx] = 0; return idx; }
+                    if (!flsUsed[idx]) { flsUsed[idx] = true; return idx; }
                 return TlsOutOfIndexes;
             });
             i.Register(k, "FlsFree", CallConv.Stdcall, 1, c =>
@@ -308,14 +303,14 @@ namespace Nativra.X86.Loader
                 var idx = c.Arg(0);
                 if (idx >= flsUsed.Length || !flsUsed[idx]) return 0;
                 flsUsed[idx] = false;
-                fls.Remove(idx);
+                foreach (var t in process.Threads) fls.Remove(((ulong)t.Id << 32) | idx);
                 return 1;
             });
-            i.Register(k, "FlsGetValue", CallConv.Stdcall, 1, c => fls.TryGetValue(c.Arg(0), out var v) ? v : 0);
+            i.Register(k, "FlsGetValue", CallConv.Stdcall, 1, c => fls.TryGetValue(FlsKey(c.Arg(0)), out var v) ? v : 0);
             i.Register(k, "FlsSetValue", CallConv.Stdcall, 2, c =>
             {
                 if (c.Arg(0) >= flsUsed.Length || !flsUsed[c.Arg(0)]) return 0;
-                fls[c.Arg(0)] = c.Arg(1);
+                fls[FlsKey(c.Arg(0))] = c.Arg(1);
                 return 1;
             });
 
@@ -334,34 +329,6 @@ namespace Nativra.X86.Loader
                 else memory.Write32(c.Arg(0), 0);
                 return 1;
             });
-
-            // Slim locks and condition variables on one thread: acquiring never
-            // waits, and a wait on a condition nobody else can signal times out.
-            i.Register(k, "TryEnterCriticalSection", CallConv.Stdcall, 1, c => 1);
-            i.Register(k, "InitializeSRWLock", CallConv.Stdcall, 1, c => { memory.Write32(c.Arg(0), 0); return 0; });
-            i.Register(k, "AcquireSRWLockExclusive", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "AcquireSRWLockShared", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "ReleaseSRWLockExclusive", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "ReleaseSRWLockShared", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "TryAcquireSRWLockExclusive", CallConv.Stdcall, 1, c => 1);
-            i.Register(k, "TryAcquireSRWLockShared", CallConv.Stdcall, 1, c => 1);
-            i.Register(k, "InitializeConditionVariable", CallConv.Stdcall, 1, c => { memory.Write32(c.Arg(0), 0); return 0; });
-            i.Register(k, "WakeConditionVariable", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "WakeAllConditionVariable", CallConv.Stdcall, 1, c => 0);
-            i.Register(k, "SleepConditionVariableCS", CallConv.Stdcall, 3, c => { process.LastError = ErrorTimeout; return 0; });
-            i.Register(k, "SleepConditionVariableSRW", CallConv.Stdcall, 4, c => { process.LastError = ErrorTimeout; return 0; });
-
-            // Events and waits, single-threaded: a wait succeeds on a signalled
-            // event and otherwise times out, since nothing else could signal it.
-            i.Register(k, "CreateEventA", CallConv.Stdcall, 4, c => CreateEvent(c.Arg(1) != 0, c.Arg(2) != 0));
-            i.Register(k, "CreateEventW", CallConv.Stdcall, 4, c => CreateEvent(c.Arg(1) != 0, c.Arg(2) != 0));
-            i.Register(k, "CreateEventExW", CallConv.Stdcall, 4, c => CreateEvent((c.Arg(2) & 1) != 0, (c.Arg(2) & 2) != 0));
-            i.Register(k, "SetEvent", CallConv.Stdcall, 1, c => SignalEvent(c.Arg(0), true));
-            i.Register(k, "ResetEvent", CallConv.Stdcall, 1, c => SignalEvent(c.Arg(0), false));
-            i.Register(k, "WaitForSingleObject", CallConv.Stdcall, 2, c => Wait(c.Arg(0), c.Arg(1)));
-            i.Register(k, "WaitForSingleObjectEx", CallConv.Stdcall, 3, c => Wait(c.Arg(0), c.Arg(1)));
-            i.Register(k, "SleepEx", CallConv.Stdcall, 2, c => 0);
-            i.Register(k, "SwitchToThread", CallConv.Stdcall, 0, c => 0);
 
             // lstr*: the Win32 string helpers older games still import.
             i.Register(k, "lstrlenA", CallConv.Stdcall, 1, c => c.Arg(0) == 0 ? 0u : (uint)ReadText(c.Arg(0), false).Length);
@@ -742,38 +709,6 @@ namespace Nativra.X86.Loader
             memory.Write32(initOnce, 2);
             return 1;
         }
-
-        private uint CreateEvent(bool manualReset, bool signaled)
-        {
-            var handle = NewHandle();
-            events[handle] = new GuestEvent { ManualReset = manualReset, Signaled = signaled };
-            return handle;
-        }
-
-        private uint SignalEvent(uint handle, bool signaled)
-        {
-            if (!events.TryGetValue(handle, out var e)) { process.LastError = 6; return 0; }
-            e.Signaled = signaled;
-            return 1;
-        }
-
-        private uint Wait(uint handle, uint timeout)
-        {
-            if (events.TryGetValue(handle, out var e))
-            {
-                if (e.Signaled)
-                {
-                    if (!e.ManualReset) e.Signaled = false;
-                    return WaitObject0;
-                }
-                if (timeout == Infinite) Say($"x86: infinite wait on unsignalled event 0x{handle:X} (single thread)");
-                return WaitTimeout;
-            }
-            // Anything else (a file, a finished thread): already signalled.
-            return WaitObject0;
-        }
-
-        private bool CloseRuntimeHandle(uint handle) => events.Remove(handle);
 
         /// <summary>
         /// Code page 1252, the ANSI code page of a US/Western Windows: Latin-1

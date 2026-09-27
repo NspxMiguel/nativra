@@ -53,7 +53,8 @@ namespace Kiosk
             }
         }
 
-        public string InstallLabel => Texts.Get("shop.install");
+        public bool Available { get; set; } = true;
+        public string InstallLabel => Available ? Texts.Get("shop.install") : Texts.Get("shop.notavailable.label");
         public Visibility BarShown => busy ? Visibility.Visible : Visibility.Collapsed;
         public bool CanInstall => !busy;
 
@@ -88,7 +89,10 @@ namespace Kiosk
                     var entry = value.GetObject();
                     if (entry.GetNamedBoolean("installed", false)) continue;
                     var url = entry.GetNamedString("url", string.Empty);
-                    if (string.IsNullOrEmpty(url)) continue;
+                    // Listed without a download yet — the slug is real (someone
+                    // is building or testing it) but there is nowhere public to
+                    // fetch it from. The card says so instead of failing on a
+                    // network call to nothing.
                     items.Add(new CatalogItem
                     {
                         Slug = entry.GetNamedString("slug", string.Empty),
@@ -96,6 +100,7 @@ namespace Kiosk
                         Kind = entry.GetNamedString("kind", string.Empty),
                         Note = entry.GetNamedString("note", string.Empty),
                         Url = url,
+                        Available = !string.IsNullOrEmpty(url),
                     });
                 }
             }
@@ -109,6 +114,7 @@ namespace Kiosk
         /// <summary>Downloads and installs one entry; null when it worked, otherwise why not.</summary>
         public static async Task<string> InstallAsync(CatalogItem item)
         {
+            if (!item.Available) return Texts.Get("shop.notavailable");
             item.Busy = true;
             var work = Path.Combine(ApplicationData.Current.TemporaryFolder.Path, "install-" + item.Slug);
             try

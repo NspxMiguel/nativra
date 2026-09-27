@@ -287,9 +287,26 @@ namespace Kiosk
             // The invitation to sign in is only for someone who has not.
             try
             {
-                SignInLink.Visibility = (await SteamSession.LoadAsync()).IsSignedIn
+                var session = await SteamSession.LoadAsync();
+                SignInLink.Visibility = session.IsSignedIn
                     ? Visibility.Collapsed
                     : Visibility.Visible;
+                // A refresh token that is never used to renew ages out after a
+                // few months (SteamAuth.RenewTokensAsync); one that only ever
+                // gets its access token asked for reactively can sit unused
+                // between sessions and expire before the console notices. The
+                // home screen opens whenever the console is turned on, so this
+                // is the natural heartbeat: push the expiry forward here,
+                // quietly, on its own thread, whether or not anything else
+                // needs Steam this session.
+                if (session.IsSignedIn)
+                {
+                    var _ = Task.Run(async () =>
+                    {
+                        try { await session.EnsureAccessTokenAsync(force: true); }
+                        catch { /* Renewed next time the app opens instead. */ }
+                    });
+                }
             }
             catch
             {

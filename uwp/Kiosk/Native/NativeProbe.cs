@@ -710,6 +710,7 @@ namespace Kiosk.Native
                                         + " release=" + GraphicsBridge.ReleaseTimedOut
                                         + " mirror.prepare=" + FrameMirror.PrepareTimedOut
                                         + " audio.activate=" + AudioBridge.ActivateTimedOut);
+                                    beat.Add("steamcm.timedout=" + Steam.SteamCm.TimedOut);
                                     beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " keyreads=" + PadBridge.KeyReads
                                         + " desktop=" + ControllerMode.Desktop
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);

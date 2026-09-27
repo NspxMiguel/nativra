@@ -30,6 +30,9 @@ xbox-*.png
 unity.log
 Player.log
 portal-probe.txt
+shop-log.txt
+update-log.txt
+crash-log.txt
 native-frame.bgra
 HANDOFF.md
 .games/

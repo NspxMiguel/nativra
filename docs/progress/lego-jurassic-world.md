@@ -42,3 +42,38 @@ Log `CheckFormatSupport` / `CheckMultisampleQualityLevels` answers in
 GraphicsBridge, run LEGO (`APPID=352400`), and read which DXGI format the engine
 asks about just before the fault. Then disassemble `0x14033F600` down to the
 failing branch.
+
+## Build 377 (CheckFormatSupport logging, crash-log.txt)
+
+Different picture than the earlier stop. This run: `graphics=whole path
+works: level 0xB000, present 0x00000000` — the D3D11 device and swap chain
+were created successfully. No `CreateTexture2D`/`CreateDepthStencilView`
+failure logged, no `CheckFormatSupport` refusal logged either (so it never
+reached the point this build was meant to observe).
+
+Instead, the guest's main thread goes idle: `thread 13 ... idle=48171ms at
+USER32.dll!SystemParametersInfoA`, `busiest 8x USER32.dll!SystemParametersInfoA`
+— eight calls to a stub that answers instantly (`WindowStubs.cs`: a constant
+`Answers["SystemParametersInfoA"] = 1`, no work in it at all), then nothing
+further recorded on that thread for 48 seconds, then the whole app process is
+gone. No `crash-log.txt` entry (added this build specifically to catch a
+managed unhandled exception) and no console crash dump — this is not an
+exception of any kind reaching .NET or a native access violation with a
+dump. The most consistent explanation: the guest thread enters a spin or
+retry loop outside anything this build's diagnostics track (plausibly right
+after the earlier-documented null-resource read, if the engine's own
+try/catch around that swallows it and retries), burning CPU without making
+another tracked Win32 call, until the console's own foreground-unresponsive
+watchdog kills the app — see the note in
+[../DIAGNOSTICS.md](../DIAGNOSTICS.md#unexplained-app-termination) added this
+round; the same pattern (no exception, no dump, app gone after roughly a
+minute) showed up independently today in the emulator shop and in TRACE mode.
+
+Reproduction is not yet consistent enough between runs (an earlier attempt on
+the same build stopped after only ~20s, mid-load) to be certain this is the
+same failure every time. Next: `STACKS=on` alone (no TRACE, cheaper) for a
+longer window to confirm the idle thread's native return address, and check
+whether the earlier-documented `+0x3795DB` null-resource fault still happens
+first (a debug build or a native crash handler that survives longer than 48s
+would settle whether this is that fault swallowed by a retry loop, or
+something upstream of it entirely).

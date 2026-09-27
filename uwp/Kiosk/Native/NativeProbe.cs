@@ -703,6 +703,8 @@ namespace Kiosk.Native
                                                 beat.Add("reached " + imports.Shim.Called[i]);
                                         }
                                     }
+                                    beat.Add("usb.folders opened=" + UsbFiles.Opened + " missed=" + UsbFiles.Missed
+                                        + " declined=" + UsbFiles.Declined + " timedout=" + UsbFiles.TimedOut);
                                     beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " keyreads=" + PadBridge.KeyReads
                                         + " desktop=" + ControllerMode.Desktop
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);

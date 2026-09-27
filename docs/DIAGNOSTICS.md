@@ -22,6 +22,28 @@ volumes and engine internals cannot be inferred from these measurements.
   capture or a person listening. The owner confirmed menu audio in build 194.
 - GPU identity is captured before optional compatibility naming overrides.
 
+## Unexplained app termination
+
+The whole app has vanished mid-session — process gone, no `crash-log.txt`
+entry (a caught unhandled exception, added build 377), no console crash dump
+(a native access violation; check `/api/debug/dump/usermode/dumps` on the
+Device Portal) — three separate times in one day (2026-09-27): once installing
+an emulator from the shop, once running Brawlhalla under TRACE for over a
+minute, once running LEGO Jurassic World after its guest thread went idle for
+48 seconds. Each time the console fell back to displaying its own "Xbox
+Network status" system screen, as if nothing else was in the foreground.
+
+None of the three leaves a trace that points at Nativra's own code. The
+pattern in common — an app that stops responding for somewhere around 60-90
+seconds before it disappears — matches a platform watchdog killing an
+unresponsive foreground app more than it matches a bug in any one of these
+three unrelated code paths. Not confirmed (nothing in reach from inside the
+app can query the Xbox shell's own watchdog policy), but worth knowing before
+chasing a "crash" as a code bug: if a diagnostic run needs more than about a
+minute, pull what you need well before that, and treat a run that goes idle
+that long as expected to be killed, not a fault to explain in Nativra's own
+handlers.
+
 ## Files written for remote reading
 
 All in the package's `LocalState`, readable with `xbdev pull Nativra <file> LocalState`:

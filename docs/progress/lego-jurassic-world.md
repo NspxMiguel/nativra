@@ -145,3 +145,37 @@ scoped to only the window-to-first-Present window (full TRACE crashes the
 app itself after ~60-90s, so it cannot safely cover this), or profiling
 which of the several bounded waits above are actually firing and how many
 times, by adding counters to each the way `UsbFiles.TimedOut` was added.
+
+## Build 383 — every known blocking wait ruled out
+
+Added a counter to the sixth and last candidate found by an exhaustive grep
+of every `.Wait(`/`.GetAwaiter().GetResult()` in `uwp/Kiosk/Native/`,
+`uwp/Kiosk/Steam/` and `x86/Nativra.X86/Loader/`: `SteamCm.Await()` (30s
+timeout, used by the background playtime/achievement sync `SteamBridge`
+starts). Ran LEGO once more, patient, with all six now reported live:
+
+    waits timedout: show=0 shownative=0 release=0 mirror.prepare=0
+    audio.activate=0 steamcm.timedout=0
+
+All six stayed at zero for the whole run, right up to the app's death at
+40s. This is a complete, definitive negative result for every blocking-wait
+pattern that exists in this codebase's own Windows-bridge and Steam code —
+not one of them is the cause. The freeze is somewhere this kind of search
+cannot find: either genuine, slow work happening in LEGO's own machine code
+(a large shader compile or asset decompression that just takes a while,
+unlucky enough to trip whatever kills an unresponsive foreground app), a
+native deadlock inside COM/WinRT marshaling itself rather than in any of
+this project's own wait calls, or the console's own broker services being
+slow from a long evening of repeated installs and restarts rather than
+anything reproducible in the code.
+
+**Where this stands, honestly**: LEGO Jurassic World creates its D3D11
+device, swap chain, and window reliably with `steambridge.txt` set — real,
+verified progress from where this investigation started (a null-resource
+read before any of that worked). It does not yet reach a playable first
+frame. The next productive step is not more grep-based hunting in this
+codebase; it needs either a live debugger attached during the hang (not
+available from a Mac driving the console over Device Portal), or narrowing
+by elimination — try the same steps against a *different* 64-bit game that
+also uses a large asset set, to see whether the hang is LEGO-specific or a
+general risk any big enough game would hit.

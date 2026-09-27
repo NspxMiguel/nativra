@@ -84,9 +84,28 @@ namespace Kiosk.Native
                 try
                 {
                     relative = relative.TrimEnd('\\');
-                    var folder = relative.Length == 0
-                        ? root
-                        : root.GetFolderAsync(relative).AsTask().GetAwaiter().GetResult();
+                    // A game thread has no message pump of its own; blocking
+                    // it directly on a WinRT async call can deadlock if the
+                    // call's continuation needs one to run (measured: LEGO
+                    // Jurassic World froze here, not just its own thread but
+                    // the whole process, waiting on this exact call chain
+                    // through combase/windows.storage.onecore.dll — see
+                    // docs/progress/lego-jurassic-world.md). Starting it on
+                    // the thread pool instead, with a bound, turns a possible
+                    // forever-hang into a miss this path already treats as
+                    // cheap and harmless.
+                    StorageFolder folder;
+                    if (relative.Length == 0)
+                    {
+                        folder = root;
+                    }
+                    else
+                    {
+                        var lookup = Task.Run(() => root.GetFolderAsync(relative).AsTask());
+                        if (!lookup.Wait(TimeSpan.FromSeconds(5)))
+                            throw new TimeoutException("GetFolderAsync(" + relative + ") did not return");
+                        folder = lookup.Result;
+                    }
                     var unknown = Marshal.GetIUnknownForObject(folder);
                     try
                     {

@@ -34,10 +34,10 @@ namespace Kiosk.Native
         private const string EndpointInterface = "1be09788-6894-4089-8586-9a2a6c265ac5";
         private const string CollectionInterface = "0bd7a1be-7a1a-44db-8397-cc5392387b5e";
 
-        [DllImport("Mmdevapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         /// <summary>How many times the cross-thread wait below timed out instead of an audio client arriving.</summary>
         public static long ActivateTimedOut;
 
+        [DllImport("Mmdevapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern int ActivateAudioInterfaceAsync(
             string path, ref Guid riid, IntPtr parameters, IntPtr handler, out IntPtr operation);
 

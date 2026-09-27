@@ -77,3 +77,42 @@ whether the earlier-documented `+0x3795DB` null-resource fault still happens
 first (a debug build or a native crash handler that survives longer than 48s
 would settle whether this is that fault swallowed by a retry loop, or
 something upstream of it entirely).
+
+## Build 378 (SteamBridge armed) — much further, then a frozen process
+
+With `steambridge.txt` set (the classic Steamworks bridge answers with the
+signed-in account instead of the game loading the real `steam_api64.dll` and
+waiting on a Steam client that is not there — that wait was the earlier
+48-second hang at `SystemParametersInfoA`, confirmed by comparison: without
+the bridge the game never gets past that call; with it, it does), the game
+now:
+
+- Creates its D3D11 device and swap chain (`graphics=whole path works`).
+- Fully creates and shows its window: `LoadIconA`, `LoadCursorA`,
+  `AdjustWindowRect`, `SetWindowTextA`, `SetWindowPos`, `ShowWindow`,
+  `UpdateWindow`, `SetForegroundWindow`, `SetFocus` — the complete sequence,
+  in order.
+
+Then, about 20-24 seconds in, the **whole process freezes** — not just the
+game's thread. The `native-watch.txt` background watcher (its own dedicated
+thread, unrelated to the game, writing a timestamp every second) stops
+updating entirely: three pulls a few seconds apart all showed the identical
+timestamp. The last stack sample before the freeze has the main thread inside
+an RPC call: `~ntdll.dll → ~RPCRT4.dll → ~combase.dll →
+~windows.storage.onecore.dll → ~shcore.dll → ~windows.storage.onecore.dll`
+(repeated) — a cross-process COM/WinRT call into the Storage broker. LEGO's
+files are on a USB drive (`usb=E:\Nativra\games\352400`); this is consistent
+with a file operation falling through to the slow broker path (`UsbFiles.cs`
+docs: the broker path measured ~220ms normally — this is not that, it never
+returns) rather than the fast folder-handle path, on whichever file the game
+reaches for once its window is up (likely a config or the first content
+file). After the freeze the console's watchdog kills the whole app, same
+as the earlier pattern (see [../DIAGNOSTICS.md](../DIAGNOSTICS.md)).
+
+**This is real forward progress**: window and graphics work now; the
+remaining blocker is a specific file access that hangs the storage broker
+instead of returning (even an error would let the game continue). Next:
+`FILEWATCH=on` together with `steambridge.txt` (not `stacks.txt`, which
+combined with `steambridge.txt` triggers a separate, earlier issue in
+`SteamClassic.Prebuild()` under trace — a Kiosk-side diagnostic bug to fix
+separately) to name the exact path the broker call hangs on.

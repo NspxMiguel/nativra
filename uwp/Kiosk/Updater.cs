@@ -159,6 +159,14 @@ namespace Kiosk
         /// platform's own route (packageManagement capability, allowed for a
         /// Dev Mode app); ForceApplicationShutdown lets it replace the running
         /// app, which usually ends this process before the call returns.
+        ///
+        /// Safe in a way EmulatorShop's call to the same API is not: on this
+        /// console AddPackageAsync only gets a real, per-user registration
+        /// when it is *updating* a package that already has one (measured —
+        /// this call never leaves a SYSTEM-only registration, unlike a fresh
+        /// install of a package with no prior registration). See
+        /// EmulatorShop.InstallAsync's comment for the console's dev-mode
+        /// deployment broker's SYSTEM-only behaviour on a brand-new package.
         /// </summary>
         private static async Task<string> InstallAsync(StorageFile bundle)
         {

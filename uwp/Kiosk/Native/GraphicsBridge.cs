@@ -530,6 +530,52 @@ namespace Kiosk.Native
             return code;
         };
 
+        private const int CheckFormatSupportSlot = 29;
+        private const int CheckMultisampleSlot = 30;
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int FormatSupportDelegate(IntPtr self, int format, IntPtr support);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int MultisampleDelegate(IntPtr self, int format, int samples, IntPtr levels);
+
+        private static readonly HashSet<string> asked = new HashSet<string>();
+
+        private static void NoteOnce(string line)
+        {
+            lock (asked)
+            {
+                if (asked.Count > 200 || !asked.Add(line)) return;
+            }
+            Note(line);
+        }
+
+        /// <summary>
+        /// Capability questions, answered by the console and noted once per
+        /// format. An engine that asks whether a format can be a depth buffer
+        /// and hears no gives up before creating anything, so no failed
+        /// CreateTexture2D ever shows it (LEGO Jurassic World, engine format 0x70).
+        /// </summary>
+        private static readonly FormatSupportDelegate checkFormat = (self, format, support) =>
+        {
+            var original = ComProxy.Original(self);
+            var call = Marshal.GetDelegateForFunctionPointer<FormatSupportDelegate>(ComProxy.Method(original, CheckFormatSupportSlot));
+            var code = call(original, format, support);
+            NoteOnce("CheckFormatSupport format " + format + " -> 0x" + code.ToString("X8")
+                + (code >= 0 && support != IntPtr.Zero ? " support 0x" + Marshal.ReadInt32(support).ToString("X") : string.Empty));
+            return code;
+        };
+
+        private static readonly MultisampleDelegate checkMultisample = (self, format, samples, levels) =>
+        {
+            var original = ComProxy.Original(self);
+            var call = Marshal.GetDelegateForFunctionPointer<MultisampleDelegate>(ComProxy.Method(original, CheckMultisampleSlot));
+            var code = call(original, format, samples, levels);
+            NoteOnce("CheckMultisampleQualityLevels format " + format + " x" + samples + " -> 0x" + code.ToString("X8")
+                + (code >= 0 && levels != IntPtr.Zero ? " levels " + Marshal.ReadInt32(levels) : string.Empty));
+            return code;
+        };
+
         private static IntPtr WrapDevice(IntPtr device)
         {
             if (device == IntPtr.Zero) return device;
@@ -544,6 +590,8 @@ namespace Kiosk.Native
                     { QueryInterfaceSlot, Marshal.GetFunctionPointerForDelegate(deviceAsk) },
                     { CreateTexture2DSlot, Marshal.GetFunctionPointerForDelegate(createTexture2D) },
                     { CreateDepthStencilViewSlot, Marshal.GetFunctionPointerForDelegate(createDepthView) },
+                    { CheckFormatSupportSlot, Marshal.GetFunctionPointerForDelegate(checkFormat) },
+                    { CheckMultisampleSlot, Marshal.GetFunctionPointerForDelegate(checkMultisample) },
                 });
             }
             catch

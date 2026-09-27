@@ -128,5 +128,16 @@ the foreground app after some minutes with no controller input** — every
 an unattended diagnostic run with nobody touching a pad. Before spending more
 time chasing any of these as a Nativra bug, send an occasional harmless
 button press (`xbdev press` from another terminal, or scripted) during a
-long unattended run and see whether that alone keeps the app alive — if it
-does, most of today's mystery terminations were never Nativra's to fix.
+long unattended run and see whether that alone keeps the app alive.
+
+Tested: it does not save LEGO Jurassic World, which still dies around 30s
+with a press every 15s. That is consistent with the two phenomena being
+different, not the same thing: Seraph was genuinely alive and rendering at
+60 fps when it disappeared (not frozen — the idle theory fits); LEGO's
+process is observably frozen first (the independent watcher thread stops
+updating, not just the game's own thread — see the round above), and an
+input the frozen app cannot process obviously cannot rescue it. So: a real
+Nativra-side hang for LEGO (the `UsbFiles.Folder()` bug was one real
+instance of it, fixed, evidently not the only one), separate from Xbox's own
+idle timeout probably explaining Seraph, Hades' slow starts, and the shop
+and TRACE terminations, which were never observed frozen before vanishing.

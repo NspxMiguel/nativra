@@ -165,13 +165,20 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
-        public void AnUnknownSlotStopsWithItsName()
+        public void ScreenshotsAreServedAndAnUnknownSlotStopsWithItsName()
         {
-            var screenshots = Api("SteamScreenshots");
-            var result = Method(screenshots, 0, out _);
+            var client = Api("SteamClient");
+            var screenshots = M(client, 18, 1, 1, Str("STEAMSCREENSHOTS_INTERFACE_VERSION002"));   // GetISteamScreenshots
+            Assert.Equal(0u, M(screenshots, 3, 1));        // HookScreenshots(true)
+            Assert.Equal(0u, M(screenshots, 2));           // TriggerScreenshot
+            Assert.Equal(0u, M(screenshots, 0, 0, 0, 0, 0));   // WriteScreenshot: no handle
+            var result = Method(screenshots, 7, out _);    // past version 002's seven methods
             Assert.Equal(GuestStop.HostError, result.Stop);
-            Assert.Contains("SteamScreenshots", result.ToString());
-            Assert.Contains("slot 0", result.ToString());
+            Assert.Contains("STEAMSCREENSHOTS_INTERFACE_VERSION002", result.ToString());
+            Assert.Contains("slot 7", result.ToString());
+
+            var video = Api("SteamVideo");                 // an interface not served at all
+            Assert.Equal(GuestStop.HostError, Method(video, 0, out _).Stop);
         }
     }
 }

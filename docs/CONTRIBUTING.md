@@ -38,6 +38,8 @@ The rest are written by hand, and that is the list that needs people.
     uwp/Kiosk/Native/PadBridge.cs      XInput over the console's gamepad
     src/                               the command line tool that drives all this
 
+The full map, file by file, is [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Writing a missing function
 
 Run a game. The report names every function it reached that nobody had written,

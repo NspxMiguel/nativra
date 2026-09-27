@@ -116,3 +116,32 @@ instead of returning (even an error would let the game continue). Next:
 combined with `steambridge.txt` triggers a separate, earlier issue in
 `SteamClassic.Prebuild()` under trace — a Kiosk-side diagnostic bug to fix
 separately) to name the exact path the broker call hangs on.
+
+## Build 380 (1s bound + timeout counter) — the UsbFiles fix helped, isn't the whole story
+
+Console rebooted clean, then five more runs. Survival time after the window
+shows is not consistent (20-50s across runs, same console, same build,
+nothing else changed) — this on its own says the remaining blocker is a race,
+not a deterministic wait on one fixed thing.
+
+The clean result: `usb.folders opened=0 missed=0 declined=0 timedout=0` — a
+run that still froze and died at the same point (last call `SetFocus`, same
+as every prior run) with **zero** `UsbFiles` folder-handle timeouts. So the
+5-second-then-1-second freeze fixed in `UsbFiles.Folder()` was real and worth
+fixing, but it is not what is blocking LEGO specifically, or not the only
+thing. Checked the other bounded waits in the graphics/audio path
+(`GraphicsBridge.cs` ×3, `FrameMirror.cs`, `AudioBridge.cs` — each already
+has a 3-4 second bound, not an unbounded one) — none of them is a fresh
+unbounded-hang bug the way `UsbFiles.Folder()` was; if they are involved it
+would be several of them firing in sequence adding up, not one clear cause.
+
+Reasonable stopping point for tonight: window + D3D11 device/swap chain
+reliably work with `steambridge.txt`; something after the window is shown
+and before the first frame is intermittently very slow or genuinely stuck,
+severely enough that the console's watchdog (see
+[../DIAGNOSTICS.md](../DIAGNOSTICS.md#unexplained-app-termination)) ends the
+app before any of it reaches a log. Next real step needs either: TRACE mode
+scoped to only the window-to-first-Present window (full TRACE crashes the
+app itself after ~60-90s, so it cannot safely cover this), or profiling
+which of the several bounded waits above are actually firing and how many
+times, by adding counters to each the way `UsbFiles.TimedOut` was added.

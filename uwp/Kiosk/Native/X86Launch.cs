@@ -89,6 +89,15 @@ namespace Kiosk.Native
                 // Direct3D 9 through the packaged 64-bit layer.
                 var com = new GuestCom(process, kernel);
                 X86Direct3D9.Install(process, kernel, com);
+                // Steamworks for the signed-in account, as the 64-bit bridge answers it:
+                // the game's own steam_api.dll is not mapped, its exports are served.
+                GuestSteam steam = null;
+                if (SteamBridge.Active)
+                {
+                    SteamBridge.Resolve("SteamAPI_Init");   // loads the account's saved achievements and stats
+                    steam = new GuestSteam(process, kernel, new X86SteamAccount());
+                    steam.Install();
+                }
                 // XAudio 2.7 through the packaged 64-bit shim, as for a 64-bit game.
                 var xaudio = new XAudio27Com(process, kernel, com);
                 xaudio.Install((clsid, iid, made) => XAudio27Route.Create(clsid, iid, made));
@@ -97,6 +106,7 @@ namespace Kiosk.Native
                 var fromPackage = new List<string>();
                 process.ModuleSource = name =>
                 {
+                    if (steam != null && name.Equals("steam_api.dll", StringComparison.OrdinalIgnoreCase)) return null;
                     var bytes = ReadGameModule(folderPath, name);
                     if (bytes != null) return bytes;
                     bytes = ReadPackagedModule(packaged, name);
@@ -154,6 +164,12 @@ namespace Kiosk.Native
                     lines.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
                 foreach (var call in com.Calls.OrderByDescending(pair => pair.Value).Take(40))
                     lines.Add("x86.com " + call.Value + "x " + call.Key);
+                if (steam != null)
+                {
+                    lines.Add("x86.steam=" + string.Join(",", steam.Versions));
+                    foreach (var call in steam.Calls.OrderByDescending(pair => pair.Value).Take(30))
+                        lines.Add("x86.steam " + call.Value + "x " + call.Key);
+                }
                 lines.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
 
                 await WriteImportsAsync(process, kernel);

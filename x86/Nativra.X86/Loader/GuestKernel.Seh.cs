@@ -233,7 +233,12 @@ namespace Nativra.X86.Loader
             {
                 if (d.Unwind) { FinishUnwind(d); return; }
                 dispatches.Remove(d.Id);
-                throw new GuestRaisedException(memory.Read32(d.Record));   // unhandled
+                // Unhandled: the record says where it happened (and, for an access
+                // violation, what was touched), which is what the report needs.
+                var code = memory.Read32(d.Record);
+                var parameters = memory.Read32(d.Record + 16);
+                throw new GuestRaisedException(code, memory.Read32(d.Record + 12),
+                    parameters >= 2 ? memory.Read32(d.Record + 24) : 0, parameters >= 1 && memory.Read32(d.Record + 20) != 0);
             }
 
             d.Frame = frame;

@@ -41,3 +41,9 @@ uwp/Redist/
 native/directx-redist/obj-app/
 x86/harness/guests/bin/
 x86/harness/guests/obj/
+CLOUD-PROMPT-SENT.md
+
+# Stray scratch files that leaked into git before; never track these
+/nochain.txt
+/shelf.json
+CLOUD-ROUND5-REPORT.md

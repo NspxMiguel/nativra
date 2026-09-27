@@ -179,3 +179,36 @@ available from a Mac driving the console over Device Portal), or narrowing
 by elimination — try the same steps against a *different* 64-bit game that
 also uses a large asset set, to see whether the hang is LEGO-specific or a
 general risk any big enough game would hit.
+
+## Build 385 (LockWatch) — a real, specific lock, named for the first time
+
+The suspicious tail on every death (hundreds of EnterCriticalSection/
+LeaveCriticalSection pairs, then repeated Sleep) is real contention, not
+unrelated engine noise: `LockWatch` (new, opt-in via `lockwatch.txt`) names
+the CRITICAL_SECTION address entered many times running without another one
+between — `lock spin=2477 at 0x19D073D7070`, unchanged across three pulls a
+few seconds apart, right up to the app's death at 35s.
+
+That address is not a fixed engine constant — it is heap-allocated at
+runtime, so it belongs to whatever subsystem's lock the game constructed at
+start-up (a task/job queue or resource-loader are the common owners of a
+spin-checked lock like this). No `CreateThread`/`_beginthreadex` call
+appears anywhere in a 400-call window before the spin starts, and no "game"
+or "crt" tracked thread has ever shown up in `native-watch.txt` across every
+round of this investigation — so whatever should set the condition this
+lock protects true is not a worker thread the game creates and this
+codebase would see. Two live possibilities: (a) the condition is set by a
+callback the game expects from something Nativra's own bridges own —
+graphics, audio, or file I/O — that call for one reason or another never
+completes or never calls back; or (b) the engine's own logic for this
+platform expects a capability (a specific device feature, a file, a thread
+count) that is absent here and its fallback path is the one now spinning
+forever instead of degrading.
+
+**This is the most specific finding yet, and a reasonable point to hand off
+rather than keep pushing blind**: a real address, a real iteration count, no
+thread ever created to explain what it is waiting for. The next step needs
+symbols for `LEGOJurassicWorld_DX11.exe` (a call stack *inside* the spin
+loop, not just the KERNEL32 call it makes each iteration, would show what
+condition it is testing) or a live debugger — both outside what a console
+reached only over Device Portal can do tonight.

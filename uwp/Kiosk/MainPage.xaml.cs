@@ -654,10 +654,16 @@ namespace Kiosk
                 }
                 catch
                 {
-                    return null;
+                    // The live library did not answer this time; a name
+                    // already learned still comes from the cache below.
                 }
             }
-            return libraryNames.TryGetValue(appId, out var name) ? name : null;
+            if (libraryNames != null && libraryNames.TryGetValue(appId, out var name))
+            {
+                await GameNameCache.RememberAsync(appId, name);
+                return name;
+            }
+            return await GameNameCache.GetAsync(appId);
         }
 
         /// <summary>
@@ -732,12 +738,17 @@ namespace Kiosk
                 var session = await SteamSession.LoadAsync();
                 foreach (var appId in found)
                 {
-                    var name = session.IsSignedIn ? await GameNameAsync(session, appId) : null;
+                    // A cached name survives even when the account is signed
+                    // out or the library fetch below fails; only a game this
+                    // console has never named at all falls back to its id.
+                    var name = await GameNameCache.GetAsync(appId);
+                    if (name == null && session.IsSignedIn) name = await GameNameAsync(session, appId);
                     var tile = GameTile(appId, name ?? DownloadManager.Find(appId)?.Name ?? appId.ToString());
                     var job = DownloadManager.Find(appId);
                     if (job != null && job.Running) tile.Progress = job.Percent;
                     list.Add(tile);
                 }
+                await GameNameCache.FlushAsync();
             }
             catch
             {
@@ -978,11 +989,13 @@ namespace Kiosk
                 where == "emulators" ? Visibility.Visible : Visibility.Collapsed;
             DownloadsScreen.Visibility =
                 where == "downloads" ? Visibility.Visible : Visibility.Collapsed;
+            ModsScreen.Visibility = where == "mods" ? Visibility.Visible : Visibility.Collapsed;
             AllGamesScreen.Visibility = Visibility.Collapsed;
             if (where == "downloads") ShowDownloads();
             if (where == "emulators") { var shop = ShowShopAsync(); }
+            if (where == "mods") ShowMods();
 
-            var built = where == "library" || where == "emulators" || where == "downloads";
+            var built = where == "library" || where == "emulators" || where == "downloads" || where == "mods";
             StatusText.Text = built ? string.Empty : Texts.Get("status.notyet", where);
         }
 

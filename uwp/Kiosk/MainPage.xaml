@@ -155,6 +155,34 @@
               </ItemsControl>
             </ScrollViewer>
           </Grid>
+          <!-- Where to get mods from, honest about what each one still needs. -->
+          <Grid x:Name="ModsScreen" Visibility="Collapsed" Margin="56,40,56,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="ModsTitle" Grid.Row="0" FontSize="{StaticResource SectionSize}" FontWeight="ExtraBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,28"/>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+              <ItemsControl x:Name="ModSourceList">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <local:EvenWrapPanel Columns="2" Gap="26"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="local:ModSource">
+                    <Border Background="{StaticResource Surface}" CornerRadius="{StaticResource RadiusCard}" Padding="30">
+                      <StackPanel>
+                        <TextBlock Text="{x:Bind Name}" FontSize="{StaticResource ItemNameSize}" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"/>
+                        <TextBlock Text="{x:Bind Note}" Margin="0,10,0,0" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{x:Bind Needs}" Margin="0,14,0,0" FontSize="{StaticResource LabelSize}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap"/>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Grid>
           <!-- Every game at once, when the one-row shelf is too long to walk. -->
           <Grid x:Name="AllGamesScreen" Visibility="Collapsed" Margin="56,40,56,0">
             <Grid.RowDefinitions>

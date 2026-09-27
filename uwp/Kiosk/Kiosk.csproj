@@ -75,6 +75,8 @@
     <Compile Include="DriveProbe.cs" />
     <Compile Include="MemoryProbe.cs" />
     <Compile Include="GameStorage.cs" />
+    <Compile Include="GameNameCache.cs" />
+    <Compile Include="MainPage.Mods.cs" />
     <Compile Include="EmulatorShop.cs" />
     <Compile Include="EvenWrapPanel.cs" />
     <Compile Include="MainPage.Diagnostics.cs" />

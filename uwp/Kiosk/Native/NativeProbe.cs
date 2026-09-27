@@ -308,7 +308,14 @@ namespace Kiosk.Native
                 CrtFiles.Install(imports);
                 DirectInputStub.Install(imports);
                 SspiStub.Install(imports);
+                LockWatch.Install(imports);
                 StackSampler.Enabled = await local.TryGetItemAsync("stacks.txt") != null;
+                // Its own marker, not stacks.txt: that one combined with
+                // steambridge.txt hits a separate issue in
+                // SteamClassic.Prebuild() under trace (see
+                // docs/progress/lego-jurassic-world.md), and LEGO needs
+                // steambridge.txt to get anywhere at all.
+                LockWatch.Active = await local.TryGetItemAsync("lockwatch.txt") != null;
                 // While diagnosing, every classic Steam interface call is traced.
                 if (StackSampler.Enabled && SteamBridge.Active)
                 {
@@ -703,10 +710,23 @@ namespace Kiosk.Native
                                                 beat.Add("reached " + imports.Shim.Called[i]);
                                         }
                                     }
+                                    beat.Add("usb.folders opened=" + UsbFiles.Opened + " missed=" + UsbFiles.Missed
+                                        + " declined=" + UsbFiles.Declined + " timedout=" + UsbFiles.TimedOut);
+                                    beat.Add("waits timedout: show=" + GraphicsBridge.ShowTimedOut
+                                        + " shownative=" + GraphicsBridge.ShowNativeTimedOut
+                                        + " release=" + GraphicsBridge.ReleaseTimedOut
+                                        + " mirror.prepare=" + FrameMirror.PrepareTimedOut
+                                        + " audio.activate=" + AudioBridge.ActivateTimedOut);
+                                    beat.Add("steamcm.timedout=" + Steam.SteamCm.TimedOut);
+                                    beat.Add("lock spin=" + LockWatch.SpinCount + " at 0x" + LockWatch.SpinningOn.ToInt64().ToString("X"));
                                     beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " keyreads=" + PadBridge.KeyReads
                                         + " desktop=" + ControllerMode.Desktop
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);
-                                    foreach (var name in imports.Shim.Recent())
+                                    // Wider than the default 64: LEGO Jurassic
+                                    // World's freeze needs a longer window to
+                                    // catch what led up to it, not just the
+                                    // last handful of calls.
+                                    foreach (var name in imports.Shim.Recent(400))
                                     {
                                         beat.Add("recent " + name);
                                     }

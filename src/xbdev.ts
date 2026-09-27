@@ -843,10 +843,29 @@ async function cmdSyncKiosk(): Promise<void> {
   );
   await portal.pushFile(kiosk.PackageFullName, catalogFile, "LocalState");
 
-  // Reinstalling wipes LocalState and with it the Steam sign-in. When a copy
-  // of the session was taken, put it back rather than making him scan again.
+  // Reinstalling wipes LocalState and with it the Steam sign-in. The console
+  // renews its own refresh token in the background while the app is open
+  // (each renewal pushes the token's expiry forward); a fixed local copy
+  // pushed back on every sync used to overwrite that live one with an older,
+  // less-renewed token every time — which is why sign-in kept "expiring"
+  // every couple of days despite Steam's own refresh tokens lasting months.
+  // Pull the console's own copy first: if it already has a live session
+  // (the common case — only a fresh reinstall loses it), keep it and bring
+  // it home instead, so the Mac's own downloads use the freshest token too.
   const sessionFile = join(ROOT, "steam.json");
-  if (await Bun.file(sessionFile).exists()) {
+  let consoleHasSession = false;
+  try {
+    const onConsole = await portal.pullFile(kiosk.PackageFullName, "steam.json", "LocalState");
+    const parsed = JSON.parse(new TextDecoder().decode(onConsole)) as { refresh?: string; steamid?: string };
+    if (parsed.refresh && parsed.steamid) {
+      consoleHasSession = true;
+      await Bun.write(sessionFile, onConsole);
+      console.log("sessao da Steam trazida do console (mais recente)");
+    }
+  } catch {
+    // Nothing on the console yet, or it could not be read: fall through to restoring the local copy.
+  }
+  if (!consoleHasSession && (await Bun.file(sessionFile).exists())) {
     await portal.pushFile(kiosk.PackageFullName, sessionFile, "LocalState");
     console.log("sessao da Steam devolvida ao console");
   }

@@ -138,6 +138,9 @@ namespace Kiosk.Native
                 return Prepare(device, swapChain, pixelsWide, pixelsHigh, format, image, dispatcher, texture);
         }
 
+        /// <summary>How many times the cross-thread wait below timed out instead of the picture answer arriving.</summary>
+        public static long PrepareTimedOut;
+
         private static bool Prepare(
             IntPtr device, IntPtr swapChain, int pixelsWide, int pixelsHigh, int format,
             Windows.UI.Xaml.Controls.Image image, Windows.UI.Core.CoreDispatcher dispatcher,
@@ -309,7 +312,7 @@ namespace Kiosk.Native
                         ready.Set();
                     }
                 });
-                ready.Wait(3000);
+                if (!ready.Wait(3000)) System.Threading.Interlocked.Increment(ref PrepareTimedOut);
 
                 Running = picture != null;
                 Note = Running ? "mirroring " + width + "x" + height + " format=" + format : Note;

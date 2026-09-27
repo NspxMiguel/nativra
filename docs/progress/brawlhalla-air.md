@@ -38,3 +38,30 @@ failures), and the `GetModuleFileNameW` answers AIR receives.
   runtime's `_read` on a descriptor from `_open_osfhandle`, or a mapping view), and
   rejected by a later check. Next: log `_open_osfhandle`/`_read`/`_fstat`, the first
   bytes AIR gets, and the AVM-side error path around `Adobe AIR.dll+0x2F3CC8`.
+
+## Build 374 (bigger trace ring, noise filtered, mapping/view logging added)
+
+- No `CreateFileMappingW`/`MapViewOfFile`(`Ex`) call — successful or failed —
+  was logged before the error box, even once. The mapping hooks (added this
+  round specifically to catch this) never fired.
+- The calls right before the box, with allocator/TLS/lock noise filtered out,
+  are exactly `KERNEL32.dll!VirtualQuery` / `KERNEL32.dll!VirtualAlloc`,
+  alternating, repeatedly — the AVM's own heap growing. Nothing
+  file-related appears in the trace at all between opening `application.xml`
+  and the error.
+- Conclusion: AIR reads the descriptor through a route this build does not
+  intercept — most likely `ntdll!NtCreateSection` / `NtMapViewOfSection`
+  called directly (bypassing the kernel32/KERNELBASE exports `FileWatch`
+  patches), which a commercial runtime tuned for performance plausibly does
+  instead of the documented Win32 wrapper. Confirming this needs hooking
+  `ntdll.dll!NtCreateSection`/`NtMapViewOfSection` (or `NtOpenFile`/
+  `NtReadFile`) the same way, which is a bigger change than the kernel32-level
+  hooks so far — SystemImports currently only routes kernel32/KERNELBASE/
+  api-ms-win-core-* exports, and ntdll direct syscalls need their own
+  interception point.
+- Separately, and not specific to Brawlhalla: TRACE mode eventually crashes
+  the app after roughly 60-90 seconds regardless of the game (reproduced with
+  TRACE alone, no FILEWATCH). It is not a regression from this round's
+  changes — likely TRACE's per-call managed-delegate overhead compounding
+  over a couple of minutes. Pull diagnostics within the first ~30-40 seconds
+  of a TRACE run; do not rely on it staying up longer than that.

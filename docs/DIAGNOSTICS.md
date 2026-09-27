@@ -22,6 +22,28 @@ volumes and engine internals cannot be inferred from these measurements.
   capture or a person listening. The owner confirmed menu audio in build 194.
 - GPU identity is captured before optional compatibility naming overrides.
 
+## Unexplained app termination
+
+The whole app has vanished mid-session — process gone, no `crash-log.txt`
+entry (a caught unhandled exception, added build 377), no console crash dump
+(a native access violation; check `/api/debug/dump/usermode/dumps` on the
+Device Portal) — three separate times in one day (2026-09-27): once installing
+an emulator from the shop, once running Brawlhalla under TRACE for over a
+minute, once running LEGO Jurassic World after its guest thread went idle for
+48 seconds. Each time the console fell back to displaying its own "Xbox
+Network status" system screen, as if nothing else was in the foreground.
+
+None of the three leaves a trace that points at Nativra's own code. The
+pattern in common — an app that stops responding for somewhere around 60-90
+seconds before it disappears — matches a platform watchdog killing an
+unresponsive foreground app more than it matches a bug in any one of these
+three unrelated code paths. Not confirmed (nothing in reach from inside the
+app can query the Xbox shell's own watchdog policy), but worth knowing before
+chasing a "crash" as a code bug: if a diagnostic run needs more than about a
+minute, pull what you need well before that, and treat a run that goes idle
+that long as expected to be killed, not a fault to explain in Nativra's own
+handlers.
+
 ## Files written for remote reading
 
 All in the package's `LocalState`, readable with `xbdev pull Nativra <file> LocalState`:
@@ -31,6 +53,11 @@ All in the package's `LocalState`, readable with `xbdev pull Nativra <file> Loca
 - `portal-probe.txt` — whether the app reached the console's Device Portal.
 - `recorder-note.txt` — the in-app recorder's state; recordings themselves go
   to `LocalState/recordings` (from build 355).
+- `crash-log.txt` — every unhandled exception the app's own handler caught
+  before the process ended, with type, HRESULT, message and stack trace (from
+  build 377). A crash it did not catch (a native access violation) still
+  leaves nothing here; check the console's own crash dumps instead
+  (`/api/debug/dump/usermode/dumps` on the Device Portal).
 
 ## The Device Portal is out of the app's reach
 
@@ -85,3 +112,32 @@ instrumentation before attributing a change to the compatibility layer.
 API references: [DXGI adapter description](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/ns-dxgi-dxgi_adapter_desc),
 [application memory usage](https://learn.microsoft.com/en-us/uwp/api/windows.system.memorymanager.appmemoryusage),
 [device-family version](https://learn.microsoft.com/en-us/uwp/api/windows.system.profile.analyticsversioninfo.devicefamilyversion).
+
+## A simpler explanation for some of "unexplained app termination": Xbox's own idle timeout
+
+Update, same day: Seraph's Last Stand (previously the most reliable game)
+ran for 5776 frames at a steady 60 fps — about 96 seconds of real, working
+gameplay, watched by nobody, no controller input sent — then the app was
+gone, same signature as before (no crash-log.txt, no dump). An earlier
+attempt at the same game died after only ~20-30s; the difference between
+runs was not code, it was luck on the console's own idle clock. This matches
+the suspected watchdog theory above less well than a much more mundane
+explanation: **the Xbox's own inactivity timeout, killing (or suspending)
+the foreground app after some minutes with no controller input** — every
+"vanished" case tonight (the shop, TRACE, LEGO, now Seraph) happened during
+an unattended diagnostic run with nobody touching a pad. Before spending more
+time chasing any of these as a Nativra bug, send an occasional harmless
+button press (`xbdev press` from another terminal, or scripted) during a
+long unattended run and see whether that alone keeps the app alive.
+
+Tested: it does not save LEGO Jurassic World, which still dies around 30s
+with a press every 15s. That is consistent with the two phenomena being
+different, not the same thing: Seraph was genuinely alive and rendering at
+60 fps when it disappeared (not frozen — the idle theory fits); LEGO's
+process is observably frozen first (the independent watcher thread stops
+updating, not just the game's own thread — see the round above), and an
+input the frozen app cannot process obviously cannot rescue it. So: a real
+Nativra-side hang for LEGO (the `UsbFiles.Folder()` bug was one real
+instance of it, fixed, evidently not the only one), separate from Xbox's own
+idle timeout probably explaining Seraph, Hades' slow starts, and the shop
+and TRACE terminations, which were never observed frozen before vanishing.

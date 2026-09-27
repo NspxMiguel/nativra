@@ -174,17 +174,27 @@ has no windows.
 - **Verified**: Seraph's Last Stand (Unity) plays at 60 fps with the controller,
   and shows "In-Game" to Steam friends.
 - **Playable**: Hades (Supergiant's own engine, D3D11, SDL2, FMOD) runs at 60 fps
-  from a USB drive, with the controller and sound.
+  from a USB drive, with the controller and sound; SDL reads the pad through
+  Nativra's XInput bridge, so PC/controller mode and remote input apply to it.
+- **Updating itself** from the project's releases, through the package manager
+  (the console's Device Portal is out of an app's reach on its own console).
+- **All games**: the shelf's last tile opens the whole library as a grid.
+- **Recording the game** to MP4 inside the app, at the game's own frame rate,
+  with the console's hardware encoder (`xbdev record`, `xbdev recordings`).
 - **Remote control of the console** from a terminal, for testing.
 
 See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for every game tried.
 
 ## What does not work yet
 
-**Experimental, not a finished PC-game compatibility layer.** Games using the classic
-Steamworks C++ interfaces (LEGO Jurassic World) stop at Steam's start-up, 32-bit
-games are not supported, Direct3D 9 games have no renderer, and Adobe AIR
-(Brawlhalla) does not find its application descriptor. Multiplayer and friend
+**Experimental, not a finished PC-game compatibility layer.** LEGO Jurassic World
+passes Steam's start-up and creates its device, then stops on a depth texture its
+engine refuses to create
+([progress](docs/progress/lego-jurassic-world.md)). 32-bit games run through an
+x86 layer that is still being completed (WAVESHAPER reaches its window and Steam
+start-up). Adobe AIR (Brawlhalla) does not find its application descriptor.
+Installing emulators from the app's own shop downloads them but does not finish
+registering them yet; installing them from a computer (`xbdev`) works. Multiplayer and friend
 invitations are not validated. No license or authentication checks are
 bypassed: games run from the signed-in account's own licenses.
 

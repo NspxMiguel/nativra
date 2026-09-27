@@ -311,6 +311,7 @@ namespace Nativra.X86.Loader
             else if (version.StartsWith("STEAMAPPS_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamApps"; layout = AppsLayout; methods = AppsMethods(); }
             else if (version.StartsWith("STEAMUSERSTATS_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamUserStats"; layout = StatsLayout; methods = StatsMethods(); }
             else if (version.StartsWith("STEAMREMOTESTORAGE_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamRemoteStorage"; layout = RemoteLayout; methods = RemoteMethods(VersionNumber(version)); }
+            else if (version.StartsWith("STEAMSCREENSHOTS_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamScreenshots"; layout = ScreenshotsLayout(VersionNumber(version)); methods = new Dictionary<string, Method>(); }
             else { family = version; layout = new Slot[0]; methods = new Dictionary<string, Method>(); }
 
             var table = kernel.Heap.Alloc(Slots * 4, zero: true);
@@ -678,6 +679,21 @@ namespace Nativra.X86.Loader
             BitConverter.GetBytes(entries).CopyTo(b, 8);
             BitConverter.GetBytes(bestScores.ContainsKey(board) ? 1 : 0).CopyTo(b, 16);
             return Result(1105, b);
+        }
+
+        // --- ISteamScreenshots (002-003) ---------------------------------------------------
+        // The console takes its own screenshots: none are written to a Steam library,
+        // hooking is accepted, and every handle answers as invalid (0).
+
+        private static Slot[] ScreenshotsLayout(int version)
+        {
+            var slots = new List<string>
+            {
+                "WriteScreenshot:4", "AddScreenshotToLibrary:4", "TriggerScreenshot:0", "HookScreenshots:1",
+                "SetLocation:2", "TagUser:3", "TagPublishedFile:3",
+            };
+            if (version >= 3) slots.AddRange(new[] { "IsScreenshotsHooked:0", "AddVRScreenshotToLibrary:3" });
+            return Layout(slots.ToArray());
         }
 
         // --- ISteamRemoteStorage (012-014) ---------------------------------------------------

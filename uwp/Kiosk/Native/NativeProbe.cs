@@ -714,7 +714,11 @@ namespace Kiosk.Native
                                     beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " keyreads=" + PadBridge.KeyReads
                                         + " desktop=" + ControllerMode.Desktop
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);
-                                    foreach (var name in imports.Shim.Recent())
+                                    // Wider than the default 64: LEGO Jurassic
+                                    // World's freeze needs a longer window to
+                                    // catch what led up to it, not just the
+                                    // last handful of calls.
+                                    foreach (var name in imports.Shim.Recent(400))
                                     {
                                         beat.Add("recent " + name);
                                     }

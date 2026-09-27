@@ -112,3 +112,21 @@ instrumentation before attributing a change to the compatibility layer.
 API references: [DXGI adapter description](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/ns-dxgi-dxgi_adapter_desc),
 [application memory usage](https://learn.microsoft.com/en-us/uwp/api/windows.system.memorymanager.appmemoryusage),
 [device-family version](https://learn.microsoft.com/en-us/uwp/api/windows.system.profile.analyticsversioninfo.devicefamilyversion).
+
+## A simpler explanation for some of "unexplained app termination": Xbox's own idle timeout
+
+Update, same day: Seraph's Last Stand (previously the most reliable game)
+ran for 5776 frames at a steady 60 fps — about 96 seconds of real, working
+gameplay, watched by nobody, no controller input sent — then the app was
+gone, same signature as before (no crash-log.txt, no dump). An earlier
+attempt at the same game died after only ~20-30s; the difference between
+runs was not code, it was luck on the console's own idle clock. This matches
+the suspected watchdog theory above less well than a much more mundane
+explanation: **the Xbox's own inactivity timeout, killing (or suspending)
+the foreground app after some minutes with no controller input** — every
+"vanished" case tonight (the shop, TRACE, LEGO, now Seraph) happened during
+an unattended diagnostic run with nobody touching a pad. Before spending more
+time chasing any of these as a Nativra bug, send an occasional harmless
+button press (`xbdev press` from another terminal, or scripted) during a
+long unattended run and see whether that alone keeps the app alive — if it
+does, most of today's mystery terminations were never Nativra's to fix.

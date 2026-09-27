@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.ApplicationModel;
 using Windows.Data.Json;
 using Windows.Management.Deployment;
 using Windows.Storage;
@@ -53,7 +54,8 @@ namespace Kiosk
             }
         }
 
-        public string InstallLabel => Texts.Get("shop.install");
+        public bool Available { get; set; } = true;
+        public string InstallLabel => Available ? Texts.Get("shop.install") : Texts.Get("shop.notavailable.label");
         public Visibility BarShown => busy ? Visibility.Visible : Visibility.Collapsed;
         public bool CanInstall => !busy;
 
@@ -88,7 +90,10 @@ namespace Kiosk
                     var entry = value.GetObject();
                     if (entry.GetNamedBoolean("installed", false)) continue;
                     var url = entry.GetNamedString("url", string.Empty);
-                    if (string.IsNullOrEmpty(url)) continue;
+                    // Listed without a download yet — the slug is real (someone
+                    // is building or testing it) but there is nowhere public to
+                    // fetch it from. The card says so instead of failing on a
+                    // network call to nothing.
                     items.Add(new CatalogItem
                     {
                         Slug = entry.GetNamedString("slug", string.Empty),
@@ -96,6 +101,7 @@ namespace Kiosk
                         Kind = entry.GetNamedString("kind", string.Empty),
                         Note = entry.GetNamedString("note", string.Empty),
                         Url = url,
+                        Available = !string.IsNullOrEmpty(url),
                     });
                 }
             }
@@ -109,6 +115,7 @@ namespace Kiosk
         /// <summary>Downloads and installs one entry; null when it worked, otherwise why not.</summary>
         public static async Task<string> InstallAsync(CatalogItem item)
         {
+            if (!item.Available) return Texts.Get("shop.notavailable");
             item.Busy = true;
             var work = Path.Combine(ApplicationData.Current.TemporaryFolder.Path, "install-" + item.Slug);
             try
@@ -152,8 +159,35 @@ namespace Kiosk
                 failed = await StepAsync(item.Slug + " register",
                     manager.AddPackageAsync(new Uri(main), dependencies, DeploymentOptions.None), item, 60, 40);
                 if (failed != null) return failed;
-                await MarkInstalledAsync(item.Slug);
-                return null;
+
+                // Measured on this console (DOSBox Pure, 2026-09-27): a package
+                // installed this way registers only for NT AUTHORITY\SYSTEM, not
+                // the console's interactive user (compare Nativra's own
+                // self-update, which keeps the DefaultAccount/UserMgr0
+                // registration it already had — updating an existing
+                // registration is not the same operation as creating one). A
+                // SYSTEM-only registration cannot be launched by the person, and
+                // left in place it blocks the next real install with
+                // 0x80073D02 ("resources it modifies are currently in use").
+                // So it comes back off, and the download is not wasted: the
+                // person finishes with `xbdev get <slug>` from a computer,
+                // which installs through the Device Portal and gets a real,
+                // per-user registration (as every other installed app has).
+                var package = FindByFamily(manager, main);
+                if (package != null)
+                {
+                    try
+                    {
+                        await manager.RemovePackageAsync(package.Id.FullName);
+                    }
+                    catch (Exception error)
+                    {
+                        Log(item.Slug + ": could not remove the SYSTEM-only registration: "
+                            + error.GetType().Name + " " + error.Message);
+                    }
+                }
+                Log(item.Slug + ": registered for SYSTEM only, not the console's user; removed, download kept for xbdev");
+                return Texts.Get("shop.finishoncomputer", item.Slug);
             }
             catch (Exception error)
             {
@@ -242,6 +276,27 @@ namespace Kiosk
                     }
                 }).Unwrap();
             }
+        }
+
+        /// <summary>The just-installed package's own record, to remove it by identity rather than guessing its family name.</summary>
+        private static Package FindByFamily(PackageManager manager, string mainPackagePath)
+        {
+            try
+            {
+                var wanted = System.IO.Path.GetFileNameWithoutExtension(mainPackagePath);
+                foreach (var pkg in manager.FindPackagesForUser(string.Empty))
+                {
+                    if (pkg.Id.Name.IndexOf(wanted, StringComparison.OrdinalIgnoreCase) >= 0
+                        || (wanted.IndexOf(pkg.Id.Name, StringComparison.OrdinalIgnoreCase) >= 0 && pkg.Id.Name.Length > 3))
+                        return pkg;
+                }
+            }
+            catch
+            {
+                // Best-effort: a package we cannot find this way is left for
+                // the person to remove with `xbdev uninstall` if it matters.
+            }
+            return null;
         }
 
         private static Windows.UI.Core.CoreDispatcher dispatcher;

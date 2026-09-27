@@ -1017,6 +1017,9 @@ namespace Kiosk.Native
         /// interface is what accepts a swap chain; C# has no declaration for
         /// it, so it is asked for by identifier and called by slot.
         /// </summary>
+        /// <summary>How many times each cross-thread wait below timed out instead of the answer arriving.</summary>
+        public static long ShowTimedOut, ShowNativeTimedOut, ReleaseTimedOut;
+
         private static bool Show(IntPtr chain)
         {
             var panel = Surface;
@@ -1102,7 +1105,7 @@ namespace Kiosk.Native
 
             // Waited on, because what happens next depends on the answer and
             // the answer arrives on another thread.
-            settled.Wait(3000);
+            if (!settled.Wait(3000)) System.Threading.Interlocked.Increment(ref ShowTimedOut);
             return attached;
         }
 
@@ -1198,7 +1201,7 @@ namespace Kiosk.Native
                     settled.Set();
                 }
             });
-            settled.Wait(3000);
+            if (!settled.Wait(3000)) System.Threading.Interlocked.Increment(ref ShowNativeTimedOut);
             return attached;
         }
 
@@ -1382,7 +1385,7 @@ namespace Kiosk.Native
                     settled.Set();
                 }
             });
-            settled.Wait(3000);
+            if (!settled.Wait(3000)) System.Threading.Interlocked.Increment(ref ReleaseTimedOut);
         }
 
         public static void Install(SystemImports system)

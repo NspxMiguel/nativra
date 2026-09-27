@@ -37,7 +37,7 @@ namespace Kiosk.Native
         private static readonly Dictionary<string, IntPtr> folders =
             new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
 
-        public static long Opened, Missed, Declined;
+        public static long Opened, Missed, Declined, TimedOut;
 
         /// <summary>Finds the removable drives; called once before the game starts.</summary>
         public static async Task InstallAsync()
@@ -84,9 +84,37 @@ namespace Kiosk.Native
                 try
                 {
                     relative = relative.TrimEnd('\\');
-                    var folder = relative.Length == 0
-                        ? root
-                        : root.GetFolderAsync(relative).AsTask().GetAwaiter().GetResult();
+                    // A game thread has no message pump of its own; blocking
+                    // it directly on a WinRT async call can deadlock if the
+                    // call's continuation needs one to run (measured: LEGO
+                    // Jurassic World froze here, not just its own thread but
+                    // the whole process, waiting on this exact call chain
+                    // through combase/windows.storage.onecore.dll — see
+                    // docs/progress/lego-jurassic-world.md). Starting it on
+                    // the thread pool instead, with a bound, turns a possible
+                    // forever-hang into a miss this path already treats as
+                    // cheap and harmless. Kept short on purpose: a miss costs
+                    // nothing twice (cached below), but a game that resolves
+                    // several folders in a row before its first frame pays
+                    // this bound once per folder, and a long one compounds
+                    // into the same unresponsive-app freeze this exists to
+                    // avoid (measured: 5 s still let LEGO's window go
+                    // unresponsive long enough to be killed).
+                    StorageFolder folder;
+                    if (relative.Length == 0)
+                    {
+                        folder = root;
+                    }
+                    else
+                    {
+                        var lookup = Task.Run(() => root.GetFolderAsync(relative).AsTask());
+                        if (!lookup.Wait(TimeSpan.FromSeconds(1)))
+                        {
+                            System.Threading.Interlocked.Increment(ref TimedOut);
+                            throw new TimeoutException("GetFolderAsync(" + relative + ") did not return");
+                        }
+                        folder = lookup.Result;
+                    }
                     var unknown = Marshal.GetIUnknownForObject(folder);
                     try
                     {

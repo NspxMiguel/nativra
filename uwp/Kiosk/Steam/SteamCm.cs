@@ -266,9 +266,13 @@ namespace Kiosk.Steam
             return source.Task.ContinueWith(task =>
             {
                 timer.Dispose();
+                if (task.IsFaulted) System.Threading.Interlocked.Increment(ref TimedOut);
                 return task.GetAwaiter().GetResult();
             });
         }
+
+        /// <summary>How many CM requests (any instance) timed out waiting for Steam's answer.</summary>
+        public static long TimedOut;
 
         // --------------------------------------------------------------- logon
 

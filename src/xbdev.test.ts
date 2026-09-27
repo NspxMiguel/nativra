@@ -60,12 +60,16 @@ test("every catalogue entry is installable and uniquely named", () => {
   expect(new Set(slugs).size).toBe(slugs.length);
 
   for (const entry of entries) {
+    expect(entry.name.length).toBeGreaterThan(0);
+    // An entry can be listed with no public download yet (the shop shows it
+    // as "Not yet" instead of hiding it — see EmulatorShop.cs); only a real
+    // url has to point at an installable package.
+    if (entry.url === "") continue;
     expect(entry.url.startsWith("https://")).toBe(true);
     const fileName = entry.url.split("/").pop()!;
     const installable =
       isPackageFile(fileName) || fileName.toLowerCase().endsWith(".zip");
     expect(installable).toBe(true);
-    expect(entry.name.length).toBeGreaterThan(0);
   }
 });
 

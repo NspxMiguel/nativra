@@ -42,3 +42,173 @@ Log `CheckFormatSupport` / `CheckMultisampleQualityLevels` answers in
 GraphicsBridge, run LEGO (`APPID=352400`), and read which DXGI format the engine
 asks about just before the fault. Then disassemble `0x14033F600` down to the
 failing branch.
+
+## Build 377 (CheckFormatSupport logging, crash-log.txt)
+
+Different picture than the earlier stop. This run: `graphics=whole path
+works: level 0xB000, present 0x00000000` — the D3D11 device and swap chain
+were created successfully. No `CreateTexture2D`/`CreateDepthStencilView`
+failure logged, no `CheckFormatSupport` refusal logged either (so it never
+reached the point this build was meant to observe).
+
+Instead, the guest's main thread goes idle: `thread 13 ... idle=48171ms at
+USER32.dll!SystemParametersInfoA`, `busiest 8x USER32.dll!SystemParametersInfoA`
+— eight calls to a stub that answers instantly (`WindowStubs.cs`: a constant
+`Answers["SystemParametersInfoA"] = 1`, no work in it at all), then nothing
+further recorded on that thread for 48 seconds, then the whole app process is
+gone. No `crash-log.txt` entry (added this build specifically to catch a
+managed unhandled exception) and no console crash dump — this is not an
+exception of any kind reaching .NET or a native access violation with a
+dump. The most consistent explanation: the guest thread enters a spin or
+retry loop outside anything this build's diagnostics track (plausibly right
+after the earlier-documented null-resource read, if the engine's own
+try/catch around that swallows it and retries), burning CPU without making
+another tracked Win32 call, until the console's own foreground-unresponsive
+watchdog kills the app — see the note in
+[../DIAGNOSTICS.md](../DIAGNOSTICS.md#unexplained-app-termination) added this
+round; the same pattern (no exception, no dump, app gone after roughly a
+minute) showed up independently today in the emulator shop and in TRACE mode.
+
+Reproduction is not yet consistent enough between runs (an earlier attempt on
+the same build stopped after only ~20s, mid-load) to be certain this is the
+same failure every time. Next: `STACKS=on` alone (no TRACE, cheaper) for a
+longer window to confirm the idle thread's native return address, and check
+whether the earlier-documented `+0x3795DB` null-resource fault still happens
+first (a debug build or a native crash handler that survives longer than 48s
+would settle whether this is that fault swallowed by a retry loop, or
+something upstream of it entirely).
+
+## Build 378 (SteamBridge armed) — much further, then a frozen process
+
+With `steambridge.txt` set (the classic Steamworks bridge answers with the
+signed-in account instead of the game loading the real `steam_api64.dll` and
+waiting on a Steam client that is not there — that wait was the earlier
+48-second hang at `SystemParametersInfoA`, confirmed by comparison: without
+the bridge the game never gets past that call; with it, it does), the game
+now:
+
+- Creates its D3D11 device and swap chain (`graphics=whole path works`).
+- Fully creates and shows its window: `LoadIconA`, `LoadCursorA`,
+  `AdjustWindowRect`, `SetWindowTextA`, `SetWindowPos`, `ShowWindow`,
+  `UpdateWindow`, `SetForegroundWindow`, `SetFocus` — the complete sequence,
+  in order.
+
+Then, about 20-24 seconds in, the **whole process freezes** — not just the
+game's thread. The `native-watch.txt` background watcher (its own dedicated
+thread, unrelated to the game, writing a timestamp every second) stops
+updating entirely: three pulls a few seconds apart all showed the identical
+timestamp. The last stack sample before the freeze has the main thread inside
+an RPC call: `~ntdll.dll → ~RPCRT4.dll → ~combase.dll →
+~windows.storage.onecore.dll → ~shcore.dll → ~windows.storage.onecore.dll`
+(repeated) — a cross-process COM/WinRT call into the Storage broker. LEGO's
+files are on a USB drive (`usb=E:\Nativra\games\352400`); this is consistent
+with a file operation falling through to the slow broker path (`UsbFiles.cs`
+docs: the broker path measured ~220ms normally — this is not that, it never
+returns) rather than the fast folder-handle path, on whichever file the game
+reaches for once its window is up (likely a config or the first content
+file). After the freeze the console's watchdog kills the whole app, same
+as the earlier pattern (see [../DIAGNOSTICS.md](../DIAGNOSTICS.md)).
+
+**This is real forward progress**: window and graphics work now; the
+remaining blocker is a specific file access that hangs the storage broker
+instead of returning (even an error would let the game continue). Next:
+`FILEWATCH=on` together with `steambridge.txt` (not `stacks.txt`, which
+combined with `steambridge.txt` triggers a separate, earlier issue in
+`SteamClassic.Prebuild()` under trace — a Kiosk-side diagnostic bug to fix
+separately) to name the exact path the broker call hangs on.
+
+## Build 380 (1s bound + timeout counter) — the UsbFiles fix helped, isn't the whole story
+
+Console rebooted clean, then five more runs. Survival time after the window
+shows is not consistent (20-50s across runs, same console, same build,
+nothing else changed) — this on its own says the remaining blocker is a race,
+not a deterministic wait on one fixed thing.
+
+The clean result: `usb.folders opened=0 missed=0 declined=0 timedout=0` — a
+run that still froze and died at the same point (last call `SetFocus`, same
+as every prior run) with **zero** `UsbFiles` folder-handle timeouts. So the
+5-second-then-1-second freeze fixed in `UsbFiles.Folder()` was real and worth
+fixing, but it is not what is blocking LEGO specifically, or not the only
+thing. Checked the other bounded waits in the graphics/audio path
+(`GraphicsBridge.cs` ×3, `FrameMirror.cs`, `AudioBridge.cs` — each already
+has a 3-4 second bound, not an unbounded one) — none of them is a fresh
+unbounded-hang bug the way `UsbFiles.Folder()` was; if they are involved it
+would be several of them firing in sequence adding up, not one clear cause.
+
+Reasonable stopping point for tonight: window + D3D11 device/swap chain
+reliably work with `steambridge.txt`; something after the window is shown
+and before the first frame is intermittently very slow or genuinely stuck,
+severely enough that the console's watchdog (see
+[../DIAGNOSTICS.md](../DIAGNOSTICS.md#unexplained-app-termination)) ends the
+app before any of it reaches a log. Next real step needs either: TRACE mode
+scoped to only the window-to-first-Present window (full TRACE crashes the
+app itself after ~60-90s, so it cannot safely cover this), or profiling
+which of the several bounded waits above are actually firing and how many
+times, by adding counters to each the way `UsbFiles.TimedOut` was added.
+
+## Build 383 — every known blocking wait ruled out
+
+Added a counter to the sixth and last candidate found by an exhaustive grep
+of every `.Wait(`/`.GetAwaiter().GetResult()` in `uwp/Kiosk/Native/`,
+`uwp/Kiosk/Steam/` and `x86/Nativra.X86/Loader/`: `SteamCm.Await()` (30s
+timeout, used by the background playtime/achievement sync `SteamBridge`
+starts). Ran LEGO once more, patient, with all six now reported live:
+
+    waits timedout: show=0 shownative=0 release=0 mirror.prepare=0
+    audio.activate=0 steamcm.timedout=0
+
+All six stayed at zero for the whole run, right up to the app's death at
+40s. This is a complete, definitive negative result for every blocking-wait
+pattern that exists in this codebase's own Windows-bridge and Steam code —
+not one of them is the cause. The freeze is somewhere this kind of search
+cannot find: either genuine, slow work happening in LEGO's own machine code
+(a large shader compile or asset decompression that just takes a while,
+unlucky enough to trip whatever kills an unresponsive foreground app), a
+native deadlock inside COM/WinRT marshaling itself rather than in any of
+this project's own wait calls, or the console's own broker services being
+slow from a long evening of repeated installs and restarts rather than
+anything reproducible in the code.
+
+**Where this stands, honestly**: LEGO Jurassic World creates its D3D11
+device, swap chain, and window reliably with `steambridge.txt` set — real,
+verified progress from where this investigation started (a null-resource
+read before any of that worked). It does not yet reach a playable first
+frame. The next productive step is not more grep-based hunting in this
+codebase; it needs either a live debugger attached during the hang (not
+available from a Mac driving the console over Device Portal), or narrowing
+by elimination — try the same steps against a *different* 64-bit game that
+also uses a large asset set, to see whether the hang is LEGO-specific or a
+general risk any big enough game would hit.
+
+## Build 385 (LockWatch) — a real, specific lock, named for the first time
+
+The suspicious tail on every death (hundreds of EnterCriticalSection/
+LeaveCriticalSection pairs, then repeated Sleep) is real contention, not
+unrelated engine noise: `LockWatch` (new, opt-in via `lockwatch.txt`) names
+the CRITICAL_SECTION address entered many times running without another one
+between — `lock spin=2477 at 0x19D073D7070`, unchanged across three pulls a
+few seconds apart, right up to the app's death at 35s.
+
+That address is not a fixed engine constant — it is heap-allocated at
+runtime, so it belongs to whatever subsystem's lock the game constructed at
+start-up (a task/job queue or resource-loader are the common owners of a
+spin-checked lock like this). No `CreateThread`/`_beginthreadex` call
+appears anywhere in a 400-call window before the spin starts, and no "game"
+or "crt" tracked thread has ever shown up in `native-watch.txt` across every
+round of this investigation — so whatever should set the condition this
+lock protects true is not a worker thread the game creates and this
+codebase would see. Two live possibilities: (a) the condition is set by a
+callback the game expects from something Nativra's own bridges own —
+graphics, audio, or file I/O — that call for one reason or another never
+completes or never calls back; or (b) the engine's own logic for this
+platform expects a capability (a specific device feature, a file, a thread
+count) that is absent here and its fallback path is the one now spinning
+forever instead of degrading.
+
+**This is the most specific finding yet, and a reasonable point to hand off
+rather than keep pushing blind**: a real address, a real iteration count, no
+thread ever created to explain what it is waiting for. The next step needs
+symbols for `LEGOJurassicWorld_DX11.exe` (a call stack *inside* the spin
+loop, not just the KERNEL32 call it makes each iteration, would show what
+condition it is testing) or a live debugger — both outside what a console
+reached only over Device Portal can do tonight.

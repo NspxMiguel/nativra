@@ -31,6 +31,11 @@ All in the package's `LocalState`, readable with `xbdev pull Nativra <file> Loca
 - `portal-probe.txt` — whether the app reached the console's Device Portal.
 - `recorder-note.txt` — the in-app recorder's state; recordings themselves go
   to `LocalState/recordings` (from build 355).
+- `crash-log.txt` — every unhandled exception the app's own handler caught
+  before the process ended, with type, HRESULT, message and stack trace (from
+  build 377). A crash it did not catch (a native access violation) still
+  leaves nothing here; check the console's own crash dumps instead
+  (`/api/debug/dump/usermode/dumps` on the Device Portal).
 
 ## The Device Portal is out of the app's reach
 

@@ -308,7 +308,14 @@ namespace Kiosk.Native
                 CrtFiles.Install(imports);
                 DirectInputStub.Install(imports);
                 SspiStub.Install(imports);
+                LockWatch.Install(imports);
                 StackSampler.Enabled = await local.TryGetItemAsync("stacks.txt") != null;
+                // Its own marker, not stacks.txt: that one combined with
+                // steambridge.txt hits a separate issue in
+                // SteamClassic.Prebuild() under trace (see
+                // docs/progress/lego-jurassic-world.md), and LEGO needs
+                // steambridge.txt to get anywhere at all.
+                LockWatch.Active = await local.TryGetItemAsync("lockwatch.txt") != null;
                 // While diagnosing, every classic Steam interface call is traced.
                 if (StackSampler.Enabled && SteamBridge.Active)
                 {
@@ -711,6 +718,7 @@ namespace Kiosk.Native
                                         + " mirror.prepare=" + FrameMirror.PrepareTimedOut
                                         + " audio.activate=" + AudioBridge.ActivateTimedOut);
                                     beat.Add("steamcm.timedout=" + Steam.SteamCm.TimedOut);
+                                    beat.Add("lock spin=" + LockWatch.SpinCount + " at 0x" + LockWatch.SpinningOn.ToInt64().ToString("X"));
                                     beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " keyreads=" + PadBridge.KeyReads
                                         + " desktop=" + ControllerMode.Desktop
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);

@@ -55,7 +55,8 @@ namespace Nativra.X86.Loader
                 case GuestStop.Fault: return $"fault at 0x{FaultAddress:X8}";
                 case GuestStop.MissingImport: return $"missing import {Import}";
                 case GuestStop.Exited: return $"exited with code {ExitCode}";
-                case GuestStop.Raised: return $"raised exception 0x{ExitCode:X8} from 0x{FaultAddress:X8}";
+                case GuestStop.Raised:
+                    return $"raised exception 0x{ExitCode:X8} at 0x{FaultAddress:X8}" + (Detail != null ? $" ({Detail})" : "");
                 case GuestStop.HostError:
                 {
                     var first = Detail ?? "";
@@ -518,7 +519,11 @@ namespace Nativra.X86.Loader
                     }
                     catch (GuestRaisedException raised)
                     {
-                        return new GuestRunResult(GuestStop.Raised, Memory.Read32(Cpu.Esp), import, raised.Code);
+                        var where = raised.Address != 0 ? raised.Address : Memory.Read32(Cpu.Esp);
+                        var detail = raised.Code == 0xC0000005 && raised.Address != 0
+                            ? $"{(raised.Write ? "write to" : "read of")} 0x{raised.Target:X8}"
+                            : null;
+                        return new GuestRunResult(GuestStop.Raised, where, import, raised.Code, detail);
                     }
                     catch (GuestFaultException fe)
                     {

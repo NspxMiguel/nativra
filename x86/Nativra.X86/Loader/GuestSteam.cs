@@ -312,6 +312,7 @@ namespace Nativra.X86.Loader
             else if (version.StartsWith("STEAMUSERSTATS_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamUserStats"; layout = StatsLayout; methods = StatsMethods(); }
             else if (version.StartsWith("STEAMREMOTESTORAGE_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamRemoteStorage"; layout = RemoteLayout; methods = RemoteMethods(VersionNumber(version)); }
             else if (version.StartsWith("STEAMSCREENSHOTS_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamScreenshots"; layout = ScreenshotsLayout(VersionNumber(version)); methods = new Dictionary<string, Method>(); }
+            else if (version.StartsWith("STEAMUGC_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamUGC"; layout = UgcLayout(VersionNumber(version)); methods = UgcMethods(); }
             else { family = version; layout = new Slot[0]; methods = new Dictionary<string, Method>(); }
 
             var table = kernel.Heap.Alloc(Slots * 4, zero: true);
@@ -695,6 +696,53 @@ namespace Nativra.X86.Loader
             if (version >= 3) slots.AddRange(new[] { "IsScreenshotsHooked:0", "AddVRScreenshotToLibrary:3" });
             return Layout(slots.ToArray());
         }
+
+        // --- ISteamUGC (007) --------------------------------------------------------------
+        // The Workshop as the console has it: nothing subscribed, nothing installed,
+        // queries and item updates answer with invalid handles (no network session
+        // for the game), so a game's Workshop screen shows an empty list. Other
+        // versions share only their first ten slots with 007; the rest stop by name.
+
+        private static Slot[] UgcLayout(int version)
+        {
+            var slots = new List<string>
+            {
+                "CreateQueryUserUGCRequest:7:Q", "CreateQueryAllUGCRequest:5:Q", "CreateQueryUGCDetailsRequest:2:Q",
+                "SendQueryUGCRequest:2:Q", "GetQueryUGCResult:4", "GetQueryUGCPreviewURL:5", "GetQueryUGCMetadata:5",
+                "GetQueryUGCChildren:5", "GetQueryUGCStatistic:5", "GetQueryUGCNumAdditionalPreviews:3",
+            };
+            if (version == 7)
+                slots.AddRange(new[]
+                {
+                    "GetQueryUGCAdditionalPreview:7", "GetQueryUGCNumKeyValueTags:3", "GetQueryUGCKeyValueTag:8",
+                    "ReleaseQueryUGCRequest:2", "AddRequiredTag:3", "AddExcludedTag:3", "SetReturnKeyValueTags:3",
+                    "SetReturnLongDescription:3", "SetReturnMetadata:3", "SetReturnChildren:3", "SetReturnAdditionalPreviews:3",
+                    "SetReturnTotalOnly:3", "SetLanguage:3", "SetAllowCachedResponse:3", "SetCloudFileNameFilter:3",
+                    "SetMatchAnyTag:3", "SetSearchText:3", "SetRankedByTrendDays:3", "AddRequiredKeyValueTag:4",
+                    "RequestUGCDetails:3:Q", "CreateItem:2:Q", "StartItemUpdate:3:Q", "SetItemTitle:3", "SetItemDescription:3",
+                    "SetItemUpdateLanguage:3", "SetItemMetadata:3", "SetItemVisibility:3", "SetItemTags:3", "SetItemContent:3",
+                    "SetItemPreview:3", "RemoveItemKeyValueTags:3", "AddItemKeyValueTag:4", "SubmitItemUpdate:3:Q",
+                    "GetItemUpdateProgress:4", "SetUserItemVote:3:Q", "GetUserItemVote:2:Q", "AddItemToFavorites:3:Q",
+                    "RemoveItemFromFavorites:3:Q", "SubscribeItem:2:Q", "UnsubscribeItem:2:Q", "GetNumSubscribedItems:0",
+                    "GetSubscribedItems:2", "GetItemState:2", "GetItemInstallInfo:6", "GetItemDownloadInfo:4", "DownloadItem:3",
+                    "BInitWorkshopForGameServer:2", "SuspendDownloads:1",
+                });
+            return Layout(slots.ToArray());
+        }
+
+        private Dictionary<string, Method> UgcMethods() => new Dictionary<string, Method>
+        {
+            ["CreateQueryUserUGCRequest"] = c => ulong.MaxValue,      // k_UGCQueryHandleInvalid
+            ["CreateQueryAllUGCRequest"] = c => ulong.MaxValue,
+            ["CreateQueryUGCDetailsRequest"] = c => ulong.MaxValue,
+            ["StartItemUpdate"] = c => ulong.MaxValue,               // k_UGCUpdateHandleInvalid
+            ["GetNumSubscribedItems"] = c => 0,
+            ["GetSubscribedItems"] = c => 0,
+            ["GetItemState"] = c => 0,                               // k_EItemStateNone
+            ["GetItemInstallInfo"] = c => 0,
+            ["GetItemDownloadInfo"] = c => 0,
+            ["DownloadItem"] = c => 0,
+        };
 
         // --- ISteamRemoteStorage (012-014) ---------------------------------------------------
 

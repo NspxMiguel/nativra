@@ -165,6 +165,20 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void WorkshopAnswersAsEmpty()
+        {
+            var client = Api("SteamClient");
+            var ugc = M(client, 26, 1, 1, Str("STEAMUGC_INTERFACE_VERSION007"));   // GetISteamUGC
+            Assert.Equal(0u, M(ugc, 50));                                            // GetNumSubscribedItems
+            Assert.Equal(0u, M(ugc, 51, k.Heap.Alloc(8), 1));                        // GetSubscribedItems
+            Method(ugc, 1, out var low, 0, 0, 562260, 562260, 1);                    // CreateQueryAllUGCRequest
+            Assert.Equal(0xFFFFFFFFu, low);
+            Assert.Equal(0xFFFFFFFFu, p.Cpu.Edx);                                    // k_UGCQueryHandleInvalid
+            Assert.Equal(0u, M(ugc, 57, 1));                                         // SuspendDownloads, the last 007 slot
+            Assert.Equal(GuestStop.HostError, Method(ugc, 58, out _).Stop);
+        }
+
+        [Fact]
         public void ScreenshotsAreServedAndAnUnknownSlotStopsWithItsName()
         {
             var client = Api("SteamClient");

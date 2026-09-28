@@ -56,3 +56,41 @@ last N host function names once `exe.calls` crosses ~750,000, the same
 "recent calls" ring already used elsewhere in the codebase) rather than
 guess, since the exact same stopping point every run means the same log
 line will appear at the same call count next time too.
+
+## Fixed, verified: the FileWatch.Attributes deadlock is real and gone
+
+Root cause found by loading `Kiosk.pdb` (from the CI build's `.appxsym`
+artifact) into radare2 and resolving the crash stack's raw addresses
+directly to source: both non-generic frames landed in
+`Kiosk.Native.FileWatch.Attributes` / `GetFileAttributesExFromAppW`.
+`GetFileAttributesExFromAppW` is a direct P/Invoke into the app-container
+storage broker with no timeout — the same class of bug as `UsbFiles.Folder`
+before it. Fixed the same way (build 395, commit fc3fa7b): run it on its own
+task, 2s bound, timeout answers "not found" instead of blocking forever.
+
+Verified on console: the exact `exe.calls≈755000`/`exe.pumped≈12000` point
+that killed every previous run went past cleanly — `exe.calls` reached
+755,934 and kept climbing (+395,606 in one interval, not flat). The original
+deadlock is confirmed fixed.
+
+**New finding: it still doesn't reach a frame.** Shortly after passing that
+point, the whole Nativra process dropped to the Xbox Home screen again — no
+crash-log.txt entry (not a caught .NET exception), and native-probe.txt
+stopped updating at the same 755,934/12,969 reading (the probe writer died
+with the process, so that reading is the last one before whatever happened,
+not necessarily the exact failure point — could be moments later). This is
+a different, not-yet-diagnosed problem, likely the same class of bug
+(another unbounded broker call somewhere else in the startup path) given how
+cleanly the first one was found. Next session: reproduce again, and if it
+recurs at a consistent call count like the first one did, the same
+PDB-address-resolution technique above will find it directly — that
+workflow is now proven and fast to repeat:
+1. `gh release download kiosk-build-<N> -D <dir>` (grabs `kiosk-uwp.zip`, which
+   contains `Kiosk_<ver>_Test/Kiosk_<ver>_x64.appxsym`)
+2. Unzip the `.appxsym` (it's a zip containing `Kiosk.pdb`)
+3. Extract `Kiosk.dll` from the matching `.msixbundle`
+4. `brew install radare2`
+5. Pull `native-watch.txt` from the console while it's hung, take the
+   `Kiosk.dll+0x...` offsets, add the image base (`rabin2 -H Kiosk.dll` shows
+   it, e.g. `0x180000000`), and resolve with
+   `r2 -q -c "idp Kiosk.pdb; fd <base+offset>" Kiosk.dll`

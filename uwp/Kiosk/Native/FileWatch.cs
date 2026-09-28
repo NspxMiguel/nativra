@@ -97,7 +97,7 @@ namespace Kiosk.Native
         public static long BrokerCalls, BrokerTicks;
 
         /// <summary>The same, by kind: opens, directory listings, attribute questions.</summary>
-        public static long OpenCalls, OpenTicks, FindCalls, FindTicks, AttributeCalls, AttributeTicks;
+        public static long OpenCalls, OpenTicks, FindCalls, FindTicks, AttributeCalls, AttributeTicks, AttributesTimedOut;
 
         public static string BrokerReport()
         {
@@ -161,30 +161,62 @@ namespace Kiosk.Native
                     return true;
                 }
             }
-            var buffer = Marshal.AllocHGlobal(40);
-            try
+            // GetFileAttributesExFromAppW goes through the same app-container
+            // storage broker as the WinRT folder lookups that turned out to hang
+            // outright on a real game (see UsbFiles.Folder): bound it the same
+            // way instead of trusting it always comes back. The buffer belongs
+            // to the background task, not this one — if it times out the task
+            // may still be running and could still write into it, so this frees
+            // it only once the task itself is done (immediately on the happy
+            // path; whenever it finally returns, if ever, on a timeout).
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            int error;
+            bool ok;
+            byte[] answer = Missing;
+            var lookup = System.Threading.Tasks.Task.Run(() =>
             {
-                var started = System.Diagnostics.Stopwatch.GetTimestamp();
-                var ok = GetFileAttributesExFromAppW(path, 0, buffer);
-                var error = Marshal.GetLastWin32Error();
-                Count(ref AttributeCalls, ref AttributeTicks, started);
-                byte[] answer = Missing;
+                var owned = Marshal.AllocHGlobal(40);
+                try
+                {
+                    var result = GetFileAttributesExFromAppW(path, 0, owned);
+                    var code = Marshal.GetLastWin32Error();
+                    byte[] bytes = null;
+                    if (result)
+                    {
+                        bytes = new byte[AttributeData];
+                        Marshal.Copy(owned, bytes, 0, AttributeData);
+                    }
+                    return (result, code, bytes);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(owned);
+                }
+            });
+            if (lookup.Wait(TimeSpan.FromSeconds(2)))
+            {
+                bool resultOk; int resultError; byte[] bytes;
+                (resultOk, resultError, bytes) = lookup.Result;
+                ok = resultOk;
+                error = resultError;
                 if (ok)
                 {
-                    answer = new byte[AttributeData];
-                    Marshal.Copy(buffer, answer, 0, AttributeData);
+                    answer = bytes;
                     if (data != IntPtr.Zero) Marshal.Copy(answer, 0, data, AttributeData);
                 }
-                // Only "not there" is worth remembering among failures.
-                if (cacheable && (ok || error == 2 || error == 3))
-                    lock (attributeCache) attributeCache[path] = answer;
-                if (!ok) SetLastError((uint)error);
-                return ok;
             }
-            finally
+            else
             {
-                Marshal.FreeHGlobal(buffer);
+                System.Threading.Interlocked.Increment(ref AttributesTimedOut);
+                ok = false;
+                error = 2;   // treat an unanswered broker the same as "not found"
             }
+            Count(ref AttributeCalls, ref AttributeTicks, started);
+            // Only "not there" is worth remembering among failures.
+            if (cacheable && (ok || error == 2 || error == 3))
+                lock (attributeCache) attributeCache[path] = answer;
+            if (!ok) SetLastError((uint)error);
+            return ok;
         }
 
         [DllImport("api-ms-win-core-errorhandling-l1-1-0.dll")]

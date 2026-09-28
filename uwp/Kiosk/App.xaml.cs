@@ -2,6 +2,7 @@ using System;
 using Windows.ApplicationModel.Activation;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Core;
 using Windows.UI.ViewManagement;
 
 namespace Kiosk
@@ -76,6 +77,7 @@ namespace Kiosk
                 // Not every host allows it; the title-safe layout still works.
             }
 
+            var isNewFrame = !(Window.Current.Content is Frame);
             if (!(Window.Current.Content is Frame frame))
             {
                 frame = new Frame();
@@ -85,6 +87,25 @@ namespace Kiosk
             if (frame.Content == null)
             {
                 frame.Navigate(typeof(MainPage), e.Arguments);
+            }
+
+            // The controller's B press reaches the app as this event, not as
+            // a key press a page could catch on its own — nothing hooked it,
+            // so Xbox's own default ran instead: leaving the whole app for
+            // Home, from any screen, exactly like pressing it on the Home
+            // screen itself does. Send it to the frame's own back stack
+            // first; only the root screen (nothing to go back to) still
+            // falls through to that default, which is the right one there.
+            if (isNewFrame)
+            {
+                SystemNavigationManager.GetForCurrentView().BackRequested += (sender, args) =>
+                {
+                    if (frame.CanGoBack)
+                    {
+                        frame.GoBack();
+                        args.Handled = true;
+                    }
+                };
             }
 
             Window.Current.Activate();

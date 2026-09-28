@@ -25,3 +25,19 @@ across millions of small calls the game would run near-instantly on real
 hardware. Worth a longer unattended run (20-30 minutes) next time, and/or
 profiling whether the per-call dispatch overhead itself (not `towupper`'s own
 logic, which is a single `char.ToUpperInvariant`) is what's actually slow.
+
+## Clarification: the busy `towupper` calls are not emulation overhead
+
+Checked whether the "busiest" numbers reflect a per-call dispatch cost added
+by Nativra (which would be a real, fixable bug): they don't. `towupper` is a
+standard CRT export the packaged redistributable CRT DLLs already provide —
+it is never routed through `Win32Shim` (that class only builds stub thunks
+for imports nothing else answers) or any other interception layer for a
+64-bit game. It runs as plain native code, same as it would on a PC. So the
+6M-plus calls are the game's own (likely case-insensitive config/asset-table
+search) work, genuinely taking that long on this console, not an artifact of
+how Nativra dispatches imports. Whether that is "just how slow this specific
+UE4 startup path is here" or a separate real bug in the game's own algorithm
+meeting an unusually large table is still open — not something to chase
+further without being able to compare against a timing baseline (a PC
+running the same build), which is out of reach from here.

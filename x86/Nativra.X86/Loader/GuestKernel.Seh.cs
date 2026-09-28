@@ -290,6 +290,8 @@ namespace Nativra.X86.Loader
             memory.Write32(t + 0, filterReturn);
             memory.Write32(t + 4, t + 8);                 // the one argument: &EXCEPTION_POINTERS
             pendingFilter = d;
+            Log?.Invoke("calling unhandledFilter 0x" + unhandledFilter.ToString("X8") +
+                " for code 0x" + memory.Read32(d.Record).ToString("X8"));
 
             process.Cpu.Esp = t;
             process.Cpu.Eip = unhandledFilter;
@@ -309,6 +311,7 @@ namespace Nativra.X86.Loader
             pendingFilter = null;
             if (d == null) throw new GuestRaisedException(StatusInvalidDisposition);
             var result = process.Cpu.Eax;
+            Log?.Invoke("unhandledFilter returned 0x" + result.ToString("X8"));
             dispatches.Remove(d.Id);
 
             if (result == 0xFFFFFFFF)

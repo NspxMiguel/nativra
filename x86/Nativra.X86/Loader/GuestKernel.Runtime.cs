@@ -109,6 +109,7 @@ namespace Nativra.X86.Loader
             {
                 var previous = unhandledFilter;
                 unhandledFilter = c.Arg(0);
+                Log?.Invoke("SetUnhandledExceptionFilter 0x" + previous.ToString("X8") + " -> 0x" + unhandledFilter.ToString("X8"));
                 return previous;
             });
             i.Register(k, "UnhandledExceptionFilter", CallConv.Stdcall, 1, c => 0 /* EXCEPTION_CONTINUE_SEARCH */);

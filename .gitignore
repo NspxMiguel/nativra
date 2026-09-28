@@ -33,6 +33,7 @@ portal-probe.txt
 shop-log.txt
 update-log.txt
 crash-log.txt
+shelf-log.txt
 native-frame.bgra
 HANDOFF.md
 .games/

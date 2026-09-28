@@ -637,6 +637,21 @@ namespace Kiosk
 
         private Dictionary<uint, string> libraryNames;
 
+        /// <summary>Appends a timestamped line to LocalState\shelf-log.txt, readable from the Mac.</summary>
+        private static void ShelfLog(string line)
+        {
+            try
+            {
+                var text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + line + "\r\n";
+                var path = System.IO.Path.Combine(ApplicationData.Current.LocalFolder.Path, "shelf-log.txt");
+                System.IO.File.AppendAllText(path, text);
+            }
+            catch
+            {
+                // Diagnostics only; a failure here must not break the shelf.
+            }
+        }
+
         /// <summary>
         /// A game's name from his library or his family's, for the downloads
         /// screen; null when the library cannot be reached.
@@ -652,10 +667,14 @@ namespace Kiosk
                     foreach (var game in await SteamLibrary.FamilyAsync(session)) names[game.AppId] = game.Name;
                     libraryNames = names;
                 }
-                catch
+                catch (Exception error)
                 {
                     // The live library did not answer this time; a name
-                    // already learned still comes from the cache below.
+                    // already learned still comes from the cache below. Logged
+                    // because a silent failure here is exactly what made a
+                    // game stick on its app id forever with no way to tell
+                    // why from the console alone.
+                    ShelfLog(error.Message);
                 }
             }
             if (libraryNames != null && libraryNames.TryGetValue(appId, out var name))

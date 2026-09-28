@@ -84,46 +84,59 @@ namespace Kiosk
         /// </summary>
         public static async Task<List<OwnedGame>> FamilyAsync(SteamSession session)
         {
-            var games = new List<OwnedGame>();
             try
             {
                 var token = await session.EnsureAccessTokenAsync();
-                if (string.IsNullOrEmpty(token)) return games;
+                var games = string.IsNullOrEmpty(token) ? null : await FamilyFetchAsync(session, token);
+                if (games != null) return games;
 
-                const string Base = "https://api.steampowered.com/IFamilyGroupsService";
-                var groupText = await Http.GetStringAsync(
-                    $"{Base}/GetFamilyGroupForUser/v1/?access_token={Uri.EscapeDataString(token)}"
-                    + $"&steamid={session.SteamId}");
-                if (!JsonObject.TryParse(groupText, out var groupRoot)) return games;
+                // Same reasoning as OwnedAsync: a cached token Steam has since
+                // expired fails exactly like "no family group" would, so this
+                // used to give up silently instead of minting a fresh one.
+                token = await session.EnsureAccessTokenAsync(force: true);
+                if (string.IsNullOrEmpty(token)) return new List<OwnedGame>();
 
-                var familyId = groupRoot.GetNamedObject("response", new JsonObject())
-                    .GetNamedString("family_groupid", string.Empty);
-                if (string.IsNullOrEmpty(familyId)) return games;
-
-                var sharedText = await Http.GetStringAsync(
-                    $"{Base}/GetSharedLibraryApps/v1/?access_token={Uri.EscapeDataString(token)}"
-                    + $"&family_groupid={familyId}&include_own=true&include_excluded=true&include_free=true");
-                if (!JsonObject.TryParse(sharedText, out var sharedRoot)) return games;
-
-                var payload = sharedRoot.GetNamedObject("response", new JsonObject());
-                if (!payload.ContainsKey("apps")) return games;
-
-                foreach (var value in payload.GetNamedArray("apps"))
-                {
-                    var item = value.GetObject();
-                    var name = item.GetNamedString("name", string.Empty);
-                    if (string.IsNullOrWhiteSpace(name)) continue;
-                    games.Add(new OwnedGame
-                    {
-                        AppId = (uint)item.GetNamedNumber("appid", 0),
-                        Name = name,
-                        Shared = true,
-                    });
-                }
+                return await FamilyFetchAsync(session, token) ?? new List<OwnedGame>();
             }
             catch
             {
                 // No family, or a refusal: the owned library still stands on its own.
+                return new List<OwnedGame>();
+            }
+        }
+
+        /// <summary>Null means the request itself failed; an empty list means no shared apps.</summary>
+        private static async Task<List<OwnedGame>> FamilyFetchAsync(SteamSession session, string token)
+        {
+            var games = new List<OwnedGame>();
+            const string Base = "https://api.steampowered.com/IFamilyGroupsService";
+            var groupText = await Http.GetStringAsync(
+                $"{Base}/GetFamilyGroupForUser/v1/?access_token={Uri.EscapeDataString(token)}"
+                + $"&steamid={session.SteamId}");
+            if (!JsonObject.TryParse(groupText, out var groupRoot)) return null;
+
+            var familyId = groupRoot.GetNamedObject("response", new JsonObject())
+                .GetNamedString("family_groupid", string.Empty);
+            if (string.IsNullOrEmpty(familyId)) return games;
+
+            var sharedText = await Http.GetStringAsync(
+                $"{Base}/GetSharedLibraryApps/v1/?access_token={Uri.EscapeDataString(token)}"
+                + $"&family_groupid={familyId}&include_own=true&include_excluded=true&include_free=true");
+            if (!JsonObject.TryParse(sharedText, out var sharedRoot)) return null;
+
+            var payload = sharedRoot.GetNamedObject("response", new JsonObject());
+            if (!payload.ContainsKey("apps")) return games;
+
+            foreach (var value in payload.GetNamedArray("apps"))
+            {
+                var item = value.GetObject();
+                var name = item.GetNamedString("name", string.Empty);
+                games.Add(new OwnedGame
+                {
+                    AppId = (uint)item.GetNamedNumber("appid", 0),
+                    Name = string.IsNullOrWhiteSpace(name) ? null : name,
+                    Shared = true,
+                });
             }
             return games;
         }
@@ -160,11 +173,15 @@ namespace Kiosk
             {
                 var item = value.GetObject();
                 var name = item.GetNamedString("name", string.Empty);
-                if (string.IsNullOrWhiteSpace(name)) continue;
+                // Steam does return a real owned app with a blank name now
+                // and then (a delisted or tool app id, still owned). Keep the
+                // entry anyway: dropping it made GameNameAsync's dictionary
+                // lookup miss forever, which looked identical to the library
+                // fetch never having worked at all.
                 games.Add(new OwnedGame
                 {
                     AppId = (uint)item.GetNamedNumber("appid", 0),
-                    Name = name,
+                    Name = string.IsNullOrWhiteSpace(name) ? null : name,
                     MinutesPlayed = (int)item.GetNamedNumber("playtime_forever", 0),
                 });
             }

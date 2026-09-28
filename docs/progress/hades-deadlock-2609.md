@@ -94,3 +94,29 @@ workflow is now proven and fast to repeat:
    `Kiosk.dll+0x...` offsets, add the image base (`rabin2 -H Kiosk.dll` shows
    it, e.g. `0x180000000`), and resolve with
    `r2 -q -c "idp Kiosk.pdb; fd <base+offset>" Kiosk.dll`
+
+## Neighbours checked: the same bug is probably widespread
+
+Grepped for every other `*FromAppW` broker P/Invoke (the family
+`GetFileAttributesExFromAppW` belongs to) across `Native/`:
+`CreateFileFromAppW` and `CreateDirectoryFromAppW` in `CrtFiles.cs`;
+`FindFirstFileExFromAppW`, `MoveFileFromAppW`, `DeleteFileFromAppW`,
+`CopyFileFromAppW`, `CreateFileFromAppW` (again, a second copy) in
+`FileWatch.cs`; `CreateFileFromAppW`, `FindFirstFileExFromAppW`,
+`CreateDirectoryFromAppW`, `DeleteFileFromAppW`, `RemoveDirectoryFromAppW`
+in `X86Files.cs` — roughly 15 call sites total, every one a direct,
+unbounded P/Invoke into the same app-container storage broker that just
+hung on `GetFileAttributesExFromAppW`.
+
+**Not fixed tonight, deliberately.** `CreateFileFromAppW` specifically is
+the single hottest call in the file layer (every file open) — wrapping it
+in the same `Task.Run` + 2s-wait pattern unconditionally would add real
+per-call overhead to the common, already-working case, and that trade-off
+needs an actual timing comparison on console, not a guess made to close out
+a context-constrained session. The narrower, safer version of this fix is
+probably: only the ones that are not already latency-sensitive (directory
+creation, delete, move, rename — not the per-file open path) can get the
+bounded-wait treatment cheaply; `CreateFileFromAppW` itself may need a
+different approach (a shorter bound, or accepting that a hang there is
+rarer because it is usually opening a file that is already known to exist).
+Flagged as the clear next step, not attempted blind.

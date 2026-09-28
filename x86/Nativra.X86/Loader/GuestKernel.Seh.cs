@@ -40,6 +40,12 @@ namespace Nativra.X86.Loader
         private readonly Dictionary<uint, SehDispatch> dispatches = new Dictionary<uint, SehDispatch>();
         private uint nextDispatch = 1;
         private uint sehReturn;
+        private uint filterReturn;
+        // The one filter call in flight, if any: UnhandledExceptionFilter is
+        // WINAPI (stdcall, one argument, the callee pops it), a different
+        // stack shape from the SEH handlers FindReturning's two offsets are
+        // built for, so this is tracked directly instead of guessed at.
+        private SehDispatch pendingFilter;
 
         private sealed class SehDispatch
         {
@@ -61,6 +67,8 @@ namespace Nativra.X86.Loader
         {
             i.Register("nativra.dll", "SehReturn", CallConv.Cdecl, 0, c => { HandlerReturned(); return 0; });
             sehReturn = i.Bind("nativra.dll", "SehReturn", -1);
+            i.Register("nativra.dll", "SehFilterReturn", CallConv.Cdecl, 0, c => { FilterReturned(); return 0; });
+            filterReturn = i.Bind("nativra.dll", "SehFilterReturn", -1);
 
             i.Register("kernel32.dll", "RaiseException", CallConv.Stdcall, 4, c =>
             {
@@ -232,6 +240,11 @@ namespace Nativra.X86.Loader
             if (IsEnd(frame))
             {
                 if (d.Unwind) { FinishUnwind(d); return; }
+                // A program that installed its own top-level filter (SetUnhandledExceptionFilter
+                // — common in a DRM/anti-tamper wrapper, which routinely raises an exception on
+                // purpose and expects its own filter to fix up the context and resume) gets a real
+                // call to it before this counts as fatal, exactly as Windows would.
+                if (unhandledFilter != 0) { CallUnhandledFilter(d); return; }
                 dispatches.Remove(d.Id);
                 // Unhandled: the record says where it happened (and, for an access
                 // violation, what was touched), which is what the report needs.
@@ -255,6 +268,60 @@ namespace Nativra.X86.Loader
             process.Cpu.Esp = t;
             process.Cpu.Eip = memory.Read32(frame + 4);
             process.Jumped();
+        }
+
+        /// <summary>
+        /// Calls the program's own top-level filter with a pointer to an
+        /// EXCEPTION_POINTERS {ExceptionRecord, ContextRecord} — the same call
+        /// Windows makes when structured handling finds nothing on the chain.
+        /// The filter is guest code; like a __except handler, this sets up its
+        /// call and returns, and <see cref="FilterReturned"/> takes the next
+        /// step once it comes back to the sentinel.
+        /// </summary>
+        private void CallUnhandledFilter(SehDispatch d)
+        {
+            // t+8/t+12 are the normal handler call's frame/context argument
+            // slots (unused here — the filter takes one argument, not four),
+            // safely inside the reserved call area and clear of d.Record
+            // (t+32) and d.Context (t+112) that a wider struct would clobber.
+            var t = d.Top;
+            memory.Write32(t + 8, d.Record);            // EXCEPTION_POINTERS.ExceptionRecord
+            memory.Write32(t + 12, d.Context);           // EXCEPTION_POINTERS.ContextRecord
+            memory.Write32(t + 0, filterReturn);
+            memory.Write32(t + 4, t + 8);                 // the one argument: &EXCEPTION_POINTERS
+            pendingFilter = d;
+
+            process.Cpu.Esp = t;
+            process.Cpu.Eip = unhandledFilter;
+            process.Jumped();
+        }
+
+        /// <summary>
+        /// The top-level filter returned: -1 (EXCEPTION_CONTINUE_EXECUTION)
+        /// resumes the guest exactly where the exception happened, same as a
+        /// __except handler's disposition 0 — anything else (0 CONTINUE_SEARCH,
+        /// 1 EXECUTE_HANDLER, or garbage) is still unhandled, same as Windows
+        /// with no debugger attached: the process would not survive it either.
+        /// </summary>
+        private void FilterReturned()
+        {
+            var d = pendingFilter;
+            pendingFilter = null;
+            if (d == null) throw new GuestRaisedException(StatusInvalidDisposition);
+            var result = process.Cpu.Eax;
+            dispatches.Remove(d.Id);
+
+            if (result == 0xFFFFFFFF)
+            {
+                RestoreContext(d.Context);
+                process.Jumped();
+                return;
+            }
+
+            var code = memory.Read32(d.Record);
+            var parameters = memory.Read32(d.Record + 16);
+            throw new GuestRaisedException(code, memory.Read32(d.Record + 12),
+                parameters >= 2 ? memory.Read32(d.Record + 24) : 0, parameters >= 1 && memory.Read32(d.Record + 20) != 0);
         }
 
         /// <summary>A handler returned to the sentinel: act on its disposition.</summary>

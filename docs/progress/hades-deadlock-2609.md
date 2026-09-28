@@ -36,3 +36,23 @@ similarly confined to `x86/Nativra.X86/Loader/`. This looks like a
 pre-existing intermittent bug this session happened to hit twice in a row,
 not a regression from tonight's work — but that is an inference, not
 verified by a clean run on an older build tonight.
+
+## Confirmed deterministic (3 runs)
+
+Reproduced two more times: `exe.calls=754089`/`exe.pumped=11373`,
+`exe.calls=755227`/`exe.pumped=12240`, `exe.calls=755407`/`exe.pumped=12235`
+— same stall point within noise, every time, on a genuinely cold process
+each run. This is not resource pressure or a slow console tonight: it is a
+deterministic deadlock at a specific point in Hades' own startup sequence,
+right around 755,000 host calls and 12,000 pumped window messages.
+
+**This is the single best lead of the night to hand to a fresh session.**
+The stack (see above) has the main thread inside `windows.storage.onecore.dll`
+via `combase.dll`/`RPCRT4.dll`, called from `~Kiosk.dll+0x737436`, reached
+through a chain that repeatedly crosses `SDL2.dll` and `EngineWin64s.dll`.
+Being 100% reproducible at the same call count makes this tractable: the
+next session should add a call-count-based breakpoint-equivalent (log the
+last N host function names once `exe.calls` crosses ~750,000, the same
+"recent calls" ring already used elsewhere in the codebase) rather than
+guess, since the exact same stopping point every run means the same log
+line will appear at the same call count next time too.

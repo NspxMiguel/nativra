@@ -120,3 +120,38 @@ bounded-wait treatment cheaply; `CreateFileFromAppW` itself may need a
 different approach (a shorter bound, or accepting that a hang there is
 rarer because it is usually opening a file that is already known to exist).
 Flagged as the clear next step, not attempted blind.
+
+## Second stop: reproduced, ambiguous — might be the same bug via a new path
+
+Reproduced the "still doesn't reach a frame" issue again on build 395,
+stalling flat at `exe.calls=754907`/`exe.pumped=12004` (identical reading
+across a 20+ second recheck — not moving). Pulled `native-watch.txt` and
+resolved the `Kiosk.dll` offsets in the main thread's stack with the same
+PDB technique:
+
+```
+0x180000000+0x73D418 -> Kiosk.Native.FileWatch.Attributes + 1048
+0x180000000+0x4106C8 -> System.Threading.Tasks.Task<(bool,int,byte[])>  (my own fix's tuple type)
+0x180000000+0x121240 -> Dictionary<..., (bool,int,byte[])>              (also my fix's types)
+```
+
+This is `Attributes()` again, but this time the frames are the generic
+`Task<(bool,int,byte[])>`/`Dictionary` types the fix itself introduced —
+meaning either:
+1. The main thread is legitimately just inside the bounded `lookup.Wait(2s)`
+   call at the moment this sample was taken (expected, harmless — `Task.Wait`
+   uses the same OS wait primitive `KERNELBASE+0x229F3` this frame shows),
+   and the real stall is elsewhere, coincidentally sampled while a nearby
+   `Attributes()` call happened to be mid-flight; or
+2. Something about repeated timeouts through the fix does not actually let
+   the game keep going — worth checking whether the game is calling
+   `Attributes()` on the *same* path over and over (a retry loop of its own
+   that never accepts "not found" and gives up), so every 2 seconds it just
+   asks again and the effective behaviour is still an infinite wait, just
+   chunked into 2-second slices instead of one unbounded one.
+
+Not resolved — didn't have the context budget left tonight to add a log
+line at the top of `Attributes()` (which path, which count) and watch
+whether it is one call parked mid-timeout or thousands of retries of the
+same path. That is the exact next step, and it is cheap: one `Log()` call,
+one rebuild, one run.

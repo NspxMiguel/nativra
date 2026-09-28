@@ -75,3 +75,32 @@ that the diagnostic's displayed module name matches, but that display uses
 `import.Module`, which is set from `Bind()`'s own already-canonicalized
 `module` parameter, not from a second independent source, so it cannot
 actually catch a mismatch between the two callers.
+
+## Update (build 394): implemented calling SetUnhandledExceptionFilter, no change
+
+Added real support for calling a program's own top-level unhandled-exception
+filter before treating an exception as fatal (`GuestKernel.Seh.cs`'s
+`CallUnhandledFilter`/`FilterReturned`, commit c14c08a) — this is a real,
+independently useful fix (any program that installs one and expects
+`EXCEPTION_CONTINUE_EXECUTION` to resume it now gets that), but it did not
+change WAVESHAPER's crash at all: same `0xC0000005 at 0x0020F300`, same
+`x86.eip=0x7EF00010`.
+
+Added logging for every `SetUnhandledExceptionFilter` call and for the new
+filter dispatch (commit be5704b) to find out why. Answer: **WAVESHAPER never
+calls `SetUnhandledExceptionFilter` at all** — no log line appears before the
+crash. So this specific exception is unhandled because there is genuinely no
+handler anywhere in the chain, not because a filter declined to resume it.
+The CEG (Steamworks' anti-tamper wrapper, `Steamworks_InitCEGLibrary` /
+`Steamworks_SelfCheck()` in the log right before the crash) does something
+else that raises this — most likely a plain, deliberate access violation
+used as an integrity/anti-debug check with no SEH involved at all, or a
+genuine bug in how the layer serves whatever CEG is probing.
+
+Not chased further tonight — this needs figuring out what CEG is actually
+doing at 0x0020F300 (a stack address, not image code — `Detail` on the
+raised exception came back null, meaning the exception record's own fault
+address was 0, so this was likely a software `RaiseException` call, not a
+hardware access violation the CPU itself trapped). Next step: log the full
+exception record's fields (code, flags, all parameters) at the point
+`EnterHandler` finds no handler, not just the ones already surfaced.

@@ -193,6 +193,26 @@ namespace Nativra.X86.Loader
         public bool TryResolve(uint address, out GuestImport import) =>
             bySentinel.TryGetValue(address, out import);
 
+        /// <summary>
+        /// One line describing everything known about module!function, for
+        /// chasing a "registered but still reports missing" mismatch without a
+        /// debugger: whether a handler was ever registered under this exact
+        /// key, whether a binding exists, and whether that binding's own
+        /// Handler pointer actually got set.
+        /// </summary>
+        public string Diagnose(string module, string function)
+        {
+            var key = Key(Norm(module), function, -1);
+            var hasHandler = handlers.ContainsKey(key);
+            var hasBinding = byKey.TryGetValue(key, out var bound);
+            var boundHandlerSet = hasBinding && bound.Handler != null;
+            return "key=" + key + " handlers.has=" + hasHandler +
+                " byKey.has=" + hasBinding +
+                " byKey.handler-set=" + boundHandlerSet +
+                " handlers.count=" + handlers.Count + " byKey.count=" + byKey.Count +
+                " instance=" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this).ToString("X8");
+        }
+
         /// <summary>True when a host implementation is registered for module!function.</summary>
         public bool HasHandler(string module, string function) =>
             function != null && (handlers.ContainsKey(Key(Norm(module), function, -1)) ||

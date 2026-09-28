@@ -86,6 +86,8 @@ namespace Kiosk.Native
                 await UsbFiles.InstallAsync();
                 kernel.Files = new X86Files();
                 kernel.Install();
+                kernel.Log("imports.diagnose kernel32!InterlockedCompareExchange: " +
+                    process.Imports.Diagnose("kernel32.dll", "InterlockedCompareExchange"));
                 // Direct3D 9 through the packaged 64-bit layer.
                 var com = new GuestCom(process, kernel);
                 X86Direct3D9.Install(process, kernel, com);
@@ -130,6 +132,8 @@ namespace Kiosk.Native
 
                     result = process.InitializeModules(BlockBudget);
                     lines.Add("x86.init=" + result);
+                    lines.Add("x86.init.diagnose=" +
+                        process.Imports.Diagnose("kernel32.dll", "InterlockedCompareExchange"));
                     if (result.Ok)
                     {
                         result = process.Call(image.EntryPoint, out var exitCode, BlockBudget);

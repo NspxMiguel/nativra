@@ -99,6 +99,7 @@ namespace Nativra.X86.Loader
         private const int DirImport = 1;
         private const int DirBaseReloc = 5;
         private const int DirTls = 9;
+        public const int DirResource = 2;
 
         private readonly byte[] file;
         private readonly GuestMemory memory;
@@ -405,6 +406,14 @@ namespace Nativra.X86.Loader
         }
 
         // --- helpers -------------------------------------------------------
+
+        /// <summary>A data directory's guest VA (0 when absent) and size.</summary>
+        public uint Directory(int index, out uint size)
+        {
+            var rva = DirectoryRva(index);
+            size = rva == 0 ? 0 : DirectorySize(index);
+            return rva == 0 ? 0 : BaseAddress + rva;
+        }
 
         private uint DirectoryRva(int index)
         {

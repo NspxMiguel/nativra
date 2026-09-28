@@ -13,9 +13,20 @@ namespace Nativra.X86.Loader
     {
         public uint Code { get; }
 
-        public GuestRaisedException(uint code) : base($"guest raised exception 0x{code:X8}")
+        /// <summary>Where it was raised (the faulting instruction for a processor exception), 0 when unknown.</summary>
+        public uint Address { get; }
+
+        /// <summary>For an access violation: the address touched, and whether it was a write.</summary>
+        public uint Target { get; }
+        public bool Write { get; }
+
+        public GuestRaisedException(uint code, uint address = 0, uint target = 0, bool write = false)
+            : base($"guest raised exception 0x{code:X8}")
         {
             Code = code;
+            Address = address;
+            Target = target;
+            Write = write;
         }
     }
 
@@ -46,6 +57,15 @@ namespace Nativra.X86.Loader
                 ["windir"] = "C:\\Windows",
                 ["TEMP"] = "C:\\Temp",
                 ["TMP"] = "C:\\Temp",
+                ["USERNAME"] = "Player",
+                ["USERPROFILE"] = GuestProfile,
+                ["HOMEDRIVE"] = "C:",
+                ["HOMEPATH"] = "\\users\\Player",
+                ["APPDATA"] = GuestProfile + "\\AppData\\Roaming",
+                ["LOCALAPPDATA"] = GuestProfile + "\\AppData\\Local",
+                ["ALLUSERSPROFILE"] = "C:\\ProgramData",
+                ["ProgramData"] = "C:\\ProgramData",
+                ["PUBLIC"] = "C:\\users\\Public",
             };
 
         // Fiber-local values per thread: key is thread id << 32 | index.

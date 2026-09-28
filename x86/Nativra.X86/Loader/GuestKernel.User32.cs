@@ -906,6 +906,21 @@ namespace Nativra.X86.Loader
             process.Jumped();
         }
 
+        /// <summary>A nested thiscall into guest code (a C++ method: this in ECX), for callbacks the host delivers.</summary>
+        internal uint CallGuestThis(uint function, uint thisPointer, params uint[] args)
+        {
+            if (function == 0) return 0;
+            var saved = SaveRegisters();
+            process.Cpu.Ecx = thisPointer;
+            var result = process.Call(function, out var eax, 50_000_000, args);
+            RestoreRegisters(saved);
+            if (!result.Ok) Say($"x86: guest method 0x{function:X8} stopped: {result}");
+            return result.Ok ? eax : 0;
+        }
+
+        /// <summary>A nested cdecl call into guest code.</summary>
+        internal uint CallGuestCdecl(uint function, params uint[] args) => CallGuest(function, args);
+
         /// <summary>A nested stdcall into guest code, for answers a host call needs before it returns.</summary>
         private uint CallGuest(uint function, params uint[] args)
         {

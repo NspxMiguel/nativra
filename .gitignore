@@ -26,6 +26,11 @@ ESTADO.md
 .markers/
 native-probe.txt
 native-pulse.txt
+native-watch.txt
+drives.txt
+downloading.txt
+download-error.txt
+jogos/
 xbox-*.png
 unity.log
 Player.log

@@ -98,6 +98,8 @@ namespace Kiosk.Native
 
         /// <summary>The same, by kind: opens, directory listings, attribute questions.</summary>
         public static long OpenCalls, OpenTicks, FindCalls, FindTicks, AttributeCalls, AttributeTicks, AttributesTimedOut;
+        private static string lastTimedOutPath;
+        private static long timedOutStreak;
 
         public static string BrokerReport()
         {
@@ -105,7 +107,9 @@ namespace Kiosk.Native
             return "broker calls=" + BrokerCalls + " ms=" + (long)(BrokerTicks / perMs)
                 + " opens=" + OpenCalls + "/" + (long)(OpenTicks / perMs) + "ms"
                 + " finds=" + FindCalls + "/" + (long)(FindTicks / perMs) + "ms"
-                + " attributes=" + AttributeCalls + "/" + (long)(AttributeTicks / perMs) + "ms | "
+                + " attributes=" + AttributeCalls + "/" + (long)(AttributeTicks / perMs) + "ms"
+                + " (timedout=" + AttributesTimedOut + " streak=" + timedOutStreak +
+                  (lastTimedOutPath != null ? " last=" + lastTimedOutPath : "") + ") | "
                 + UsbFiles.Report();
         }
 
@@ -208,6 +212,12 @@ namespace Kiosk.Native
             else
             {
                 System.Threading.Interlocked.Increment(ref AttributesTimedOut);
+                // Tells apart one path getting asked about a lot (each answer
+                // taking the full bound, never actually hanging past it) from
+                // the same one path timing out over and over in a row, which
+                // reads as the game retrying something that will never work.
+                timedOutStreak = path == lastTimedOutPath ? timedOutStreak + 1 : 1;
+                lastTimedOutPath = path;
                 ok = false;
                 error = 2;   // treat an unanswered broker the same as "not found"
             }

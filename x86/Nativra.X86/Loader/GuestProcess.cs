@@ -626,9 +626,13 @@ namespace Nativra.X86.Loader
                     {
                         var remaining = Math.Min(64L, maxBlocks - i);
                         remaining = Math.Min(remaining, Math.Max(1L, (long)SliceBlocks - slice));
-                        Jit.RunBlock((int)remaining, stopEip);
-                        i += Jit.LastRunBlocks - 1;
-                        slice += Jit.LastRunBlocks - 1;
+                        try { Jit.RunBlock((int)remaining, stopEip); }
+                        finally
+                        {
+                            var extra = Math.Max(0, Jit.LastRunBlocks - 1);
+                            i += extra;
+                            slice += extra;
+                        }
                     }
                     else Interpreter.Step();
                 }

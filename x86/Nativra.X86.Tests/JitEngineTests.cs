@@ -7,8 +7,8 @@ namespace Nativra.X86.Tests
 {
     /// <summary>
     /// End-to-end engine checks: real little programs with loops and memory
-    /// traffic, driven to completion. Straight-line bodies run as JIT-compiled
-    /// x64; branches fall back to the interpreter and the two stay in step.
+    /// traffic, driven to completion. Branches and straight-line bodies run as
+    /// JIT-compiled x64 while untranslated instructions use the interpreter.
     /// </summary>
     public sealed class JitEngineTests
     {
@@ -29,7 +29,7 @@ namespace Nativra.X86.Tests
         }
 
         [SkippableFact]
-        public void SumLoopWithFallbackBranch()
+        public void SumLoopWithTranslatedBranch()
         {
             Skip.IfNot(CanJit, "JIT needs an x64 host");
             using (var memory = new GuestMemory(native: true))
@@ -51,7 +51,7 @@ namespace Nativra.X86.Tests
                 Assert.True(jit.RunUntil(end, 100000), "loop did not reach the end");
                 Assert.Equal(5050u, cpu.Eax);          // 100 * 101 / 2
                 Assert.Equal(0u, cpu.Ecx);
-                Assert.True(jit.InterpreterFallbacks > 0, "the branch should have used the interpreter");
+                Assert.Equal(0, jit.InterpreterFallbacks);
                 Assert.True(jit.BlocksExecuted > 1, "the JIT body should have run many times");
             }
         }

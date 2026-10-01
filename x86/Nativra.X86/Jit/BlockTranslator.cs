@@ -11,10 +11,8 @@ namespace Nativra.X86.Jit
     /// same x64 instruction on the mapped registers and its flags fall out of
     /// the host processor unchanged.
     ///
-    /// The block stops — and returns to the dispatcher for one interpreter
-    /// step — at the first control-flow or untranslated instruction. That makes
-    /// the JIT always correct: it is a fast path over the reference interpreter,
-    /// never a replacement that could diverge from it.
+    /// A translated control-flow instruction ends the block at its target.
+    /// Untranslated instructions still return to the reference interpreter.
     /// </summary>
     public sealed class BlockTranslator
     {
@@ -71,6 +69,7 @@ namespace Nativra.X86.Jit
                     break;
                 }
                 InstructionCount++;
+                if (IsBranch(ins)) { terminated = true; break; }
                 eip = ins.Next;
             }
             if (!terminated) EmitExit(eip, Ctx.ReasonNext);
@@ -136,6 +135,20 @@ namespace Nativra.X86.Jit
             e.Jmp("exit");
         }
 
+        private void EmitExitReg(int target)
+        {
+            e.StoreCtx(target, Ctxr, Ctx.Eip);
+            e.MovMemImm(Ctxr, -1, 1, Ctx.ExitReason, Ctx.ReasonNext);
+            e.Jmp("exit");
+        }
+
+        private static bool IsBranch(in Instruction ins) =>
+            (ins.Op >= 0x70 && ins.Op <= 0x7F) ||
+            (ins.Op >= 0x0F80 && ins.Op <= 0x0F8F) ||
+            ins.Op == 0xE8 || ins.Op == 0xE9 || ins.Op == 0xEB ||
+            ins.Op == 0xC2 || ins.Op == 0xC3 ||
+            (ins.Op == 0xFF && (ins.RegField == 2 || ins.RegField == 4));
+
         // ----------------------------------------------------------- addressing
 
         /// <summary>Loads a memory operand's guest linear address into <see cref="S1"/>.</summary>
@@ -179,6 +192,11 @@ namespace Nativra.X86.Jit
             // an instruction that needs a REX prefix, which every memory
             // operand here does. Leave those forms to the interpreter.
             if (UsesHighByteRegister(ins)) return false;
+
+            if (op >= 0x70 && op <= 0x7F)
+                return EmitConditional(ins, op - 0x70, (uint)(sbyte)ins.Imm);
+            if (op >= 0x0F80 && op <= 0x0F8F)
+                return EmitConditional(ins, op - 0x0F80, ins.Imm);
 
             // ALU r/m,r and r,r/m and the AL/eAX immediate forms.
             if (op < 0x40 && (op & 7) < 6)
@@ -249,6 +267,21 @@ namespace Nativra.X86.Jit
                     return true;
 
                 case 0x90: return true; // NOP
+                case 0xC2: case 0xC3:
+                    e.LoadMem(S2, Mem, G[Reg.Esp], 1, 0);
+                    e.Lea(G[Reg.Esp], G[Reg.Esp], -1, 1, op == 0xC2 ? 4 + (int)ins.Imm : 4);
+                    EmitExitReg(S2);
+                    return true;
+                case 0xE8:
+                    EmitPushImm(ins.Next, 32);
+                    EmitExit(unchecked(ins.Next + ins.Imm), Ctx.ReasonNext);
+                    return true;
+                case 0xE9:
+                    EmitExit(unchecked(ins.Next + ins.Imm), Ctx.ReasonNext);
+                    return true;
+                case 0xEB:
+                    EmitExit(unchecked(ins.Next + (uint)(sbyte)ins.Imm), Ctx.ReasonNext);
+                    return true;
                 case 0xC6: // MOV r/m8, imm8
                     if (IsMem(ins)) { EmitAddress(ins); e.MovMemImm(Mem, S1, 1, 0, ins.Imm, 8); }
                     else e.MovRegImm8(G[ins.Rm], (byte)ins.Imm);
@@ -267,7 +300,15 @@ namespace Nativra.X86.Jit
                     else e.IncDecReg(ins.RegField, G[ins.Rm], 8);
                     return true;
                 case 0xFF:
-                    if (ins.RegField > 1) return false; // call/jmp/push handled as control flow → fallback
+                    if (ins.RegField == 2 || ins.RegField == 4)
+                    {
+                        if (IsMem(ins)) { EmitAddress(ins); e.LoadMem(S2, Mem, S1, 1, 0); }
+                        else e.MovRegReg(S2, G[ins.Rm]);
+                        if (ins.RegField == 2) EmitPushImm(ins.Next, 32);
+                        EmitExitReg(S2);
+                        return true;
+                    }
+                    if (ins.RegField > 1) return false;
                     if (IsMem(ins)) { EmitAddress(ins); e.IncDecMem(ins.RegField, Mem, S1, 1, 0, size); }
                     else e.IncDecReg(ins.RegField, G[ins.Rm], size);
                     return true;
@@ -340,6 +381,16 @@ namespace Nativra.X86.Jit
             }
 
             return false;
+        }
+
+        private bool EmitConditional(in Instruction ins, int cc, uint displacement)
+        {
+            var taken = "taken";
+            e.Jcc(cc, taken);
+            EmitExit(ins.Next, Ctx.ReasonNext);
+            e.Label(taken);
+            EmitExit(unchecked(ins.Next + displacement), Ctx.ReasonNext);
+            return true;
         }
 
         /// <summary>An 8-bit operand that names AH, CH, DH or BH (register numbers 4-7).</summary>

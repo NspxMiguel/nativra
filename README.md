@@ -183,6 +183,23 @@ has no windows.
 
 See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for every game tried.
 
+## Compatibility
+
+Tested on an Xbox Series X in Developer Mode, with games downloaded from the
+owner's Steam library by Nativra itself.
+
+| Game | Engine | Rating | Notes |
+| --- | --- | --- | --- |
+| Seraph's Last Stand | Unity (x64, D3D11) | ✅ Verified | 60 fps with the controller; "In-Game" for Steam friends. |
+| Hades | Supergiant (x64, D3D11) | 🟡 Playable | 60 fps from a USB drive, controller and sound; memory runs near the app limit. |
+| WAVESHAPER | GameMaker (32-bit, D3D9) | 🟡 Playable | First 32-bit game: Steam sign-in, menus and gameplay with the controller; gameplay ~2 fps and no sound yet (both in progress). |
+| Little Nightmares | Unreal Engine 4 (x64) | ⛔ Not working | D3D11 device and swap chain created; no frame yet. |
+| LEGO Jurassic World | TT Games (x64, D3D11) | ⛔ Not working | Starts and creates its window; stops before the first frame. |
+| Brawlhalla | Adobe AIR (x64) | ⛔ Not working | AIR cannot find its application descriptor. |
+
+Ratings, dates and builds for every game tried: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+Every other game in the library, sorted by what is missing: [docs/LIBRARY.md](docs/LIBRARY.md).
+
 ## What does not work yet
 
 **Experimental, not a finished PC-game compatibility layer.** LEGO Jurassic World

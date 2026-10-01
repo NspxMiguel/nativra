@@ -160,6 +160,23 @@ também registram metas e investigações anteriores; não são garantias de com
 
 A tabela de cada jogo testado está em [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
+## Compatibilidade
+
+Testado num Xbox Series X em Modo Desenvolvedor, com jogos baixados da
+biblioteca Steam do dono pelo próprio Nativra.
+
+| Jogo | Motor | Nota | Observações |
+| --- | --- | --- | --- |
+| Seraph's Last Stand | Unity (x64, D3D11) | ✅ Verificado | 60 fps com o controle; aparece "Em jogo" para os amigos da Steam. |
+| Hades | Supergiant (x64, D3D11) | 🟡 Jogável | 60 fps de um pendrive, com controle e som; a memória fica perto do limite do app. |
+| WAVESHAPER | GameMaker (32 bits, D3D9) | 🟡 Jogável | Primeiro jogo 32 bits: login Steam, menus e gameplay com o controle; gameplay a ~2 fps e ainda sem som (os dois em andamento). |
+| Little Nightmares | Unreal Engine 4 (x64) | ⛔ Não roda | Cria o dispositivo D3D11 e a swap chain; ainda sem quadro. |
+| LEGO Jurassic World | TT Games (x64, D3D11) | ⛔ Não roda | Abre e cria a janela; para antes do primeiro quadro. |
+| Brawlhalla | Adobe AIR (x64) | ⛔ Não roda | O AIR não acha o descritor da aplicação. |
+
+Notas, datas e builds de cada jogo testado: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+O resto da biblioteca, ordenado pelo que falta: [docs/LIBRARY.md](docs/LIBRARY.md).
+
 ## O que falta
 
 **Experimental, ainda não é uma camada de compatibilidade pronta.** Jogos que usam a API C++

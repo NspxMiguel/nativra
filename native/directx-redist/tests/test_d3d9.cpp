@@ -2,7 +2,8 @@
 // the results back through the API, under WARP. Covers device creation and
 // caps, clears, programmable draws through the shader translator, textures and
 // D3D9's half-pixel convention, alpha test, blending, depth, triangle fans and
-// user-pointer draws, StretchRect, state blocks and reference counting.
+// user-pointer draws, StretchRect, state blocks, volume textures and reference
+// counting.
 
 #include <windows.h>
 #include <d3d9.h>
@@ -130,6 +131,106 @@ bool Near(DWORD a, DWORD b, int tolerance = 2)
         if (ca - cb > tolerance || cb - ca > tolerance) return false;
     }
     return true;
+}
+
+// --- volume texture helpers ----------------------------------------------------
+// The volumes under test code each texel with its own position, and a draw
+// shows one slice of one across the target, split into a grid of cells: the
+// centre of cell (x, y) shows texel (x, y) of the slice that was sampled.
+
+using Coding = DWORD (*)(UINT x, UINT y, UINT z);
+
+// x, y and z become red, green and blue.
+DWORD Coded(UINT x, UINT y, UINT z) { return D3DCOLOR_XRGB(x * 85, y * 85, z * 85) & 0x00FFFFFF; }
+// The same with the axes rotated, to tell one volume from another.
+DWORD Permuted(UINT x, UINT y, UINT z) { return Coded(z, x, y); }
+// A 2x2x2 level: each axis is 0 or full.
+DWORD Corners(UINT x, UINT y, UINT z) { return D3DCOLOR_XRGB(x * 255, y * 255, z * 255) & 0x00FFFFFF; }
+DWORD White(UINT, UINT, UINT) { return 0x00FFFFFF; }
+// Coded, with the box of texels 1..2 on every axis overwritten by white.
+DWORD Whitened(UINT x, UINT y, UINT z)
+{
+    const bool inside = x >= 1 && x <= 2 && y >= 1 && y <= 2 && z >= 1 && z <= 2;
+    return inside ? 0x00FFFFFF : Coded(x, y, z);
+}
+// The 8x8x2 DXT1 volume: a red slice, then a blue one, and one green block in the first.
+DWORD DxtBlocks(UINT x, UINT y, UINT z)
+{
+    return z == 1 ? 0x000000FF : (x == 1 && y == 1) ? 0x0000FF00 : 0x00FF0000;
+}
+
+// Fills the first `size` texels of every axis of a locked A8R8G8B8 volume level.
+void FillVolume(const D3DLOCKED_BOX& box, UINT size, Coding code)
+{
+    for (UINT z = 0; z < size; z++)
+        for (UINT y = 0; y < size; y++) {
+            auto* row = reinterpret_cast<DWORD*>(static_cast<uint8_t*>(box.pBits) +
+                                                 static_cast<size_t>(z) * box.SlicePitch +
+                                                 static_cast<size_t>(y) * box.RowPitch);
+            for (UINT x = 0; x < size; x++) row[x] = 0xFF000000u | code(x, y, z);
+        }
+}
+
+using DrawSlice = bool (*)(IDirect3DDevice9* dev, float slice, Readback& out);
+
+// A full-target quad through a pixel shader that samples the volume on
+// sampler 1 at depth `slice`.
+bool DrawSliceShader(IDirect3DDevice9* dev, float slice, Readback& out)
+{
+    const float coordinate[4] = { slice, 0, 0, 0 };
+    dev->SetPixelShaderConstantF(0, coordinate, 1);
+    dev->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0);
+    Vertex quad[4];
+    Quad(quad, 0.5f, 0);
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, quad, sizeof(Vertex));
+    return ReadBackBuffer(dev, out);
+}
+
+// The same through fixed-function stage 0, with the depth as the third
+// texture coordinate.
+bool DrawSliceFixed(IDirect3DDevice9* dev, float slice, Readback& out)
+{
+    struct V { float x, y, z, rhw; D3DCOLOR color; float u, v, w; };
+    const float lo = -0.5f, hi = kSize - 0.5f;
+    const V quad[4] = {
+        { lo, lo, 0.5f, 1.0f, 0xFFFFFFFF, 0, 0, slice },
+        { hi, lo, 0.5f, 1.0f, 0xFFFFFFFF, 1, 0, slice },
+        { lo, hi, 0.5f, 1.0f, 0xFFFFFFFF, 0, 1, slice },
+        { hi, hi, 0.5f, 1.0f, 0xFFFFFFFF, 1, 1, slice },
+    };
+    dev->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0);
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, quad, sizeof(V));
+    return ReadBackBuffer(dev, out);
+}
+
+// Samples every slice with `draw` and counts the cells of a cells x cells grid
+// whose centre differs from code(x, y, z): -1 when a draw cannot be read back.
+// `first` describes the first miss.
+int WrongCells(IDirect3DDevice9* dev, DrawSlice draw, UINT cells, UINT depth, Coding code, std::string& first)
+{
+    int wrong = 0;
+    const UINT cell = kSize / cells;
+    for (UINT z = 0; z < depth; z++) {
+        Readback shot;
+        if (!draw(dev, (z + 0.5f) / depth, shot)) return -1;
+        for (UINT y = 0; y < cells; y++)
+            for (UINT x = 0; x < cells; x++) {
+                const DWORD got = shot.At(x * cell + cell / 2, y * cell + cell / 2);
+                const DWORD want = code(x, y, z);
+                if (!Near(got, want) && wrong++ == 0)
+                    first = "(" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) + ") " +
+                            Hex(got) + " want " + Hex(want);
+            }
+    }
+    return wrong;
+}
+
+// A texel as the game reads it back through a locked level.
+DWORD TexelAt(const D3DLOCKED_BOX& box, UINT x, UINT y, UINT z)
+{
+    return reinterpret_cast<const DWORD*>(static_cast<const uint8_t*>(box.pBits) +
+                                          static_cast<size_t>(z) * box.SlicePitch +
+                                          static_cast<size_t>(y) * box.RowPitch)[x];
 }
 
 } // namespace
@@ -470,6 +571,371 @@ int main()
           Hex(rb.At(32, 32)));
     dev->SetRenderState(D3DRS_FOGENABLE, FALSE);
     dev->SetRenderState(D3DRS_LIGHTING, FALSE);
+
+    // --- volume textures ---------------------------------------------------------------------
+    // Volumes sampled through a ps_3_0 tex3D on sampler 1 (not 0: the view must
+    // land in the slot the shader declares), and through fixed-function stage 0.
+    {
+        Check(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_VOLUMETEXTURE, D3DFMT_A8R8G8B8) == D3D_OK,
+              "A8R8G8B8 volume textures available");
+        Check(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_VOLUMETEXTURE, D3DFMT_DXT1) == D3D_OK,
+              "DXT1 volume textures available");
+        Check(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_RENDERTARGET, D3DRTYPE_VOLUMETEXTURE,
+                                     D3DFMT_A8R8G8B8) != D3D_OK &&
+              d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_VOLUMETEXTURE,
+                                     D3DFMT_D24S8) != D3D_OK,
+              "volume textures refuse render target and depth-stencil use");
+        Check((caps.TextureCaps & D3DPTEXTURECAPS_VOLUMEMAP) && (caps.TextureCaps & D3DPTEXTURECAPS_MIPVOLUMEMAP) &&
+                  caps.MaxVolumeExtent >= 256 && (caps.VolumeTextureFilterCaps & D3DPTFILTERCAPS_MAGFLINEAR),
+              "caps advertise volume textures");
+
+        IDirect3DVolumeTexture9* rejected = nullptr;
+        Check(dev->CreateVolumeTexture(4, 4, 0, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &rejected, nullptr) == D3DERR_INVALIDCALL &&
+                  !rejected,
+              "a volume with no depth is refused");
+        Check(dev->CreateVolumeTexture(4, 4, 4, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &rejected, nullptr) ==
+                      D3DERR_INVALIDCALL && !rejected,
+              "a volume cannot be a render target");
+        Check(dev->CreateVolumeTexture(4, 4, 4, 1, 0, D3DFMT_D24S8, D3DPOOL_DEFAULT, &rejected, nullptr) == D3DERR_INVALIDCALL &&
+                  !rejected,
+              "a volume cannot hold depth");
+
+        const char* const kPsVolume =
+            "sampler3D s1 : register(s1);\n"
+            "float4 slice : register(c0);   // where to sample along the third axis\n"
+            "float4 main(float2 uv : TEXCOORD0) : COLOR { return tex3D(s1, float3(uv, slice.x)); }";
+        ID3DBlob* psVolumeCode = CompileSm3(kPsVolume, "ps_3_0");
+        IDirect3DPixelShader9* psVolume = nullptr;
+        if (psVolumeCode) dev->CreatePixelShader(static_cast<const DWORD*>(psVolumeCode->GetBufferPointer()), &psVolume);
+        Check(psVolume != nullptr, "tex3D pixel shader created");
+
+        auto report = [&](const char* what, int wrong, const std::string& where) {
+            std::string detail;
+            if (wrong < 0) detail = "no readback";
+            else if (wrong > 0) detail = std::to_string(wrong) + " cells differ, first " + where;
+            Check(wrong == 0, what, detail);
+        };
+        std::string where;
+
+        dev->SetVertexShader(vs);
+        dev->SetVertexDeclaration(decl);
+        dev->SetPixelShader(psVolume);
+        dev->SetVertexShaderConstantF(0, zero, 1);
+        dev->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
+        dev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+
+        // --- a managed 4x4x4 volume, filled through LockBox ---
+        IDirect3DVolumeTexture9* volume = nullptr;
+        const HRESULT madeVolume = dev->CreateVolumeTexture(4, 4, 4, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &volume, nullptr);
+        Check(SUCCEEDED(madeVolume) && volume, "CreateVolumeTexture (managed)", Hex(madeVolume));
+        if (volume && psVolume) {
+            D3DLOCKED_BOX box = {};
+            const HRESULT lockedAll = volume->LockBox(0, &box, nullptr, 0);
+            Check(SUCCEEDED(lockedAll) && box.RowPitch >= 16 && box.SlicePitch >= box.RowPitch * 4,
+                  "LockBox reports a row and a slice pitch", std::to_string(box.RowPitch) + " / " + std::to_string(box.SlicePitch));
+            D3DLOCKED_BOX second = {};
+            Check(volume->LockBox(0, &second, nullptr, 0) == D3DERR_INVALIDCALL, "a locked level cannot be locked again");
+            if (SUCCEEDED(lockedAll)) {
+                FillVolume(box, 4, Coded);
+                volume->UnlockBox(0);
+            }
+            Check(volume->UnlockBox(0) == D3DERR_INVALIDCALL, "UnlockBox without a lock fails");
+
+            dev->SetTexture(1, volume);
+            int wrong = WrongCells(dev, DrawSliceShader, 4, 4, Coded, where);
+            report("volume: every texel is sampled at its own coordinates", wrong, where);
+
+            // Halfway between slices 1 and 2 a linear filter blends them: blue 85 and 170 meet at 128.
+            dev->SetSamplerState(1, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+            dev->SetSamplerState(1, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+            const bool blended = DrawSliceShader(dev, 0.5f, rb);
+            Check(blended && Near(rb.At(8, 8), 0x000080, 6), "volume: linear filtering blends neighbouring slices",
+                  blended ? Hex(rb.At(8, 8)) : "no readback");
+            dev->SetSamplerState(1, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+            dev->SetSamplerState(1, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+
+            // A box lock edits part of a level: texels 1..2 on every axis go white.
+            const D3DBOX inner = { 1, 1, 3, 3, 1, 3 };   // left, top, right, bottom, front, back
+            D3DLOCKED_BOX part = {};
+            const HRESULT lockedPart = volume->LockBox(0, &part, &inner, 0);
+            Check(SUCCEEDED(lockedPart), "LockBox with a box", Hex(lockedPart));
+            if (SUCCEEDED(lockedPart)) {
+                for (UINT z = 0; z < 2; z++)
+                    for (UINT y = 0; y < 2; y++) {
+                        auto* row = reinterpret_cast<DWORD*>(static_cast<uint8_t*>(part.pBits) +
+                                                             static_cast<size_t>(z) * part.SlicePitch +
+                                                             static_cast<size_t>(y) * part.RowPitch);
+                        row[0] = row[1] = 0xFFFFFFFF;
+                    }
+                volume->UnlockBox(0);
+            }
+            wrong = WrongCells(dev, DrawSliceShader, 4, 4, Whitened, where);
+            report("volume: a box lock changes only its own texels", wrong, where);
+
+            // A static level's CPU copy is gone after the upload; locking it again reads the GPU's back.
+            D3DLOCKED_BOX again = {};
+            DWORD kept = 0, edited = 0;
+            if (SUCCEEDED(volume->LockBox(0, &again, nullptr, D3DLOCK_READONLY))) {
+                kept = TexelAt(again, 1, 2, 3);
+                edited = TexelAt(again, 2, 2, 1);
+                volume->UnlockBox(0);
+            }
+            Check(kept == 0xFF55AAFFu && edited == 0xFFFFFFFFu, "a static volume relocked after upload keeps its texels",
+                  Hex(kept) + " / " + Hex(edited));
+
+            // Its CPU copy dropped again, UpdateTexture copies the volume on the GPU.
+            IDirect3DVolumeTexture9* duplicate = nullptr;
+            dev->CreateVolumeTexture(4, 4, 4, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &duplicate, nullptr);
+            if (duplicate) {
+                const HRESULT copied = dev->UpdateTexture(volume, duplicate);
+                dev->SetTexture(1, duplicate);
+                wrong = WrongCells(dev, DrawSliceShader, 4, 4, Whitened, where);
+                report("volume: UpdateTexture copies a static volume on the GPU", wrong, where);
+                Check(copied == D3D_OK, "UpdateTexture from a static volume", Hex(copied));
+                dev->SetTexture(1, volume);
+                duplicate->Release();
+            }
+
+            // sRGB sampling decodes before the shader sees the texel: 85, 170 and 255 become about 23, 102 and 255.
+            dev->SetSamplerState(1, D3DSAMP_SRGBTEXTURE, TRUE);
+            const bool decoded = DrawSliceShader(dev, 3.5f / 4, rb);
+            Check(decoded && Near(rb.At(24, 40), 0x1767FF, 4), "volume: sRGB sampling decodes the texels",
+                  decoded ? Hex(rb.At(24, 40)) : "no readback");
+            dev->SetSamplerState(1, D3DSAMP_SRGBTEXTURE, FALSE);
+
+            const D3DBOX outside = { 0, 0, 5, 4, 0, 4 };
+            const D3DBOX empty = { 2, 0, 2, 4, 0, 4 };
+            Check(volume->LockBox(0, &second, &outside, 0) == D3DERR_INVALIDCALL &&
+                      volume->LockBox(0, &second, &empty, 0) == D3DERR_INVALIDCALL,
+                  "LockBox refuses a box outside the level or without volume");
+
+            // The resource methods.
+            D3DVOLUME_DESC desc = {};
+            const HRESULT described = volume->GetLevelDesc(0, &desc);
+            Check(SUCCEEDED(described) && desc.Width == 4 && desc.Height == 4 && desc.Depth == 4 &&
+                      desc.Format == D3DFMT_A8R8G8B8 && desc.Type == D3DRTYPE_VOLUME && desc.Pool == D3DPOOL_MANAGED,
+                  "GetLevelDesc describes the level", Hex(described));
+            Check(volume->GetType() == D3DRTYPE_VOLUMETEXTURE && volume->GetLevelCount() == 1 &&
+                      volume->GetLevelDesc(1, &desc) == D3DERR_INVALIDCALL,
+                  "a volume texture reports its type and level count");
+            IDirect3DDevice9* owner = nullptr;
+            volume->GetDevice(&owner);
+            Check(owner == dev, "GetDevice returns the creating device");
+            if (owner) owner->Release();
+            Check(volume->SetPriority(7) == 0 && volume->GetPriority() == 7 && volume->SetLOD(1) == 0 && volume->GetLOD() == 1 &&
+                      volume->SetAutoGenFilterType(D3DTEXF_POINT) == D3D_OK && volume->GetAutoGenFilterType() == D3DTEXF_POINT &&
+                      volume->AddDirtyBox(nullptr) == D3D_OK,
+                  "priority, LOD, auto-generation filter and dirty box");
+            volume->PreLoad();
+            volume->GenerateMipSubLevels();
+            volume->SetLOD(0);
+
+            // The level object shares the texture's counts and knows its container.
+            IDirect3DVolume9 *level0 = nullptr, *missing = nullptr;
+            const HRESULT gotLevel = volume->GetVolumeLevel(0, &level0);
+            Check(SUCCEEDED(gotLevel) && level0 && volume->GetVolumeLevel(1, &missing) == D3DERR_INVALIDCALL && !missing,
+                  "GetVolumeLevel", Hex(gotLevel));
+            if (level0) {
+                const ULONG volumeBefore = volume->AddRef() - 1;
+                volume->Release();
+                level0->AddRef();
+                const ULONG volumeAfter = volume->AddRef() - 1;
+                volume->Release();
+                level0->Release();
+                Check(volumeAfter == volumeBefore + 1, "a volume level shares the texture's count",
+                      std::to_string(volumeBefore) + " -> " + std::to_string(volumeAfter));
+
+                void* container = nullptr;
+                Check(SUCCEEDED(level0->GetContainer(__uuidof(IDirect3DVolumeTexture9), &container)) && container == volume,
+                      "a volume level finds its container");
+                if (container) static_cast<IUnknown*>(container)->Release();
+
+                D3DVOLUME_DESC levelDesc = {};
+                level0->GetDesc(&levelDesc);
+                Check(levelDesc.Width == 4 && levelDesc.Depth == 4 && levelDesc.Type == D3DRTYPE_VOLUME,
+                      "IDirect3DVolume9::GetDesc");
+
+                // Locking through the level is the same as through the texture.
+                D3DLOCKED_BOX viaLevel = {};
+                DWORD viaLevelTexel = 0;
+                if (SUCCEEDED(level0->LockBox(&viaLevel, nullptr, D3DLOCK_READONLY))) {
+                    viaLevelTexel = TexelAt(viaLevel, 1, 2, 3);
+                    level0->UnlockBox();
+                }
+                Check(viaLevelTexel == 0xFF55AAFFu, "IDirect3DVolume9::LockBox", Hex(viaLevelTexel));
+
+                const GUID tag = { 0x6e617469, 0x7672, 0x6139, { 'v', 'o', 'l', 'u', 'm', 'e', '0', '1' } };
+                const DWORD stored = 0x1234;
+                DWORD loaded = 0, loadedSize = sizeof loaded;
+                level0->SetPrivateData(tag, &stored, sizeof stored, 0);
+                Check(SUCCEEDED(level0->GetPrivateData(tag, &loaded, &loadedSize)) && loaded == stored,
+                      "a volume level keeps private data");
+                level0->Release();
+            }
+
+            // State blocks and GetTexture hold the volume like any texture.
+            IDirect3DStateBlock9* recorded = nullptr;
+            dev->BeginStateBlock();
+            dev->SetTexture(1, volume);
+            dev->EndStateBlock(&recorded);
+            dev->SetTexture(1, nullptr);
+            recorded->Apply();
+            IDirect3DBaseTexture9* bound = nullptr;
+            dev->GetTexture(1, &bound);
+            Check(bound == volume, "a state block binds a volume texture");
+            if (bound) bound->Release();
+            recorded->Release();
+
+            // Fixed function samples a volume through a stage, with three texture coordinates.
+            dev->SetTexture(1, nullptr);
+            dev->SetTexture(0, volume);
+            dev->SetVertexShader(nullptr);
+            dev->SetPixelShader(nullptr);
+            dev->SetFVF(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1 | D3DFVF_TEXCOORDSIZE3(0));
+            wrong = WrongCells(dev, DrawSliceFixed, 4, 4, Whitened, where);
+            report("volume: fixed function samples a volume with (u, v, w)", wrong, where);
+            dev->SetTexture(0, nullptr);
+            dev->SetVertexShader(vs);
+            dev->SetVertexDeclaration(decl);
+            dev->SetPixelShader(psVolume);
+        }
+
+        // --- a chain of levels: each level is its own volume ---
+        IDirect3DVolumeTexture9* chain = nullptr;
+        Check(SUCCEEDED(dev->CreateVolumeTexture(4, 4, 4, 0, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &chain, nullptr)) && chain &&
+                  chain->GetLevelCount() == 3,
+              "levels 0 asks for the whole volume chain");
+        if (chain && psVolume) {
+            D3DVOLUME_DESC last = {};
+            chain->GetLevelDesc(2, &last);
+            Check(last.Width == 1 && last.Height == 1 && last.Depth == 1, "the last level of a volume chain is 1x1x1");
+            D3DLOCKED_BOX top = {}, mid = {};
+            if (SUCCEEDED(chain->LockBox(0, &top, nullptr, 0))) { FillVolume(top, 4, Coded); chain->UnlockBox(0); }
+            if (SUCCEEDED(chain->LockBox(1, &mid, nullptr, 0))) {
+                Check(mid.RowPitch >= 8 && mid.SlicePitch >= 16, "a level's pitches follow its own size",
+                      std::to_string(mid.RowPitch) + " / " + std::to_string(mid.SlicePitch));
+                FillVolume(mid, 2, Corners);
+                chain->UnlockBox(1);
+            }
+            // Forcing the sampler down to level 1 shows the 2x2x2 level the game filled separately.
+            dev->SetTexture(1, chain);
+            dev->SetSamplerState(1, D3DSAMP_MIPFILTER, D3DTEXF_POINT);
+            dev->SetSamplerState(1, D3DSAMP_MAXMIPLEVEL, 1);
+            const int wrong = WrongCells(dev, DrawSliceShader, 2, 2, Corners, where);
+            report("volume: each mip level is uploaded to its own level", wrong, where);
+            dev->SetSamplerState(1, D3DSAMP_MAXMIPLEVEL, 0);
+            dev->SetSamplerState(1, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+            dev->SetTexture(1, nullptr);
+        }
+
+        // --- a volume that generates its own mip levels from level 0 ---
+        IDirect3DVolumeTexture9* generated = nullptr;
+        const HRESULT madeGenerated =
+            dev->CreateVolumeTexture(4, 4, 4, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &generated, nullptr);
+        Check(SUCCEEDED(madeGenerated) && generated, "CreateVolumeTexture (auto-generated mips)", Hex(madeGenerated));
+        if (generated && psVolume) {
+            D3DLOCKED_BOX base = {};
+            if (SUCCEEDED(generated->LockBox(0, &base, nullptr, 0))) { FillVolume(base, 4, White); generated->UnlockBox(0); }
+            // Only level 0 was written; level 1 is white if it was generated from it.
+            dev->SetTexture(1, generated);
+            dev->SetSamplerState(1, D3DSAMP_MIPFILTER, D3DTEXF_POINT);
+            dev->SetSamplerState(1, D3DSAMP_MAXMIPLEVEL, 1);
+            const int wrong = WrongCells(dev, DrawSliceShader, 2, 2, White, where);
+            report("volume: mip levels are generated from level 0", wrong, where);
+            dev->SetSamplerState(1, D3DSAMP_MAXMIPLEVEL, 0);
+            dev->SetSamplerState(1, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+            dev->SetTexture(1, nullptr);
+        }
+
+        // --- a DEFAULT-pool volume filled by UpdateTexture from system memory ---
+        IDirect3DVolumeTexture9 *staged = nullptr, *resident = nullptr;
+        dev->CreateVolumeTexture(4, 4, 4, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &staged, nullptr);
+        dev->CreateVolumeTexture(4, 4, 4, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &resident, nullptr);
+        Check(staged && resident, "system-memory and DEFAULT volumes created");
+        if (staged && resident && psVolume) {
+            D3DLOCKED_BOX staging = {};
+            if (SUCCEEDED(staged->LockBox(0, &staging, nullptr, 0))) { FillVolume(staging, 4, Permuted); staged->UnlockBox(0); }
+            const HRESULT updated = dev->UpdateTexture(staged, resident);
+            Check(updated == D3D_OK, "UpdateTexture copies a system-memory volume to the GPU", Hex(updated));
+            dev->SetTexture(1, resident);
+            const int wrong = WrongCells(dev, DrawSliceShader, 4, 4, Permuted, where);
+            report("volume: a DEFAULT volume shows what UpdateTexture copied", wrong, where);
+            dev->SetTexture(1, nullptr);
+            Check(dev->UpdateTexture(staged, tex) == D3DERR_INVALIDCALL && dev->UpdateTexture(tex, resident) == D3DERR_INVALIDCALL,
+                  "UpdateTexture does not mix volumes and 2D textures");
+        }
+
+        // --- a dynamic volume refilled with D3DLOCK_DISCARD ---
+        IDirect3DVolumeTexture9* dynamic = nullptr;
+        dev->CreateVolumeTexture(4, 4, 4, 1, D3DUSAGE_DYNAMIC, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &dynamic, nullptr);
+        Check(dynamic != nullptr, "dynamic volume created");
+        if (dynamic && psVolume) {
+            dev->SetTexture(1, dynamic);
+            const Coding fills[2] = { Coded, Permuted };
+            for (int pass = 0; pass < 2; pass++) {
+                D3DLOCKED_BOX frame = {};
+                if (SUCCEEDED(dynamic->LockBox(0, &frame, nullptr, D3DLOCK_DISCARD))) {
+                    FillVolume(frame, 4, fills[pass]);
+                    dynamic->UnlockBox(0);
+                }
+                const int wrong = WrongCells(dev, DrawSliceShader, 4, 4, fills[pass], where);
+                report(pass == 0 ? "volume: a dynamic volume after its first fill" : "volume: a dynamic volume after a DISCARD refill",
+                       wrong, where);
+            }
+            dev->SetTexture(1, nullptr);
+        }
+
+        // --- a block-compressed volume: pitches count 4x4 blocks, a slice holds whole block rows ---
+        IDirect3DVolumeTexture9* dxt = nullptr;
+        const HRESULT madeDxt = dev->CreateVolumeTexture(8, 8, 2, 1, 0, D3DFMT_DXT1, D3DPOOL_MANAGED, &dxt, nullptr);
+        Check(SUCCEEDED(madeDxt) && dxt, "CreateVolumeTexture (DXT1)", Hex(madeDxt));
+        if (dxt && psVolume) {
+            // A BC1 block is two RGB565 endpoints and 2-bit indices; index 0 everywhere shows the first endpoint.
+            auto put = [](void* at, uint16_t color) {
+                const uint16_t endpoints[2] = { color, 0 };
+                std::memcpy(at, endpoints, sizeof endpoints);
+                std::memset(static_cast<uint8_t*>(at) + 4, 0, 4);
+            };
+            D3DLOCKED_BOX whole = {};
+            if (SUCCEEDED(dxt->LockBox(0, &whole, nullptr, 0))) {
+                Check(whole.RowPitch == 16 && whole.SlicePitch == 32, "a compressed volume's pitches count blocks",
+                      std::to_string(whole.RowPitch) + " / " + std::to_string(whole.SlicePitch));
+                for (UINT z = 0; z < 2; z++)
+                    for (UINT by = 0; by < 2; by++)
+                        for (UINT bx = 0; bx < 2; bx++)
+                            put(static_cast<uint8_t*>(whole.pBits) + z * whole.SlicePitch + by * whole.RowPitch + bx * 8,
+                                z == 0 ? 0xF800 : 0x001F);   // red slice, then blue slice
+                dxt->UnlockBox(0);
+            }
+            // A box on block boundaries edits one block: the lower right of slice 0 turns green.
+            const D3DBOX corner = { 4, 4, 8, 8, 0, 1 };
+            D3DLOCKED_BOX one = {};
+            if (SUCCEEDED(dxt->LockBox(0, &one, &corner, 0))) {
+                put(one.pBits, 0x07E0);
+                dxt->UnlockBox(0);
+            }
+            const D3DBOX straddling = { 2, 0, 8, 8, 0, 1 };
+            Check(dxt->LockBox(0, &one, &straddling, 0) == D3DERR_INVALIDCALL, "a compressed volume locks whole blocks only");
+
+            dev->SetTexture(1, dxt);
+            const int wrong = WrongCells(dev, DrawSliceShader, 2, 2, DxtBlocks, where);
+            report("volume: block-compressed slices sample as the blocks say", wrong, where);
+            dev->SetTexture(1, nullptr);
+        }
+
+        dev->SetPixelShader(nullptr);
+        dev->SetVertexShader(nullptr);
+        dev->SetVertexDeclaration(nullptr);
+        if (dxt) dxt->Release();
+        if (dynamic) dynamic->Release();
+        if (resident) resident->Release();
+        if (staged) staged->Release();
+        if (generated) generated->Release();
+        if (chain) chain->Release();
+        if (volume) volume->Release();
+        if (psVolume) psVolume->Release();
+        if (psVolumeCode) psVolumeCode->Release();
+    }
 
     // --- reference counting ----------------------------------------------------------------
     const ULONG countBefore = rtTex->AddRef() - 1;

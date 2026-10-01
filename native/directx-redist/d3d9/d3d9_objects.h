@@ -118,11 +118,65 @@ private:
     ID3D11Texture2D* staging = nullptr;
 };
 
+// --- volume images ------------------------------------------------------------
+
+struct VolumeLevel {
+    UINT width = 0, height = 0, depth = 0;
+    uint8_t* shadow = nullptr;   // D3D9-layout copy the game locks
+    UINT rowPitch = 0;           // D3D9 row pitch of the shadow
+    UINT slicePitch = 0;         // D3D9 slice pitch: a row pitch per row (per block row when compressed)
+    bool locked = false;
+    bool readOnly = false;       // the lock in progress does not write
+    bool evicted = false;        // shadow dropped after upload; the GPU copy is the contents
+    D3D11_BOX lockedBox = {};    // what the lock in progress covers, uploaded on unlock
+};
+
+// A D3D11 3D texture plus what D3D9 layers on top, as Image does for 2D
+// textures: CPU shadows for locking, a lazily created view, format conversion
+// on upload. D3D9 cannot render to a volume or use one as a depth buffer, so
+// there are no target views.
+class VolumeImage {
+public:
+    VolumeImage(Device* device, UINT width, UINT height, UINT depth, UINT levels, D3DFORMAT format,
+                DWORD usage, D3DPOOL pool);
+    ~VolumeImage();
+    HRESULT Init();
+
+    HRESULT Lock(UINT level, D3DLOCKED_BOX* locked, const D3DBOX* box, DWORD flags);
+    HRESULT Unlock(UINT level);
+    HRESULT UpdateFrom(VolumeImage& source);   // UpdateTexture: the source's levels -> this
+    void GenerateMips();
+    uint8_t* Shadow(UINT level);               // allocates on demand (reading an evicted one back)
+    bool Evictable() const;                    // the shadow can go once uploaded
+
+    ID3D11ShaderResourceView* Srv(bool srgb);
+
+    Device* device;
+    ID3D11Texture3D* texture = nullptr;
+    const FormatInfo* fmt = nullptr;
+    D3DFORMAT format;
+    UINT width, height, depth, levels;
+    DWORD usage;
+    D3DPOOL pool;
+    std::vector<VolumeLevel> mips;
+
+private:
+    uint8_t* Texel(const VolumeLevel& level, UINT left, UINT top, UINT front) const;
+    void Write(UINT level, const D3D11_BOX& box, const uint8_t* texels, UINT rowPitch, UINT slicePitch);
+    bool ReadBack(UINT level);
+
+    ID3D11ShaderResourceView* srv[2] = {};
+    bool autoGen = false;      // created able to generate its own mip levels
+};
+
 // Anything SetTexture accepts.
 class TextureBinding {
 public:
     virtual ~TextureBinding() = default;
-    virtual Image* GetImage() = 0;
+    virtual Image* GetImage() { return nullptr; }               // 2D and cube textures
+    virtual VolumeImage* GetVolumeImage() { return nullptr; }   // volume textures
+    virtual ID3D11ShaderResourceView* Srv(bool srgb) = 0;       // whatever the dimension, bound in the sampler's slot
+    virtual dxso::SamplerType SamplerKind() const = 0;          // what a shader's sampler declaration must be
     virtual RefCounted* Ref() = 0;
 };
 
@@ -185,6 +239,8 @@ public:
     STDMETHODIMP AddDirtyRect(const RECT*) override { return D3D_OK; }
 
     Image* GetImage() override { return image.get(); }
+    ID3D11ShaderResourceView* Srv(bool srgb) override { return image->Srv(srgb); }
+    dxso::SamplerType SamplerKind() const override { return dxso::SamplerType::Tex2D; }
     RefCounted* Ref() override { return this; }
 
 private:
@@ -216,11 +272,74 @@ public:
     STDMETHODIMP AddDirtyRect(D3DCUBEMAP_FACES, const RECT*) override { return D3D_OK; }
 
     Image* GetImage() override { return image.get(); }
+    ID3D11ShaderResourceView* Srv(bool srgb) override { return image->Srv(srgb); }
+    dxso::SamplerType SamplerKind() const override { return dxso::SamplerType::Cube; }
     RefCounted* Ref() override { return this; }
 
 private:
     std::unique_ptr<Image> image;
     std::vector<Surface*> surfaces;
+    DWORD lod_ = 0;
+    D3DTEXTUREFILTERTYPE filter = D3DTEXF_LINEAR;
+};
+
+// One level of a volume texture. It only ever lives inside its texture, so its
+// reference counts are the texture's, as for a texture's surfaces.
+class Volume final : public IDirect3DVolume9, public DeviceChild {
+public:
+    Volume(Device* device, VolumeImage* image, UINT level, IUnknown* container, RefCounted* containerRef);
+
+    ULONG PublicAddRef() override { return containerRef->PublicAddRef(); }
+    ULONG PublicRelease() override { return containerRef->PublicRelease(); }
+    void PrivateAddRef() override { containerRef->PrivateAddRef(); }
+    void PrivateRelease() override { containerRef->PrivateRelease(); }
+
+    STDMETHODIMP QueryInterface(REFIID riid, void** out) override;
+    D3D9_UNKNOWN_METHODS
+    STDMETHODIMP GetDevice(IDirect3DDevice9** out) override;
+    STDMETHODIMP SetPrivateData(REFGUID g, const void* d, DWORD s, DWORD f) override { return privateData.Set(g, d, s, f); }
+    STDMETHODIMP GetPrivateData(REFGUID g, void* d, DWORD* s) override { return privateData.Get(g, d, s); }
+    STDMETHODIMP FreePrivateData(REFGUID g) override { return privateData.Free(g); }
+    STDMETHODIMP GetContainer(REFIID riid, void** out) override;
+    STDMETHODIMP GetDesc(D3DVOLUME_DESC* desc) override;
+    STDMETHODIMP LockBox(D3DLOCKED_BOX* locked, const D3DBOX* box, DWORD flags) override;
+    STDMETHODIMP UnlockBox() override;
+
+    VolumeImage* image;
+    UINT level;
+    IUnknown* container;        // not owned
+    RefCounted* containerRef;   // the same object, for reference counting
+};
+
+class VolumeTexture final : public IDirect3DVolumeTexture9, public DeviceChild, public TextureBinding {
+public:
+    VolumeTexture(Device* device, std::unique_ptr<VolumeImage> image);
+    ~VolumeTexture() override;
+    HRESULT Init();
+
+    STDMETHODIMP QueryInterface(REFIID riid, void** out) override;
+    D3D9_UNKNOWN_METHODS
+    D3D9_RESOURCE_METHODS(D3DRTYPE_VOLUMETEXTURE)
+    STDMETHODIMP_(DWORD) SetLOD(DWORD lod) override { DWORD o = lod_; lod_ = lod; return o; }
+    STDMETHODIMP_(DWORD) GetLOD() override { return lod_; }
+    STDMETHODIMP_(DWORD) GetLevelCount() override { return image->levels; }
+    STDMETHODIMP SetAutoGenFilterType(D3DTEXTUREFILTERTYPE f) override { filter = f; return D3D_OK; }
+    STDMETHODIMP_(D3DTEXTUREFILTERTYPE) GetAutoGenFilterType() override { return filter; }
+    STDMETHODIMP_(void) GenerateMipSubLevels() override;
+    STDMETHODIMP GetLevelDesc(UINT level, D3DVOLUME_DESC* desc) override;
+    STDMETHODIMP GetVolumeLevel(UINT level, IDirect3DVolume9** volume) override;
+    STDMETHODIMP LockBox(UINT level, D3DLOCKED_BOX* locked, const D3DBOX* box, DWORD flags) override;
+    STDMETHODIMP UnlockBox(UINT level) override;
+    STDMETHODIMP AddDirtyBox(const D3DBOX*) override { return D3D_OK; }
+
+    VolumeImage* GetVolumeImage() override { return image.get(); }
+    ID3D11ShaderResourceView* Srv(bool srgb) override { return image->Srv(srgb); }
+    dxso::SamplerType SamplerKind() const override { return dxso::SamplerType::Volume; }
+    RefCounted* Ref() override { return this; }
+
+private:
+    std::unique_ptr<VolumeImage> image;
+    std::vector<Volume*> volumes;
     DWORD lod_ = 0;
     D3DTEXTUREFILTERTYPE filter = D3DTEXF_LINEAR;
 };
@@ -680,6 +799,7 @@ private:
     ID3D11SamplerState* Sampler(UINT slot);
     HRESULT DrawFan(bool indexed, INT baseVertex, UINT start, UINT count, const void* upIndices, D3DFORMAT upFormat);
     HRESULT UploadUp(const void* data, UINT bytes, UINT* offset, ID3D11Buffer** buffer, bool index);
+    TextureBinding* BindingOf(IDirect3DBaseTexture9* texture);
     Image* ImageOf(IDirect3DBaseTexture9* texture);
     void ResetViewport();
     bool InitBlitter();

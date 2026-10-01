@@ -499,7 +499,7 @@ ShaderVariant* Device::FixedPixelShader()
         g.alphaArg[1] = static_cast<uint8_t>(t[D3DTSS_ALPHAARG1]);
         g.alphaArg[2] = static_cast<uint8_t>(t[D3DTSS_ALPHAARG2]);
         g.result = static_cast<uint8_t>(t[D3DTSS_RESULTARG]);
-        if (Image* image = ImageOf(state.textures[st])) g.texType = image->faces == 6 ? 3 : 2;
+        if (TextureBinding* binding = BindingOf(state.textures[st])) g.texType = static_cast<uint8_t>(binding->SamplerKind());
         const DWORD flags = t[D3DTSS_TEXTURETRANSFORMFLAGS];
         if (flags & D3DTTFF_PROJECTED) {
             const DWORD count = flags & 0xFF;

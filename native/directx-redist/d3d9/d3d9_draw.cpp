@@ -519,9 +519,11 @@ void Device::BindTextures()
 {
     ID3D11ShaderResourceView* srvs[16] = {};
     ID3D11SamplerState* samplers[16] = {};
+    // A texture's view is of its own dimension (2D, cube or 3D), which is what
+    // the shader's declaration of that sampler expects.
     for (UINT s = 0; s < 16; s++) {
-        Image* image = ImageOf(state.textures[s]);
-        if (image) srvs[s] = image->Srv(state.ss[s][D3DSAMP_SRGBTEXTURE] != 0);
+        if (TextureBinding* binding = BindingOf(state.textures[s]))
+            srvs[s] = binding->Srv(state.ss[s][D3DSAMP_SRGBTEXTURE] != 0);
         samplers[s] = Sampler(s);
     }
     ctx->PSSetShaderResources(0, 16, srvs);
@@ -530,8 +532,8 @@ void Device::BindTextures()
     ID3D11ShaderResourceView* vsrvs[4] = {};
     ID3D11SamplerState* vsamplers[4] = {};
     for (UINT s = 0; s < 4; s++) {
-        Image* image = ImageOf(state.textures[17 + s]);
-        if (image) vsrvs[s] = image->Srv(state.ss[17 + s][D3DSAMP_SRGBTEXTURE] != 0);
+        if (TextureBinding* binding = BindingOf(state.textures[17 + s]))
+            vsrvs[s] = binding->Srv(state.ss[17 + s][D3DSAMP_SRGBTEXTURE] != 0);
         vsamplers[s] = Sampler(17 + s);
     }
     ctx->VSSetShaderResources(0, 4, vsrvs);
@@ -893,6 +895,13 @@ HRESULT Device::UpdateSurface(IDirect3DSurface9* srcSurface, const RECT* srcRect
 HRESULT Device::UpdateTexture(IDirect3DBaseTexture9* srcTexture, IDirect3DBaseTexture9* dstTexture)
 {
     LOCK_DEVICE;
+    // Both textures must be the same kind: volumes only update volumes.
+    TextureBinding* srcBinding = BindingOf(srcTexture);
+    TextureBinding* dstBinding = BindingOf(dstTexture);
+    VolumeImage* srcVolume = srcBinding ? srcBinding->GetVolumeImage() : nullptr;
+    VolumeImage* dstVolume = dstBinding ? dstBinding->GetVolumeImage() : nullptr;
+    if (srcVolume || dstVolume) return srcVolume && dstVolume ? dstVolume->UpdateFrom(*srcVolume) : D3DERR_INVALIDCALL;
+
     Image* src = ImageOf(srcTexture);
     Image* dst = ImageOf(dstTexture);
     if (!src || !dst || src->format != dst->format || src->faces != dst->faces || !dst->texture) return D3DERR_INVALIDCALL;

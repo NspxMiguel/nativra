@@ -140,6 +140,9 @@ namespace Kiosk.Native
                     foreach (var text in guestLog.ToArray()) into.Add("x86.log=" + text);
                     into.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
                     into.Add("x86.window=0x" + kernel.InputWindow.ToString("X") + " dispatched=" + kernel.MessagesDispatched);
+                    // Whether the pad reaches the game: its XInput polls, and the keys the host window holds.
+                    into.Add("x86.pad=reads " + PadBridge.Reads + " probes " + PadBridge.Probes +
+                             " held " + PointerBridge.HostKeys.Count(down => down));
                     into.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
                     into.Add("x86.xaudio=" + XAudio27Route.Note + " callbacks=" + xaudio.CallbacksDelivered +
                               " dropped=" + xaudio.CallbacksDropped + " effect-chains-dropped=" + xaudio.EffectChainsDropped);

@@ -20,6 +20,9 @@ idea, with one addition for games not tried yet.
 | WAVESHAPER | 562260 | 32-bit Windows | ⛔ Not working | build 348, 2026-09-26 | 32-bit. The x86 block-JIT loader maps it (base 0x400000, entry 0x6D2D98) and runs; most imports resolve (kernel32 169/212, user32 53/68). Stops at a missing kernel32 thunk (InterlockedCompareExchange). Real progress; needs more import thunks. |
 | LEGO Jurassic World | 352400 | TT Games (D3D11, x64 `LEGOJurassicWorld_DX11.exe`) | ⛔ Not working | build 305, 2026-09-26 | Borrowed through Steam Families; downloads (15.3 GB, to a USB drive). Starts through the classic Steamworks bridge, creates its window, D3D11 device and swap chain, then reads a null engine resource (`+0x3795DB`) before its first frame; the missing piece is not found yet. |
 
+Every other game in the library is sorted by how realistic it is today, with the missing
+piece behind each "not yet", in the planning catalog [LIBRARY.md](LIBRARY.md).
+
 Performance note: Xbox Developer Mode runs sideloaded apps as *apps* unless
 `DefaultUWPContentTypeToGame` is on (`bun src/xbdev.ts gamemode`, then
 restart). As an app Nativra gets a fraction of the CPU and GPU; a console

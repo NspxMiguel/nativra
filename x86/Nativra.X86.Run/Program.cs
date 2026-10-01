@@ -79,6 +79,14 @@ namespace Nativra.X86.Run
                 kernel.Files = new HostFolderFiles("C:\\game", folder);
                 kernel.Install();
                 var com = new GuestCom(process, kernel);
+                // No renderer here, but d3d9.dll exists as on the console, so a game
+                // takes the same path: D3D9Ex is unavailable and plain D3D9 fails.
+                process.Imports.Register("d3d9.dll", "Direct3DCreate9Ex", CallConv.Stdcall, 2, c =>
+                {
+                    if (c.Arg(1) != 0) process.Memory.Write32(c.Arg(1), 0);
+                    return 0x8876086A;   // D3DERR_NOTAVAILABLE
+                });
+                process.Imports.Register("d3d9.dll", "Direct3DCreate9", CallConv.Stdcall, 1, c => 0);
 
                 process.ModuleSource = name =>
                     Read(Path.Combine(folder, name)) ?? Read(Path.Combine(folder, "bin", name)) ??

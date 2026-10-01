@@ -63,3 +63,4 @@ artifacts/
 
 # Agent worktrees (local only)
 .claude/
+.install/

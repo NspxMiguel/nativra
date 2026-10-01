@@ -239,7 +239,34 @@ namespace Kiosk.Native
                 var magic = BitConverter.ToUInt16(executableBytes, peOffset + 24);
                 if (machine == 0x014C && magic == 0x10B)
                 {
-                    var finished = await X86Launch.RunAsync(folder.Path, exeName, executableBytes, lines, WriteAsync);
+                    // As for a 64-bit game: the page hands the pad's keys to the game
+                    // only while one is running, and the pad becomes the desktop
+                    // mouse and keys (or, toggled, a plain XInput pad) on this thread.
+                    GameRunning = true;
+                    var stepping = true;
+                    var stepper = new System.Threading.Thread(() =>
+                    {
+                        var last = Environment.TickCount;
+                        while (stepping)
+                        {
+                            var now = Environment.TickCount;
+                            PointerBridge.Step(Math.Max(0, now - last) / 1000.0);
+                            last = now;
+                            System.Threading.Thread.Sleep(8);
+                        }
+                    }) { IsBackground = true };
+                    stepper.Start();
+                    bool finished;
+                    try
+                    {
+                        finished = await X86Launch.RunAsync(folder.Path, exeName, executableBytes, lines, WriteAsync);
+                    }
+                    finally
+                    {
+                        stepping = false;
+                        GameRunning = false;
+                        PointerBridge.ReleaseHostKeys();
+                    }
                     await WriteAsync(lines);
                     if (!finished)
                         throw new PlatformNotSupportedException("The 32-bit layer stopped before the game finished; see x86.* in the probe report.");

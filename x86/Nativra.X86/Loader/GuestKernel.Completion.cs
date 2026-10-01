@@ -15,7 +15,9 @@ namespace Nativra.X86.Loader
 
         private sealed class CompletionPort : Waitable
         {
-            public readonly Queue<uint[]> Packets = new Queue<uint[]>();   // bytes, key, overlapped
+            // bytes, key, overlapped, status: a posted packet's "overlapped" is any value
+            // the program chose, so its status is kept here, never read through it.
+            public readonly Queue<uint[]> Packets = new Queue<uint[]>();
             public override bool Ready(uint thread) => Packets.Count > 0;
             public override void Consume(uint thread) { }
         }
@@ -34,7 +36,7 @@ namespace Nativra.X86.Loader
             i.Register(k, "PostQueuedCompletionStatus", CallConv.Stdcall, 4, c =>
             {
                 if (!(Object(c.Arg(0)) is CompletionPort port)) { process.LastError = ErrorInvalidHandle; return 0; }
-                port.Packets.Enqueue(new[] { c.Arg(1), c.Arg(2), c.Arg(3) });
+                port.Packets.Enqueue(new[] { c.Arg(1), c.Arg(2), c.Arg(3), 0u });
                 return 1;
             });
             i.Register(k, "GetQueuedCompletionStatus", CallConv.Stdcall, 5, c =>
@@ -84,7 +86,7 @@ namespace Nativra.X86.Loader
             if (status == 0 && (binding.Modes & SkipPortOnSuccess) != 0) return signal;
             // The low bit of hEvent asks for no packet.
             if ((memory.Read32(overlapped + 0x10) & 1) != 0) return signal;
-            port.Packets.Enqueue(new[] { bytes, binding.Key, overlapped });
+            port.Packets.Enqueue(new[] { bytes, binding.Key, overlapped, status });
             return signal;
         }
 
@@ -107,14 +109,10 @@ namespace Nativra.X86.Loader
             if (keyOut != 0) memory.Write32(keyOut, packet[1]);
             if (overlappedOut != 0) memory.Write32(overlappedOut, packet[2]);
             // A packet for a failed I/O is still dequeued, but the call reports the failure.
-            if (packet[2] != 0)
+            if (packet[3] != 0)
             {
-                var status = memory.Read32(packet[2]);
-                if (status != 0)
-                {
-                    process.LastError = status == StatusEndOfFile ? ErrorHandleEof : status;
-                    return 0;
-                }
+                process.LastError = packet[3] == StatusEndOfFile ? ErrorHandleEof : packet[3];
+                return 0;
             }
             return 1;
         }
@@ -142,7 +140,7 @@ namespace Nativra.X86.Loader
                 var at = entries + n * 16;
                 memory.Write32(at + 0x0, packet[1]);
                 memory.Write32(at + 0x4, packet[2]);
-                memory.Write32(at + 0x8, packet[2] != 0 ? memory.Read32(packet[2]) : 0);
+                memory.Write32(at + 0x8, packet[3]);
                 memory.Write32(at + 0xC, packet[0]);
                 n++;
             }

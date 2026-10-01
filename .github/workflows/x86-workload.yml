@@ -1,0 +1,65 @@
+name: x86 real workload
+
+# Runs a real 32-bit Windows program through the x86 layer under the JIT: the
+# Half-Life 2: Deathmatch dedicated server (Source engine, Steam app 232370),
+# which Valve lets anyone download anonymously. It exercises the loader, the
+# guest kernel and the CPU translator with the same engine binaries the Source
+# games use, and fails if the server no longer reaches the milestones it did.
+# See docs/progress/hl2dm-dedicated-server.md.
+
+on:
+  push:
+    paths:
+      - "x86/**"
+      - ".github/workflows/x86-workload.yml"
+  workflow_dispatch:
+
+jobs:
+  srcds:
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Cache the dedicated server
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: srcds
+          key: hl2dm-ds-232370-v1
+
+      - name: Download the dedicated server (anonymous)
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip -OutFile steamcmd.zip
+          Expand-Archive steamcmd.zip -DestinationPath steamcmd
+          # steamcmd updates itself on its first start and may exit non-zero
+          # while doing it; the files on disk are what counts.
+          & steamcmd\steamcmd.exe +force_install_dir "$PWD\srcds" +login anonymous +app_update 232370 +quit
+          & steamcmd\steamcmd.exe +force_install_dir "$PWD\srcds" +login anonymous +app_update 232370 validate +quit
+          if (-not (Test-Path srcds\srcds.exe)) { Write-Error "srcds.exe was not downloaded"; exit 1 }
+          exit 0
+
+      - name: Build the runner
+        run: dotnet build x86/Nativra.X86.Run -c Release
+
+      - name: Run the server through the layer
+        shell: pwsh
+        run: |
+          dotnet x86/Nativra.X86.Run/bin/Release/net8.0/Nativra.X86.Run.dll --budget 4000000000 --log 800 `
+            srcds srcds.exe -console -game hl2mp -insecure +sv_lan 1 +maxplayers 2 +map dm_lockdown | Tee-Object srcds.txt
+          $milestones = @(
+            'x86.jit=on',
+            'Console initialized.',
+            'server.dll loaded for "Half-Life 2 Deathmatch"'
+          )
+          $missing = $milestones | Where-Object { -not (Select-String -Path srcds.txt -SimpleMatch -Pattern $_ -Quiet) }
+          if ($missing) { Write-Error ("missing milestones: " + ($missing -join ' | ')); exit 1 }
+          exit 0

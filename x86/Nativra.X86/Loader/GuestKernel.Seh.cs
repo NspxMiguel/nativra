@@ -318,6 +318,8 @@ namespace Nativra.X86.Loader
             var d = pendingVectored.Pop();
             if (process.Cpu.Eax == 0xFFFFFFFF)
             {
+                if ((memory.Read32(d.Record + 4) & ExceptionNoncontinuable) != 0)
+                    throw new GuestRaisedException(StatusNoncontinuableException);
                 dispatches.Remove(d.Id);
                 RestoreContext(d.Context);
                 process.Jumped();

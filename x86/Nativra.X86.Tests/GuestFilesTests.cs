@@ -75,6 +75,31 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void AnExplicitFolderWinsOverTheSameNameBesideTheProgram()
+        {
+            Directory.CreateDirectory(Path.Combine(root, "mods"));
+            File.WriteAllBytes(Path.Combine(root, "plugin.dll"), TestPe32.Minimal(dll: true));
+            File.WriteAllBytes(Path.Combine(root, "mods", "plugin.dll"), TestPe32.Minimal(dll: true, dllMain: true));
+            p.LoadExecutable("game.exe", TestPe32.Minimal());
+
+            var module = K("LoadLibraryA", A("mods\\plugin.dll"));
+            Assert.NotEqual(0u, module);
+            // The copy under mods\ has a DllMain that leaves its mark; the one beside the program has none.
+            Assert.Equal(TestPe32.DllMainMark, p.Memory.Read32(module + TestPe32.DllMainMarkRva));
+        }
+
+        [Fact]
+        public void APostedPacketComesBackAsPostedWhateverItsPointer()
+        {
+            var port = K("CreateIoCompletionPort", 0xFFFFFFFF, 0, 0, 1);
+            Assert.Equal(1u, K("PostQueuedCompletionStatus", port, 1, 0x99, 0xDEAD0000));   // not a mapped OVERLAPPED
+            uint bytes = k.Heap.Alloc(4), key = k.Heap.Alloc(4), ov = k.Heap.Alloc(4);
+            Assert.Equal(1u, K("GetQueuedCompletionStatus", port, bytes, key, ov, 0));
+            Assert.Equal(0xDEAD0000u, p.Memory.Read32(ov));
+            Assert.Equal(0x99u, p.Memory.Read32(key));
+        }
+
+        [Fact]
         public void CompletionPortQueuesPostedPacketsAndOverlappedReads()
         {
             var port = K("CreateIoCompletionPort", 0xFFFFFFFF, 0, 0, 1);

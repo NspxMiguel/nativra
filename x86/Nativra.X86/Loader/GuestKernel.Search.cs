@@ -22,7 +22,16 @@ namespace Nativra.X86.Loader
 
         private byte[] SearchModule(string key)
         {
-            if (Files == null || searchMissed.Contains(key)) return null;
+            if (Files == null) return null;
+            // Beside the DLL being loaded comes first and is never answered from
+            // the cache: a miss elsewhere says nothing about this folder.
+            if (loadingFolders.Count > 0)
+            {
+                var beside = loadingFolders.Peek().TrimEnd('\\') + "\\" + key;
+                var found = ReadGuestFile(beside);
+                if (found != null) { modulePaths[key] = beside; return found; }
+            }
+            if (searchMissed.Contains(key)) return null;
             foreach (var folder in SearchFolders())
             {
                 var path = folder.TrimEnd('\\') + "\\" + key;
@@ -35,7 +44,6 @@ namespace Nativra.X86.Loader
 
         private IEnumerable<string> SearchFolders()
         {
-            if (loadingFolders.Count > 0) yield return loadingFolders.Peek();
             if (!string.IsNullOrEmpty(ExePath)) yield return Folder(ExePath);
             yield return CurrentDirectory;
             environment.TryGetValue("PATH", out var path);
@@ -82,5 +90,16 @@ namespace Nativra.X86.Loader
         }
 
         private void SearchChanged() => searchMissed.Clear();
+
+        /// <summary>
+        /// A DLL name with a folder that is the program's own: not one under the
+        /// Windows folder, whose DLLs the host supplies by name.
+        /// </summary>
+        private bool HasOwnFolder(string raw)
+        {
+            if (raw.IndexOfAny(new[] { '\\', '/' }) < 0) return false;
+            var full = FullPath(raw);
+            return !full.StartsWith("C:\\Windows\\", StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

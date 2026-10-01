@@ -292,7 +292,11 @@ namespace Nativra.X86.Loader
 
             var alreadyMapped = process.FindModule(name) != null;
             var firstNew = process.Images.Count;
-            var image = process.LoadModule(name) ?? LoadFromPath(raw, name);
+            // A name with a folder means that very file; the base-name search is for
+            // bare names, and for system-folder paths whose DLL the host supplies.
+            var image = HasOwnFolder(raw)
+                ? process.FindModule(name) ?? LoadFromPath(raw, name)
+                : process.LoadModule(name);
             if (image != null)
             {
                 if (!alreadyMapped)

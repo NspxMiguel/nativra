@@ -60,3 +60,6 @@ CLOUD-ROUND5-REPORT.md
 
 # Local test screenshots/frames (e.g. P5R capture scratch)
 artifacts/
+
+# Agent worktrees (local only)
+.claude/

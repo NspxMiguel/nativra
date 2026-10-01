@@ -22,6 +22,9 @@ namespace Nativra.X86.Loader
     /// <item><c>x</c> a HANDLE* for sharing, always passed as null</item>
     /// <item><c>P</c> D3DPRESENT_PARAMETERS in/out; <c>C</c> D3DDEVICE_CREATION_PARAMETERS out</item>
     /// <item><c>L</c> D3DLOCKED_RECT out; <c>B</c> D3DLOCKED_BOX out; <c>V</c> void** data out</item>
+    /// <item><c>n:Bytes</c> plain data, in and out, of that size here but padded wider on the host
+    /// (D3DADAPTER_IDENTIFIER9: 1100 bytes here, 1104 on x64): the host fills its own copy and only
+    /// the guest's bytes come back, so the padding never lands past the game's buffer</item>
     /// </list>
     /// A method name ending in <c>:F</c> returns a float (in ST0 for the guest);
     /// <c>:skip</c> answers S_OK without calling the host. Other single
@@ -108,6 +111,8 @@ namespace Nativra.X86.Loader
         private readonly Dictionary<IntPtr, Delegate> callers = new Dictionary<IntPtr, Delegate>();
         private readonly IntPtr scratch;   // host-side out slots and structure copies
         private const int ScratchSize = 1024;
+        private readonly IntPtr wide;      // host copy for an n:Bytes structure
+        private const int WideSize = 4096;
 
         private sealed class Proxy
         {
@@ -137,6 +142,7 @@ namespace Nativra.X86.Loader
             this.process = process;
             this.kernel = kernel;
             scratch = Marshal.AllocHGlobal(ScratchSize);
+            wide = Marshal.AllocHGlobal(WideSize);
             kernel.CoCreateInstance = CreateInstance;
         }
 
@@ -333,6 +339,26 @@ namespace Nativra.X86.Loader
                     case 'x':
                         args.Add(IntPtr.Zero);
                         break;
+                    case 'n':
+                    {
+                        var target = value;
+                        var size = int.Parse(code.Substring(2));
+                        if (size + 16 > WideSize) throw new InvalidOperationException("structure too large in " + key);
+                        args.Add(target == 0 ? IntPtr.Zero : wide);
+                        if (target != 0)
+                        {
+                            var bytes = Memory.ReadBytes(target, size);
+                            Marshal.Copy(bytes, 0, wide, size);
+                            for (var k = size; k < size + 16; k++) Marshal.WriteByte(wide, k, 0);
+                            outs.Add(() =>
+                            {
+                                var back = new byte[size];
+                                Marshal.Copy(wide, back, 0, size);
+                                Memory.WriteBytes(target, back);
+                            });
+                        }
+                        break;
+                    }
                     case 'i':
                         args.Add(Unwrap(value));
                         break;

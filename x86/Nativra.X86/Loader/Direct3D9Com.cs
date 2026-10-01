@@ -20,7 +20,7 @@ namespace Nativra.X86.Loader
             const string D = "IDirect3DDevice9";
 
             com.Define("IDirect3D9", new Guid("81BDCBCA-64D4-426d-AE8D-AD0147F4275C"), null, true,
-                "RegisterSoftwareDevice(p)", "GetAdapterCount()", "GetAdapterIdentifier(u,u,p)",
+                "RegisterSoftwareDevice(p)", "GetAdapterCount()", "GetAdapterIdentifier(u,u,n:1100)",
                 "GetAdapterModeCount(u,u)", "EnumAdapterModes(u,u,u,p)", "GetAdapterDisplayMode(u,p)",
                 "CheckDeviceType(u,u,u,u,u)", "CheckDeviceFormat(u,u,u,u,u,u)",
                 "CheckDeviceMultiSampleType(u,u,u,u,u,p)", "CheckDepthStencilMatch(u,u,u,u,u)",

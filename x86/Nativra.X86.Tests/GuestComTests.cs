@@ -21,6 +21,7 @@ namespace Nativra.X86.Tests
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int PresentFn(IntPtr self, IntPtr parameters);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int LockFn(IntPtr self, IntPtr locked);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int ScaleFn(IntPtr self, float factor);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int IdentifyFn(IntPtr self, IntPtr identity);
 
         private static readonly Guid CalcIid = new Guid("11111111-2222-3333-4444-555555555555");
 
@@ -36,6 +37,7 @@ namespace Nativra.X86.Tests
         private float scaled;
         private long seenWindow;
         private int seenWindowed;
+        private int seenSize;
 
         public GuestComTests()
         {
@@ -46,7 +48,7 @@ namespace Nativra.X86.Tests
             kernel.Install();
             com = new GuestCom(p, kernel);
             calc = com.Define("ICalc", CalcIid, null, true,
-                "Add(u,u,p)", "Make(o:ICalc)", "TakePresent(P)", "Lock(L)", "Scale(f)");
+                "Add(u,u,p)", "Make(o:ICalc)", "TakePresent(P)", "Lock(L)", "Scale(f)", "Identify(n:12)");
             BuildVtable();
         }
 
@@ -88,6 +90,13 @@ namespace Nativra.X86.Tests
                     return 0;
                 }),
                 new ScaleFn((self, factor) => { scaled = factor; return 0; }),
+                // A structure the host pads wider: it writes all 16 of its bytes.
+                new IdentifyFn((self, identity) =>
+                {
+                    seenSize = Marshal.ReadInt32(identity);
+                    for (var k = 0; k < 16; k += 4) Marshal.WriteInt32(identity, k, 0x11111111 * (k / 4 + 1));
+                    return 0;
+                }),
             };
             keep.AddRange(methods);
             vtable = Marshal.AllocHGlobal(methods.Length * IntPtr.Size);
@@ -125,6 +134,22 @@ namespace Nativra.X86.Tests
             Assert.Equal(0u, Call(obj, 3, 2, 3, sum));
             Assert.Equal(5u, p.Memory.Read32(sum));
             Assert.Equal(obj, com.Wrap(com.Unwrap(obj), calc));   // one guest address per object
+        }
+
+        [Fact]
+        public void APaddedStructureComesBackWithoutItsHostPadding()
+        {
+            // D3DADAPTER_IDENTIFIER9 is 1100 bytes for the game and 1104 on x64; the
+            // four extra bytes used to land on whatever followed the game's buffer —
+            // on its stack, the /GS cookie.
+            var obj = com.Wrap(NewObject(), calc);
+            var buffer = kernel.Heap.Alloc(16);
+            p.Memory.Write32(buffer, 12);
+            p.Memory.Write32(buffer + 12, 0xC0C0C0C0);
+            Assert.Equal(0u, Call(obj, 8, buffer));
+            Assert.Equal(12, seenSize);                                // what the game put in goes in
+            Assert.Equal(0x33333333u, p.Memory.Read32(buffer + 8));    // its bytes come back
+            Assert.Equal(0xC0C0C0C0u, p.Memory.Read32(buffer + 12));   // the padding does not
         }
 
         [Fact]

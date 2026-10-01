@@ -138,6 +138,9 @@ namespace Kiosk.Native
                     {
                         result = process.Call(image.EntryPoint, out var exitCode, BlockBudget);
                         lines.Add("x86.run=" + result + (result.Ok ? " (entry returned " + exitCode + ")" : ""));
+                        // The run line keeps only the exception's first line; the stack says where.
+                        if (result.Stop == GuestStop.HostError && result.Detail != null)
+                            lines.Add("x86.host-error=" + result.Detail.Replace("\r", "").Replace("\n", " | "));
                     }
                 }
                 catch (Exception error)

@@ -250,6 +250,17 @@ namespace Nativra.X86.Loader
                 // violation, what was touched), which is what the report needs.
                 var code = memory.Read32(d.Record);
                 var parameters = memory.Read32(d.Record + 16);
+                if (Log != null)
+                {
+                    var flags = memory.Read32(d.Record + 4);
+                    var eip = memory.Read32(d.Record + 12);
+                    var args = new List<string>();
+                    for (uint n = 0; n < Math.Min(parameters, 15); n++)
+                        args.Add("0x" + memory.Read32(d.Record + 20 + n * 4).ToString("X8"));
+                    Log("unhandled exception code=0x" + code.ToString("X8") + " flags=0x" + flags.ToString("X8") +
+                        " eip=0x" + eip.ToString("X8") + " eax=0x" + process.Cpu.Eax.ToString("X8") +
+                        " nparams=" + parameters + " params=[" + string.Join(",", args) + "]");
+                }
                 throw new GuestRaisedException(code, memory.Read32(d.Record + 12),
                     parameters >= 2 ? memory.Read32(d.Record + 24) : 0, parameters >= 1 && memory.Read32(d.Record + 20) != 0);
             }

@@ -28,7 +28,7 @@ namespace Nativra.X86.Tests
 
         public GuestNetworkTests()
         {
-            p = new GuestProcess(new GuestMemory(), useJit: false);
+            p = new GuestProcess(new GuestMemory(), useJit: false) { HostWaitLimitMilliseconds = 20_000 };   // no test waits for ever
             k = new GuestKernel(p);
             k.Install();
             Assert.Equal(0u, W("WSAStartup", 0x0202, Alloc(400)));
@@ -821,6 +821,51 @@ namespace Nativra.X86.Tests
             Assert.Equal(7u, W("recv", s, buffer, 16, 2));   // MSG_PEEK
             Assert.Equal(7u, W("recv", s, buffer, 16, 0));
             Assert.Equal("peek me", p.Memory.ReadAnsi(buffer));
+        }
+
+        [Fact]
+        public void PeekedDatagramStaysReadableAndCountedUntilReceived()
+        {
+            var s = BoundUdp(out var port);
+            Send(s, "peek me", Addr("127.0.0.1", port));
+            AwaitReadable(s);
+            var arg = Dword(0);
+            Assert.Equal(7u, W("recv", s, Alloc(16), 16, 2));
+            AwaitReadable(s);                                          // still readable after the peek
+            Assert.Equal(0u, W("ioctlsocket", s, 0x4004667F, arg));
+            Assert.Equal(7u, p.Memory.Read32(arg));
+            Assert.Equal(7u, W("recv", s, Alloc(16), 16, 2));          // peeked twice
+            NonBlocking(s);
+            Assert.Equal(7u, W("recv", s, Alloc(16), 16, 0));
+            Assert.Equal(Invalid, W("recv", s, Alloc(16), 16, 0));
+            Assert.Equal(WouldBlock, Last());
+        }
+
+        [Fact]
+        public void ABlockedReceiveLeavesNothingBehindForAnotherSocket()
+        {
+            var a = BoundUdp(out _);
+            var b = BoundUdp(out var portB);
+            Assert.Equal(0u, W("setsockopt", a, SolSocket, SoRcvTimeo, Dword(40), 4));
+            Assert.Equal(Invalid, W("recv", a, Alloc(8), 8, 0));
+            Assert.Equal(TimedOut, Last());
+            Assert.Equal(0u, W("closesocket", a));
+            Send(b, "fresh", Addr("127.0.0.1", portB));
+            AwaitReadable(b);
+            Assert.Equal("fresh", Receive(b));
+        }
+
+        [Fact]
+        public void ClosingALingeringSocketDoesNotWait()
+        {
+            var s = Socket(1, 6);
+            var linger = Alloc(4);
+            p.Memory.Write16(linger, 1);
+            p.Memory.Write16(linger + 2, 30);
+            Assert.Equal(0u, W("setsockopt", s, SolSocket, SoLinger, linger, 4));
+            var watch = Stopwatch.StartNew();
+            Assert.Equal(0u, W("closesocket", s));
+            Assert.True(watch.ElapsedMilliseconds < 5000);
         }
 
         [Fact]

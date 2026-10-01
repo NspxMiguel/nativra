@@ -315,11 +315,17 @@ namespace Nativra.X86.Loader
         private long OverlappedOffset(uint overlapped) =>
             ((long)memory.Read32(overlapped + 0xC) << 32) | memory.Read32(overlapped + 8);
 
-        private void CompleteOverlapped(uint handle, uint overlapped, uint bytes, uint status)
+        /// <summary>
+        /// Ends an overlapped call: status and count into the OVERLAPPED, the
+        /// packet on the handle's port, the event. <paramref name="synchronous"/>
+        /// is true when the call finished before it returned (every file read and
+        /// write here), false for a socket call that returned pending.
+        /// </summary>
+        private void CompleteOverlapped(uint handle, uint overlapped, uint bytes, uint status, bool synchronous = true)
         {
             memory.Write32(overlapped + 0, status);
             memory.Write32(overlapped + 4, bytes);
-            if (!QueueCompletion(handle, overlapped, bytes, status)) return;
+            QueueCompletion(handle, overlapped, bytes, status, synchronous);
             var signal = memory.Read32(overlapped + 0x10) & ~1u;   // the low bit only asks not to queue a completion
             if (signal != 0) SignalEvent(signal, true);
         }

@@ -39,7 +39,7 @@ namespace Nativra.X86.Loader
         // Winsock option and ioctl numbers.
         private const uint SolSocket = 0xFFFF, IpprotoIp = 0, IpprotoTcp = 6, IpprotoIpv6 = 41;
         private const uint FdFionbio = 0x8004667E, FdFionread = 0x4004667F, FdSiocatmark = 0x40047307;
-        private const uint SioUdpConnReset = 0x9800000C, SioKeepAliveVals = 0x98000004;
+        private const uint SioUdpConnReset = 0x9800000C, SioKeepAliveVals = 0x98000004, SioGetExtensionFunctionPointer = 0xC8000006;
 
         private uint socketError;       // WSAGetLastError: per process here, as it always was
         private int networkStarted;     // WSAStartup calls not yet matched by WSACleanup
@@ -52,15 +52,40 @@ namespace Nativra.X86.Loader
         private readonly byte[] receiveBuffer = new byte[65536 + 64];
 
         // A blocking send of many bytes, or a MSG_WAITALL receive, that has to
-        // wait part-way: its progress, kept by guest thread across the calls
-        // the thread makes while it waits.
+        // wait part-way: its progress, kept across the calls the thread makes
+        // while it waits. A thread that is waiting repeats the very call it was
+        // in, so the key is the thread, the socket and the direction: a call that
+        // ends some other way (the socket closed under it) cannot leave progress
+        // behind for the next call the thread makes, and closing a socket drops
+        // what was kept for it.
         private sealed class Transfer
         {
             public byte[] Data;
             public int Done;
         }
 
-        private readonly Dictionary<uint, Transfer> transfers = new Dictionary<uint, Transfer>();
+        private enum TransferKind { Send, Receive }
+
+        private readonly struct TransferKey : IEquatable<TransferKey>
+        {
+            public readonly uint Thread, Socket;
+            public readonly TransferKind Kind;
+            public TransferKey(uint thread, uint socket, TransferKind kind) { Thread = thread; Socket = socket; Kind = kind; }
+            public bool Equals(TransferKey other) => Thread == other.Thread && Socket == other.Socket && Kind == other.Kind;
+            public override bool Equals(object obj) => obj is TransferKey other && Equals(other);
+            public override int GetHashCode() => unchecked((int)((Thread * 397u) ^ (Socket * 31u) ^ (uint)Kind));
+        }
+
+        private readonly Dictionary<TransferKey, Transfer> transfers = new Dictionary<TransferKey, Transfer>();
+
+        private void DropTransfers(uint socket)
+        {
+            List<TransferKey> stale = null;
+            foreach (var key in transfers.Keys)
+                if (key.Socket == socket) (stale ?? (stale = new List<TransferKey>())).Add(key);
+            if (stale == null) return;
+            foreach (var key in stale) transfers.Remove(key);
+        }
 
         /// <summary>What gethostname answers; it also resolves to this machine's own addresses.</summary>
         public string HostName { get; set; } = "xbox";
@@ -74,6 +99,10 @@ namespace Nativra.X86.Loader
             public bool NonBlocking;                  // the guest's FIONBIO state; the host socket is always non-blocking
             public uint ReceiveTimeout, SendTimeout;  // milliseconds, 0 = none
             public bool Bound, Listening, Connected, Connecting;
+            public bool AcceptPending;                // an AcceptEx names this socket as the one to accept into
+            public byte[] Peeked;                     // a datagram a MSG_PEEK took from the host: kept here for the next receive
+            public IPEndPoint PeekedFrom;
+            public long ConnectedAt;                  // Milliseconds when the connection was made (SO_CONNECT_TIME)
             public uint ConnectError;                 // a connect that failed, until the guest has been told
             public uint ConnectWaiter;                // the thread inside a blocking connect
             public bool ShutdownReceive, ShutdownSend;
@@ -285,6 +314,7 @@ namespace Nativra.X86.Loader
             Ws("getnameinfo", 7, c => GetNameInfo(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3), c.Arg(4), c.Arg(5), c.Arg(6), false), NetFail.Code);
             Ws("GetNameInfoW", 7, c => GetNameInfo(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3), c.Arg(4), c.Arg(5), c.Arg(6), true), NetFail.Code);
 
+            InstallMswsock(i);
             InstallWininet(i);
         }
 
@@ -360,9 +390,29 @@ namespace Nativra.X86.Loader
         private void ReleaseSocket(GuestSocket s)
         {
             CancelPending(s);   // overlapped calls end as aborted, their packets still queued
+            DropTransfers(s.Handle);
             eventSockets.Remove(s);
             portBindings.Remove(s.Handle);
-            try { s.Host.Close(); }
+            CloseHost(s.Host);
+        }
+
+        /// <summary>
+        /// Closes a host socket without ever waiting. With SO_LINGER on and a positive time, the host's
+        /// close holds the calling thread (the one thread the whole guest runs on) until the peer has
+        /// taken the queued data or the time runs out. A plain close is graceful as well: what is queued
+        /// is still delivered, followed by the FIN. Linger on with a zero time (an abortive close, a
+        /// reset) does not wait, and stays.
+        /// </summary>
+        private static void CloseHost(Socket host)
+        {
+            try
+            {
+                var linger = host.LingerState;
+                if (linger != null && linger.Enabled && linger.LingerTime > 0) host.LingerState = new LingerOption(false, 0);
+            }
+            catch (SocketException) { }
+            catch (ObjectDisposedException) { }
+            try { host.Close(); }
             catch (SocketException) { }
             catch (ObjectDisposedException) { }
         }
@@ -446,7 +496,7 @@ namespace Nativra.X86.Loader
             var error = ReadSockaddr(name, length, out var endpoint);
             if (error != 0) return SockFail(error);
             if (endpoint.AddressFamily != s.Family) return SockFail(WsaEafnosupport);
-            if (s.Bound || s.Connected || s.Connecting || s.Listening) return SockFail(WsaEinval);
+            if (s.Bound || s.Connected || s.Connecting || s.Listening || s.AcceptPending) return SockFail(WsaEinval);
             s.Host.Bind(endpoint);
             s.Bound = true;
             return 0;
@@ -470,6 +520,7 @@ namespace Nativra.X86.Loader
             if (address != 0 && (lengthPointer == 0 || memory.Read32(lengthPointer) < SockaddrSize(s.Family)))
                 return SockFail(WsaEfault);
 
+            ServiceAccepts(s);   // an AcceptEx already waiting for a connection has it before accept does
             Socket accepted = null;
             if (s.Host.Poll(0, SelectMode.SelectRead))
             {
@@ -484,7 +535,7 @@ namespace Nativra.X86.Loader
             var n = new GuestSocket
             {
                 Handle = handleOut, Host = accepted, Family = s.Family, Type = s.Type,
-                Bound = true, Connected = true, WriteArmed = true, Peer = peer,
+                Bound = true, Connected = true, WriteArmed = true, Peer = peer, ConnectedAt = Milliseconds,
                 NonBlocking = s.NonBlocking, ReceiveTimeout = s.ReceiveTimeout, SendTimeout = s.SendTimeout,
                 Event = s.Event, EventMask = s.EventMask,   // the new socket has the listening one's properties, events included
             };
@@ -514,7 +565,7 @@ namespace Nativra.X86.Loader
                 return SockFail(failed);
             }
             if (s.Connecting) return SockFail(WsaEalready);
-            if (s.Listening) return SockFail(WsaEinval);
+            if (s.Listening || s.AcceptPending) return SockFail(WsaEinval);
             if (s.Connected && s.Type == SocketType.Stream) return SockFail(WsaEisconn);
 
             var error = ReadSockaddr(name, length, out var endpoint);
@@ -538,6 +589,7 @@ namespace Nativra.X86.Loader
                 return 0;
             }
             s.Connected = true;
+            s.ConnectedAt = Milliseconds;
             s.Bound = true;
             s.Peer = endpoint;
             s.WriteArmed = true;
@@ -566,6 +618,7 @@ namespace Nativra.X86.Loader
             if (error == 0)
             {
                 s.Connected = true;
+                s.ConnectedAt = Milliseconds;
                 s.WriteArmed = true;
             }
             else s.ConnectError = error;
@@ -691,13 +744,14 @@ namespace Nativra.X86.Loader
         private uint TransmitCall(GuestSocket s, Piece[] pieces, uint flags, IPEndPoint target, out uint count)
         {
             count = 0;
-            var resumed = transfers.TryGetValue(Me, out var t);
+            var key = new TransferKey(Me, s.Handle, TransferKind.Send);
+            var resumed = transfers.TryGetValue(key, out var t);
             if (!resumed)
             {
                 t = new Transfer { Data = Gather(pieces) };
                 if (t.Data == null) return WsaEnobufs;
             }
-            transfers.Remove(Me);
+            transfers.Remove(key);
 
             while (true)
             {
@@ -711,7 +765,7 @@ namespace Nativra.X86.Loader
                     }
                     if (process.WaitTimedOut(s.SendTimeout == 0 ? Infinite : s.SendTimeout)) return WsaEtimedout;
                     process.BlockOnHost();
-                    transfers[Me] = t;
+                    transfers[key] = t;
                     return Waiting;
                 }
                 if (error != 0) return error;
@@ -757,11 +811,29 @@ namespace Nativra.X86.Loader
                 }
 
                 if (!s.Bound && !s.Connected) return WsaEinval;
+                var peek = (flags & 2) != 0;
+                if (s.Peeked != null)
+                {
+                    // The datagram an earlier MSG_PEEK took from the host: it is the next one, peeked or received.
+                    count = s.Peeked.Length;
+                    Buffer.BlockCopy(s.Peeked, 0, receiveBuffer, 0, count);
+                    from = s.PeekedFrom;
+                    if (!peek)
+                    {
+                        s.Peeked = null;
+                        s.PeekedFrom = null;
+                        s.ReadArmed = true;
+                    }
+                    return 0;
+                }
                 if (!s.Host.Poll(0, SelectMode.SelectRead)) return WsaEwouldblock;
                 EndPoint remote = AnyEndpoint(s.Family);
-                count = s.Host.ReceiveFrom(receiveBuffer, 0, receiveBuffer.Length, HostFlags(flags & 0x7), ref remote);
-                if ((flags & 2) == 0) s.ReadArmed = true;
+                // A peek is never asked of the host: how a host's peek leaves its readiness, its events and
+                // its queue is the host's own (a Windows host stopped a peeked datagram from being read again).
+                count = s.Host.ReceiveFrom(receiveBuffer, 0, receiveBuffer.Length, HostFlags(flags & 0x5), ref remote);
                 from = remote as IPEndPoint;
+                if (peek) KeepDatagram(s, count, from);
+                else s.ReadArmed = true;
                 return 0;
             }
             catch (SocketException e)
@@ -770,6 +842,14 @@ namespace Nativra.X86.Loader
                 return e.SocketErrorCode == SocketError.WouldBlock ? WsaEwouldblock : CodeOf(e.SocketErrorCode);
             }
             catch (ObjectDisposedException) { return WsaEnotsock; }
+        }
+
+        /// <summary>Keeps the datagram just read into the receive buffer as the socket's next one (what MSG_PEEK and FIONREAD leave).</summary>
+        private void KeepDatagram(GuestSocket s, int count, IPEndPoint from)
+        {
+            s.Peeked = new byte[count];
+            Buffer.BlockCopy(receiveBuffer, 0, s.Peeked, 0, count);
+            s.PeekedFrom = from;
         }
 
         private uint RecvCall(uint handle, uint buffer, uint length, uint flags, uint from, uint fromLength)
@@ -790,9 +870,10 @@ namespace Nativra.X86.Loader
             count = 0;
             var capacity = TotalLength(pieces);
             var waitAll = (flags & 8) != 0 && s.Type == SocketType.Stream && (flags & 2) == 0;   // MSG_WAITALL
-            var resumed = transfers.TryGetValue(Me, out var t);
+            var key = new TransferKey(Me, s.Handle, TransferKind.Receive);
+            var resumed = transfers.TryGetValue(key, out var t);
             if (!resumed) t = new Transfer();
-            transfers.Remove(Me);
+            transfers.Remove(key);
 
             while (true)
             {
@@ -802,7 +883,7 @@ namespace Nativra.X86.Loader
                     if (s.NonBlocking) return t.Done > 0 ? Finish(t, out count) : WsaEwouldblock;
                     if (process.WaitTimedOut(s.ReceiveTimeout == 0 ? Infinite : s.ReceiveTimeout)) return WsaEtimedout;
                     process.BlockOnHost();
-                    transfers[Me] = t;
+                    transfers[key] = t;
                     return Waiting;
                 }
                 if (error != 0) return error;
@@ -868,10 +949,14 @@ namespace Nativra.X86.Loader
             {
                 if (s.Listening) return 0;
                 if (s.Type == SocketType.Stream) return s.Connected ? (uint)Math.Max(0, s.Host.Available) : 0;
+                if (s.Peeked != null) return (uint)s.Peeked.Length;
                 if (!s.Host.Poll(0, SelectMode.SelectRead)) return 0;
-                // Peeked: the host's own count includes headers on some platforms.
+                // The size of the next datagram, which is read to know it (the host's own count includes headers
+                // on some platforms, and its peek is not relied on) and kept for the receive that takes it.
                 EndPoint remote = AnyEndpoint(s.Family);
-                return (uint)s.Host.ReceiveFrom(receiveBuffer, 0, receiveBuffer.Length, SocketFlags.Peek, ref remote);
+                var size = s.Host.ReceiveFrom(receiveBuffer, 0, receiveBuffer.Length, SocketFlags.None, ref remote);
+                KeepDatagram(s, size, remote as IPEndPoint);
+                return (uint)size;
             }
             catch (SocketException) { return 0; }
             catch (ObjectDisposedException) { return 0; }
@@ -917,8 +1002,15 @@ namespace Nativra.X86.Loader
                 case SioUdpConnReset:
                 case SioKeepAliveVals:
                     break;   // accepted: the host's defaults stand
+                case SioGetExtensionFunctionPointer:
+                {
+                    var error = ExtensionFunction(input, inputLength, output, outputLength);
+                    if (error != 0) return SockFail(error);
+                    returned = 4;
+                    break;
+                }
                 default:
-                    return SockFail(WsaEopnotsupp);   // extension-function lookups and the like: the program falls back
+                    return SockFail(WsaEopnotsupp);   // the rest of the ioctls: the program falls back
             }
             if (returnedPointer != 0) memory.Write32(returnedPointer, returned);
             return 0;
@@ -979,8 +1071,19 @@ namespace Nativra.X86.Loader
                         case 0x1005: s.SendTimeout = number; return 0;                                                                  // SO_SNDTIMEO
                         case 0x1006: s.ReceiveTimeout = number; return 0;                                                               // SO_RCVTIMEO
                         case 0x3002:   // SO_CONDITIONAL_ACCEPT
-                        case 0x700B:   // SO_UPDATE_ACCEPT_CONTEXT
                         case 0x7010:   // SO_UPDATE_CONNECT_CONTEXT
+                            return 0;
+                        case 0x700B:   // SO_UPDATE_ACCEPT_CONTEXT: the option value is the listening socket
+                            // The socket AcceptEx accepted takes the listening socket's properties, as the one accept returns has them.
+                            if (length >= 4 && s.Connected && sockets.TryGetValue(number, out var listener) && listener.Listening)
+                            {
+                                s.NonBlocking = listener.NonBlocking;
+                                s.ReceiveTimeout = listener.ReceiveTimeout;
+                                s.SendTimeout = listener.SendTimeout;
+                                s.Event = listener.Event;
+                                s.EventMask = listener.EventMask;
+                                if (s.EventMask != 0 && !eventSockets.Contains(s)) eventSockets.Add(s);
+                            }
                             return 0;
                         default: return SockFail(WsaEnoprotoopt);
                     }
@@ -1065,6 +1168,10 @@ namespace Nativra.X86.Loader
                         case 0x1006: answer = s.ReceiveTimeout; break;
                         case 0x1007: answer = TakeSocketError(s); break;                                     // SO_ERROR
                         case 0x1008: answer = s.Type == SocketType.Stream ? 1u : 2u; break;                  // SO_TYPE
+                        case 0x700C:                                                                         // SO_CONNECT_TIME: seconds connected, or -1
+                            Settle(s);
+                            answer = s.Connected ? (uint)Math.Max(0, (Milliseconds - s.ConnectedAt) / 1000) : 0xFFFFFFFF;
+                            break;
                         case 0x2003:                                                                         // SO_MAX_MSG_SIZE
                             if (s.Type == SocketType.Stream) return SockFail(WsaEnoprotoopt);
                             answer = 65507;

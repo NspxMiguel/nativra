@@ -62,6 +62,15 @@ namespace Nativra.X86.Loader
         /// <summary>How long every thread may wait with nothing able to wake it before the run stops.</summary>
         public int DeadlockMilliseconds { get; set; } = 30_000;
 
+        /// <summary>
+        /// How long every thread may wait with nothing running, whatever it waits for, before the run stops
+        /// as deadlocked: unlike <see cref="DeadlockMilliseconds"/> this counts the waits the host could
+        /// still end (a packet, a connection, a name lookup) and the timed ones. 0, the default, is no
+        /// limit: a server waits for its clients for ever. A test sets one, so a wake-up that never comes
+        /// fails the test where it would otherwise hang it.
+        /// </summary>
+        public int HostWaitLimitMilliseconds { get; set; }
+
         private readonly List<GuestThread> threads = new List<GuestThread>();
         private uint nextThreadId = MainThreadId + 4;
         private int depth;            // nested Run calls on the host stack
@@ -71,6 +80,7 @@ namespace Nativra.X86.Loader
         private bool hostWake;        // the import that just blocked waits on something the host can end
         private int blockedStreak;    // consecutive turns that ended in a wait with nothing run between
         private long allWaitingSince;
+        private long hostIdleSince;   // when every thread began waiting (host-wakeable waits included); 0 while something ran
         private uint threadExitSentinel;
         private readonly Stopwatch clock = Stopwatch.StartNew();
 
@@ -220,12 +230,19 @@ namespace Nativra.X86.Loader
                 if (allWaitingSince == 0) allWaitingSince = clock.ElapsedMilliseconds;
                 if (clock.ElapsedMilliseconds - allWaitingSince > DeadlockMilliseconds)
                     return new GuestRunResult(GuestStop.Deadlocked);
+                if (HostWaitLimitMilliseconds > 0)
+                {
+                    if (hostIdleSince == 0) hostIdleSince = clock.ElapsedMilliseconds;
+                    else if (clock.ElapsedMilliseconds - hostIdleSince > HostWaitLimitMilliseconds)
+                        return new GuestRunResult(GuestStop.Deadlocked);
+                }
                 PauseForTime();
                 blockedStreak = 0;
             }
             else
             {
                 allWaitingSince = 0;
+                hostIdleSince = 0;
             }
 
             if (next != current) SwitchTo(next);

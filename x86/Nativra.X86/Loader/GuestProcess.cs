@@ -612,6 +612,7 @@ namespace Nativra.X86.Loader
                 }
 
                 blockedStreak = 0;
+                hostIdleSince = 0;
                 try
                 {
                     if (UsesJit) Jit.RunBlock();
@@ -666,6 +667,7 @@ namespace Nativra.X86.Loader
             thread.Blocked = false;
             thread.WaitStarted = false;
             blockedStreak = 0;
+            hostIdleSince = 0;
             if (jumped) return;   // the handler set the whole CPU state itself
 
             Cpu.Eax = (uint)result;

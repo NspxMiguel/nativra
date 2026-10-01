@@ -11,7 +11,9 @@ namespace Nativra.X86.Loader
     public sealed partial class GuestKernel
     {
         private const uint WaitTimeoutError = 258;   // WAIT_TIMEOUT as GetLastError reports it
-        private const uint SkipPortOnSuccess = 1, SkipSetEventOnHandle = 2;
+        // FILE_SKIP_COMPLETION_PORT_ON_SUCCESS; FILE_SKIP_SET_EVENT_ON_HANDLE (2) concerns only the file object's own
+        // event, which nothing here waits on, so it is stored and has no effect.
+        private const uint SkipPortOnSuccess = 1;
 
         private sealed class CompletionPort : Waitable
         {
@@ -76,18 +78,22 @@ namespace Nativra.X86.Loader
         /// <summary>
         /// The completion of an overlapped call on <paramref name="handle"/>:
         /// queued on its port, if it has one and was not told to skip it.
-        /// Returns whether the handle's event should still be set.
+        /// <paramref name="synchronous"/> says the call finished before it
+        /// returned (success, not WSA_IO_PENDING / ERROR_IO_PENDING): only such
+        /// a completion is dropped by FILE_SKIP_COMPLETION_PORT_ON_SUCCESS; a
+        /// call that returned pending and succeeded later is always queued.
+        /// (FILE_SKIP_SET_EVENT_ON_HANDLE spares the file object's own event,
+        /// which nothing here waits on; the OVERLAPPED's explicit event is
+        /// always signalled, as Microsoft documents.)
         /// </summary>
-        private bool QueueCompletion(uint handle, uint overlapped, uint bytes, uint status)
+        private void QueueCompletion(uint handle, uint overlapped, uint bytes, uint status, bool synchronous)
         {
-            if (!portBindings.TryGetValue(handle, out var binding)) return true;
-            var signal = (binding.Modes & SkipSetEventOnHandle) == 0;
-            if (binding.Port == 0 || !(Object(binding.Port) is CompletionPort port)) return signal;
-            if (status == 0 && (binding.Modes & SkipPortOnSuccess) != 0) return signal;
+            if (!portBindings.TryGetValue(handle, out var binding)) return;
+            if (binding.Port == 0 || !(Object(binding.Port) is CompletionPort port)) return;
+            if (synchronous && status == 0 && (binding.Modes & SkipPortOnSuccess) != 0) return;
             // The low bit of hEvent asks for no packet.
-            if ((memory.Read32(overlapped + 0x10) & 1) != 0) return signal;
+            if ((memory.Read32(overlapped + 0x10) & 1) != 0) return;
             port.Packets.Enqueue(new[] { bytes, binding.Key, overlapped, status });
-            return signal;
         }
 
         private uint DequeueCompletion(uint portHandle, uint bytesOut, uint keyOut, uint overlappedOut, uint timeout)

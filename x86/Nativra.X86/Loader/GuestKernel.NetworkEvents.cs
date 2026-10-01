@@ -18,6 +18,7 @@ namespace Nativra.X86.Loader
         private const uint NetFdRead = 0x01, NetFdWrite = 0x02, NetFdAccept = 0x08, NetFdConnect = 0x10, NetFdClose = 0x20;
 
         private const uint StatusPending = 0x103, StatusCancelled = 0xC0000120, StatusBufferOverflow = 0x80000005;
+        private const uint StatusBufferTooSmall = 0xC0000023;   // with ErrorInsufficientBuffer (122), AcceptEx's address areas that are too small
         private const uint StatusCustomSocket = 0xE0010000;   // 0xE001xxxx: a Winsock error with no NTSTATUS of its own
 
         [Flags]
@@ -25,16 +26,16 @@ namespace Nativra.X86.Loader
 
         private readonly List<GuestSocket> eventSockets = new List<GuestSocket>();
 
-        private enum IoKind { Receive, Send }
+        private enum IoKind { Receive, Send, Accept, Connect }
 
-        /// <summary>An overlapped WSARecv or WSASend that could not finish at once.</summary>
+        /// <summary>An overlapped WSARecv, WSASend, AcceptEx or ConnectEx that could not finish at once.</summary>
         private sealed class PendingIo
         {
-            public GuestSocket Socket;
+            public GuestSocket Socket;     // the handle the call was made on (AcceptEx: the listening socket)
             public IoKind Kind;
             public uint Overlapped;
             public Piece[] Pieces;         // receive: where the data goes
-            public byte[] Data;            // send: what goes, and how much has
+            public byte[] Data;            // send (and ConnectEx's data): what goes, and how much has
             public int Sent;
             public uint Flags;
             public uint From, FromLength;  // recvfrom's address out
@@ -42,6 +43,13 @@ namespace Nativra.X86.Loader
             public bool Immediate;         // still inside the call that started it
             public bool Finished;
             public uint Error, Bytes;
+
+            // AcceptEx: the guest socket that becomes the connection, the one output buffer (the first data, then the
+            // local and the remote address area), and whether the connection has been taken already; with a receive
+            // length the call then waits for the first data on the accepted socket.
+            public GuestSocket Acceptor;
+            public uint Buffer, ReceiveLength, LocalLength, RemoteLength;
+            public bool Accepted;
         }
 
         private readonly List<PendingIo> pendingIo = new List<PendingIo>();
@@ -70,9 +78,13 @@ namespace Nativra.X86.Loader
             var ready = Ready.None;
             try
             {
-                if (s.Listening) return s.Host.Poll(0, SelectMode.SelectRead) ? Ready.Read : Ready.None;
+                if (s.Listening)
+                {
+                    ServiceAccepts(s);
+                    return s.Host.Poll(0, SelectMode.SelectRead) ? Ready.Read : Ready.None;
+                }
                 if (s.Type == SocketType.Stream && !s.Connected) return Ready.None;
-                if (s.Host.Poll(0, SelectMode.SelectRead))
+                if (s.Peeked != null || s.Host.Poll(0, SelectMode.SelectRead))   // a peeked datagram is still to be read
                 {
                     ready |= Ready.Read;
                     if (s.Type == SocketType.Stream && s.Host.Available == 0) ready |= Ready.Hangup;
@@ -280,6 +292,7 @@ namespace Nativra.X86.Loader
             {
                 if (s.Listening)
                 {
+                    ServiceAccepts(s);
                     if (s.AcceptArmed && (s.EventMask & NetFdAccept) != 0 && s.Host.Poll(0, SelectMode.SelectRead))
                     {
                         s.AcceptArmed = false;
@@ -289,7 +302,7 @@ namespace Nativra.X86.Loader
                 }
                 if (s.Type == SocketType.Stream && !s.Connected) return;
 
-                var readable = s.Host.Poll(0, SelectMode.SelectRead);
+                var readable = s.Peeked != null || s.Host.Poll(0, SelectMode.SelectRead);
                 if (s.Type == SocketType.Stream)
                 {
                     var data = readable && s.Host.Available > 0;
@@ -358,6 +371,7 @@ namespace Nativra.X86.Loader
                 case 10061: return 0xC0000236;            // WSAECONNREFUSED: STATUS_CONNECTION_REFUSED
                 case WsaEtimedout: return 0xC00000B5;     // STATUS_IO_TIMEOUT
                 case WsaEmsgsize: return StatusBufferOverflow;
+                case ErrorInsufficientBuffer: return StatusBufferTooSmall;   // AcceptEx with address areas too small
                 default: return StatusCustomSocket | (error & 0xFFFF);
             }
         }
@@ -373,6 +387,7 @@ namespace Nativra.X86.Loader
                 case 0xC0000236: return 10061;
                 case 0xC00000B5: return WsaEtimedout;
                 case StatusBufferOverflow: return WsaEmsgsize;
+                case StatusBufferTooSmall: return ErrorInsufficientBuffer;
                 default: return (status & 0xFFFF0000) == StatusCustomSocket ? status & 0xFFFF : status;
             }
         }
@@ -452,14 +467,25 @@ namespace Nativra.X86.Loader
             return 0;
         }
 
+        /// <summary>
+        /// The queue a call waits in: calls on one socket in one direction finish in the order they were
+        /// made. An AcceptEx that has taken its connection is waiting for data on the accepted socket,
+        /// so it no longer holds up the next AcceptEx on the listener.
+        /// </summary>
+        private static ulong LineOf(PendingIo op)
+        {
+            var socket = op.Kind == IoKind.Accept && op.Accepted ? op.Acceptor : op.Socket;
+            var send = op.Kind == IoKind.Send || op.Kind == IoKind.Connect;
+            return ((ulong)socket.Handle << 1) | (send ? 1UL : 0UL);
+        }
+
         private void PumpPendingIo()
         {
-            // Calls on one socket in one direction finish in the order they were made.
             List<ulong> behind = null;
             for (var n = 0; n < pendingIo.Count; n++)
             {
                 var op = pendingIo[n];
-                var line = ((ulong)op.Socket.Handle << 1) | (op.Kind == IoKind.Send ? 1UL : 0UL);
+                var line = LineOf(op);
                 if (behind != null && behind.Contains(line)) continue;
                 if (!Advance(op))
                 {
@@ -475,6 +501,8 @@ namespace Nativra.X86.Loader
         /// <summary>Does what the host allows of a pending call now; true when the call has ended, however it ended.</summary>
         private bool Advance(PendingIo op)
         {
+            if (op.Kind == IoKind.Accept) return AdvanceAccept(op);
+            if (op.Kind == IoKind.Connect) return AdvanceConnect(op);
             var s = op.Socket;
             if (op.Kind == IoKind.Receive)
             {
@@ -505,6 +533,7 @@ namespace Nativra.X86.Loader
         private void Complete(PendingIo op)
         {
             op.Finished = true;
+            if (op.Acceptor != null) op.Acceptor.AcceptPending = false;
             if (op.Immediate && op.Error != 0)
             {
                 // The call that started it reports the failure itself and nothing is queued.
@@ -512,16 +541,20 @@ namespace Nativra.X86.Loader
                 memory.Write32(op.Overlapped + 4, op.Bytes);
                 return;
             }
-            CompleteOverlapped(op.Socket.Handle, op.Overlapped, op.Bytes, NtStatusOf(op.Error));
+            // Finished inside the call that started it: a synchronous completion, which FILE_SKIP_COMPLETION_PORT_ON_SUCCESS may drop.
+            CompleteOverlapped(op.Socket.Handle, op.Overlapped, op.Bytes, NtStatusOf(op.Error), op.Immediate);
         }
 
-        /// <summary>A socket that closes ends its pending calls as aborted; their packets are still queued.</summary>
+        /// <summary>
+        /// A socket that closes ends its pending calls as aborted; their packets are still queued. An
+        /// AcceptEx ends when either of its two sockets, the listener or the one to accept into, closes.
+        /// </summary>
         private void CancelPending(GuestSocket s)
         {
             for (var n = 0; n < pendingIo.Count; n++)
             {
                 var op = pendingIo[n];
-                if (op.Socket != s) continue;
+                if (op.Socket != s && op.Acceptor != s) continue;
                 pendingIo.RemoveAt(n--);
                 op.Error = WsaOperationAborted;
                 op.Bytes = 0;

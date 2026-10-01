@@ -179,6 +179,13 @@ namespace Nativra.X86.Loader
         // question can mean a storage lookup on the console.
         private readonly HashSet<string> notCarried = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// DLLs the host answers in place of the game's own copy (steam_api.dll
+        /// under the Steam bridge): never mapped from the game's folders, so their
+        /// served exports are what LoadLibrary and the import tables reach.
+        /// </summary>
+        public HashSet<string> HostServed { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         /// <summary>Every image mapped into the guest, dependencies before their dependents.</summary>
         public IReadOnlyList<Pe32Image> Images => images;
 
@@ -347,7 +354,7 @@ namespace Nativra.X86.Loader
             var existing = FindModule(name);
             if (existing != null) return existing;
             var key = ModuleKey(name);
-            if (loading.Contains(key)) return null;
+            if (loading.Contains(key) || HostServed.Contains(key)) return null;
             // The program's own folders first (the guest kernel's search), then
             // what the host carries (redistributables, shims).
             var bytes = ModuleSearch?.Invoke(key);

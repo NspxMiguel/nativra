@@ -70,6 +70,24 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void LoadLibraryReachesTheServedApiNotTheGamesOwnCopy()
+        {
+            // The game ships its own steam_api.dll, which would look for a running
+            // Steam; by name or by path, LoadLibrary must hand out the served one.
+            File.WriteAllBytes(Path.Combine(work, "steam_api.dll"), new byte[] { (byte)'M', (byte)'Z' });
+            foreach (var name in new[] { "steam_api.dll", "C:\\game\\steam_api.dll" })
+            {
+                var r = p.Call(p.Imports.Bind("kernel32.dll", "LoadLibraryA", -1), out var module, 10_000_000, Str(name));
+                Assert.True(r.Ok, r.ToString());
+                Assert.NotEqual(0u, module);
+                r = p.Call(p.Imports.Bind("kernel32.dll", "GetProcAddress", -1), out var init, 10_000_000, module, Str("SteamAPI_InitSafe"));
+                Assert.True(r.Ok, r.ToString());
+                Assert.Equal(p.Imports.Bind("steam_api.dll", "SteamAPI_InitSafe", -1), init);
+            }
+            Assert.DoesNotContain(p.Images, image => image.Name.Equals("steam_api.dll", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
         public void InitSafeThenInterfacesByVersionAnswerWithTheAccount()
         {
             Assert.Equal(0u, Api("SteamAPI_RestartAppIfNecessary", 562260));

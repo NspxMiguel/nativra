@@ -272,8 +272,9 @@ namespace Nativra.X86.Loader
             var firstNew = process.Images.Count;
             // A name with a folder means that very file; the base-name search is for
             // bare names, and for system-folder paths whose DLL the host supplies.
-            var image = HasOwnFolder(raw)
-                ? process.FindModule(name) ?? LoadFromPath(raw, name)
+            // A DLL the host answers in the game's place is never mapped, even by path.
+            var image = process.HostServed.Contains(name) ? null
+                : HasOwnFolder(raw) ? process.FindModule(name) ?? LoadFromPath(raw, name)
                 : process.LoadModule(name);
             if (image != null)
             {

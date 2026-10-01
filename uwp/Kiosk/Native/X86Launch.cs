@@ -28,7 +28,11 @@ namespace Kiosk.Native
     internal static class X86Launch
     {
         private const string ImportsReport = "x86-imports.txt";
+        // DLL initialisation is bounded: a DllMain that never returns is a bug to report.
         private const long BlockBudget = 200_000_000;
+        // The game itself runs until it exits: a budget here ended games mid-play.
+        private const long GameBudget = long.MaxValue;
+        private static readonly TimeSpan SnapshotEvery = TimeSpan.FromSeconds(30);
         private const int LogLines = 50;
 
         /// <summary>
@@ -36,7 +40,8 @@ namespace Kiosk.Native
         /// returned or called ExitProcess); false when it stopped at something
         /// the layer does not serve yet, with the reason in <paramref name="lines"/>.
         /// </summary>
-        public static async Task<bool> RunAsync(string folderPath, string exeName, byte[] exeBytes, List<string> lines)
+        public static async Task<bool> RunAsync(string folderPath, string exeName, byte[] exeBytes, List<string> lines,
+            Func<List<string>, Task> snapshot = null)
         {
             try
             {
@@ -116,6 +121,39 @@ namespace Kiosk.Native
                     return bytes;
                 };
 
+                // Where the game is: registers, recent calls, its log, the bridges' counters.
+                void Describe(List<string> into)
+                {
+                    into.Add("x86.eip=0x" + process.Cpu.Eip.ToString("X8") + " " + process.Cpu);
+                    into.Add("x86.blocks=" + (process.Jit != null
+                        ? process.Jit.BlocksCompiled + " compiled, " + process.Jit.BlocksExecuted + " run, " +
+                          process.Jit.InterpreterFallbacks + " interpreted"
+                        : "interpreter"));
+                    into.Add("x86.recent=" + string.Join(" ", process.RecentImports));
+                    if (process.JitRefusal != null) into.Add("x86.jit.refused=" + process.JitRefusal);
+                    if (kernel.ProbedAbsent.Count > 0)
+                        into.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));
+                    if (kernel.FilesNotFound.Count > 0)
+                        into.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(LogLines)));
+                    foreach (var text in guestLog.ToArray()) into.Add("x86.log=" + text);
+                    into.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
+                    into.Add("x86.window=0x" + kernel.InputWindow.ToString("X") + " dispatched=" + kernel.MessagesDispatched);
+                    into.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
+                    into.Add("x86.xaudio=" + XAudio27Route.Note + " callbacks=" + xaudio.CallbacksDelivered +
+                              " dropped=" + xaudio.CallbacksDropped + " effect-chains-dropped=" + xaudio.EffectChainsDropped);
+                    if (com.MissingClasses.Count > 0)
+                        into.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
+                    foreach (var call in com.Calls.OrderByDescending(pair => pair.Value).Take(40))
+                        into.Add("x86.com " + call.Value + "x " + call.Key);
+                    if (steam != null)
+                    {
+                        into.Add("x86.steam=" + string.Join(",", steam.Versions));
+                        foreach (var call in steam.Calls.OrderByDescending(pair => pair.Value).Take(30))
+                            into.Add("x86.steam " + call.Value + "x " + call.Key);
+                    }
+                    into.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
+                }
+
                 result = null;
                 try
                 {
@@ -136,7 +174,27 @@ namespace Kiosk.Native
                         process.Imports.Diagnose("kernel32.dll", "InterlockedCompareExchange"));
                     if (result.Ok)
                     {
-                        result = process.Call(image.EntryPoint, out var exitCode, BlockBudget);
+                        // The report is otherwise written only when the game ends; while it
+                        // plays, a copy goes out every half minute so a sweep sees where it is.
+                        var playing = new System.Threading.CancellationTokenSource();
+                        var reporter = snapshot == null ? Task.CompletedTask : Task.Run(async () =>
+                        {
+                            while (!playing.IsCancellationRequested)
+                            {
+                                try { await Task.Delay(SnapshotEvery, playing.Token); } catch (TaskCanceledException) { break; }
+                                try
+                                {
+                                    var now = new List<string>(lines) { "x86.run=running" };
+                                    Describe(now);
+                                    await snapshot(now);
+                                }
+                                catch (Exception) { }   // lists in use by the game thread; the next tick tries again
+                            }
+                        });
+                        uint exitCode;
+                        try { result = process.Call(image.EntryPoint, out exitCode, GameBudget); }
+                        finally { playing.Cancel(); }
+                        await reporter;
                         lines.Add("x86.run=" + result + (result.Ok ? " (entry returned " + exitCode + ")" : ""));
                         // The run line keeps only the exception's first line; the stack says where.
                         if (result.Stop == GuestStop.HostError && result.Detail != null)
@@ -154,34 +212,7 @@ namespace Kiosk.Native
                 // (the app keeps running, and the next launch binds the same port).
                 kernel.CloseNetwork();
 
-                lines.Add("x86.eip=0x" + process.Cpu.Eip.ToString("X8") + " " + process.Cpu);
-                lines.Add("x86.blocks=" + (process.Jit != null
-                    ? process.Jit.BlocksCompiled + " compiled, " + process.Jit.BlocksExecuted + " run, " +
-                      process.Jit.InterpreterFallbacks + " interpreted"
-                    : "interpreter"));
-                lines.Add("x86.recent=" + string.Join(" ", process.RecentImports));
-                if (process.JitRefusal != null) lines.Add("x86.jit.refused=" + process.JitRefusal);
-                if (kernel.ProbedAbsent.Count > 0)
-                    lines.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));
-                if (kernel.FilesNotFound.Count > 0)
-                    lines.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(LogLines)));
-                foreach (var text in guestLog) lines.Add("x86.log=" + text);
-                lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
-                lines.Add("x86.window=0x" + kernel.InputWindow.ToString("X") + " dispatched=" + kernel.MessagesDispatched);
-                lines.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
-                lines.Add("x86.xaudio=" + XAudio27Route.Note + " callbacks=" + xaudio.CallbacksDelivered +
-                          " dropped=" + xaudio.CallbacksDropped + " effect-chains-dropped=" + xaudio.EffectChainsDropped);
-                if (com.MissingClasses.Count > 0)
-                    lines.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
-                foreach (var call in com.Calls.OrderByDescending(pair => pair.Value).Take(40))
-                    lines.Add("x86.com " + call.Value + "x " + call.Key);
-                if (steam != null)
-                {
-                    lines.Add("x86.steam=" + string.Join(",", steam.Versions));
-                    foreach (var call in steam.Calls.OrderByDescending(pair => pair.Value).Take(30))
-                        lines.Add("x86.steam " + call.Value + "x " + call.Key);
-                }
-                lines.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
+                Describe(lines);
 
                 await WriteImportsAsync(process, kernel);
             }

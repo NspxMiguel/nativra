@@ -239,7 +239,7 @@ namespace Kiosk.Native
                 var magic = BitConverter.ToUInt16(executableBytes, peOffset + 24);
                 if (machine == 0x014C && magic == 0x10B)
                 {
-                    var finished = await X86Launch.RunAsync(folder.Path, exeName, executableBytes, lines);
+                    var finished = await X86Launch.RunAsync(folder.Path, exeName, executableBytes, lines, WriteAsync);
                     await WriteAsync(lines);
                     if (!finished)
                         throw new PlatformNotSupportedException("The 32-bit layer stopped before the game finished; see x86.* in the probe report.");

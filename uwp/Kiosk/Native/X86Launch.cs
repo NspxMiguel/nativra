@@ -97,6 +97,9 @@ namespace Kiosk.Native
                 // Direct3D 9 through the packaged 64-bit layer.
                 var com = new GuestCom(process, kernel);
                 X86Direct3D9.Install(process, kernel, com);
+                using (var directSound = new GuestDirectSound(process, kernel, new X86DirectSoundOutput()))
+                {
+                    directSound.Install();
                 PadBridge.InstallX86(process);   // xinput1_3/1_4/9_1_0: the same pad the 64-bit games read
                 // Steamworks for the signed-in account, as the 64-bit bridge answers it:
                 // the game's own steam_api.dll is not mapped, its exports are served.
@@ -144,6 +147,8 @@ namespace Kiosk.Native
                     into.Add("x86.pad=reads " + PadBridge.Reads + " probes " + PadBridge.Probes +
                              " held " + PointerBridge.HostKeys.Count(down => down));
                     into.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
+                    into.Add("x86.dsound=buffers " + directSound.BuffersCreated + " frames " + directSound.FramesMixed +
+                             " underruns " + directSound.Underruns);
                     into.Add("x86.xaudio=" + XAudio27Route.Note + " callbacks=" + xaudio.CallbacksDelivered +
                               " dropped=" + xaudio.CallbacksDropped + " effect-chains-dropped=" + xaudio.EffectChainsDropped);
                     if (com.MissingClasses.Count > 0)
@@ -220,6 +225,7 @@ namespace Kiosk.Native
                 Describe(lines);
 
                 await WriteImportsAsync(process, kernel);
+                }
             }
             return result.Stop == GuestStop.Exited || result.Stop == GuestStop.Returned;
         }

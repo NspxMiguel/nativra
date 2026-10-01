@@ -79,6 +79,11 @@ namespace Nativra.X86.Run
                 kernel.Files = new HostFolderFiles("C:\\game", folder);
                 kernel.Install();
                 var com = new GuestCom(process, kernel);
+                var steam = new GuestSteam(process, kernel, new MemorySteamAccount { AppId = 562260 });
+                steam.Install();
+                using (var sound = new GuestDirectSound(process, kernel, new NullSoundOutput()))
+                {
+                    sound.Install();
                 // No renderer here, but d3d9.dll exists as on the console, so a game
                 // takes the same path: D3D9Ex is unavailable and plain D3D9 fails.
                 process.Imports.Register("d3d9.dll", "Direct3DCreate9Ex", CallConv.Stdcall, 2, c =>
@@ -127,6 +132,7 @@ namespace Nativra.X86.Run
                     lines.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(80)));
                 if (com.MissingClasses.Count > 0)
                     lines.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
+                lines.Add("x86.dsound=buffers " + sound.BuffersCreated + " frames " + sound.FramesMixed + " underruns " + sound.Underruns);
                 lines.Add("x86.raised=" + string.Join(",", kernel.ExceptionsRaised.Select(c => c.ToString("X8"))));
                 lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
                 if (process.Jit != null)
@@ -158,6 +164,7 @@ namespace Nativra.X86.Run
                         }
                     }
                     File.WriteAllLines(importsFile, report);
+                }
                 }
             }
             foreach (var line in lines) Console.WriteLine(line);

@@ -622,7 +622,14 @@ namespace Nativra.X86.Loader
                 hostIdleSince = 0;
                 try
                 {
-                    if (UsesJit) Jit.RunBlock();
+                    if (UsesJit)
+                    {
+                        var remaining = Math.Min(64L, maxBlocks - i);
+                        remaining = Math.Min(remaining, Math.Max(1L, (long)SliceBlocks - slice));
+                        Jit.RunBlock((int)remaining, stopEip);
+                        i += Jit.LastRunBlocks - 1;
+                        slice += Jit.LastRunBlocks - 1;
+                    }
                     else Interpreter.Step();
                 }
                 catch (Exception e) when (UsesJit && (e is InvalidOperationException || e is OutOfMemoryException))

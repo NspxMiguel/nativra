@@ -55,26 +55,43 @@ namespace Nativra.X86.Jit
         }
 
         /// <summary>
-        /// Translate and run one natural block at the current EIP, then, if it
-        /// stopped on an untranslated instruction, interpret that one. Blocks
-        /// are cached and reused, so a hot loop compiles once. Returns why the
-        /// block stopped.
+        /// Run a bounded chain while keeping guest state in the native context.
+        /// Every target is looked up again, so invalidated blocks cannot be
+        /// reached through a stale link. Import thunks and the caller's stop
+        /// address return to the dispatcher before executing another block.
         /// </summary>
-        public int RunBlock()
+        public int RunBlock(int maxBlocks = 64, uint stopEip = 0)
         {
+            if (maxBlocks < 1) throw new ArgumentOutOfRangeException(nameof(maxBlocks));
             ctx.Load(Cpu);
-            var block = GetBlock(Cpu.Eip, 0);
-            DelegateFor(block)(ctx.Pointer);
-            BlocksExecuted++;
-            ctx.Store(Cpu);
-            if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault(block);
-            if (ctx.ExitReason == Ctx.ReasonFallback)
+            LastRunBlocks = 0;
+            for (var i = 0; i < maxBlocks; i++)
             {
-                Interpreter.Step();
-                InterpreterFallbacks++;
+                IntPtr block;
+                try { block = GetBlock(ctx.Eip, 0); }
+                catch { ctx.Store(Cpu); throw; }
+                DelegateFor(block)(ctx.Pointer);
+                BlocksExecuted++;
+                LastRunBlocks++;
+                if (ctx.ExitReason == Ctx.ReasonFault)
+                {
+                    ctx.Store(Cpu);
+                    RaiseFault(block);
+                }
+                if (ctx.ExitReason == Ctx.ReasonFallback)
+                {
+                    ctx.Store(Cpu);
+                    Interpreter.Step();
+                    InterpreterFallbacks++;
+                    return ctx.ExitReason;
+                }
+                if (ctx.Eip == stopEip || (ctx.Eip >= 0x7EF00000 && ctx.Eip < 0x7F000000)) break;
             }
+            ctx.Store(Cpu);
             return ctx.ExitReason;
         }
+
+        public int LastRunBlocks { get; private set; }
 
         /// <summary>
         /// Runs until EIP reaches <paramref name="stop"/>. Real code reaches its
@@ -83,10 +100,11 @@ namespace Nativra.X86.Jit
         /// </summary>
         public bool RunUntil(uint stop, long maxBlocks = 10_000_000)
         {
-            for (long i = 0; i < maxBlocks; i++)
+            for (long remaining = maxBlocks; remaining > 0;)
             {
                 if (Cpu.Eip == stop) return true;
-                RunBlock();
+                RunBlock((int)Math.Min(64, remaining), stop);
+                remaining -= LastRunBlocks;
             }
             return Cpu.Eip == stop;
         }

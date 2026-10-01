@@ -145,6 +145,7 @@ namespace Nativra.X86.Tests
             {
                 Skip.IfNot(p.UsesJit, "the host refused executable memory");
                 RunForwarderAdd(p);
+                Assert.Equal(0, p.Jit.InterpreterFallbacks);
             }
         }
 

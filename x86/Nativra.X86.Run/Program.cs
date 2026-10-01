@@ -129,6 +129,8 @@ namespace Nativra.X86.Run
                     lines.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
                 lines.Add("x86.raised=" + string.Join(",", kernel.ExceptionsRaised.Select(c => c.ToString("X8"))));
                 lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
+                if (process.Jit != null)
+                    lines.Add($"x86.blocks={process.Jit.BlocksCompiled} compiled, {process.Jit.BlocksExecuted} run, {process.Jit.InterpreterFallbacks} interpreted");
                 foreach (var text in guestLog) lines.Add("x86.log=" + text);
                 lines.Add("x86.memory=committed " + (memory.MappedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB (" + memory.MappedPages +
                           " pages), reserved " + (memory.ReservedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB more");

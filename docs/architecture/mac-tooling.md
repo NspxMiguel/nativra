@@ -23,7 +23,6 @@ servers.
 | `icons.ts` | Extracts/embeds game icons into packages |
 | `i18n.ts` | The CLI's own pt/en strings (separate from the app's `Texts.cs`) |
 | `formats.ts` | Package/codec format definitions |
-| `intake.ts` | Validates a catalogue entry before it is used |
 | `bios.ts` | BIOS/key-file handling for emulators that need one |
 | `emulators.ts` | Installing and configuring emulators (RetroArch and friends) from the catalogue |
 

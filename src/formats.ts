@@ -469,9 +469,9 @@ export async function detect(filePath: string): Promise<DetectResult | null> {
 // ------------------------------------------------------------- archives
 
 /**
- * The archive container formats intake.ts unpacks before running `detect()`
- * on what comes out. Not a system — a torrent or a Telegram upload can wrap
- * any of the formats above in any of these.
+ * The archive container formats unpacked before running `detect()` on what
+ * comes out. Not a system — a user's own archive can wrap any of the formats
+ * above in any of these.
  */
 export type ArchiveKind = "zip" | "rar" | "sevenzip" | "gzip";
 

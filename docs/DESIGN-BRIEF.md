@@ -75,7 +75,7 @@ should be easy to get back to.
 From here: launch an installed item directly; open a game's own detail page
 (2.5) for anything not yet installed or to see more before playing; jump to
 Steam sign-in if signed out; jump to the emulator shelf, settings, or the
-downloads/intake screens.
+downloads screens.
 
 ### 2.2 First-run setup
 
@@ -165,7 +165,7 @@ folder, wherever is available), the same way Steam itself asks.
 From here: install (kicks off 2.7), play (launches the game directly),
 uninstall, open the full achievements list (2.8), mark as favorite, hide,
 manage which collections it belongs to, and — if the install came from a
-non-Steam source (2.11–2.13) — whatever is relevant there (choosing a mod for
+non-Steam source (2.11–2.12) — whatever is relevant there (choosing a mod for
 it, for instance, via 2.14).
 
 ### 2.7 Download and install progress
@@ -174,7 +174,7 @@ The person's goal is to know a download is actually happening and roughly
 when it will be done, and — since more than one thing can be queued — to
 manage more than one job. Downloads and installs happen on the console
 itself, from Steam's own content servers for Steam games, or from the
-relevant emulator/mod/intake source otherwise.
+relevant emulator or mod source otherwise.
 
 Needs to show: per-job progress (bytes done vs. total, current speed, time
 remaining), the state of each job (queued, downloading, installing, done,
@@ -271,22 +271,10 @@ system, in plain terms (not just an internal filename), and confirmation once
 a supplied file was recognized and accepted — or a clear explanation when a
 supplied file was not the right one.
 
-### 2.13 Adding a download by magnet link, .torrent file, or Telegram
+### 2.14 Choosing which console a file is for
 
-The person's goal is handing the app a game they already have a source for —
-a magnet link, a `.torrent` file, or something from Telegram — and having it
-end up filed and playable, the same as anything installed any other way. (See
-`docs/INTAKE.md` for the underlying job queue this screen is the front end
-of.)
-
-Needs to show: a way to hand over each of the three input types, and then the
-job in the same download/progress view as everything else (2.7) once it
-starts moving.
-
-### 2.14 Choosing which console a download is for
-
-A specific, necessary follow-up to 2.13 (and to 2.12's own file recognition):
-when a downloaded file's format does not make it obvious which system it
+A specific, necessary follow-up to 2.12's own file recognition:
+when a file's format does not make it obvious which system it
 belongs to, the person is asked directly rather than the app guessing wrong
 and filing it somewhere that will not run it. When the app does have a guess,
 it should be offered as the obvious first choice rather than making the

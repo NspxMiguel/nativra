@@ -105,10 +105,9 @@ app. São referências de experiência, não afiliação nem recursos já conclu
   pastas; importar os arquivos do usuário e identificar o sistema. A ideia é
   “colocar os jogos e jogar”, sem configurar cada emulador à mão. Executar os
   emuladores dentro do app é uma meta, não uma substituição já pronta dos pacotes UWP.
-- **Arquivos e downloads no mesmo lugar.** Reconhecer e organizar arquivos do
-  usuário. A entrada por magnet, `.torrent` e Telegram deve seguir o mesmo fluxo,
-  perguntando o console quando houver dúvida. Não fornecemos fontes de jogos,
-  trackers, BIOS proprietárias ou chaves.
+- **Os arquivos do usuário no mesmo lugar.** Reconhecer e organizar os arquivos
+  do próprio usuário, perguntando o console quando houver dúvida. Não fornecemos
+  jogos, BIOS ou chaves.
 - **Mods e saves.** Central de mods para jogos de PC e emulados, com integração
   planejada ao SwitchSaveSync para levar os saves do dono entre aparelhos.
 - **Tudo pelo app.** Fontes comunitárias de apps/emuladores na linha do Cydia,
@@ -130,12 +129,11 @@ os jogos automaticamente compatíveis.
 | Biblioteca e emuladores | Telas e atalhos na prateleira existem; importação unificada por jogo ainda está incompleta. |
 | Configuração de emuladores | Catálogo, ferramentas de instalação/configuração pela CLI e arquivos de configuração existem. Nem todos foram validados, e o fluxo completo ainda não funciona dentro do app. |
 | Reconhecimento de BIOS e arquivos | Módulos locais de identificação/organização e guias de extração do próprio hardware existem; falta concluir o fluxo pelo controle. |
-| Torrent e Telegram | Existem fila e identificação de arquivos; os dois transportes de download ainda não foram implementados. |
 | Epic/GOG, mods, sincronização de saves, fontes comunitárias, multicontas e site de compatibilidade | Planejados; não entregues como funções completas. |
 
 Detalhes no [briefing completo](docs/DESIGN-BRIEF.md), na
-[configuração de emuladores](docs/EMULATORS.md), na [entrada de arquivos](docs/INTAKE.md)
-e no [tratamento de BIOS do usuário](docs/BIOS.md). Esses documentos em inglês
+[configuração de emuladores](docs/EMULATORS.md) e no
+[tratamento de BIOS do usuário](docs/BIOS.md). Esses documentos em inglês
 também registram metas e investigações anteriores; não são garantias de compatibilidade.
 
 ## O que já foi demonstrado

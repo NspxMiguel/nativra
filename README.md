@@ -113,10 +113,9 @@ or claims that Nativra already matches either project.
   target system. The intended experience is “add your games and play,” not
   manually configuring each emulator. Hosting emulators inside the app is a goal,
   not a completed replacement for installed UWP emulator packages.
-- **Files and downloads in one place.** Recognize and organize user-supplied
-  files from storage. Planned magnet, `.torrent` and Telegram intake feeds the
-  same workflow, asking which system a file belongs to when detection is unsure.
-  No game sources, trackers, proprietary BIOS or keys are supplied.
+- **The owner's files in one place.** Recognize and organize the user's own
+  files from storage, asking which system a file belongs to when detection is
+  unsure. No game files, BIOS or keys are supplied.
 - **Mods and saves.** A shared mod hub for PC and emulated games, with a planned
   connection to SwitchSaveSync for moving the owner's saves between devices.
 - **A self-contained ecosystem.** Community app/emulator sources inspired by
@@ -133,11 +132,10 @@ or claims that Nativra already matches either project.
 | Library and emulator shelf | In-app screens and shelf shortcuts exist; unified game-level import is incomplete. |
 | Emulator setup | Package catalog, CLI installation/configuration tools and configuration files exist. Not every emulator is verified, and the whole flow is not available inside the app. |
 | BIOS/file recognition | Local recognition/filing modules and owner-dump guidance exist; the controller-driven onboarding flow is unfinished. |
-| Torrent and Telegram | Queue and detection plumbing exist; both transfer implementations are explicitly unimplemented. |
 | Epic/GOG, mod hub, save sync, community sources, multi-account and compatibility site | Planned; not shipped as working end-to-end features. |
 
-See [the full product brief](docs/DESIGN-BRIEF.md), [emulator setup](docs/EMULATORS.md),
-[file intake](docs/INTAKE.md) and [user-supplied BIOS handling](docs/BIOS.md).
+See [the full product brief](docs/DESIGN-BRIEF.md), [emulator setup](docs/EMULATORS.md)
+and [user-supplied BIOS handling](docs/BIOS.md).
 Those documents also contain design targets and historical investigations;
 their presence is not a compatibility guarantee.
 

@@ -148,7 +148,8 @@ namespace Kiosk.Native
                              " held " + PointerBridge.HostKeys.Count(down => down));
                     into.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
                     into.Add("x86.dsound=buffers " + directSound.BuffersCreated + " frames " + directSound.FramesMixed +
-                             " underruns " + directSound.Underruns);
+                             " underruns " + directSound.Underruns +
+                             (directSound.Failure != null ? " (" + directSound.Failure + ")" : ""));
                     into.Add("x86.xaudio=" + XAudio27Route.Note + " callbacks=" + xaudio.CallbacksDelivered +
                               " dropped=" + xaudio.CallbacksDropped + " effect-chains-dropped=" + xaudio.EffectChainsDropped);
                     if (com.MissingClasses.Count > 0)

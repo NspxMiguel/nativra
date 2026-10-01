@@ -21,6 +21,7 @@ namespace Nativra.X86.Loader
     {
         private const string Module = "dsound.dll", Methods = "nativra-dsound.dll";
         private const uint Invalid = 0x80004005, BadParam = 0x80070057, NoInterface = 0x80004002;
+        private const uint NoDriver = 0x88780078;   // DSERR_NODRIVER
         private static readonly Guid Sound = new Guid("47d4d946-62e8-11cf-93bc-444553540000");
         private static readonly Guid Sound8 = new Guid("3901cc3f-84b5-4fa4-ba35-aa8172b8a09b");
         private static readonly Guid SoundIid = new Guid("a05aeec1-fefb-11d0-9953-00a0c925cd16");
@@ -114,6 +115,7 @@ namespace Nativra.X86.Loader
         private uint Create(uint result)
         {
             if (result == 0) return BadParam;
+            if (!Started()) { memory.Write32(result, 0); return NoDriver; }
             memory.Write32(result, Make(deviceTable, new Item()));
             return 0;
         }
@@ -146,10 +148,27 @@ namespace Nativra.X86.Loader
                 : previous(clsid, iid, result);
             kernel.PollAudio += PollNotifications;
             kernel.AudioWaitActive = () => buffers.Exists(b => b.Playing && b.Notices.Count != 0);
-            output.Start(); running = true;
+        }
+
+        /// <summary>
+        /// The output and its mixer start with the first device a game makes, not
+        /// with the layer: most 32-bit games never ask for DirectSound, and one whose
+        /// output cannot start is told there is no driver, as Windows would.
+        /// </summary>
+        private bool Started()
+        {
+            if (running) return true;
+            if (Failure != null) return false;
+            try { output.Start(); }
+            catch (Exception e) { Failure = "output did not start: " + e.Message; return false; }
+            running = true;
             mixer = new Thread(MixLoop) { IsBackground = true, Name = "Guest DirectSound" };
             mixer.Start();
+            return true;
         }
+
+        /// <summary>Why the sound stopped or never started, for the report; null while it plays.</summary>
+        public string Failure { get; private set; }
         private uint Enumerate(uint callback, uint context, bool wide)
         {
             if (callback != 0)
@@ -404,13 +423,15 @@ namespace Nativra.X86.Loader
                     if (output.FramesQueued < output.SampleRate / 10) output.Write(Mix(512));
                     else Thread.Sleep(4);
                 }
-                catch { Interlocked.Increment(ref underruns); running = false; }
+                catch (Exception e) { Interlocked.Increment(ref underruns); Failure = "mixer stopped: " + e.Message; running = false; }
             }
         }
         public void Dispose()
         {
+            var started = mixer != null;
             running = false; mixer?.Join(500); kernel.PollAudio -= PollNotifications; kernel.AudioWaitActive = null;
-            output.Stop(); output.Dispose();
+            if (started) output.Stop();
+            output.Dispose();
         }
     }
 }

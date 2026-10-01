@@ -235,6 +235,18 @@ namespace Nativra.X86.Loader
             return false;
         }
 
+        /// <summary>Every function and variable the host serves for <paramref name="module"/>, by name.</summary>
+        public List<string> NamesOf(string module)
+        {
+            var prefix = Norm(module) + "!";
+            var names = new List<string>();
+            foreach (var key in handlers.Keys)
+                if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) names.Add(key.Substring(prefix.Length));
+            foreach (var key in data.Keys)
+                if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) names.Add(key.Substring(prefix.Length));
+            return names;
+        }
+
         /// <summary>True when an address falls inside the sentinel region at all (used to spot strays).</summary>
         public static bool InRegion(uint address) => address >= Region && address < RegionEnd + Stride;
 

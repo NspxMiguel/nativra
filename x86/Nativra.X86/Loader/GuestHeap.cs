@@ -94,6 +94,12 @@ namespace Nativra.X86.Loader
 
         public bool Owns(uint address) => address >= regionBase && address < regionEnd;
 
+        /// <summary>Whether [address, address+size) touches the heap's region, mapped yet or not.</summary>
+        public bool Overlaps(uint address, uint size) =>
+            (ulong)address < regionEnd && (ulong)address + size > regionBase;
+
+        public uint RegionEnd => regionEnd;
+
         private bool EnsureCommitted(uint upTo)
         {
             if (upTo <= regionBase + committed) return true;

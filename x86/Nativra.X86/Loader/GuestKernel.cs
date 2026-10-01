@@ -223,6 +223,7 @@ namespace Nativra.X86.Loader
             InstallUser32More(i);
             InstallLibraries(i);
             InstallProcess(i);
+            InstallAdapters(i);
         }
 
         // --- handler bodies -----------------------------------------------
@@ -232,12 +233,16 @@ namespace Nativra.X86.Loader
             if (size == 0) return 0;
             if (address == 0)
             {
+                // The heap maps its region only as it grows, so its unmapped part
+                // looks free; anything handed out there would later be the heap's too.
                 var at = memory.FindFree(size, virtualCursor);
+                if (at != 0 && heap.Overlaps(at, size)) at = memory.FindFree(size, heap.RegionEnd);
                 if (at == 0) return 0;
                 memory.Map(at, size);
                 virtualCursor = at + RoundPage(size);
                 return at;
             }
+            if (heap.Overlaps(address, size)) { process.LastError = 487; return 0; }   // ERROR_INVALID_ADDRESS
             memory.Map(address, size);
             return address;
         }
@@ -383,6 +388,7 @@ namespace Nativra.X86.Loader
             var handle = FakeModuleBase + (uint)fakeByName.Count * FakeModuleStride;
             fakeByName[name] = handle;
             fakeHandles[handle] = name;
+            BuildStandIn(handle, name);
             return handle;
         }
 

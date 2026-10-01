@@ -441,11 +441,18 @@ HRESULT Device::CreateTexture(UINT width, UINT height, UINT levels, DWORD usage,
     return D3D_OK;
 }
 
-HRESULT Device::CreateVolumeTexture(UINT, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DVolumeTexture9** out, HANDLE*)
+HRESULT Device::CreateVolumeTexture(UINT width, UINT height, UINT depth, UINT levels, DWORD usage, D3DFORMAT format,
+                                    D3DPOOL pool, IDirect3DVolumeTexture9** out, HANDLE*)
 {
-    if (out) *out = nullptr;
-    Log("CreateVolumeTexture is not implemented");
-    return D3DERR_NOTAVAILABLE;
+    LOCK_DEVICE;
+    if (!out) return D3DERR_INVALIDCALL;
+    *out = nullptr;
+    auto* texture = new VolumeTexture(
+        this, std::unique_ptr<VolumeImage>(new VolumeImage(this, width, height, depth, levels, format, usage, pool)));
+    const HRESULT hr = texture->Init();
+    if (FAILED(hr)) { texture->Release(); return hr; }
+    *out = texture;
+    return D3D_OK;
 }
 
 HRESULT Device::CreateCubeTexture(UINT edge, UINT levels, DWORD usage, D3DFORMAT format, D3DPOOL pool,
@@ -806,10 +813,15 @@ HRESULT Device::GetClipStatus(D3DCLIPSTATUS9* status)
     return D3D_OK;
 }
 
+TextureBinding* Device::BindingOf(IDirect3DBaseTexture9* texture)
+{
+    return texture ? dynamic_cast<TextureBinding*>(texture) : nullptr;
+}
+
+// The 2D or cube image behind a texture; null for none, and for a volume.
 Image* Device::ImageOf(IDirect3DBaseTexture9* texture)
 {
-    if (!texture) return nullptr;
-    auto* binding = dynamic_cast<TextureBinding*>(texture);
+    TextureBinding* binding = BindingOf(texture);
     return binding ? binding->GetImage() : nullptr;
 }
 
@@ -818,8 +830,8 @@ HRESULT Device::SetTexture(DWORD stage, IDirect3DBaseTexture9* texture)
     LOCK_DEVICE;
     const int slot = SamplerSlot(stage);
     if (slot < 0) return D3DERR_INVALIDCALL;
-    auto* binding = texture ? dynamic_cast<TextureBinding*>(texture) : nullptr;
-    if (texture && !binding) return D3DERR_INVALIDCALL;   // volume textures are not implemented
+    TextureBinding* binding = BindingOf(texture);
+    if (texture && !binding) return D3DERR_INVALIDCALL;   // not one of ours
     if (recording) {
         recording->state.textures[slot] = texture;
         recording->mask.textures.set(slot);

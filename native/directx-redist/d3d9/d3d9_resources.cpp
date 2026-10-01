@@ -83,6 +83,8 @@ void DeviceChild::OnPublicZero() { device->Release(); }
 DEFINE_GET_DEVICE(Surface)
 DEFINE_GET_DEVICE(Texture)
 DEFINE_GET_DEVICE(CubeTexture)
+DEFINE_GET_DEVICE(Volume)
+DEFINE_GET_DEVICE(VolumeTexture)
 DEFINE_GET_DEVICE(VertexBuffer)
 DEFINE_GET_DEVICE(IndexBuffer)
 DEFINE_GET_DEVICE(VertexDeclaration)
@@ -542,6 +544,372 @@ HRESULT CubeTexture::UnlockRect(D3DCUBEMAP_FACES face, UINT level)
 {
     if (face > D3DCUBEMAP_FACE_NEGATIVE_Z || level >= image->levels) return D3DERR_INVALIDCALL;
     return surfaces[face * image->levels + level]->UnlockRect();
+}
+
+// --- volume images --------------------------------------------------------------
+
+VolumeImage::VolumeImage(Device* device, UINT width, UINT height, UINT depth, UINT levels, D3DFORMAT format,
+                         DWORD usage, D3DPOOL pool)
+    : device(device), format(format), width(width), height(height), depth(depth), levels(levels), usage(usage),
+      pool(pool)
+{
+}
+
+VolumeImage::~VolumeImage()
+{
+    for (auto& m : mips) LockMemoryFree(m.shadow);
+    for (auto* v : srv) SafeRelease(v);
+    SafeRelease(texture);
+}
+
+HRESULT VolumeImage::Init()
+{
+    fmt = GetFormat(format);
+    if (!fmt || fmt->depth != DXGI_FORMAT_UNKNOWN || width == 0 || height == 0 || depth == 0 ||
+        (usage & (D3DUSAGE_RENDERTARGET | D3DUSAGE_DEPTHSTENCIL)))
+        return D3DERR_INVALIDCALL;
+
+    // Levels 0 asks for the whole chain, which halves all three dimensions.
+    UINT fullChain = 1;
+    for (UINT s = std::max({ width, height, depth }); s > 1; s >>= 1) fullChain++;
+    if (levels == 0 || levels > fullChain || (usage & D3DUSAGE_AUTOGENMIPMAP)) levels = fullChain;
+
+    mips.resize(levels);
+    for (UINT l = 0; l < levels; l++) {
+        VolumeLevel& m = mips[l];
+        m.width = std::max(1u, width >> l);
+        m.height = std::max(1u, height >> l);
+        m.depth = std::max(1u, depth >> l);
+        m.rowPitch = (RowPitch(*fmt, m.width, true) + 3) & ~3u;
+        m.slicePitch = m.rowPitch * RowCount(*fmt, m.height);
+        // A level's shadow is one allocation, addressed with 32-bit offsets.
+        if (static_cast<uint64_t>(m.slicePitch) * m.depth > 0x7FFFFFFFu) return D3DERR_OUTOFVIDEOMEMORY;
+    }
+
+    if (pool == D3DPOOL_SYSTEMMEM || pool == D3DPOOL_SCRATCH) return D3D_OK;   // CPU only
+
+    D3D11_TEXTURE3D_DESC desc = {};
+    desc.Width = width;
+    desc.Height = height;
+    desc.Depth = depth;
+    desc.MipLevels = levels;
+    desc.Format = fmt->typeless;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    if ((usage & D3DUSAGE_AUTOGENMIPMAP) && !fmt->block) {
+        // D3D9 does not promise this for volumes, and not every format can do
+        // it in D3D11: try, and fall back to a texture without it.
+        D3D11_TEXTURE3D_DESC generating = desc;
+        generating.BindFlags |= D3D11_BIND_RENDER_TARGET;
+        generating.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+        autoGen = SUCCEEDED(device->dev->CreateTexture3D(&generating, nullptr, &texture));
+    }
+    HRESULT hr = S_OK;
+    if (!texture) hr = device->dev->CreateTexture3D(&desc, nullptr, &texture);
+    if (FAILED(hr)) {
+        Log("CreateTexture3D %ux%ux%u levels %u format %d failed: 0x%08lX", width, height, depth, levels,
+            static_cast<int>(format), static_cast<unsigned long>(hr));
+        return hr == E_OUTOFMEMORY ? D3DERR_OUTOFVIDEOMEMORY : D3DERR_INVALIDCALL;
+    }
+    return D3D_OK;
+}
+
+uint8_t* VolumeImage::Shadow(UINT level)
+{
+    VolumeLevel& m = mips[level];
+    if (!m.shadow) {
+        const size_t bytes = static_cast<size_t>(m.slicePitch) * m.depth;
+        m.shadow = static_cast<uint8_t*>(LockMemoryAlloc(bytes));
+        if (!m.shadow) return nullptr;
+        std::memset(m.shadow, 0, bytes);
+        if (m.evicted) {
+            // Dropped after its upload: the GPU copy is the contents.
+            m.evicted = false;
+            ReadBack(level);
+        }
+    }
+    return m.shadow;
+}
+
+// The same rule as Image::Evictable: a static volume's CPU copy is only needed
+// while it is locked, which keeps big noise and lookup volumes out of system
+// memory.
+bool VolumeImage::Evictable() const
+{
+    return texture && fmt->convert == Convert::None && !(usage & D3DUSAGE_DYNAMIC) &&
+           (pool == D3DPOOL_MANAGED || pool == D3DPOOL_DEFAULT);
+}
+
+// Where a texel sits in a level's shadow. Compressed formats address whole
+// 4x4 blocks, so `left` and `top` are on block boundaries there.
+uint8_t* VolumeImage::Texel(const VolumeLevel& m, UINT left, UINT top, UINT front) const
+{
+    const UINT rowOffset = fmt->block ? (top / 4) * m.rowPitch : top * m.rowPitch;
+    const UINT colOffset = fmt->block ? (left / 4) * fmt->d3dBytes : left * fmt->d3dBytes;
+    return m.shadow + static_cast<size_t>(front) * m.slicePitch + rowOffset + colOffset;
+}
+
+HRESULT VolumeImage::Lock(UINT level, D3DLOCKED_BOX* locked, const D3DBOX* box, DWORD flags)
+{
+    if (!locked || level >= mips.size()) return D3DERR_INVALIDCALL;
+    VolumeLevel& m = mips[level];
+    if (m.locked) return D3DERR_INVALIDCALL;
+
+    const D3DBOX whole = { 0, 0, m.width, m.height, 0, m.depth };
+    const D3DBOX& b = box ? *box : whole;
+    if (b.Left >= b.Right || b.Top >= b.Bottom || b.Front >= b.Back || b.Right > m.width || b.Bottom > m.height ||
+        b.Back > m.depth)
+        return D3DERR_INVALIDCALL;
+    // Compressed formats lock whole blocks: edges fall on a block boundary or
+    // on the edge of the level.
+    if (fmt->block && ((b.Left | b.Top) % 4 != 0 || (b.Right % 4 != 0 && b.Right != m.width) ||
+                       (b.Bottom % 4 != 0 && b.Bottom != m.height)))
+        return D3DERR_INVALIDCALL;
+    if (!Shadow(level)) return E_OUTOFMEMORY;
+
+    locked->pBits = Texel(m, b.Left, b.Top, b.Front);
+    locked->RowPitch = static_cast<INT>(m.rowPitch);
+    locked->SlicePitch = static_cast<INT>(m.slicePitch);
+    m.locked = true;
+    m.readOnly = (flags & D3DLOCK_READONLY) != 0;
+    m.lockedBox = { b.Left, b.Top, b.Front, b.Right, b.Bottom, b.Back };
+    return D3D_OK;
+}
+
+HRESULT VolumeImage::Unlock(UINT level)
+{
+    if (level >= mips.size() || !mips[level].locked) return D3DERR_INVALIDCALL;
+    VolumeLevel& m = mips[level];
+    m.locked = false;
+    if (texture && !m.readOnly) {
+        // Only the box that was locked goes up: a small edit of a big volume
+        // must not cost the whole level.
+        const D3D11_BOX& b = m.lockedBox;
+        Write(level, b, Texel(m, b.left, b.top, b.front), m.rowPitch, m.slicePitch);
+        if (level == 0) GenerateMips();
+    }
+    if (Evictable()) {
+        LockMemoryFree(m.shadow);
+        m.shadow = nullptr;
+        m.evicted = true;
+    }
+    return D3D_OK;
+}
+
+// Puts a box of texels, laid out as D3D9 holds them, on the GPU. `texels` is
+// the box's first texel. Formats the GPU holds differently are converted.
+void VolumeImage::Write(UINT level, const D3D11_BOX& box, const uint8_t* texels, UINT rowPitch, UINT slicePitch)
+{
+    const VolumeLevel& m = mips[level];
+    const bool whole = box.left == 0 && box.top == 0 && box.front == 0 && box.right == m.width &&
+                       box.bottom == m.height && box.back == m.depth;
+    const D3D11_BOX* region = whole ? nullptr : &box;
+    if (fmt->convert == Convert::None) {
+        device->ctx->UpdateSubresource(texture, level, region, texels, rowPitch, slicePitch);
+        return;
+    }
+    const UINT w = box.right - box.left, h = box.bottom - box.top, d = box.back - box.front;
+    const UINT rows = RowCount(*fmt, h);
+    const UINT convertedRow = RowPitch(*fmt, w, false);
+    const UINT convertedSlice = convertedRow * rows;
+    std::vector<uint8_t> converted(static_cast<size_t>(convertedSlice) * d);
+    for (UINT z = 0; z < d; z++)
+        ConvertRows(*fmt, texels + static_cast<size_t>(z) * slicePitch, rowPitch,
+                    converted.data() + static_cast<size_t>(z) * convertedSlice, convertedRow, w, rows);
+    device->ctx->UpdateSubresource(texture, level, region, converted.data(), convertedRow, convertedSlice);
+}
+
+bool VolumeImage::ReadBack(UINT level)
+{
+    VolumeLevel& m = mips[level];
+    if (!texture || !Shadow(level)) return false;
+
+    D3D11_TEXTURE3D_DESC desc;
+    texture->GetDesc(&desc);
+    desc.Width = m.width;
+    desc.Height = m.height;
+    desc.Depth = m.depth;
+    desc.MipLevels = 1;
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    desc.MiscFlags = 0;
+    ID3D11Texture3D* copy = nullptr;
+    if (FAILED(device->dev->CreateTexture3D(&desc, nullptr, &copy))) return false;
+    device->ctx->CopySubresourceRegion(copy, 0, 0, 0, 0, texture, level, nullptr);
+
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    const bool ok = SUCCEEDED(device->ctx->Map(copy, 0, D3D11_MAP_READ, 0, &mapped));
+    if (ok) {
+        const UINT rows = RowCount(*fmt, m.height);
+        const UINT bytes = std::min(m.rowPitch, RowPitch(*fmt, m.width, false));
+        for (UINT z = 0; z < m.depth; z++)
+            for (UINT y = 0; y < rows; y++)
+                std::memcpy(m.shadow + static_cast<size_t>(z) * m.slicePitch + static_cast<size_t>(y) * m.rowPitch,
+                            static_cast<const uint8_t*>(mapped.pData) + static_cast<size_t>(z) * mapped.DepthPitch +
+                                static_cast<size_t>(y) * mapped.RowPitch,
+                            bytes);
+        device->ctx->Unmap(copy, 0);
+    }
+    copy->Release();
+    return ok;
+}
+
+void VolumeImage::GenerateMips()
+{
+    if (autoGen && Srv(false)) device->ctx->GenerateMips(Srv(false));
+}
+
+// UpdateTexture for volumes, system memory to the GPU: every level this
+// volume has comes from the source level of the same size, so the source may
+// carry larger levels above.
+HRESULT VolumeImage::UpdateFrom(VolumeImage& source)
+{
+    if (source.format != format || !texture) return D3DERR_INVALIDCALL;
+    UINT first = 0;
+    while (first < source.levels && (source.mips[first].width != width || source.mips[first].height != height ||
+                                     source.mips[first].depth != depth))
+        first++;
+    if (first == source.levels) return D3DERR_INVALIDCALL;
+
+    for (UINT l = 0; l < levels && first + l < source.levels; l++) {
+        const VolumeLevel& from = source.mips[first + l];
+        const VolumeLevel& to = mips[l];
+        if (!from.shadow) {
+            // Dropped after its upload: the GPU has it, copy on the GPU.
+            if (from.evicted && source.texture)
+                device->ctx->CopySubresourceRegion(texture, l, 0, 0, 0, source.texture, first + l, nullptr);
+            continue;   // otherwise never written
+        }
+        const D3D11_BOX whole = { 0, 0, 0, to.width, to.height, to.depth };
+        Write(l, whole, from.shadow, from.rowPitch, from.slicePitch);
+    }
+    GenerateMips();
+    return D3D_OK;
+}
+
+ID3D11ShaderResourceView* VolumeImage::Srv(bool srgb)
+{
+    if (!texture) return nullptr;
+    const bool useSrgb = srgb && fmt->srgb != DXGI_FORMAT_UNKNOWN;
+    ID3D11ShaderResourceView*& view = srv[useSrgb ? 1 : 0];
+    if (!view) {
+        D3D11_SHADER_RESOURCE_VIEW_DESC desc = {};
+        desc.Format = useSrgb ? fmt->srgb : fmt->view;
+        desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
+        desc.Texture3D.MipLevels = static_cast<UINT>(-1);
+        if (FAILED(device->dev->CreateShaderResourceView(texture, &desc, &view))) view = nullptr;
+    }
+    return view;
+}
+
+// --- volume textures --------------------------------------------------------------
+
+Volume::Volume(Device* device, VolumeImage* image, UINT level, IUnknown* container, RefCounted* containerRef)
+    : DeviceChild(device, false), image(image), level(level), container(container), containerRef(containerRef)
+{
+}
+
+HRESULT Volume::QueryInterface(REFIID riid, void** out)
+{
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (riid == __uuidof(IUnknown) || riid == __uuidof(IDirect3DVolume9))
+        return ReturnInterface(static_cast<IDirect3DVolume9*>(this), out);
+    return E_NOINTERFACE;
+}
+
+HRESULT Volume::GetContainer(REFIID riid, void** out)
+{
+    if (!out) return D3DERR_INVALIDCALL;
+    return container->QueryInterface(riid, out);
+}
+
+HRESULT Volume::GetDesc(D3DVOLUME_DESC* desc)
+{
+    if (!desc) return D3DERR_INVALIDCALL;
+    const VolumeLevel& m = image->mips[level];
+    desc->Format = image->format;
+    desc->Type = D3DRTYPE_VOLUME;
+    desc->Usage = image->usage;
+    desc->Pool = image->pool;
+    desc->Width = m.width;
+    desc->Height = m.height;
+    desc->Depth = m.depth;
+    return D3D_OK;
+}
+
+HRESULT Volume::LockBox(D3DLOCKED_BOX* locked, const D3DBOX* box, DWORD flags)
+{
+    std::lock_guard<std::recursive_mutex> guard(device->mutex);
+    return image->Lock(level, locked, box, flags);
+}
+
+HRESULT Volume::UnlockBox()
+{
+    std::lock_guard<std::recursive_mutex> guard(device->mutex);
+    return image->Unlock(level);
+}
+
+VolumeTexture::VolumeTexture(Device* device, std::unique_ptr<VolumeImage> image)
+    : DeviceChild(device, true), image(std::move(image))
+{
+}
+
+VolumeTexture::~VolumeTexture()
+{
+    for (auto* v : volumes) delete v;
+}
+
+HRESULT VolumeTexture::Init()
+{
+    const HRESULT hr = image->Init();
+    if (FAILED(hr)) return hr;
+    for (UINT l = 0; l < image->levels; l++)
+        volumes.push_back(new Volume(device, image.get(), l, static_cast<IDirect3DVolumeTexture9*>(this), this));
+    return D3D_OK;
+}
+
+HRESULT VolumeTexture::QueryInterface(REFIID riid, void** out)
+{
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (riid == __uuidof(IUnknown) || riid == __uuidof(IDirect3DResource9) ||
+        riid == __uuidof(IDirect3DBaseTexture9) || riid == __uuidof(IDirect3DVolumeTexture9))
+        return ReturnInterface(static_cast<IDirect3DVolumeTexture9*>(this), out);
+    return E_NOINTERFACE;
+}
+
+void VolumeTexture::GenerateMipSubLevels()
+{
+    std::lock_guard<std::recursive_mutex> guard(device->mutex);
+    image->GenerateMips();
+}
+
+HRESULT VolumeTexture::GetLevelDesc(UINT level, D3DVOLUME_DESC* desc)
+{
+    if (level >= volumes.size()) return D3DERR_INVALIDCALL;
+    return volumes[level]->GetDesc(desc);
+}
+
+HRESULT VolumeTexture::GetVolumeLevel(UINT level, IDirect3DVolume9** volume)
+{
+    if (!volume || level >= volumes.size()) return D3DERR_INVALIDCALL;
+    volumes[level]->AddRef();
+    *volume = volumes[level];
+    return D3D_OK;
+}
+
+HRESULT VolumeTexture::LockBox(UINT level, D3DLOCKED_BOX* locked, const D3DBOX* box, DWORD flags)
+{
+    if (level >= volumes.size()) return D3DERR_INVALIDCALL;
+    return volumes[level]->LockBox(locked, box, flags);
+}
+
+HRESULT VolumeTexture::UnlockBox(UINT level)
+{
+    if (level >= volumes.size()) return D3DERR_INVALIDCALL;
+    return volumes[level]->UnlockBox();
 }
 
 // --- buffers --------------------------------------------------------------------

@@ -209,6 +209,29 @@ bool Device::Blit(Image* src, UINT srcSub, const RECT& srcRect, Image* dst, UINT
 
 // --- pipeline setup -------------------------------------------------------------
 
+// ps_1_x shaders declare no samplers, and which textures are projected is a
+// texture stage state, so the translation depends on the bound textures and
+// stage states (see dxso::Result::guessedSamplers). Other shaders ignore this.
+dxso::Options Device::PixelShaderOptions()
+{
+    dxso::Options options;
+    const dxso::Result& shader = state.ps->base;
+    for (UINT s = 0; s < 8; s++) {
+        if (shader.guessedSamplers & (1u << s)) {
+            Image* image = ImageOf(state.textures[s]);
+            if (image && image->faces == 6) options.samplerTypes[s] = dxso::SamplerType::Cube;
+        }
+        if (shader.projectableSamplers & (1u << s)) {
+            const DWORD flags = state.tss[s][D3DTSS_TEXTURETRANSFORMFLAGS];
+            if (flags & D3DTTFF_PROJECTED) {
+                const DWORD count = flags & 0xFF;
+                options.projectDivisor[s] = static_cast<uint8_t>(count >= 2 && count <= 4 ? count : 4);
+            }
+        }
+    }
+    return options;
+}
+
 bool Device::BindShaders(UINT instanceMask)
 {
     VertexDeclaration* decl = state.decl;
@@ -233,7 +256,7 @@ bool Device::BindShaders(UINT instanceMask)
     } else {
         currentVs = FixedVertexShader(decl, &inputs);
     }
-    currentPs = state.ps ? state.ps->Variant(dxso::Options()) : FixedPixelShader();
+    currentPs = state.ps ? state.ps->Variant(PixelShaderOptions()) : FixedPixelShader();
     if (!currentVs || !currentPs) {
         if (!warnedFixedFunction) {
             Log("draw skipped: no usable shader (vs %s, ps %s)", state.vs ? "translated" : "fixed",
@@ -343,9 +366,20 @@ void Device::FlushConstants()
         upload(cbVs[3], vsFix, sizeof vsFix);
         std::memcpy(lastVsFix, vsFix, sizeof vsFix);
     }
-    float psFix[16] = {};
+    float psFix[dxso::FixupSlots * 4] = {};
     psFix[0] = state.rs[D3DRS_ALPHATESTENABLE] ? static_cast<float>(state.rs[D3DRS_ALPHAFUNC]) : 8.0f;
     psFix[1] = (state.rs[D3DRS_ALPHAREF] & 0xFF) / 255.0f;
+    // The bump-environment state of each stage, for ps_1_x texbem/texbeml/bem.
+    for (int s = 0; s < dxso::BumpStages; s++) {
+        float* matrix = &psFix[(dxso::FixupBumpMatrix + s) * 4];
+        matrix[0] = AsFloat(state.tss[s][D3DTSS_BUMPENVMAT00]);
+        matrix[1] = AsFloat(state.tss[s][D3DTSS_BUMPENVMAT01]);
+        matrix[2] = AsFloat(state.tss[s][D3DTSS_BUMPENVMAT10]);
+        matrix[3] = AsFloat(state.tss[s][D3DTSS_BUMPENVMAT11]);
+        float* luminance = &psFix[(dxso::FixupBumpLuminance + s) * 4];
+        luminance[0] = AsFloat(state.tss[s][D3DTSS_BUMPENVLSCALE]);
+        luminance[1] = AsFloat(state.tss[s][D3DTSS_BUMPENVLOFFSET]);
+    }
     if (std::memcmp(psFix, lastPsFix, sizeof psFix) != 0) {
         upload(cbPs[3], psFix, sizeof psFix);
         std::memcpy(lastPsFix, psFix, sizeof psFix);

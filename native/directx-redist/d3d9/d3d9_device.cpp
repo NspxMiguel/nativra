@@ -109,8 +109,9 @@ HRESULT Device::Init(D3DPRESENT_PARAMETERS* params)
     dev->GetImmediateContext(&ctx);
     ctx->QueryInterface(__uuidof(ID3D11DeviceContext1), reinterpret_cast<void**>(&ctx1));
 
-    // Constant buffers: float (256 x float4), int (16 x int4), bool (16 x int4), fixup.
-    const UINT sizes[4] = { 4096, 256, 256, 64 };
+    // Constant buffers: float (256 x float4), int (16 x int4), bool (16 x int4), fixup
+    // (the pixel one also carries ps_1_x's bump-environment state; see dxso::FixupSlot).
+    const UINT sizes[4] = { 4096, 256, 256, dxso::FixupSlots * 16 };
     for (int k = 0; k < 4; k++) {
         D3D11_BUFFER_DESC desc = {};
         desc.ByteWidth = sizes[k];

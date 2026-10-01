@@ -789,6 +789,7 @@ private:
     void SetDefaultStates();
     bool PrepareDraw(UINT* instances);
     bool BindShaders(UINT instanceMask);
+    dxso::Options PixelShaderOptions();
     ID3D11InputLayout* InputLayout(ShaderVariant* vs, const VertexDeclaration* decl, UINT instanceMask,
                                    const std::vector<dxso::InputDecl>& inputs);
     VertexDeclaration* FvfDeclaration(DWORD fvf);
@@ -840,7 +841,7 @@ private:
     UINT upVertexCapacity = 0, upIndexCapacity = 0;
     struct { ID3D11Buffer* buffer; UINT offset; UINT stride; } upStream = {};   // stream 0 during a UP draw
     float lastVsFix[16] = { -1e30f };
-    float lastPsFix[16] = { -1e30f };
+    float lastPsFix[dxso::FixupSlots * 4] = { -1e30f };
     D3DFORMAT boundDepthFormat = D3DFMT_UNKNOWN;
     bool warnedDepthSize = false;
     bool warnedPartialDepthClear = false;

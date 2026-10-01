@@ -71,8 +71,19 @@ if errorlevel 1 exit /b 1
 bin\test_d3dx9.exe
 if errorlevel 1 exit /b 1
 
+rem Pixel shaders 1.1 - 1.4: hand-written assembly translated and checked for the
+rem exact computation each instruction calls for; needs no GPU.
+echo === tests: d3d9 pixel shader 1.x translation (dxso, ps_1_x) ===
+cl /nologo /EHsc /O2 /MD /std:c++17 ^
+   tests\test_dxso_ps1.cpp d3d9\dxso.cpp ^
+   /Fo:bin\ /Fe:bin\test_dxso_ps1.exe
+if errorlevel 1 exit /b 1
+bin\test_dxso_ps1.exe
+if errorlevel 1 exit /b 1
+
 rem D3D9 shader bytecode -> SM5: real D3D9 bytecode from Microsoft's compiler,
-rem translated, must render what a direct SM5 compile renders (under WARP).
+rem translated, must render what a direct SM5 compile renders (under WARP). The
+rem ps_1_x cases are hand-written assembly rendered against equivalent HLSL.
 echo === tests: d3d9 shader translation (dxso) ===
 cl /nologo /EHsc /O2 /MD /std:c++17 ^
    tests\test_dxso.cpp d3d9\dxso.cpp ^

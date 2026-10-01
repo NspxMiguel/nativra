@@ -4,9 +4,28 @@
 // collects declarations (dcl/def/defi/defb), and a third emits HLSL. Every
 // D3D9 register becomes a `static` global, so subroutines (label/call/ret) are
 // plain HLSL functions and `ret` is a plain `return`.
+//
+// Pixel shaders 1.1 .. 1.4 share all of that and differ in four ways, handled
+// where marked "ps_1_x":
+//   * tokens carry no length (the operand count follows from the opcode) and
+//     there are no declarations: v0/v1 are COLOR0/COLOR1, t# are TEXCOORD#, the
+//     colour result is r0;
+//   * the registers are fixed point on the hardware these shaders were made
+//     for. Constants are clamped to [-1,1] (ps_1_1 .. 1_3) or [-8,8] (ps_1_4),
+//     as the spec requires. Nothing else is clamped: temporaries and results
+//     keep float range, as on current drivers, except where an instruction or
+//     modifier says so (_sat, texcoord);
+//   * destination modifiers include a result scale (_x2 .. _d8), applied before
+//     _sat; sources add _bias/_bx2/_x2 and ps_1_4's _dz/_dw;
+//   * texture addressing is part of the instruction set (tex, texbem,
+//     texm3x3pad, ...), and ps_1_4 splits a shader into two phases. The phases
+//     only schedule the hardware; running the instructions in order, with every
+//     register kept across the `phase` marker, gives the same result. Co-issued
+//     pairs ('+') likewise write disjoint channels, so program order is exact.
 
 #include "dxso.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <map>
@@ -30,6 +49,11 @@ enum Opcode : uint32_t {
     OpTexCoord = 64, OpTexKill = 65, OpTex = 66, OpExpP = 78, OpLogP = 79, OpCnd = 80, OpDef = 81,
     OpCmp = 88, OpDp2Add = 90, OpDsx = 91, OpDsy = 92, OpTexLdd = 93, OpSetP = 94, OpTexLdl = 95,
     OpBreakP = 96,
+    // ps_1_x texture addressing (OpTexCoord/OpTexKill/OpTex above are shared).
+    OpTexBem = 67, OpTexBemL = 68, OpTexReg2Ar = 69, OpTexReg2Gb = 70, OpTexM3x2Pad = 71,
+    OpTexM3x2Tex = 72, OpTexM3x3Pad = 73, OpTexM3x3Tex = 74, OpTexM3x3Spec = 76, OpTexM3x3VSpec = 77,
+    OpTexReg2Rgb = 82, OpTexDp3Tex = 83, OpTexM3x2Depth = 84, OpTexDp3 = 85, OpTexM3x3 = 86,
+    OpTexDepth = 87, OpBem = 89,
     OpPhase = 0xFFFD, OpComment = 0xFFFE, OpEnd = 0xFFFF,
 };
 
@@ -90,6 +114,60 @@ int Sm1ParamCount(uint32_t op)
     }
 }
 
+// The same for ps_1_x. The texture instructions are the ones whose form changed
+// in ps_1_4: `tex` is texld rN, src and `texcoord` is texcrd rN, src there.
+int Ps1ParamCount(uint32_t op, uint32_t minor)
+{
+    switch (op) {
+    case OpNop:
+        return 0;
+    case OpTexKill: case OpTexDepth:
+        return 1;
+    case OpTex: case OpTexCoord:
+        return minor >= 4 ? 2 : 1;
+    case OpMov: case OpTexBem: case OpTexBemL: case OpTexReg2Ar: case OpTexReg2Gb: case OpTexReg2Rgb:
+    case OpTexM3x2Pad: case OpTexM3x2Tex: case OpTexM3x2Depth: case OpTexM3x3Pad: case OpTexM3x3Tex:
+    case OpTexM3x3VSpec: case OpTexM3x3: case OpTexDp3: case OpTexDp3Tex:
+        return 2;
+    case OpAdd: case OpSub: case OpMul: case OpDp3: case OpDp4: case OpBem: case OpTexM3x3Spec:
+        return 3;
+    case OpMad: case OpLrp: case OpCnd: case OpCmp:
+        return 4;
+    case OpDef:
+        return 5;
+    default:
+        return -1;
+    }
+}
+
+// The name of a ps_1_x texture-addressing opcode, for error messages.
+const char* Ps1TextureName(uint32_t op)
+{
+    switch (op) {
+    case OpTex: return "tex";
+    case OpTexCoord: return "texcoord";
+    case OpTexKill: return "texkill";
+    case OpTexBem: return "texbem";
+    case OpTexBemL: return "texbeml";
+    case OpTexReg2Ar: return "texreg2ar";
+    case OpTexReg2Gb: return "texreg2gb";
+    case OpTexReg2Rgb: return "texreg2rgb";
+    case OpTexM3x2Pad: return "texm3x2pad";
+    case OpTexM3x2Tex: return "texm3x2tex";
+    case OpTexM3x2Depth: return "texm3x2depth";
+    case OpTexM3x3Pad: return "texm3x3pad";
+    case OpTexM3x3Tex: return "texm3x3tex";
+    case OpTexM3x3Spec: return "texm3x3spec";
+    case OpTexM3x3VSpec: return "texm3x3vspec";
+    case OpTexM3x3: return "texm3x3";
+    case OpTexDp3: return "texdp3";
+    case OpTexDp3Tex: return "texdp3tex";
+    case OpTexDepth: return "texdepth";
+    case OpBem: return "bem";
+    default: return "instruction";
+    }
+}
+
 std::string Swizzle(uint32_t token)
 {
     const uint32_t swz = (token >> 16) & 0xFF;
@@ -141,6 +219,7 @@ struct Instruction {
     uint32_t op = 0;
     uint32_t control = 0;      // instruction-token bits 16..23
     bool predicated = false;
+    bool coissue = false;      // ps_1_x: the '+' prefix, paired with the previous instruction
     std::vector<Param> params; // destination first (when present), then sources
     Param predicate;
     std::vector<uint32_t> literal;
@@ -163,6 +242,7 @@ public:
 private:
     bool Decode(const uint32_t* tokens, size_t count);
     bool Collect();
+    bool CollectPs1();
     bool EmitFunction(size_t begin, size_t end, std::ostringstream& out);
     std::string Assemble(const std::map<uint32_t, std::string>& labelBodies, const std::string& mainBody);
 
@@ -174,14 +254,19 @@ private:
     std::string PredicateComponent(const Param& p);
     uint32_t DstMask(const Param& p) { return (p.token >> 16) & 0xF; }
     bool Saturate(const Param& p) { return ((p.token >> 20) & 1) != 0; }
+    int ResultShift(const Param& p) { const int s = static_cast<int>((p.token >> 24) & 0xF); return s >= 8 ? s - 16 : s; }
+    uint32_t ConstBits(uint32_t bits) const;
 
     void Assign(const Instruction& ins, const std::string& value4);
     bool EmitInstruction(const Instruction& ins);
+    bool EmitPs1Texture(const Instruction& ins);
+    std::string SampleExpr(uint32_t sampler, const std::string& coord4, int divide);
     void Line(const std::string& s) { (*out) << std::string(static_cast<size_t>(indent) * 4, ' ') << s << "\n"; }
 
     Result res;
     Stage stage = Stage::Vertex;
     uint32_t major = 0, minor = 0;
+    bool ps1 = false;           // pixel shader 1.x
     std::vector<Instruction> program;
 
     std::vector<DclEntry> dcls;
@@ -191,7 +276,15 @@ private:
 
     bool relativeConst = false;
     bool usesPos = false, usesFace = false;
+    bool usesDz = false, usesDw = false;   // ps_1_4 _dz/_dw source modifiers
     uint32_t maxTemp = 0;
+
+    // ps_1_x matrix texture instructions: the rows of texm3x2pad/texm3x3pad seen
+    // so far, waiting for the instruction that completes the matrix.
+    int padColumns = 0;                    // 2 (texm3x2*) or 3 (texm3x3*); 0 = no rows pending
+    int padRows = 0;
+    uint32_t padStage[2] = {};             // the t# whose coordinates form each row
+    std::string padValue[2];               // the HLSL variable holding each row's dot product
 
     std::ostringstream* out = nullptr;
     int indent = 1;
@@ -213,9 +306,11 @@ bool Translator::Decode(const uint32_t* tokens, size_t count)
     major = (version >> 8) & 0xFF;
     minor = version & 0xFF;
 
-    if (stage == Stage::Pixel && major < 2) return Fail("ps_1_x is not supported yet");
     if (major < 1 || major > 3) return Fail("unsupported shader model " + std::to_string(major));
+    // ps_1_0 (D3D8's first version) is read as ps_1_1, which only adds instructions.
+    if (stage == Stage::Pixel && major == 1 && minor > 4) return Fail("unsupported pixel shader version ps_1_" + std::to_string(minor));
 
+    ps1 = stage == Stage::Pixel && major < 2;
     const bool sm1 = major < 2;
     size_t i = 1;
     while (i < count) {
@@ -228,14 +323,16 @@ bool Translator::Decode(const uint32_t* tokens, size_t count)
         Instruction ins;
         ins.op = op;
         ins.control = (token >> 16) & 0xFF;
-        ins.predicated = (token & (1u << 28)) != 0;
+        // In ps_1_x bit 28 is reserved and bit 30 is the co-issue flag.
+        ins.predicated = !ps1 && (token & (1u << 28)) != 0;
+        ins.coissue = ps1 && (token & 0x40000000u) != 0;
 
         size_t length;
         if (!sm1) {
             length = (token >> 24) & 0xF;
         } else {
-            const int n = Sm1ParamCount(op);
-            if (n < 0) return Fail("vs_1_1: unknown opcode " + std::to_string(op));
+            const int n = ps1 ? Ps1ParamCount(op, minor) : Sm1ParamCount(op);
+            if (n < 0) return Fail(std::string(ps1 ? "ps_1_x" : "vs_1_1") + ": unknown opcode " + std::to_string(op));
             length = static_cast<size_t>(n);
         }
         if (i + length > count) return Fail("instruction runs past the end of the shader");
@@ -261,6 +358,9 @@ bool Translator::Decode(const uint32_t* tokens, size_t count)
         while (i < end) {
             Param p;
             p.token = tokens[i++];
+            // Every register token has bit 31 set; without it the operand
+            // count implied by the opcode disagrees with the stream.
+            if (ps1 && (p.token & 0x80000000u) == 0) return Fail("ps_1_x: operand count does not match opcode " + std::to_string(op));
             p.type = RegTypeOf(p.token);
             p.num = RegNumOf(p.token);
             if (IsRelative(p.token)) {
@@ -329,10 +429,79 @@ bool Translator::Collect()
             defB[ins.params[0].num] = ins.literal[0] != 0;
         }
     }
+    return ps1 ? CollectPs1() : true;
+}
+
+// ps_1_x declares nothing, so the inputs and the samplers are derived here.
+bool Translator::CollectPs1()
+{
+    // The inputs are fixed: v0/v1 are the diffuse and specular colours and t#
+    // the texture coordinate sets (4 of them up to ps_1_3, 6 in ps_1_4).
+    const uint32_t textureRegisters = minor >= 4 ? 6 : 4;
+    for (uint32_t n = 0; n < 2; n++)
+        dcls.push_back(DclEntry{ RegInput, n, 0xF, UsageColor, static_cast<uint8_t>(n), false });
+    for (uint32_t n = 0; n < textureRegisters; n++)
+        dcls.push_back(DclEntry{ RegAddr, n, 0xF, UsageTexCoord, static_cast<uint8_t>(n), false });
+
+    // A texture register that is only ever written by `tex`-like instructions
+    // is a sampler: stage n for `tex tn`, and for ps_1_4's `texld rn` the stage
+    // is the destination register's number. Which dimension the bound texture
+    // has is not in the bytecode. Instructions that only make sense for one
+    // dimension (the 3x3 matrix family reads cube maps; texbem and texreg2ar/gb
+    // read 2D) fix it; for `tex`, `texld` and texreg2rgb the device's answer in
+    // Options wins and 2D (cube for texreg2rgb) is the guess.
+    for (const auto& ins : program) {
+        SamplerType implied = SamplerType::None;
+        bool fixed = true;
+        switch (ins.op) {
+        case OpTex:
+            implied = SamplerType::Tex2D;
+            fixed = false;
+            break;
+        case OpTexReg2Rgb:
+            implied = SamplerType::Cube;
+            fixed = false;
+            break;
+        case OpTexBem: case OpTexBemL: case OpTexReg2Ar: case OpTexReg2Gb: case OpTexM3x2Tex: case OpTexDp3Tex:
+            implied = SamplerType::Tex2D;
+            break;
+        case OpTexM3x3Tex: case OpTexM3x3Spec: case OpTexM3x3VSpec:
+            implied = SamplerType::Cube;
+            break;
+        default:
+            continue;
+        }
+        if (ins.params.empty()) return Fail(std::string(Ps1TextureName(ins.op)) + " has too few operands");
+        const uint32_t sampler = ins.params[0].num;
+        if (sampler >= 16) return Fail("sampler index out of range");
+
+        SamplerType type = implied;
+        if (!fixed) {
+            if (sampler < 8 && options.samplerTypes[sampler] != SamplerType::None) type = options.samplerTypes[sampler];
+            res.guessedSamplers |= 1u << sampler;
+        }
+        // A stage a fixed-dimension instruction reads keeps that dimension.
+        if (res.samplers[sampler] == SamplerType::None || fixed) res.samplers[sampler] = type;
+        if (ins.op == OpTex && minor < 4) res.projectableSamplers |= 1u << sampler;
+    }
     return true;
 }
 
 // --- operands ----------------------------------------------------------------
+
+// ps_1_x constants live in fixed point: [-1,1] up to ps_1_3 and [-8,8] in ps_1_4.
+// def'd literals are clamped here, c# registers where they are read.
+uint32_t Translator::ConstBits(uint32_t bits) const
+{
+    if (!ps1) return bits;
+    float f;
+    std::memcpy(&f, &bits, sizeof f);
+    const float limit = minor >= 4 ? 8.0f : 1.0f;
+    if (f > limit) f = limit;
+    else if (f < -limit) f = -limit;
+    std::memcpy(&bits, &f, sizeof f);
+    return bits;
+}
 
 // The register a parameter names. Float registers are float4; a0 is int4, aL
 // int, p0 bool4, i# int4, b# bool, oFog/oPts/oDepth/vFace float.
@@ -364,10 +533,14 @@ std::string Translator::RegName(const Param& p, int offset)
         if (!p.hasRel) {
             auto it = defF.find(base);
             if (it != defF.end()) {
-                return "float4(" + FloatLiteral(it->second[0]) + ", " + FloatLiteral(it->second[1]) + ", " +
-                       FloatLiteral(it->second[2]) + ", " + FloatLiteral(it->second[3]) + ")";
+                return "float4(" + FloatLiteral(ConstBits(it->second[0])) + ", " + FloatLiteral(ConstBits(it->second[1])) + ", " +
+                       FloatLiteral(ConstBits(it->second[2])) + ", " + FloatLiteral(ConstBits(it->second[3])) + ")";
             }
             if (base + 1 > res.floatConstantsUsed) res.floatConstantsUsed = base + 1;
+            if (ps1) {
+                const char* limit = minor >= 4 ? "8.0" : "1.0";
+                return "clamp(c[" + std::to_string(base) + "], -" + limit + ", " + limit + ")";
+            }
             return "c[" + std::to_string(base) + "]";
         }
         relativeConst = true;
@@ -442,6 +615,13 @@ std::string Translator::Source(const Param& p, int offset)
         value = swizzle == ".xyzw" ? reg : reg + swizzle;
     }
 
+    // ps_1_4's projective modifiers: x and y divided by the swizzled z or w.
+    if (ps1 && (((p.token >> 24) & 0xF) == ModDz || ((p.token >> 24) & 0xF) == ModDw)) {
+        const bool byZ = ((p.token >> 24) & 0xF) == ModDz;
+        (byZ ? usesDz : usesDw) = true;
+        return std::string(byZ ? "nativra_dz(" : "nativra_dw(") + value + ")";
+    }
+
     switch ((p.token >> 24) & 0xF) {
     case ModNone: return value;
     case ModNeg: return "(-" + value + ")";
@@ -468,12 +648,22 @@ std::string Translator::PredicateComponent(const Param& p)
     return std::string(negate ? "!" : "") + "p0." + "xyzw"[(p.token >> 16) & 3];
 }
 
-// dst.mask = value (a float4 expression), with saturate and predication.
+// dst.mask = value (a float4 expression), with result scale, saturate and
+// predication.
 void Translator::Assign(const Instruction& ins, const std::string& value4)
 {
     const Param& dst = ins.params[0];
     const std::string suffix = MaskSuffix(DstMask(dst));
-    const std::string value = Saturate(dst) ? "saturate(" + value4 + ")" : "(" + value4 + ")";
+
+    // ps_1_x result scale (_x2 .. _x8, _d2 .. _d8), applied before the clamp.
+    std::string scaled = value4;
+    if (ps1 && ResultShift(dst) != 0) {
+        const float factor = std::ldexp(1.0f, ResultShift(dst));
+        uint32_t bits;
+        std::memcpy(&bits, &factor, sizeof bits);
+        scaled = "(" + value4 + ") * " + FloatLiteral(bits);
+    }
+    const std::string value = Saturate(dst) ? "saturate(" + scaled + ")" : "(" + scaled + ")";
     const std::string target = RegName(dst);
 
     // Scalar destinations.
@@ -517,6 +707,20 @@ bool Translator::EmitInstruction(const Instruction& ins)
         return true;
     };
     auto src = [&](size_t k) { return Source(P[k]); };
+
+    // ps_1_x texture addressing; everything else in ps_1_x (mov, add, mul, mad,
+    // lrp, cnd, cmp, dp3, dp4, ...) shares the code below.
+    if (ps1) {
+        switch (ins.op) {
+        case OpTex: case OpTexCoord: case OpTexKill: case OpTexBem: case OpTexBemL: case OpTexReg2Ar:
+        case OpTexReg2Gb: case OpTexReg2Rgb: case OpTexM3x2Pad: case OpTexM3x2Tex: case OpTexM3x2Depth:
+        case OpTexM3x3Pad: case OpTexM3x3Tex: case OpTexM3x3Spec: case OpTexM3x3VSpec: case OpTexM3x3:
+        case OpTexDp3: case OpTexDp3Tex: case OpTexDepth: case OpBem:
+            return EmitPs1Texture(ins);
+        default:
+            break;
+        }
+    }
 
     switch (ins.op) {
     case OpNop: case OpDcl: case OpDef: case OpDefI: case OpDefB: case OpPhase: case OpLabel:
@@ -735,6 +939,198 @@ bool Translator::EmitInstruction(const Instruction& ins)
     }
 }
 
+// --- ps_1_x texture addressing -----------------------------------------------
+
+// A sample of texture stage `sampler` at a float4 coordinate expression: xy
+// for a 2D texture, xyz for a cube or volume one. `divide` (2 .. 4) divides the
+// coordinates by .y, .z or .w first (D3DTTFF_PROJECTED), 0 for none.
+std::string Translator::SampleExpr(uint32_t sampler, const std::string& coord4, int divide)
+{
+    const SamplerType type = res.samplers[sampler];
+    const bool threeD = type == SamplerType::Cube || type == SamplerType::Volume;
+    const std::string coord = "(" + coord4 + ")";
+    std::string uv = coord + (threeD ? ".xyz" : ".xy");
+    if (divide >= 2 && divide <= 4) uv = "(" + uv + " / " + coord + "." + "xyzw"[divide - 1] + ")";
+    return "t" + std::to_string(sampler) + ".Sample(s" + std::to_string(sampler) + ", " + uv + ")";
+}
+
+// The ps_1_x instructions that read texture coordinates, sample textures or
+// write depth. In ps_1_1 .. ps_1_3 the destination t# is both where the
+// interpolated coordinates of set # start and where the sampled colour ends up;
+// every instruction reads the coordinates before it writes the colour, and no
+// stage is written twice, so the t[] array models it directly.
+bool Translator::EmitPs1Texture(const Instruction& ins)
+{
+    const auto& P = ins.params;
+    const std::string name = Ps1TextureName(ins.op);
+    auto need = [&](size_t n) {
+        if (P.size() < n) return Fail(name + " has too few operands");
+        return true;
+    };
+    const std::string id = std::to_string(uniqueId++);
+
+    switch (ins.op) {
+    case OpTex:
+        if (minor < 4) {                                  // tex tn
+            if (!need(1)) return false;
+            const uint32_t s = P[0].num;
+            Assign(ins, SampleExpr(s, RegName(P[0]), s < 8 ? options.projectDivisor[s] : 0));
+        } else {                                          // texld rn, src: stage n, coordinates from src
+            if (!need(2)) return false;
+            Assign(ins, SampleExpr(P[0].num, Source(P[1]), 0));
+        }
+        return true;
+
+    case OpTexCoord:
+        if (minor < 4) {                                  // texcoord tn: coordinates as a colour, in [0,1]
+            if (!need(1)) return false;
+            Assign(ins, "float4(saturate((" + RegName(P[0]) + ").xyz), 1.0)");
+        } else {                                          // texcrd rn, src: copied unclamped
+            if (!need(2)) return false;
+            Assign(ins, Source(P[1]));
+        }
+        return true;
+
+    case OpTexKill:
+        // Kills on a negative u, v or w: only the first three components count.
+        if (!need(1)) return false;
+        Line("if (any((" + RegName(P[0]) + ").xyz < 0.0)) discard;");
+        return true;
+
+    // Bump-environment mapping: the 2x2 matrix of the destination stage turns
+    // the bump map's (du, dv) into an offset of the coordinates.
+    //   u' = u + du * M00 + dv * M10      v' = v + du * M01 + dv * M11
+    // texbeml also scales the colour by the luminance bump.z * scale + offset
+    // (clamped to [0,1]). bem is the ps_1_4 form: the offset is added to a
+    // register's coordinates and no texture is read.
+    case OpTexBem: case OpTexBemL: case OpBem: {
+        const bool bem = ins.op == OpBem;
+        if (!need(bem ? 3 : 2)) return false;
+        const uint32_t n = P[0].num;
+        if (n >= static_cast<uint32_t>(BumpStages)) return Fail(name + ": texture stage out of range");
+        res.usesBumpEnv = true;
+        const std::string matrix = "nativra_fix[" + std::to_string(FixupBumpMatrix + n) + "]";
+        const std::string bump = "nativra_bump" + id;
+        const std::string uv = "nativra_uv" + id;
+        Line("float4 " + bump + " = " + Source(P[bem ? 2 : 1]) + ";");
+        const std::string base = bem ? "(" + Source(P[1]) + ").xy" : "(" + RegName(P[0]) + ").xy";
+        Line("float2 " + uv + " = " + base + " + " + bump + ".x * " + matrix + ".xy + " + bump + ".y * " + matrix + ".zw;");
+        if (bem) {
+            Assign(ins, "float4(" + uv + ", 0.0, 0.0)");
+            return true;
+        }
+        const std::string texel = "nativra_texel" + id;
+        Line("float4 " + texel + " = " + SampleExpr(n, "float4(" + uv + ", 0.0, 0.0)", 0) + ";");
+        if (ins.op == OpTexBemL) {
+            const std::string luminance = "nativra_fix[" + std::to_string(FixupBumpLuminance + n) + "]";
+            Line(texel + ".rgb *= saturate(" + bump + ".z * " + luminance + ".x + " + luminance + ".y);");
+        }
+        Assign(ins, texel);
+        return true;
+    }
+
+    // Dependent reads: a colour in a register is the coordinate of the lookup.
+    case OpTexReg2Ar: case OpTexReg2Gb: case OpTexReg2Rgb: {
+        if (!need(2)) return false;
+        const std::string src = "(" + Source(P[1]) + ")";
+        const std::string coord = ins.op == OpTexReg2Ar ? "float4(" + src + ".wx, 0.0, 0.0)"
+                                : ins.op == OpTexReg2Gb ? "float4(" + src + ".yz, 0.0, 0.0)"
+                                                        : "float4(" + src + ".xyz, 0.0)";
+        Assign(ins, SampleExpr(P[0].num, coord, 0));
+        return true;
+    }
+
+    // Matrix texture instructions. The pads each compute one row of the matrix
+    // product (the coordinates of their stage dotted with the source) and write
+    // nothing; the last instruction computes the final row and consumes them.
+    case OpTexM3x2Pad: case OpTexM3x3Pad: {
+        if (!need(2)) return false;
+        const int columns = ins.op == OpTexM3x2Pad ? 2 : 3;
+        if (padColumns != columns || padRows >= columns - 1) {   // a new matrix starts
+            padColumns = columns;
+            padRows = 0;
+        }
+        const std::string row = "nativra_row" + id;
+        Line("float " + row + " = dot((" + RegName(P[0]) + ").xyz, (" + Source(P[1]) + ").xyz);");
+        padStage[padRows] = P[0].num;
+        padValue[padRows] = row;
+        padRows++;
+        return true;
+    }
+    case OpTexM3x2Tex: case OpTexM3x2Depth: case OpTexM3x3Tex: case OpTexM3x3Spec: case OpTexM3x3VSpec:
+    case OpTexM3x3: {
+        const bool spec = ins.op == OpTexM3x3Spec;
+        if (!need(spec ? 3 : 2)) return false;
+        const int columns = ins.op == OpTexM3x2Tex || ins.op == OpTexM3x2Depth ? 2 : 3;
+        if (padColumns != columns || padRows != columns - 1) {
+            return Fail(name + " needs " + (columns == 2 ? "one texm3x2pad" : "two texm3x3pad instructions") +
+                        " before it");
+        }
+        padColumns = 0;
+        padRows = 0;
+        const uint32_t n = P[0].num;
+        const std::string last = "nativra_row" + id;
+        Line("float " + last + " = dot((" + RegName(P[0]) + ").xyz, (" + Source(P[1]) + ").xyz);");
+
+        if (columns == 2) {
+            if (ins.op == OpTexM3x2Tex) {
+                Assign(ins, SampleExpr(n, "float4(" + padValue[0] + ", " + last + ", 0.0, 0.0)", 0));
+            } else {
+                // texm3x2depth: depth is the first row over the second, 1 when that is 0.
+                Line("oDepth = " + last + " == 0.0 ? 1.0 : " + padValue[0] + " / " + last + ";");
+                res.writesDepth = true;
+            }
+            return true;
+        }
+
+        const std::string normal = "float3(" + padValue[0] + ", " + padValue[1] + ", " + last + ")";
+        if (ins.op == OpTexM3x3) {
+            Assign(ins, "float4(" + normal + ", 1.0)");
+        } else if (ins.op == OpTexM3x3Tex) {
+            Assign(ins, SampleExpr(n, "float4(" + normal + ", 0.0)", 0));
+        } else {
+            // The cube map is read along the eye vector reflected about the
+            // normal: R = 2 N (N.E) / (N.N) - E. E is the constant of
+            // texm3x3spec; texm3x3vspec takes it from the w of the three
+            // coordinate sets the matrix rows came from.
+            const std::string eye = spec ? "(" + Source(P[2]) + ").xyz"
+                : "float3((t[" + std::to_string(padStage[0]) + "]).w, (t[" + std::to_string(padStage[1]) +
+                  "]).w, (t[" + std::to_string(n) + "]).w)";
+            const std::string nn = "nativra_n" + id, ee = "nativra_e" + id, rr = "nativra_r" + id;
+            Line("float3 " + nn + " = " + normal + ";");
+            Line("float3 " + ee + " = " + eye + ";");
+            Line("float3 " + rr + " = 2.0 * dot(" + nn + ", " + ee + ") / dot(" + nn + ", " + nn + ") * " + nn + " - " + ee + ";");
+            Assign(ins, SampleExpr(n, "float4(" + rr + ", 0.0)", 0));
+        }
+        return true;
+    }
+
+    // texdp3 / texdp3tex: the coordinates of the stage dotted with the source;
+    // texdp3tex uses the result as the u coordinate of a 1D lookup, which a
+    // 2D texture of height 1 serves at v = 0.
+    case OpTexDp3: case OpTexDp3Tex: {
+        if (!need(2)) return false;
+        const std::string dp = "nativra_dp" + id;
+        Line("float " + dp + " = dot((" + RegName(P[0]) + ").xyz, (" + Source(P[1]) + ").xyz);");
+        if (ins.op == OpTexDp3) Assign(ins, "float4(" + dp + ", " + dp + ", " + dp + ", " + dp + ")");
+        else Assign(ins, SampleExpr(P[0].num, "float4(" + dp + ", 0.0, 0.0, 0.0)", 0));
+        return true;
+    }
+
+    // texdepth (ps_1_4): depth is r5.r over r5.g, 1 when that is 0.
+    case OpTexDepth: {
+        if (!need(1)) return false;
+        const std::string r = RegName(P[0]);
+        Line("oDepth = (" + r + ").y == 0.0 ? 1.0 : (" + r + ").x / (" + r + ").y;");
+        res.writesDepth = true;
+        return true;
+    }
+
+    default:
+        return Fail(name + " is not supported");
+    }
+}
+
 bool Translator::EmitFunction(size_t begin, size_t end, std::ostringstream& body)
 {
     out = &body;
@@ -767,7 +1163,8 @@ std::string Translator::Assemble(const std::map<uint32_t, std::string>& labelBod
     s << "cbuffer NativraFloat : register(b0) { float4 c[256]; };\n";
     s << "cbuffer NativraInt : register(b1) { int4 ci[16]; };\n";
     s << "cbuffer NativraBool : register(b2) { int4 cb[16]; };\n";
-    s << "cbuffer NativraFixup : register(b3) { float4 nativra_fix[4]; };\n\n";
+    s << "cbuffer NativraFixup : register(b3) { float4 nativra_fix[" << (res.usesBumpEnv ? static_cast<int>(FixupSlots) : 4)
+      << "]; };\n\n";
 
     for (int k = 0; k < 16; k++) {
         const SamplerType type = res.samplers[k];
@@ -799,6 +1196,8 @@ std::string Translator::Assemble(const std::map<uint32_t, std::string>& labelBod
         s << "    return c[i];\n}\n\n";
     }
     s << kLit;
+    if (usesDz) s << "float4 nativra_dz(float4 v)\n{\n    return float4(v.xy / v.z, v.zw);\n}\n\n";
+    if (usesDw) s << "float4 nativra_dw(float4 v)\n{\n    return float4(v.xy / v.w, v.zw);\n}\n\n";
 
     for (const auto& l : labelBodies) s << "void nativra_label" << l.first << "();\n";
     if (!labelBodies.empty()) s << "\n";
@@ -918,6 +1317,11 @@ Result Translator::Run(const uint32_t* tokens, size_t count)
 
     std::ostringstream mainBody;
     if (!EmitFunction(0, firstLabel, mainBody)) return res;
+    if (ps1) {
+        // A ps_1_x shader has no output register: its colour is r0 when it ends.
+        if (maxTemp < 1) maxTemp = 1;
+        mainBody << "    oC[0] = r0;\n";
+    }
 
     std::map<uint32_t, std::string> labelBodies;
     for (size_t k = firstLabel; k < program.size();) {

@@ -10,6 +10,11 @@
 // texture. With --render the two pipelines draw a full-screen quad under WARP
 // into float render targets, and every pixel is compared. Without it (a host
 // without WARP) only the translation and the SM5 compile are checked.
+//
+// Pixel shaders 1.x cannot be compiled by d3dcompiler_47, so those cases carry
+// the shader as hand-written assembly instead (assembled by ps1_asm.h into the
+// token stream a game would pass to CreatePixelShader). The source then holds
+// only the equivalent HLSL, which is compiled straight to SM5 as the reference.
 
 #include <windows.h>
 #include <d3d11.h>
@@ -22,6 +27,7 @@
 #include <vector>
 
 #include "../d3d9/dxso.h"
+#include "ps1_asm.h"
 
 namespace {
 
@@ -49,6 +55,15 @@ SamplerState smp0 : register(s0);
 #define TEX2DPROJ(uv4) tex0.Sample(smp0, (uv4).xy / (uv4).w)
 #define TEX2DBIAS(uv4) tex0.SampleBias(smp0, (uv4).xy, (uv4).w)
 #define TEX2DLOD(uv4) tex0.SampleLevel(smp0, (uv4).xy, (uv4).w)
+Texture2D tex1 : register(t1);
+Texture2D tex2 : register(t2);
+Texture2D tex3 : register(t3);
+SamplerState smp1 : register(s1);
+SamplerState smp2 : register(s2);
+SamplerState smp3 : register(s3);
+#define TEX2D1(uv) tex1.Sample(smp1, (uv))
+#define TEX2D2(uv) tex2.Sample(smp2, (uv))
+#define TEX2D3(uv) tex3.Sample(smp3, (uv))
 #else
 #define PSIN_POS
 #define PSIN_VPOS float2 vpos : VPOS;
@@ -68,9 +83,29 @@ sampler2D smp0 : register(s0);
 #define TEX2DPROJ(uv4) tex2Dproj(smp0, (uv4))
 #define TEX2DBIAS(uv4) tex2Dbias(smp0, (uv4))
 #define TEX2DLOD(uv4) tex2Dlod(smp0, (uv4))
+sampler2D smp1 : register(s1);
+sampler2D smp2 : register(s2);
+sampler2D smp3 : register(s3);
+#define TEX2D1(uv) tex2D(smp1, (uv))
+#define TEX2D2(uv) tex2D(smp2, (uv))
+#define TEX2D3(uv) tex2D(smp3, (uv))
 #endif
 struct VS_IN { float4 pos : POSITION; float4 uv : TEXCOORD0; };
 struct VS_OUT { float4 pos : POSOUT; float4 uv : TEXCOORD0; float4 col : COLOR0; };
+
+// For the ps_1_x cases: the bump-environment state of stage 1 as the renderer
+// puts it in the pixel fixup buffer (D3DTSS_BUMPENVMAT00/01/10/11 and
+// BUMPENVLSCALE/LOFFSET), and the component-wise selects of cnd and cmp.
+static const float4 kBump1 = float4(0.12, 0.05, -0.08, 0.15);
+static const float2 kLum1 = float2(0.6, 0.2);
+float4 CMP4(float4 c, float4 a, float4 b)
+{
+    return float4(c.x >= 0.0 ? a.x : b.x, c.y >= 0.0 ? a.y : b.y, c.z >= 0.0 ? a.z : b.z, c.w >= 0.0 ? a.w : b.w);
+}
+float4 CND4(float4 c, float4 a, float4 b)
+{
+    return float4(c.x > 0.5 ? a.x : b.x, c.y > 0.5 ? a.y : b.y, c.z > 0.5 ? a.z : b.z, c.w > 0.5 ? a.w : b.w);
+}
 )";
 
 // The pass-through vertex shader most pixel cases share.
@@ -85,12 +120,42 @@ VS_OUT VSMain(VS_IN i)
 }
 )";
 
+// The vertex shader of the ps_1_x cases: four texture coordinate sets (each with
+// a region where some component is negative or q is not 1, so texcoord, texkill
+// and projection have something to do) and both colours. PS1_IN is what the
+// reference pixel shaders read.
+const char* const kPs1Vs = R"(
+struct VS1_OUT {
+    float4 pos : POSOUT;
+    float4 uv0 : TEXCOORD0; float4 uv1 : TEXCOORD1; float4 uv2 : TEXCOORD2; float4 uv3 : TEXCOORD3;
+    float4 col : COLOR0; float4 spec : COLOR1;
+};
+struct PS1_IN {
+    PSIN_POS
+    float4 uv0 : TEXCOORD0; float4 uv1 : TEXCOORD1; float4 uv2 : TEXCOORD2; float4 uv3 : TEXCOORD3;
+    float4 col : COLOR0; float4 spec : COLOR1;
+};
+VS1_OUT VSMain(VS_IN i)
+{
+    VS1_OUT o;
+    o.pos = i.pos;
+    o.uv0 = float4(i.uv.xy, 0.0, 1.0);
+    o.uv1 = float4(i.uv.x * 0.8 + 0.1, i.uv.y * 0.9 + 0.05, i.uv.x - i.uv.y, 1.5 - i.uv.x);
+    o.uv2 = float4(i.uv.y * 0.9 - 0.2, i.uv.x - 0.1, 0.4, 1.0 + i.uv.y);
+    o.uv3 = float4(i.uv.y * 0.7 + 0.2, i.uv.x * 0.7 + 0.2, 0.3 + i.uv.x * 0.2, 0.9);
+    o.col = float4(i.uv.xy, 1.0 - i.uv.x, 0.75 - i.uv.y * 0.5);
+    o.spec = float4(0.2, i.uv.y, i.uv.x * 0.5, 0.3);
+    return o;
+}
+)";
+
 struct Case {
     const char* name;
     const char* vsProfile;
-    const char* psProfile;
-    const char* source;     // defines PS_IN and PSMain (and VSMain unless plainVs)
+    const char* psProfile;  // null for a ps_1_x case, whose shader is psAsm
+    const char* source;     // defines PS_IN and PSMain (and VSMain unless plainVs); for ps_1_x PSMain only
     bool plainVs;
+    const char* psAsm = nullptr;   // ps_1_x assembly (kPs1Vs is the vertex shader then)
 };
 
 const Case kCases[] = {
@@ -208,6 +273,247 @@ float4 PSMain(PS_IN i) : COLOROUT
     return i.col;
 }
 )", false },
+
+    // --- pixel shaders 1.1 .. 1.4 ---------------------------------------------------
+    // Each is hand-written assembly with the HLSL that computes the same thing (the
+    // instruction descriptions of the ps_1_x reference, written out). Stages 0 and 2
+    // sample the pattern texture, stages 1 and 3 a second one; c0..c3 are k0..k3 and
+    // the bump state of stage 1 is kBump1/kLum1 (see kPrelude).
+    { "ps11_modulate", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    return TEX2D(i.uv0.xy) * i.col;
+}
+)", false, R"asm(
+ps_1_1
+tex t0
+mul r0, t0, v0
+)asm" },
+
+    { "ps11_two_stage_arith", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 t0 = TEX2D(i.uv0.xy);
+    float4 t1 = TEX2D1(i.uv1.xy);
+    float4 r0 = float4(0.0, 0.0, 0.0, 0.0);
+    r0.rgb = (((2.0 * t0 - 1.0) * t1 + (i.col - 0.5)) * 2.0).rgb;                 // mad_x2 r0.rgb, t0_bx2, t1, v0_bias
+    r0.a = i.spec.a;                                                              // + mov r0.a, v1.a
+    float4 r1 = float4(0.0, 0.0, 0.0, 0.0);
+    r1.rgb = saturate(i.col.aaaa * t0 + (1.0 - i.col.aaaa) * (1.0 - t1)).rgb;     // lrp_sat r1.rgb, v0.a, t0, 1-t1
+    r0.rgb = (r0 * r1).rgb * 0.5;                                                 // mul_d2 r0.rgb, r0, r1
+    return r0;
+}
+)", false, R"asm(
+ps_1_1
+tex t0
+tex t1
+mad_x2 r0.rgb, t0_bx2, t1, v0_bias
++ mov r0.a, v1.a
+lrp_sat r1.rgb, v0.a, t0, 1-t1
+mul_d2 r0.rgb, r0, r1
+)asm" },
+
+    // def constants are clamped to [-1,1]; the result is not clamped (the target is float).
+    { "ps11_def_clamp", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 c5 = float4(1.0, -1.0, 0.25, 0.75);
+    float4 r0 = TEX2D(i.uv0.xy) * c5;
+    r0.rgb = (r0 + (k0 - 0.5)).rgb;
+    r0.a = r0.a * k2.a;
+    return r0;
+}
+)", false, R"asm(
+ps_1_1
+def c5, 2.0, -3.0, 0.25, 0.75
+tex t0
+mul r0, t0, c5
+add r0.rgb, r0, c0_bias
++ mul r0.a, r0.a, c2.a
+)asm" },
+
+    { "ps11_cnd", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 t0 = TEX2D(i.uv0.xy);
+    float4 t1 = TEX2D1(i.uv1.xy);
+    float4 r0 = float4(0.0, 0.0, 0.0, 0.0);
+    r0.a = t0.a - i.col.a;
+    r0.rgb = (r0.a > 0.5 ? t0 : t1).rgb;
+    return r0;
+}
+)", false, R"asm(
+ps_1_1
+tex t0
+tex t1
+sub r0.a, t0.a, v0.a
+cnd r0.rgb, r0.a, t0, t1
+)asm" },
+
+    { "ps12_cmp_dp4", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 t0 = TEX2D(i.uv0.xy);
+    float4 t1 = TEX2D1(i.uv1.xy);
+    float4 r1 = t0 - k0;
+    float4 r0 = CMP4(r1, t0, t1);
+    r1 = saturate(dot(r0, k1).xxxx);
+    r0.rgb = (r0 * r1).rgb;
+    return r0;
+}
+)", false, R"asm(
+ps_1_2
+tex t0
+tex t1
+sub r1, t0, c0
+cmp r0, r1, t0, t1
+dp4_sat r1, r0, c1
+mul r0.rgb, r0, r1
+)asm" },
+
+    // texcoord copies the coordinates clamped to [0,1] with alpha 1; texkill kills where
+    // any of u, v, w is negative (uv2 is, for part of the quad).
+    { "ps11_texcoord_texkill", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 t0 = TEX2D(i.uv0.xy);
+    float4 t1 = float4(saturate(i.uv1.xyz), 1.0);
+    clip(min(min(i.uv2.x, i.uv2.y), i.uv2.z));
+    return t0 * t1;
+}
+)", false, R"asm(
+ps_1_1
+tex t0
+texcoord t1
+texkill t2
+mul r0, t0, t1
+)asm" },
+
+    // Bump-environment mapping: stage 1's matrix offsets its coordinates by the bump map.
+    { "ps11_texbem", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 t0 = TEX2D(i.uv0.xy);
+    float2 uv = i.uv1.xy + t0.x * kBump1.xy + t0.y * kBump1.zw;
+    return TEX2D1(uv) * i.col;
+}
+)", false, R"asm(
+ps_1_1
+tex t0
+texbem t1, t0
+mul r0, t1, v0
+)asm" },
+
+    { "ps11_texbeml", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 t0 = TEX2D(i.uv0.xy);
+    float2 uv = i.uv1.xy + t0.x * kBump1.xy + t0.y * kBump1.zw;
+    float4 t1 = TEX2D1(uv);
+    t1.rgb *= saturate(t0.b * kLum1.x + kLum1.y);
+    return t1 * i.col;
+}
+)", false, R"asm(
+ps_1_1
+tex t0
+texbeml t1, t0
+mul r0, t1, v0
+)asm" },
+
+    // Dependent reads: the colours of t0 are the coordinates of the next lookups.
+    { "ps11_texreg2ar_gb", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 t0 = TEX2D(i.uv0.xy);
+    float4 t1 = TEX2D1(t0.ar);
+    float4 t2 = TEX2D2(t0.gb);
+    float4 r0 = t1 + t2;
+    r0.rgb = (r0 * i.col).rgb;
+    return r0;
+}
+)", false, R"asm(
+ps_1_1
+tex t0
+texreg2ar t1, t0
+texreg2gb t2, t0
+add r0, t1, t2
+mul r0.rgb, r0, v0
+)asm" },
+
+    { "ps11_texm3x2", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 t0 = TEX2D(i.uv0.xy);
+    float3 n = 2.0 * t0.xyz - 1.0;
+    float2 uv = float2(dot(i.uv1.xyz, n), dot(i.uv2.xyz, n));
+    return TEX2D2(uv) * i.col;
+}
+)", false, R"asm(
+ps_1_1
+tex t0
+texm3x2pad t1, t0_bx2
+texm3x2tex t2, t0_bx2
+mul r0, t2, v0
+)asm" },
+
+    // ps_1_4: texld takes its stage from the destination register, phase 2 reads what
+    // phase 1 computed, and registers keep their values across the phase marker.
+    { "ps14_phase_dependent_read", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 r0 = TEX2D(i.uv0.xy);
+    float4 r1 = float4(i.uv1.xyz, 0.0);
+    r1.rgb = ((2.0 * r0 - 1.0) * k0 + r1).rgb;
+    r1 = TEX2D1(r1.xy);
+    return r1 * i.col;
+}
+)", false, R"asm(
+ps_1_4
+texld r0, t0
+texcrd r1.rgb, t1
+mad r1.rgb, r0_bx2, c0, r1
+phase
+texld r1, r1
+mul r0, r1, v0
+)asm" },
+
+    // _dw divides x and y by the swizzled w; bem adds the matrix times the bump map.
+    { "ps14_projective_bem", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 r0 = TEX2D(i.uv0.xy);
+    float2 r1 = i.uv1.xy / i.uv1.w;
+    r1 = r1 + r0.x * kBump1.xy + r0.y * kBump1.zw;
+    return TEX2D1(r1) * i.col * 2.0;
+}
+)", false, R"asm(
+ps_1_4
+texld r0, t0
+texcrd r1.rg, t1_dw.rga
+bem r1.rg, r1, r0
+phase
+texld r1, r1
+mul_x2 r0, r1, v0
+)asm" },
+
+    // ps_1_4 constants are clamped to [-8,8]; cnd selects per component.
+    { "ps14_cnd_def", "vs_3_0", nullptr, R"(
+float4 PSMain(PS1_IN i) : COLOROUT
+{
+    float4 c7 = float4(4.0, -8.0, 0.5, 0.25);
+    float4 r0 = TEX2D(i.uv0.xy);
+    float4 r1 = TEX2D1(i.uv1.xy);
+    float4 r2 = CND4(r0, r1, c7);
+    return r2 + r0;
+}
+)", false, R"asm(
+ps_1_4
+def c7, 4.0, -9.0, 0.5, 0.25
+texld r0, t0
+texld r1, t1
+cnd r2, r0, r1, c7
+add r0, r2, r0
+)asm" },
 };
 
 int failures = 0;
@@ -236,11 +542,10 @@ ID3DBlob* Compile(const std::string& source, const char* entry, const char* prof
     return code;
 }
 
-// Translates D3D9 bytecode and compiles the result; fills `hlsl` either way.
-ID3DBlob* Translate(ID3DBlob* sm3, std::string& hlsl, std::string& error)
+// Translates a D3D9 token stream and compiles the result; fills `hlsl` either way.
+ID3DBlob* TranslateTokens(const uint32_t* tokens, size_t count, std::string& hlsl, std::string& error)
 {
-    const auto* tokens = static_cast<const uint32_t*>(sm3->GetBufferPointer());
-    const dxso::Result r = dxso::Translate(tokens, sm3->GetBufferSize() / 4);
+    const dxso::Result r = dxso::Translate(tokens, count);
     hlsl = r.hlsl;
     if (!r.ok) {
         error = "dxso: " + r.error;
@@ -260,6 +565,12 @@ ID3DBlob* Translate(ID3DBlob* sm3, std::string& hlsl, std::string& error)
     return code;
 }
 
+// The same for the bytecode of a D3DCompile blob.
+ID3DBlob* Translate(ID3DBlob* sm3, std::string& hlsl, std::string& error)
+{
+    return TranslateTokens(static_cast<const uint32_t*>(sm3->GetBufferPointer()), sm3->GetBufferSize() / 4, hlsl, error);
+}
+
 // --- rendering ---------------------------------------------------------------
 
 constexpr int kSize = 64;
@@ -273,6 +584,7 @@ struct Renderer {
     ID3D11Buffer* vertices = nullptr;
     ID3D11Buffer* cbuffers[4] = {};
     ID3D11ShaderResourceView* texture = nullptr;
+    ID3D11ShaderResourceView* texture2 = nullptr;    // stages 1 and 3 of the ps_1_x cases
     ID3D11SamplerState* sampler = nullptr;
     ID3D11RasterizerState* raster = nullptr;
 
@@ -326,18 +638,30 @@ struct Renderer {
         };
         std::memcpy(consts, k, sizeof k);
         static float zeros[256 * 4] = {};
+
+        // b3: the fixup buffer. Slot 0 stays zero (no half-pixel shift, no alpha test); the
+        // ps_1_x bump-environment state of stage 1 is kBump1 and kLum1 of the prelude.
+        static float fixup[256 * 4] = {};
+        const float bumpMatrix[4] = { 0.12f, 0.05f, -0.08f, 0.15f };     // D3DTSS_BUMPENVMAT00, 01, 10, 11
+        std::memcpy(&fixup[(dxso::FixupBumpMatrix + 1) * 4], bumpMatrix, sizeof bumpMatrix);
+        fixup[(dxso::FixupBumpLuminance + 1) * 4 + 0] = 0.6f;            // D3DTSS_BUMPENVLSCALE
+        fixup[(dxso::FixupBumpLuminance + 1) * 4 + 1] = 0.2f;            // D3DTSS_BUMPENVLOFFSET
+
         bd.ByteWidth = sizeof consts;
         bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         for (int b = 0; b < 4; b++) {
-            D3D11_SUBRESOURCE_DATA data = { b == 0 ? consts : zeros, 0, 0 };
+            D3D11_SUBRESOURCE_DATA data = { b == 0 ? consts : b == 3 ? fixup : zeros, 0, 0 };
             if (FAILED(device->CreateBuffer(&bd, &data, &cbuffers[b]))) return false;
         }
 
-        // A 16x16 texture with a distinct pattern.
-        uint32_t texels[16 * 16];
-        for (int y = 0; y < 16; y++)
-            for (int x = 0; x < 16; x++)
+        // Two 16x16 textures with distinct patterns.
+        uint32_t texels[16 * 16], texels2[16 * 16];
+        for (int y = 0; y < 16; y++) {
+            for (int x = 0; x < 16; x++) {
                 texels[y * 16 + x] = 0xFF000000u | ((x * 16) << 16) | ((y * 16) << 8) | (((x ^ y) & 1) * 0xFF);
+                texels2[y * 16 + x] = ((0x80u + ((x ^ y) & 7) * 16) << 24) | ((y * 16) << 16) | ((((x + y) & 15) * 16) << 8) | ((15 - x) * 16);
+            }
+        }
         D3D11_TEXTURE2D_DESC tex = {};
         tex.Width = tex.Height = 16;
         tex.MipLevels = tex.ArraySize = 1;
@@ -345,12 +669,16 @@ struct Renderer {
         tex.SampleDesc.Count = 1;
         tex.Usage = D3D11_USAGE_DEFAULT;
         tex.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-        D3D11_SUBRESOURCE_DATA texData = { texels, 16 * 4, 0 };
-        ID3D11Texture2D* t = nullptr;
-        if (FAILED(device->CreateTexture2D(&tex, &texData, &t))) return false;
-        const HRESULT hr = device->CreateShaderResourceView(t, nullptr, &texture);
-        t->Release();
-        if (FAILED(hr)) return false;
+        const uint32_t* const patterns[2] = { texels, texels2 };
+        ID3D11ShaderResourceView** const views[2] = { &texture, &texture2 };
+        for (int p = 0; p < 2; p++) {
+            D3D11_SUBRESOURCE_DATA texData = { patterns[p], 16 * 4, 0 };
+            ID3D11Texture2D* t = nullptr;
+            if (FAILED(device->CreateTexture2D(&tex, &texData, &t))) return false;
+            const HRESULT hr = device->CreateShaderResourceView(t, nullptr, views[p]);
+            t->Release();
+            if (FAILED(hr)) return false;
+        }
 
         D3D11_SAMPLER_DESC sd = {};
         sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -401,8 +729,11 @@ struct Renderer {
             context->PSSetShader(ps, nullptr, 0);
             context->VSSetConstantBuffers(0, 4, cbuffers);
             context->PSSetConstantBuffers(0, 4, cbuffers);
-            context->PSSetShaderResources(0, 1, &texture);
-            context->PSSetSamplers(0, 1, &sampler);
+            // Stages 0 and 2 read the first texture and 1 and 3 the second (ps_1_x cases use all four).
+            ID3D11ShaderResourceView* const views[4] = { texture, texture2, texture, texture2 };
+            ID3D11SamplerState* const samplers[4] = { sampler, sampler, sampler, sampler };
+            context->PSSetShaderResources(0, 4, views);
+            context->PSSetSamplers(0, 4, samplers);
             context->VSSetShaderResources(0, 1, &texture);
             context->VSSetSamplers(0, 1, &sampler);
             context->Draw(4, 0);
@@ -439,15 +770,28 @@ int main(int argc, char** argv)
     }
 
     for (const Case& c : kCases) {
-        const std::string source = std::string(kPrelude) + (c.plainVs ? kPlainVs : "") + c.source;
+        const bool ps1 = c.psAsm != nullptr;
+        const std::string source = std::string(kPrelude) + (ps1 ? kPs1Vs : c.plainVs ? kPlainVs : "") + c.source;
         std::string error, vsHlsl, psHlsl;
 
         ID3DBlob* vs3 = Compile(source, "VSMain", c.vsProfile, false, error);
-        ID3DBlob* ps3 = vs3 ? Compile(source, "PSMain", c.psProfile, false, error) : nullptr;
-        if (!vs3 || !ps3) { Report(c.name, false, "D3D9 compile failed: " + error); continue; }
+        // d3dcompiler_47 has no ps_1_x target, so a ps_1_x shader is assembled, not compiled.
+        ps1asm::Assembled assembled;
+        ID3DBlob* ps3 = nullptr;
+        if (ps1) {
+            assembled = ps1asm::Assemble(c.psAsm);
+            if (!assembled.error.empty()) { Report(c.name, false, "assembly: " + assembled.error); continue; }
+        } else if (vs3) {
+            ps3 = Compile(source, "PSMain", c.psProfile, false, error);
+        }
+        if (!vs3 || (!ps1 && !ps3)) { Report(c.name, false, "D3D9 compile failed: " + error); continue; }
 
         ID3DBlob* vsT = Translate(vs3, vsHlsl, error);
-        ID3DBlob* psT = vsT ? Translate(ps3, psHlsl, error) : nullptr;
+        ID3DBlob* psT = nullptr;
+        if (vsT) {
+            psT = ps1 ? TranslateTokens(assembled.tokens.data(), assembled.tokens.size(), psHlsl, error)
+                      : Translate(ps3, psHlsl, error);
+        }
         if (!vsT || !psT) {
             Report(c.name, false, error);
             std::printf("----- vertex translation -----\n%s\n----- pixel translation -----\n%s\n",

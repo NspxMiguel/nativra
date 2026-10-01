@@ -1145,13 +1145,18 @@ ShaderBase::~ShaderBase()
 ShaderVariant* ShaderBase::Variant(const dxso::Options& options)
 {
     if (!base.ok) return nullptr;
-    const std::string key(reinterpret_cast<const char*>(options.inputTypes), sizeof(options.inputTypes));
+    // Every Options field is part of the translation, so every one is part of the key.
+    std::string key(reinterpret_cast<const char*>(options.inputTypes), sizeof(options.inputTypes));
+    key.append(reinterpret_cast<const char*>(options.samplerTypes), sizeof(options.samplerTypes));
+    key.append(reinterpret_cast<const char*>(options.projectDivisor), sizeof(options.projectDivisor));
     auto it = variants.find(key);
     if (it != variants.end()) return it->second.shader ? &it->second : nullptr;
 
     ShaderVariant& v = variants[key];
     bool defaultOptions = true;
     for (auto t : options.inputTypes) if (t != dxso::InputType::Float) defaultOptions = false;
+    for (auto t : options.samplerTypes) if (t != dxso::SamplerType::None) defaultOptions = false;
+    for (auto d : options.projectDivisor) if (d != 0) defaultOptions = false;
     const dxso::Result translated = defaultOptions ? base : dxso::Translate(tokens.data(), tokens.size(), options);
     if (!translated.ok) return nullptr;
     v.bytecode = device->CompileHlsl(translated.hlsl, translated.profile);

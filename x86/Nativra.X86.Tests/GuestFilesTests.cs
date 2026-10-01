@@ -59,6 +59,49 @@ namespace Nativra.X86.Tests
         private const uint OpenExisting = 3, CreateAlways = 2;
 
         [Fact]
+        public void LoadLibraryWithAFolderLoadsThatFileAndAnUnknownDllIsNotFound()
+        {
+            Directory.CreateDirectory(Path.Combine(root, "mod", "bin"));
+            File.WriteAllBytes(Path.Combine(root, "mod", "bin", "server.dll"), TestPe32.Minimal(dll: true, dllMain: true));
+            p.LoadExecutable("game.exe", TestPe32.Minimal());
+
+            var module = K("LoadLibraryA", A("mod\\bin\\server.dll"));   // relative to the program's folder
+            Assert.NotEqual(0u, module);
+            Assert.Equal(p.FindModule("server.dll").BaseAddress, module);
+
+            // Nowhere at all, and no system DLL the host serves: NULL, as on Windows.
+            Assert.Equal(0u, K("LoadLibraryA", A("nosuchplugin.dll")));
+            Assert.Equal(126u, K("GetLastError"));   // ERROR_MOD_NOT_FOUND
+        }
+
+        [Fact]
+        public void CompletionPortQueuesPostedPacketsAndOverlappedReads()
+        {
+            var port = K("CreateIoCompletionPort", 0xFFFFFFFF, 0, 0, 1);
+            Assert.NotEqual(0u, port);
+            var file = K("CreateFileA", A("C:\\game\\data\\level1.pak"), GenericRead, 1, 0, OpenExisting, 0x40000000, 0);
+            Assert.Equal(port, K("CreateIoCompletionPort", file, port, 0x77, 0));
+
+            var overlapped = k.Heap.Alloc(20, zero: true);
+            var buffer = k.Heap.Alloc(8);
+            Assert.Equal(1u, K("ReadFile", file, buffer, 4, 0, overlapped));
+            Assert.Equal(1u, K("PostQueuedCompletionStatus", port, 9, 0x55, 0));
+
+            uint bytes = k.Heap.Alloc(4), key = k.Heap.Alloc(4), ov = k.Heap.Alloc(4);
+            Assert.Equal(1u, K("GetQueuedCompletionStatus", port, bytes, key, ov, 0));
+            Assert.Equal(4u, p.Memory.Read32(bytes));
+            Assert.Equal(0x77u, p.Memory.Read32(key));
+            Assert.Equal(overlapped, p.Memory.Read32(ov));
+            Assert.Equal(1u, K("GetQueuedCompletionStatus", port, bytes, key, ov, 0));
+            Assert.Equal(0x55u, p.Memory.Read32(key));
+            Assert.Equal(0u, p.Memory.Read32(ov));
+
+            // Empty, with no time to wait: WAIT_TIMEOUT.
+            Assert.Equal(0u, K("GetQueuedCompletionStatus", port, bytes, key, ov, 0));
+            Assert.Equal(258u, K("GetLastError"));
+        }
+
+        [Fact]
         public void OverlappedReadUsesItsOffsetAndReportsThroughGetOverlappedResult()
         {
             var file = K("CreateFileA", A("C:\\game\\data\\level1.pak"), GenericRead, 1, 0, OpenExisting, 0x40000000 /* FILE_FLAG_OVERLAPPED */, 0);

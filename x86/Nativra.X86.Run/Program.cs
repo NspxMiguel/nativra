@@ -26,7 +26,7 @@ namespace Nativra.X86.Run
         {
             string dlls = null, importsFile = null, traceFile = null;
             var interp = false;
-            long budget = 400_000_000;
+            long budget = 400_000_000, dllBudget = 0;
             var logLines = 200;
             var rest = new List<string>();
             for (var i = 0; i < args.Length; i++)
@@ -39,6 +39,7 @@ namespace Nativra.X86.Run
                     case "--imports": importsFile = args[++i]; break;
                     case "--log": logLines = int.Parse(args[++i]); break;
                     case "--trace": traceFile = args[++i]; break;
+                    case "--dll-budget": dllBudget = long.Parse(args[++i]); break;
                     default: rest.Add(args[i]); break;
                 }
             }
@@ -64,6 +65,7 @@ namespace Nativra.X86.Run
                     process.CallTrace = trace.WriteLine;
                 }
                 var kernel = new GuestKernel(process);
+                if (dllBudget > 0) kernel.LoadLibraryBudget = dllBudget;
                 kernel.ExePath = "C:\\game\\" + exe;
                 kernel.SetCommandLine(commandLine);
                 var guestLog = new List<string>();

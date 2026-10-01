@@ -233,6 +233,7 @@ namespace Nativra.X86.Loader
                 return 0;
             }
             CurrentDirectory = full;
+            SearchChanged();
             return 1;
         }
 
@@ -314,10 +315,11 @@ namespace Nativra.X86.Loader
         private long OverlappedOffset(uint overlapped) =>
             ((long)memory.Read32(overlapped + 0xC) << 32) | memory.Read32(overlapped + 8);
 
-        private void CompleteOverlapped(uint overlapped, uint bytes, uint status)
+        private void CompleteOverlapped(uint handle, uint overlapped, uint bytes, uint status)
         {
             memory.Write32(overlapped + 0, status);
             memory.Write32(overlapped + 4, bytes);
+            if (!QueueCompletion(handle, overlapped, bytes, status)) return;
             var signal = memory.Read32(overlapped + 0x10) & ~1u;   // the low bit only asks not to queue a completion
             if (signal != 0) SignalEvent(signal, true);
         }
@@ -356,11 +358,11 @@ namespace Nativra.X86.Loader
                 // ERROR_HANDLE_EOF instead of returning nothing.
                 if (total == 0 && count > 0)
                 {
-                    CompleteOverlapped(overlapped, 0, StatusEndOfFile);
+                    CompleteOverlapped(handle, overlapped, 0, StatusEndOfFile);
                     process.LastError = ErrorHandleEof;
                     return 0;
                 }
-                CompleteOverlapped(overlapped, total, 0);
+                CompleteOverlapped(handle, overlapped, total, 0);
             }
             return 1;
         }
@@ -390,7 +392,7 @@ namespace Nativra.X86.Loader
                 total += (uint)n;
             }
             if (writtenOut != 0) memory.Write32(writtenOut, total);
-            if (overlapped != 0) CompleteOverlapped(overlapped, total, 0);
+            if (overlapped != 0) CompleteOverlapped(handle, overlapped, total, 0);
             return 1;
         }
 
@@ -443,6 +445,7 @@ namespace Nativra.X86.Loader
 
         private uint CloseHandle(uint handle)
         {
+            portBindings.Remove(handle);
             if (files.TryGetValue(handle, out var f))
             {
                 f.Stream?.Dispose();

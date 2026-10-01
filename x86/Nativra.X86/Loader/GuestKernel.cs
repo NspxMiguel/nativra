@@ -62,6 +62,13 @@ namespace Nativra.X86.Loader
         /// </summary>
         public bool DeterministicTime { get; set; }
 
+        /// <summary>
+        /// Blocks a DllMain run by LoadLibrary may take. Windows has no such limit;
+        /// this one only stops a runaway, so it is generous: a large DLL's static
+        /// initialisers (Steam's steamclient.dll builds math tables) run long.
+        /// </summary>
+        public long LoadLibraryBudget { get; set; } = 1_000_000_000;
+
         public GuestHeap Heap => heap;
 
         /// <summary>The program's full path, as GetModuleFileName reports it.</summary>
@@ -206,6 +213,8 @@ namespace Nativra.X86.Loader
             InstallSeh(i);
             InstallThreads(i);
             InstallSystemInfo(i);
+            InstallSearch();
+            InstallCompletion(i);
             InstallUser32(i);
             InstallKernel32(i);
             InstallMsvcrt(i);
@@ -276,11 +285,12 @@ namespace Nativra.X86.Loader
         private uint LoadLibrary(uint namePtr, bool wide)
         {
             if (namePtr == 0) { process.LastError = ErrorModNotFound; return 0; }
-            var name = Trim(wide ? memory.ReadUnicode(namePtr) : memory.ReadAnsi(namePtr));
+            var raw = wide ? memory.ReadUnicode(namePtr) : memory.ReadAnsi(namePtr);
+            var name = Trim(raw);
 
             var alreadyMapped = process.FindModule(name) != null;
             var firstNew = process.Images.Count;
-            var image = process.LoadModule(name);
+            var image = process.LoadModule(name) ?? LoadFromPath(raw, name);
             if (image != null)
             {
                 if (!alreadyMapped)
@@ -289,7 +299,7 @@ namespace Nativra.X86.Loader
                     // LoadLibrary returns only after DllMain(PROCESS_ATTACH) — for
                     // the DLL and, first, for every DLL it pulled in with it.
                     var saved = SaveRegisters();
-                    var result = process.AttachModulesFrom(firstNew);
+                    var result = process.AttachModulesFrom(firstNew, LoadLibraryBudget);
                     RestoreRegisters(saved);
                     if (!result.Ok)
                     {
@@ -300,6 +310,13 @@ namespace Nativra.X86.Loader
                 return image.BaseAddress;
             }
             if (modules.TryGetValue(name, out var registered)) return registered;
+            // A system DLL the host serves calls for gets a handle GetProcAddress
+            // understands; a DLL that is nowhere is not there, as on Windows.
+            if (!IsAlwaysLoaded(name) && !process.Imports.KnowsModule(name))
+            {
+                process.LastError = ErrorModNotFound;
+                return 0;
+            }
             return FakeHandle(name);
         }
 

@@ -15,7 +15,7 @@ namespace Nativra.X86.Loader
         public string Function { get; }   // null when imported by ordinal
         public int Ordinal { get; }       // -1 when imported by name
         public uint SlotAddress { get; }  // guest VA of the IAT entry
-        public uint Bound { get; }        // what the binder returned (a sentinel, or 0 = unresolved)
+        public uint Bound { get; internal set; }   // what the binder returned (a sentinel, or 0 = unresolved)
 
         public Pe32Import(string module, string function, int ordinal, uint slot, uint bound)
         {

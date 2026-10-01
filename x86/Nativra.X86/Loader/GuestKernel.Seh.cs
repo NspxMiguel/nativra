@@ -47,6 +47,12 @@ namespace Nativra.X86.Loader
         // built for, so this is tracked directly instead of guessed at.
         private SehDispatch pendingFilter;
 
+        // Vectored handlers (AddVectoredExceptionHandler) run before the frame
+        // chain, in list order; each registration's cookie is what Remove takes.
+        private uint vectoredReturn;
+        private readonly List<KeyValuePair<uint, uint>> vectored = new List<KeyValuePair<uint, uint>>();   // cookie, handler
+        private readonly Stack<SehDispatch> pendingVectored = new Stack<SehDispatch>();
+
         private sealed class SehDispatch
         {
             public uint Id;
@@ -58,6 +64,8 @@ namespace Nativra.X86.Loader
             public uint TargetFrame;
             public uint ResumeEip, ResumeEsp, ReturnValue;
             public uint Ebx, Esi, Edi, Ebp;
+            public uint[] Vectored;   // the handlers this dispatch still has to offer it to
+            public int NextVectored;
         }
 
         /// <summary>Exceptions raised in the guest, by code, in order (the probe reports them).</summary>
@@ -69,6 +77,15 @@ namespace Nativra.X86.Loader
             sehReturn = i.Bind("nativra.dll", "SehReturn", -1);
             i.Register("nativra.dll", "SehFilterReturn", CallConv.Cdecl, 0, c => { FilterReturned(); return 0; });
             filterReturn = i.Bind("nativra.dll", "SehFilterReturn", -1);
+            i.Register("nativra.dll", "SehVectoredReturn", CallConv.Cdecl, 0, c => { VectoredReturned(); return 0; });
+            vectoredReturn = i.Bind("nativra.dll", "SehVectoredReturn", -1);
+
+            HostCall add = c => AddVectored(c.Arg(0) != 0, c.Arg(1));
+            HostCall remove = c => RemoveVectored(c.Arg(0));
+            i.Register("kernel32.dll", "AddVectoredExceptionHandler", CallConv.Stdcall, 2, add);
+            i.Register("kernel32.dll", "RemoveVectoredExceptionHandler", CallConv.Stdcall, 1, remove);
+            i.Register("ntdll.dll", "RtlAddVectoredExceptionHandler", CallConv.Stdcall, 2, add);
+            i.Register("ntdll.dll", "RtlRemoveVectoredExceptionHandler", CallConv.Stdcall, 1, remove);
 
             i.Register("kernel32.dll", "RaiseException", CallConv.Stdcall, 4, c =>
             {
@@ -162,7 +179,7 @@ namespace Nativra.X86.Loader
 
             // Continuing resumes as if RaiseException had returned.
             WriteContext(d.Context, c.ReturnAddress, c.ArgBase + 16);
-            EnterHandler(d, ChainHead);
+            StartDispatch(d);
         }
 
         /// <summary>
@@ -174,7 +191,9 @@ namespace Nativra.X86.Loader
         private bool DispatchHardware(GuestException fault)
         {
             var cpu = process.Cpu;
-            if (IsEnd(ChainHead)) return false;
+            // With no frame, no vectored handler and no top-level filter, nothing
+            // in the guest can take it: the fault is reported as it stands.
+            if (IsEnd(ChainHead) && vectored.Count == 0 && unhandledFilter == 0) return false;
             ExceptionsRaised.Add(fault.Code);
             // The record and context go below the faulting thread's stack
             // pointer; when that is not writable (a stack overflow, a wild
@@ -194,7 +213,7 @@ namespace Nativra.X86.Loader
             WriteContext(d.Context, fault.Eip, cpu.Esp);
             try
             {
-                EnterHandler(d, ChainHead);
+                StartDispatch(d);
             }
             catch (GuestRaisedException)
             {
@@ -233,6 +252,80 @@ namespace Nativra.X86.Loader
         }
 
         private static bool IsEnd(uint frame) => frame == EndOfChain || frame == 0;
+
+        private uint AddVectored(bool first, uint handler)
+        {
+            if (handler == 0) { process.LastError = ErrorInvalidParameter; return 0; }
+            var cookie = NewHandle();
+            var entry = new KeyValuePair<uint, uint>(cookie, handler);
+            if (first) vectored.Insert(0, entry); else vectored.Add(entry);
+            return cookie;
+        }
+
+        private uint RemoveVectored(uint cookie)
+        {
+            var at = vectored.FindIndex(e => e.Key == cookie);
+            if (at < 0) return 0;
+            vectored.RemoveAt(at);
+            return 1;
+        }
+
+        /// <summary>A new exception goes to the vectored handlers first, then the frame chain.</summary>
+        private int firstChanceLogged;
+
+        private void StartDispatch(SehDispatch d)
+        {
+            // The first few, as they are raised: a handled one still says where
+            // a program went wrong before it chose to give up.
+            if (firstChanceLogged < 20 && Log != null)
+            {
+                firstChanceLogged++;
+                Log("exception " + DescribeRecord(d.Record) + DescribeContext(d.Context));
+            }
+            d.Vectored = vectored.Count == 0 ? null : vectored.ConvertAll(e => e.Value).ToArray();
+            d.NextVectored = 0;
+            if (d.Vectored != null) CallVectored(d);
+            else EnterHandler(d, ChainHead);
+        }
+
+        /// <summary>
+        /// Calls the next vectored handler, LONG CALLBACK handler(EXCEPTION_POINTERS*),
+        /// laid out like the top-level filter's call; <see cref="VectoredReturned"/>
+        /// takes the next step.
+        /// </summary>
+        private void CallVectored(SehDispatch d)
+        {
+            var handler = d.Vectored[d.NextVectored++];
+            var t = d.Top;
+            memory.Write32(t + 8, d.Record);
+            memory.Write32(t + 12, d.Context);
+            memory.Write32(t + 0, vectoredReturn);
+            memory.Write32(t + 4, t + 8);
+            pendingVectored.Push(d);
+            process.Cpu.Esp = t;
+            process.Cpu.Eip = handler;
+            process.Jumped();
+        }
+
+        /// <summary>
+        /// A vectored handler returned: -1 (EXCEPTION_CONTINUE_EXECUTION) resumes
+        /// from the context it may have changed; anything else offers the
+        /// exception to the next handler, and after the last one to the frames.
+        /// </summary>
+        private void VectoredReturned()
+        {
+            if (pendingVectored.Count == 0) throw new GuestRaisedException(StatusInvalidDisposition);
+            var d = pendingVectored.Pop();
+            if (process.Cpu.Eax == 0xFFFFFFFF)
+            {
+                dispatches.Remove(d.Id);
+                RestoreContext(d.Context);
+                process.Jumped();
+                return;
+            }
+            if (d.NextVectored < d.Vectored.Length) CallVectored(d);
+            else EnterHandler(d, ChainHead);
+        }
 
         /// <summary>Calls the handler of <paramref name="frame"/>, or ends the dispatch at the chain's end.</summary>
         private void EnterHandler(SehDispatch d, uint frame)

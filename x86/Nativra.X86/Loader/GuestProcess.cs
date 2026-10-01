@@ -322,6 +322,7 @@ namespace Nativra.X86.Loader
                 SetUpStaticTls(image);
                 images.Add(image);
                 modulesByName[key] = image;
+                if (cyclic.Remove(key)) BindCycle(key, image);
                 return image;
             }
             finally
@@ -346,11 +347,24 @@ namespace Nativra.X86.Loader
             var existing = FindModule(name);
             if (existing != null) return existing;
             var key = ModuleKey(name);
-            if (ModuleSource == null || loading.Contains(key) || notCarried.Contains(key)) return null;
-            var bytes = ModuleSource(key);
-            if (bytes == null) { notCarried.Add(key); return null; }
+            if (loading.Contains(key)) return null;
+            // The program's own folders first (the guest kernel's search), then
+            // what the host carries (redistributables, shims).
+            var bytes = ModuleSearch?.Invoke(key);
+            if (bytes == null)
+            {
+                if (ModuleSource == null || notCarried.Contains(key)) return null;
+                bytes = ModuleSource(key);
+                if (bytes == null) { notCarried.Add(key); return null; }
+            }
             return LoadImage(key, bytes);
         }
+
+        /// <summary>
+        /// Looks for a DLL by file name in the guest's own search path (set by the
+        /// guest kernel); null when it is not there.
+        /// </summary>
+        public Func<string, byte[]> ModuleSearch { get; set; }
 
         /// <summary>The address a guest call to module!function should reach.</summary>
         public uint ResolveImport(string module, string function, int ordinal)
@@ -362,7 +376,29 @@ namespace Nativra.X86.Loader
                 var va = function != null ? image.Export(function) : image.ExportByOrdinal(ordinal);
                 if (va != 0) return va;
             }
+            // A DLL that imports from one still being mapped (FreeType and
+            // HarfBuzz import each other): bound for now, put right once that
+            // one is mapped and its exports are known, as Windows does.
+            if (image == null && loading.Contains(ModuleKey(module))) cyclic.Add(ModuleKey(module));
             return Imports.Bind(module, function, ordinal);
+        }
+
+        private readonly HashSet<string> cyclic = new HashSet<string>();
+
+        /// <summary>Points every import of <paramref name="key"/> bound before it was mapped at its real export.</summary>
+        private void BindCycle(string key, Pe32Image target)
+        {
+            foreach (var image in images)
+            {
+                foreach (var import in image.Imports)
+                {
+                    if (!GuestImports.InRegion(import.Bound) || ModuleKey(import.Module) != key) continue;
+                    var va = import.Function != null ? target.Export(import.Function) : target.ExportByOrdinal(import.Ordinal);
+                    if (va == 0) continue;
+                    Memory.Write32(import.SlotAddress, va);
+                    import.Bound = va;
+                }
+            }
         }
 
         /// <summary>
@@ -379,6 +415,15 @@ namespace Nativra.X86.Loader
         }
 
         private readonly HashSet<Pe32Image> attached = new HashSet<Pe32Image>();
+
+        /// <summary>An address as module+offset when it lies in a mapped image.</summary>
+        public string Describe(uint address)
+        {
+            foreach (var image in images)
+                if (address >= image.BaseAddress && address - image.BaseAddress < image.ImageSize)
+                    return image.Name + "+0x" + (address - image.BaseAddress).ToString("X");
+            return "0x" + address.ToString("X8");
+        }
 
         /// <summary>The last DLL whose initialisation did not finish, and how it stopped.</summary>
         public string LastAttachFailure { get; private set; }
@@ -401,7 +446,7 @@ namespace Nativra.X86.Loader
                 var result = AttachModule(image, maxBlocks);
                 if (!result.Ok)
                 {
-                    LastAttachFailure = image.Name + ": " + result;
+                    LastAttachFailure = image.Name + ": " + result + " at " + Describe(Cpu.Eip);
                     return result;
                 }
             }

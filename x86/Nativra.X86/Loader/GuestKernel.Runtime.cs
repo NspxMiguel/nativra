@@ -87,6 +87,7 @@ namespace Nativra.X86.Loader
         public void SetEnvironment(string name, string value)
         {
             if (value == null) environment.Remove(name); else environment[name] = value;
+            if (string.Equals(name, "PATH", StringComparison.OrdinalIgnoreCase)) SearchChanged();
         }
 
         private uint NewHandle()

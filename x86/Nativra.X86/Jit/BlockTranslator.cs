@@ -214,7 +214,8 @@ namespace Nativra.X86.Jit
 
             switch (op)
             {
-                case 0x69: case 0x6B:
+                case 0x69:
+                case 0x6B:
                     // 3-operand imul: dst = src * imm. The source goes into dst
                     // first (a load for a memory source, not dst *= mem, which
                     // multiplied dst's old value in), then dst *= imm.
@@ -224,38 +225,43 @@ namespace Nativra.X86.Jit
                         op == 0x6B ? (uint)(sbyte)ins.Imm : ins.Imm, size, op == 0x6B);
                     return true;
 
-                case 0x80: case 0x81: case 0x82: case 0x83:
-                {
-                    var width = op == 0x80 || op == 0x82 ? 8 : size;
-                    var imm = op == 0x83 ? (uint)(sbyte)ins.Imm : ins.Imm;
-                    if (IsMem(ins)) { EmitAddress(ins); e.AluMemImm(ins.RegField, Mem, S1, 1, 0, imm, width); }
-                    else e.AluRegImm(ins.RegField, G[ins.Rm], imm, width);
-                    return true;
-                }
-
-                case 0x84: case 0x85:
-                {
-                    var width = op == 0x84 ? 8 : size;
-                    if (IsMem(ins)) { EmitAddress(ins); e.TestMemReg(G[ins.RegField], Mem, S1, 1, 0, width); return true; }
-                    e.TestRegReg(G[ins.Rm], G[ins.RegField], width);
-                    return true;
-                }
-
-                case 0x86: case 0x87:   // XCHG r/m, r
-                {
-                    var width = op == 0x86 ? 8 : size;
-                    if (IsMem(ins)) return false; // memory xchg carries an implicit lock; leave it to the interpreter
-                    // Partial-register swaps are rare; decided before anything is
-                    // emitted, or the interpreter would swap them a second time.
-                    if (width != 32) return false;
-                    if (ins.Rm != ins.RegField)
+                case 0x80:
+                case 0x81:
+                case 0x82:
+                case 0x83:
                     {
-                        e.MovRegReg(S1, G[ins.Rm], true);
-                        e.MovRegReg(G[ins.Rm], G[ins.RegField], true);
-                        e.MovRegReg(G[ins.RegField], S1, true);
+                        var width = op == 0x80 || op == 0x82 ? 8 : size;
+                        var imm = op == 0x83 ? (uint)(sbyte)ins.Imm : ins.Imm;
+                        if (IsMem(ins)) { EmitAddress(ins); e.AluMemImm(ins.RegField, Mem, S1, 1, 0, imm, width); }
+                        else e.AluRegImm(ins.RegField, G[ins.Rm], imm, width);
+                        return true;
                     }
-                    return true;
-                }
+
+                case 0x84:
+                case 0x85:
+                    {
+                        var width = op == 0x84 ? 8 : size;
+                        if (IsMem(ins)) { EmitAddress(ins); e.TestMemReg(G[ins.RegField], Mem, S1, 1, 0, width); return true; }
+                        e.TestRegReg(G[ins.Rm], G[ins.RegField], width);
+                        return true;
+                    }
+
+                case 0x86:
+                case 0x87:   // XCHG r/m, r
+                    {
+                        var width = op == 0x86 ? 8 : size;
+                        if (IsMem(ins)) return false; // memory xchg carries an implicit lock; leave it to the interpreter
+                                                      // Partial-register swaps are rare; decided before anything is
+                                                      // emitted, or the interpreter would swap them a second time.
+                        if (width != 32) return false;
+                        if (ins.Rm != ins.RegField)
+                        {
+                            e.MovRegReg(S1, G[ins.Rm], true);
+                            e.MovRegReg(G[ins.Rm], G[ins.RegField], true);
+                            e.MovRegReg(G[ins.RegField], S1, true);
+                        }
+                        return true;
+                    }
 
                 case 0x88: return EmitMovStore(ins, 8);
                 case 0x89: return EmitMovStore(ins, size);
@@ -267,7 +273,8 @@ namespace Nativra.X86.Jit
                     return true;
 
                 case 0x90: return true; // NOP
-                case 0xC2: case 0xC3:
+                case 0xC2:
+                case 0xC3:
                     e.LoadMem(S2, Mem, G[Reg.Esp], 1, 0);
                     e.Lea(G[Reg.Esp], G[Reg.Esp], -1, 1, op == 0xC2 ? 4 + (int)ins.Imm : 4);
                     EmitExitReg(S2);
@@ -292,7 +299,8 @@ namespace Nativra.X86.Jit
                     else return false;
                     return true;
 
-                case 0xF6: case 0xF7:
+                case 0xF6:
+                case 0xF7:
                     return EmitGroup3(ins, op == 0xF6 ? 8 : size);
                 case 0xFE:
                     if (ins.RegField > 1) return false;
@@ -313,17 +321,50 @@ namespace Nativra.X86.Jit
                     else e.IncDecReg(ins.RegField, G[ins.Rm], size);
                     return true;
 
-                case 0xC0: case 0xC1: case 0xD0: case 0xD1: case 0xD2: case 0xD3:
+                case 0xC0:
+                case 0xC1:
+                case 0xD0:
+                case 0xD1:
+                case 0xD2:
+                case 0xD3:
                     return EmitShift(ins, op);
 
-                case 0x40: case 0x41: case 0x42: case 0x43: case 0x44: case 0x45: case 0x46: case 0x47:
+                case 0x40:
+                case 0x41:
+                case 0x42:
+                case 0x43:
+                case 0x44:
+                case 0x45:
+                case 0x46:
+                case 0x47:
                     e.IncDecReg(0, G[op - 0x40], size); return true;   // single-byte INC (0x40-0x47 are REX in x64)
-                case 0x48: case 0x49: case 0x4A: case 0x4B: case 0x4C: case 0x4D: case 0x4E: case 0x4F:
+                case 0x48:
+                case 0x49:
+                case 0x4A:
+                case 0x4B:
+                case 0x4C:
+                case 0x4D:
+                case 0x4E:
+                case 0x4F:
                     e.IncDecReg(1, G[op - 0x48], size); return true;   // single-byte DEC
 
-                case 0x50: case 0x51: case 0x52: case 0x53: case 0x54: case 0x55: case 0x56: case 0x57:
+                case 0x50:
+                case 0x51:
+                case 0x52:
+                case 0x53:
+                case 0x54:
+                case 0x55:
+                case 0x56:
+                case 0x57:
                     return EmitPush(G[op - 0x50], size);
-                case 0x58: case 0x59: case 0x5A: case 0x5B: case 0x5C: case 0x5D: case 0x5E: case 0x5F:
+                case 0x58:
+                case 0x59:
+                case 0x5A:
+                case 0x5B:
+                case 0x5C:
+                case 0x5D:
+                case 0x5E:
+                case 0x5F:
                     return EmitPop(op - 0x58, size);
                 case 0x68: return EmitPushImm(ins.Imm, size);
                 case 0x6A: return EmitPushImm((uint)(sbyte)ins.Imm, size);
@@ -331,12 +372,26 @@ namespace Nativra.X86.Jit
                 case 0xA8: e.TestRegImm(G[Reg.Eax], ins.Imm, 8); return true;
                 case 0xA9: e.TestRegImm(G[Reg.Eax], ins.Imm, size); return true;
 
-                case 0xB0: case 0xB1: case 0xB2: case 0xB3: case 0xB4: case 0xB5: case 0xB6: case 0xB7:
+                case 0xB0:
+                case 0xB1:
+                case 0xB2:
+                case 0xB3:
+                case 0xB4:
+                case 0xB5:
+                case 0xB6:
+                case 0xB7:
                     // mov r8, imm8 — only the low four map to a clean host low byte.
                     if (op - 0xB0 >= 4) return false;
                     e.MovRegImm8(G[op - 0xB0], (byte)ins.Imm);
                     return true;
-                case 0xB8: case 0xB9: case 0xBA: case 0xBB: case 0xBC: case 0xBD: case 0xBE: case 0xBF:
+                case 0xB8:
+                case 0xB9:
+                case 0xBA:
+                case 0xBB:
+                case 0xBC:
+                case 0xBD:
+                case 0xBE:
+                case 0xBF:
                     if (size != 32) return false;
                     e.MovRegImm32(G[op - 0xB8], ins.Imm);
                     return true;
@@ -366,15 +421,24 @@ namespace Nativra.X86.Jit
                         if (IsMem(ins)) { EmitAddress(ins); e.ImulRegMem(G[ins.RegField], Mem, S1, 1, 0, size); }
                         else e.ImulRegReg(G[ins.RegField], G[ins.Rm], size);
                         return true;
-                    case 0xB6: case 0xB7: // movzx
+                    case 0xB6:
+                    case 0xB7: // movzx
                         if (IsMem(ins)) { EmitAddress(ins); e.MovzxMem(G[ins.RegField], Mem, S1, 1, 0, low == 0xB6 ? 8 : 16); }
                         else e.Movzx(G[ins.RegField], G[ins.Rm], low == 0xB6 ? 8 : 16);
                         return true;
-                    case 0xBE: case 0xBF: // movsx
+                    case 0xBE:
+                    case 0xBF: // movsx
                         if (IsMem(ins)) { EmitAddress(ins); e.MovsxMem(G[ins.RegField], Mem, S1, 1, 0, low == 0xBE ? 8 : 16); }
                         else e.Movsx(G[ins.RegField], G[ins.Rm], low == 0xBE ? 8 : 16);
                         return true;
-                    case 0xC8: case 0xC9: case 0xCA: case 0xCB: case 0xCC: case 0xCD: case 0xCE: case 0xCF:
+                    case 0xC8:
+                    case 0xC9:
+                    case 0xCA:
+                    case 0xCB:
+                    case 0xCC:
+                    case 0xCD:
+                    case 0xCE:
+                    case 0xCF:
                         e.Bswap(G[low - 0xC8]);
                         return true;
                 }
@@ -406,12 +470,22 @@ namespace Nativra.X86.Jit
             {
                 switch (op)
                 {
-                    case 0x84: case 0x86: case 0x88: case 0x8A:     // test/xchg/mov with r8
+                    case 0x84:
+                    case 0x86:
+                    case 0x88:
+                    case 0x8A:     // test/xchg/mov with r8
                         rmIsByte = regIsByte = true; break;
-                    case 0x80: case 0x82: case 0xC6: case 0xF6: case 0xFE:
-                    case 0xC0: case 0xD0: case 0xD2:                 // r/m8 with an opcode extension
+                    case 0x80:
+                    case 0x82:
+                    case 0xC6:
+                    case 0xF6:
+                    case 0xFE:
+                    case 0xC0:
+                    case 0xD0:
+                    case 0xD2:                 // r/m8 with an opcode extension
                         rmIsByte = true; regIsByte = false; break;
-                    case 0x0FB6: case 0x0FBE:                        // movzx/movsx from r/m8
+                    case 0x0FB6:
+                    case 0x0FBE:                        // movzx/movsx from r/m8
                         rmIsByte = true; regIsByte = false; break;
                     default:
                         rmIsByte = op >= 0x0F90 && op <= 0x0F9F;     // setcc r/m8
@@ -477,7 +551,8 @@ namespace Nativra.X86.Jit
         {
             switch (ins.RegField)
             {
-                case 0: case 1: // TEST r/m, imm
+                case 0:
+                case 1: // TEST r/m, imm
                     if (IsMem(ins)) { EmitAddress(ins); e.TestMemImm(Mem, S1, 1, 0, ins.Imm, width); }
                     else e.TestRegImm(G[ins.Rm], ins.Imm, width);
                     return true;
@@ -489,7 +564,10 @@ namespace Nativra.X86.Jit
                     if (IsMem(ins)) { EmitAddress(ins); e.Group3Mem(3, Mem, S1, 1, 0, width); }
                     else e.Group3(3, G[ins.Rm], width);
                     return true;
-                case 4: case 5: case 6: case 7: // MUL/IMUL/DIV/IDIV via EDX:EAX
+                case 4:
+                case 5:
+                case 6:
+                case 7: // MUL/IMUL/DIV/IDIV via EDX:EAX
                     if (IsMem(ins)) { EmitAddress(ins); e.Group3Mem(ins.RegField, Mem, S1, 1, 0, width); }
                     else e.Group3(ins.RegField, G[ins.Rm], width);
                     return true;

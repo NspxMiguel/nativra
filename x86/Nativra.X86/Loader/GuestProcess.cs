@@ -59,11 +59,11 @@ namespace Nativra.X86.Loader
                 case GuestStop.Raised:
                     return $"raised exception 0x{ExitCode:X8} at 0x{FaultAddress:X8}" + (Detail != null ? $" ({Detail})" : "");
                 case GuestStop.HostError:
-                {
-                    var first = Detail ?? "";
-                    var line = first.IndexOf('\n');
-                    return $"host error in {Import}: {(line > 0 ? first.Substring(0, line).TrimEnd() : first)}";
-                }
+                    {
+                        var first = Detail ?? "";
+                        var line = first.IndexOf('\n');
+                        return $"host error in {Import}: {(line > 0 ? first.Substring(0, line).TrimEnd() : first)}";
+                    }
                 default: return Stop.ToString().ToLowerInvariant();
             }
         }

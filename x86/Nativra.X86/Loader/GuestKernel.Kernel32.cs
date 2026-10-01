@@ -332,6 +332,26 @@ namespace Nativra.X86.Loader
             i.Register(k, "ReadConsoleA", CallConv.Stdcall, 5, c => { if (c.Arg(3) != 0) memory.Write32(c.Arg(3), 0); return 1; });
             i.Register(k, "ReadConsoleW", CallConv.Stdcall, 5, c => { if (c.Arg(3) != 0) memory.Write32(c.Arg(3), 0); return 1; });
             i.Register(k, "FlushConsoleInputBuffer", CallConv.Stdcall, 1, c => 1);
+            // There is no console window: the calls that need one's buffer fail
+            // the way they do on a handle that is not a console.
+            HostCall noConsole = c => { process.LastError = ErrorInvalidHandle; return 0; };
+            i.Register(k, "GetLargestConsoleWindowSize", CallConv.Stdcall, 1, noConsole);
+            i.Register(k, "SetConsoleScreenBufferSize", CallConv.Stdcall, 2, noConsole);
+            i.Register(k, "SetConsoleWindowInfo", CallConv.Stdcall, 3, noConsole);
+            i.Register(k, "ReadConsoleInputA", CallConv.Stdcall, 4, noConsole);
+            i.Register(k, "ReadConsoleInputW", CallConv.Stdcall, 4, noConsole);
+            i.Register(k, "PeekConsoleInputA", CallConv.Stdcall, 4, noConsole);
+            i.Register(k, "PeekConsoleInputW", CallConv.Stdcall, 4, noConsole);
+            i.Register(k, "WriteConsoleInputA", CallConv.Stdcall, 4, noConsole);
+            i.Register(k, "WriteConsoleInputW", CallConv.Stdcall, 4, noConsole);
+            i.Register(k, "ReadConsoleOutputCharacterA", CallConv.Stdcall, 5, noConsole);
+            i.Register(k, "ReadConsoleOutputCharacterW", CallConv.Stdcall, 5, noConsole);
+            i.Register(k, "WriteConsoleOutputCharacterA", CallConv.Stdcall, 5, noConsole);
+            i.Register(k, "WriteConsoleOutputCharacterW", CallConv.Stdcall, 5, noConsole);
+            i.Register(k, "WriteConsoleOutputAttribute", CallConv.Stdcall, 5, noConsole);
+            i.Register(k, "FillConsoleOutputCharacterA", CallConv.Stdcall, 5, noConsole);
+            i.Register(k, "FillConsoleOutputCharacterW", CallConv.Stdcall, 5, noConsole);
+            i.Register(k, "FillConsoleOutputAttribute", CallConv.Stdcall, 5, noConsole);
 
             i.Register(k, "CompareStringA", CallConv.Stdcall, 6, c =>
             {

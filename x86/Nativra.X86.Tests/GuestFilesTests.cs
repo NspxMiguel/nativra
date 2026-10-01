@@ -59,6 +59,30 @@ namespace Nativra.X86.Tests
         private const uint OpenExisting = 3, CreateAlways = 2;
 
         [Fact]
+        public void OverlappedReadUsesItsOffsetAndReportsThroughGetOverlappedResult()
+        {
+            var file = K("CreateFileA", A("C:\\game\\data\\level1.pak"), GenericRead, 1, 0, OpenExisting, 0x40000000 /* FILE_FLAG_OVERLAPPED */, 0);
+            var overlapped = k.Heap.Alloc(20, zero: true);
+            p.Memory.Write32(overlapped + 8, 5);                 // Offset
+            var buffer = k.Heap.Alloc(8);
+            Assert.Equal(1u, K("ReadFile", file, buffer, 8, 0, overlapped));
+            Assert.Equal(new byte[] { 6, 7, 8 }, p.Memory.ReadBytes(buffer, 3));
+            Assert.Equal(0u, p.Memory.Read32(overlapped));       // Internal: STATUS_SUCCESS
+            Assert.Equal(3u, p.Memory.Read32(overlapped + 4));   // InternalHigh: bytes read
+
+            var transferred = k.Heap.Alloc(4);
+            Assert.Equal(1u, K("GetOverlappedResult", file, overlapped, transferred, 1));
+            Assert.Equal(3u, p.Memory.Read32(transferred));
+
+            // At the end of the file an overlapped read fails with ERROR_HANDLE_EOF.
+            p.Memory.Write32(overlapped + 8, 8);
+            Assert.Equal(0u, K("ReadFile", file, buffer, 8, 0, overlapped));
+            Assert.Equal(38u, K("GetLastError"));
+            Assert.Equal(0u, K("GetOverlappedResult", file, overlapped, transferred, 1));
+            Assert.Equal(38u, K("GetLastError"));
+        }
+
+        [Fact]
         public void RelativeOpenReadsFromTheGameFolderAndSeeks()
         {
             var h = K("CreateFileA", A("data/level1.pak"), GenericRead, 1, 0, OpenExisting, 0x80, 0);

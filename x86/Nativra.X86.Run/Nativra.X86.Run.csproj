@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Runs a real 32-bit Windows program through the x86 layer on a desktop
+    host (Windows, Linux or an arm64 Mac, where it interprets), and prints the
+    same report the console writes: how far it got, what it imported, what it
+    asked for that the layer does not serve yet.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>Nativra.X86.Run</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nativra.X86\Nativra.X86.csproj" />
+  </ItemGroup>
+
+</Project>

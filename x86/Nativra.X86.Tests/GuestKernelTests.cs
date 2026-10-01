@@ -127,6 +127,50 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void LoadLibraryInitialisesTheDllsItBringsAlongBeforeTheDllItself()
+        {
+            var p = NewProcess(out var kernel);
+            var inner = TestPe32.Minimal(dll: true, dllMain: true);
+            var outer = TestPe32.Minimal(importModule: "inner.dll", importName: "Start", dll: true, dllMain: true);
+            p.ModuleSource = name => name == "outer.dll" ? outer : name == "inner.dll" ? inner : null;
+            p.LoadExecutable("game.exe", TestPe32.Minimal());
+
+            Assert.NotEqual(0u, CallK(p, "LoadLibraryA", Ansi(kernel, p, "outer.dll")));
+            var innerImage = p.FindModule("inner.dll");
+            Assert.NotNull(innerImage);   // mapped as outer's import...
+            // ...and given DLL_PROCESS_ATTACH, as Windows does, not left uninitialised.
+            Assert.Equal(TestPe32.DllMainMark, p.Memory.Read32(innerImage.BaseAddress + TestPe32.DllMainMarkRva));
+            Assert.Equal(TestPe32.DllMainMark, p.Memory.Read32(p.FindModule("outer.dll").BaseAddress + TestPe32.DllMainMarkRva));
+        }
+
+        [Fact]
+        public void LogicalProcessorInformationAgreesWithGetSystemInfo()
+        {
+            var p = NewProcess(out var kernel);
+            var length = kernel.Heap.Alloc(4, zero: true);
+            Assert.Equal(0u, CallK(p, "GetLogicalProcessorInformation", 0, length));
+            Assert.Equal(122u, CallK(p, "GetLastError"));   // ERROR_INSUFFICIENT_BUFFER
+            var needed = p.Memory.Read32(length);
+            Assert.Equal(0u, needed % 24);
+
+            var buffer = kernel.Heap.Alloc(needed);
+            Assert.Equal(1u, CallK(p, "GetLogicalProcessorInformation", buffer, length));
+            int cores = 0, packages = 0;
+            uint coreMask = 0;
+            for (uint at = buffer; at < buffer + needed; at += 24)
+            {
+                var relationship = p.Memory.Read32(at + 4);
+                if (relationship == 0) { cores++; coreMask |= p.Memory.Read32(at); }
+                if (relationship == 3) packages++;
+            }
+            var info = kernel.Heap.Alloc(36, zero: true);
+            CallK(p, "GetSystemInfo", info);
+            Assert.Equal((int)p.Memory.Read32(info + 20), cores);   // dwNumberOfProcessors
+            Assert.Equal(p.Memory.Read32(info + 16), coreMask);     // dwActiveProcessorMask
+            Assert.Equal(1, packages);
+        }
+
+        [Fact]
         public void GetProcAddressOnASystemDllServesOnlyWhatTheHostImplements()
         {
             var p = NewProcess(out var kernel);
@@ -140,10 +184,10 @@ namespace Nativra.X86.Tests
             Assert.True(result.Ok);
             Assert.True(kernel.Heap.Owns(ptr));
 
-            // CreateToolhelp32Snapshot has none: the program is told it does not exist, and we note it.
-            Assert.Equal(0u, CallK(p, "GetProcAddress", kernel32, Ansi(kernel, p, "CreateToolhelp32Snapshot")));
+            // CreateRemoteThread has none: the program is told it does not exist, and we note it.
+            Assert.Equal(0u, CallK(p, "GetProcAddress", kernel32, Ansi(kernel, p, "CreateRemoteThread")));
             Assert.Equal(127u, CallK(p, "GetLastError"));   // ERROR_PROC_NOT_FOUND
-            Assert.Contains("kernel32.dll!CreateToolhelp32Snapshot", kernel.ProbedAbsent);
+            Assert.Contains("kernel32.dll!CreateRemoteThread", kernel.ProbedAbsent);
         }
 
         [Fact]

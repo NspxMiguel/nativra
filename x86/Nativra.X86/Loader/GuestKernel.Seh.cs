@@ -250,17 +250,7 @@ namespace Nativra.X86.Loader
                 // violation, what was touched), which is what the report needs.
                 var code = memory.Read32(d.Record);
                 var parameters = memory.Read32(d.Record + 16);
-                if (Log != null)
-                {
-                    var flags = memory.Read32(d.Record + 4);
-                    var eip = memory.Read32(d.Record + 12);
-                    var args = new List<string>();
-                    for (uint n = 0; n < Math.Min(parameters, 15); n++)
-                        args.Add("0x" + memory.Read32(d.Record + 20 + n * 4).ToString("X8"));
-                    Log("unhandled exception code=0x" + code.ToString("X8") + " flags=0x" + flags.ToString("X8") +
-                        " eip=0x" + eip.ToString("X8") + " eax=0x" + process.Cpu.Eax.ToString("X8") +
-                        " nparams=" + parameters + " params=[" + string.Join(",", args) + "]");
-                }
+                Log?.Invoke("unhandled exception " + DescribeRecord(d.Record) + DescribeContext(d.Context));
                 throw new GuestRaisedException(code, memory.Read32(d.Record + 12),
                     parameters >= 2 ? memory.Read32(d.Record + 24) : 0, parameters >= 1 && memory.Read32(d.Record + 20) != 0);
             }
@@ -279,6 +269,48 @@ namespace Nativra.X86.Loader
             process.Cpu.Esp = t;
             process.Cpu.Eip = memory.Read32(frame + 4);
             process.Jumped();
+        }
+
+        /// <summary>" (module+0xoffset)" for an address inside a mapped image, else empty.</summary>
+        private string Where(uint address)
+        {
+            foreach (var image in process.Images)
+                if (address >= image.BaseAddress && address - image.BaseAddress < image.ImageSize)
+                    return " (" + image.Name + "+0x" + (address - image.BaseAddress).ToString("X") + ")";
+            return "";
+        }
+
+        /// <summary>
+        /// The faulting registers and the stack words above ESP that point into a
+        /// mapped image: return-address candidates, which name the callers.
+        /// </summary>
+        private string DescribeContext(uint context)
+        {
+            if (context == 0 || !memory.IsMapped(context)) return "";
+            uint esp = memory.Read32(context + 0xC4), ebp = memory.Read32(context + 0xB4), ecx = memory.Read32(context + 0xAC);
+            var frames = new List<string>();
+            for (uint n = 0; n < 96 && frames.Count < 12; n++)
+            {
+                var at = esp + n * 4;
+                if (!memory.IsMapped(at)) break;
+                var word = memory.Read32(at);
+                var where = Where(word);
+                if (where.Length > 0) frames.Add(where.Trim().Trim('(', ')'));
+            }
+            return " esp=0x" + esp.ToString("X8") + " ebp=0x" + ebp.ToString("X8") + " ecx=0x" + ecx.ToString("X8") +
+                " stack=[" + string.Join(" < ", frames) + "]";
+        }
+
+        /// <summary>An exception record on one line: code, flags, where, and every parameter.</summary>
+        private string DescribeRecord(uint record)
+        {
+            var count = Math.Min(memory.Read32(record + 16), 15u);
+            var args = new List<string>();
+            for (uint n = 0; n < count; n++) args.Add("0x" + memory.Read32(record + 20 + n * 4).ToString("X8"));
+            var eip = memory.Read32(record + 12);
+            return "code=0x" + memory.Read32(record).ToString("X8") + " flags=0x" + memory.Read32(record + 4).ToString("X8") +
+                " eip=0x" + eip.ToString("X8") + Where(eip) +
+                " eax=0x" + process.Cpu.Eax.ToString("X8") + " params=[" + string.Join(",", args) + "]";
         }
 
         /// <summary>
@@ -302,7 +334,7 @@ namespace Nativra.X86.Loader
             memory.Write32(t + 4, t + 8);                 // the one argument: &EXCEPTION_POINTERS
             pendingFilter = d;
             Log?.Invoke("calling unhandledFilter 0x" + unhandledFilter.ToString("X8") +
-                " for code 0x" + memory.Read32(d.Record).ToString("X8"));
+                " for " + DescribeRecord(d.Record) + DescribeContext(d.Context));
 
             process.Cpu.Esp = t;
             process.Cpu.Eip = unhandledFilter;

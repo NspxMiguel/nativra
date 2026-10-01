@@ -372,14 +372,40 @@ namespace Nativra.X86.Loader
         /// </summary>
         public GuestRunResult InitializeModules(long maxBlocks = 50_000_000)
         {
-            foreach (var image in images.ToArray())
-            {
-                if (image == MainImage) continue;
-                var result = AttachModule(image, maxBlocks);
-                if (!result.Ok) return result;
-            }
+            var result = AttachModulesFrom(0, maxBlocks);
+            if (!result.Ok) return result;
             // The program's own TLS callbacks run last, just before its entry point.
             return MainImage != null ? RunTlsCallbacks(MainImage, maxBlocks) : new GuestRunResult(GuestStop.Returned);
+        }
+
+        private readonly HashSet<Pe32Image> attached = new HashSet<Pe32Image>();
+
+        /// <summary>The last DLL whose initialisation did not finish, and how it stopped.</summary>
+        public string LastAttachFailure { get; private set; }
+
+        /// <summary>
+        /// DLL_PROCESS_ATTACH for every image mapped from position <paramref name="first"/>
+        /// of <see cref="Images"/> on that has not had it yet, in list order — which is
+        /// dependencies before their dependents. LoadLibrary needs this: a DLL loaded at
+        /// run time brings its own imports, and Windows initialises those before it
+        /// (Source's dedicated.dll runs straight into tier0's allocator otherwise).
+        /// </summary>
+        public GuestRunResult AttachModulesFrom(int first, long maxBlocks = 50_000_000)
+        {
+            var list = images.ToArray();
+            for (var n = Math.Max(0, first); n < list.Length; n++)
+            {
+                var image = list[n];
+                if (image == MainImage || attached.Contains(image)) continue;
+                attached.Add(image);
+                var result = AttachModule(image, maxBlocks);
+                if (!result.Ok)
+                {
+                    LastAttachFailure = image.Name + ": " + result;
+                    return result;
+                }
+            }
+            return new GuestRunResult(GuestStop.Returned);
         }
 
         /// <summary>
@@ -599,7 +625,18 @@ namespace Nativra.X86.Loader
             Cpu.Edx = (uint)(result >> 32);
             Cpu.Esp = esp + 4 + (uint)import.Handler.CleanupBytes;   // pop return + callee-cleaned args
             Cpu.Eip = returnAddress;
+            CallTrace?.Invoke(import + "(" + TraceArg(esp + 4) + "," + TraceArg(esp + 8) + "," + TraceArg(esp + 12) + "," +
+                TraceArg(esp + 16) + ") = 0x" + ((uint)result).ToString("X") + " ret 0x" + returnAddress.ToString("X8") +
+                " tid " + CurrentThread.Id.ToString("X"));
         }
+
+        private string TraceArg(uint at) => Memory.IsMapped(at) ? "0x" + Memory.Read32(at).ToString("X") : "?";
+
+        /// <summary>
+        /// Called after each served import with its first four stack arguments and
+        /// its result, when set (a desktop run's --trace); null costs nothing.
+        /// </summary>
+        public Action<string> CallTrace { get; set; }
 
         private bool jumped;
 

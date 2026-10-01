@@ -142,7 +142,7 @@ namespace Nativra.X86.Loader
                 ModuleFileName(c.Arg(0), c.Arg(1), c.Arg(2), false));
             i.Register(k, "GetModuleFileNameW", CallConv.Stdcall, 3, c =>
                 ModuleFileName(c.Arg(0), c.Arg(1), c.Arg(2), true));
-            i.Register(k, "GetCurrentProcessId", CallConv.Stdcall, 0, c => 0x1234);
+            i.Register(k, "GetCurrentProcessId", CallConv.Stdcall, 0, c => CurrentProcessId);
             i.Register(k, "GetCurrentProcess", CallConv.Stdcall, 0, c => PseudoCurrentProcess);
             i.Register(k, "GetCurrentThread", CallConv.Stdcall, 0, c => PseudoCurrentThread);
 
@@ -205,6 +205,7 @@ namespace Nativra.X86.Loader
             InstallFiles(i);
             InstallSeh(i);
             InstallThreads(i);
+            InstallSystemInfo(i);
             InstallUser32(i);
             InstallKernel32(i);
             InstallMsvcrt(i);
@@ -278,17 +279,23 @@ namespace Nativra.X86.Loader
             var name = Trim(wide ? memory.ReadUnicode(namePtr) : memory.ReadAnsi(namePtr));
 
             var alreadyMapped = process.FindModule(name) != null;
+            var firstNew = process.Images.Count;
             var image = process.LoadModule(name);
             if (image != null)
             {
                 if (!alreadyMapped)
                 {
                     // A nested run on the same stack, as the real loader does:
-                    // LoadLibrary returns only after DllMain(PROCESS_ATTACH).
+                    // LoadLibrary returns only after DllMain(PROCESS_ATTACH) — for
+                    // the DLL and, first, for every DLL it pulled in with it.
                     var saved = SaveRegisters();
-                    var result = process.AttachModule(image);
+                    var result = process.AttachModulesFrom(firstNew);
                     RestoreRegisters(saved);
-                    if (!result.Ok) return 0;
+                    if (!result.Ok)
+                    {
+                        Log?.Invoke("LoadLibrary " + name + ": initialisation stopped in " + process.LastAttachFailure);
+                        return 0;
+                    }
                 }
                 return image.BaseAddress;
             }

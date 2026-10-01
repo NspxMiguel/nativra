@@ -84,8 +84,10 @@ namespace Nativra.X86.Loader
 
             i.Register(k, "CreateFileA", CallConv.Stdcall, 7, c => CreateFile(c, false));
             i.Register(k, "CreateFileW", CallConv.Stdcall, 7, c => CreateFile(c, true));
-            i.Register(k, "ReadFile", CallConv.Stdcall, 5, c => ReadFile(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3)));
-            i.Register(k, "WriteFile", CallConv.Stdcall, 5, c => WriteFile(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3)));
+            i.Register(k, "ReadFile", CallConv.Stdcall, 5, c => ReadFile(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3), c.Arg(4)));
+            i.Register(k, "WriteFile", CallConv.Stdcall, 5, c => WriteFile(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3), c.Arg(4)));
+            i.Register(k, "GetOverlappedResult", CallConv.Stdcall, 4, c => OverlappedResult(c.Arg(1), c.Arg(2)));
+            i.Register(k, "GetOverlappedResultEx", CallConv.Stdcall, 5, c => OverlappedResult(c.Arg(1), c.Arg(2)));
             i.Register(k, "SetFilePointer", CallConv.Stdcall, 4, c => SetFilePointer(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3)));
             i.Register(k, "SetFilePointerEx", CallConv.Stdcall, 5, c =>
                 SetFilePointerEx(c.Arg(0), (long)c.Arg64(1), c.Arg(3), c.Arg(4)));
@@ -302,11 +304,41 @@ namespace Nativra.X86.Loader
             return false;
         }
 
-        private uint ReadFile(uint handle, uint buffer, uint count, uint readOut)
+        // OVERLAPPED (x86): Internal (status) +0, InternalHigh (bytes) +4,
+        // Offset +8, OffsetHigh +0xC, hEvent +0x10. Every read and write here
+        // completes before it returns, which Windows allows for an overlapped
+        // handle too: the offset is honoured, the status and count are filled
+        // in for GetOverlappedResult, and the event is set.
+        private const uint StatusEndOfFile = 0xC0000011, ErrorHandleEof = 38;
+
+        private long OverlappedOffset(uint overlapped) =>
+            ((long)memory.Read32(overlapped + 0xC) << 32) | memory.Read32(overlapped + 8);
+
+        private void CompleteOverlapped(uint overlapped, uint bytes, uint status)
+        {
+            memory.Write32(overlapped + 0, status);
+            memory.Write32(overlapped + 4, bytes);
+            var signal = memory.Read32(overlapped + 0x10) & ~1u;   // the low bit only asks not to queue a completion
+            if (signal != 0) SignalEvent(signal, true);
+        }
+
+        private uint OverlappedResult(uint overlapped, uint bytesOut)
+        {
+            const uint StatusPending = 0x103, ErrorIoIncomplete = 996;
+            if (overlapped == 0) { process.LastError = ErrorInvalidParameter; return 0; }
+            var status = memory.Read32(overlapped);
+            if (bytesOut != 0) memory.Write32(bytesOut, memory.Read32(overlapped + 4));
+            if (status == 0) return 1;
+            process.LastError = status == StatusEndOfFile ? ErrorHandleEof : status == StatusPending ? ErrorIoIncomplete : status;
+            return 0;
+        }
+
+        private uint ReadFile(uint handle, uint buffer, uint count, uint readOut, uint overlapped = 0)
         {
             if (readOut != 0) memory.Write32(readOut, 0);
             if (handle == StdInput) return 1;   // nothing to read: end of input
             if (!TryFile(handle, out var f)) return 0;
+            if (overlapped != 0) f.Stream.Position = OverlappedOffset(overlapped);
 
             var chunk = new byte[Math.Min(count, 1u << 20)];
             uint total = 0;
@@ -318,10 +350,22 @@ namespace Nativra.X86.Loader
                 total += (uint)n;
             }
             if (readOut != 0) memory.Write32(readOut, total);
+            if (overlapped != 0)
+            {
+                // An overlapped read at the end of the file fails with
+                // ERROR_HANDLE_EOF instead of returning nothing.
+                if (total == 0 && count > 0)
+                {
+                    CompleteOverlapped(overlapped, 0, StatusEndOfFile);
+                    process.LastError = ErrorHandleEof;
+                    return 0;
+                }
+                CompleteOverlapped(overlapped, total, 0);
+            }
             return 1;
         }
 
-        private uint WriteFile(uint handle, uint buffer, uint count, uint writtenOut)
+        private uint WriteFile(uint handle, uint buffer, uint count, uint writtenOut, uint overlapped = 0)
         {
             if (handle == StdOutput || handle == StdError)
             {
@@ -331,6 +375,12 @@ namespace Nativra.X86.Loader
             }
             if (writtenOut != 0) memory.Write32(writtenOut, 0);
             if (!TryFile(handle, out var f)) return 0;
+            if (overlapped != 0)
+            {
+                // Offset 0xFFFFFFFF:0xFFFFFFFF means "at the end".
+                var offset = OverlappedOffset(overlapped);
+                f.Stream.Position = offset == -1 ? f.Stream.Length : offset;
+            }
 
             uint total = 0;
             while (total < count)
@@ -340,6 +390,7 @@ namespace Nativra.X86.Loader
                 total += (uint)n;
             }
             if (writtenOut != 0) memory.Write32(writtenOut, total);
+            if (overlapped != 0) CompleteOverlapped(overlapped, total, 0);
             return 1;
         }
 
@@ -398,6 +449,7 @@ namespace Nativra.X86.Loader
                 files.Remove(handle);
                 return 1;
             }
+            if (threadSnapshots.Remove(handle)) { snapshotCursor.Remove(handle); return 1; }
             if (CloseRuntimeHandle(handle) || CloseMapping(handle)) return 1;
             // Standard handles, pseudo handles and anything else the guest holds.
             return 1;

@@ -86,8 +86,8 @@ namespace Nativra.X86.Loader
             i.Register(k, "CreateFileW", CallConv.Stdcall, 7, c => CreateFile(c, true));
             i.Register(k, "ReadFile", CallConv.Stdcall, 5, c => ReadFile(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3), c.Arg(4)));
             i.Register(k, "WriteFile", CallConv.Stdcall, 5, c => WriteFile(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3), c.Arg(4)));
-            i.Register(k, "GetOverlappedResult", CallConv.Stdcall, 4, c => OverlappedResult(c.Arg(1), c.Arg(2)));
-            i.Register(k, "GetOverlappedResultEx", CallConv.Stdcall, 5, c => OverlappedResult(c.Arg(1), c.Arg(2)));
+            i.Register(k, "GetOverlappedResult", CallConv.Stdcall, 4, c => OverlappedResult(c.Arg(1), c.Arg(2), c.Arg(3) != 0 ? Infinite : 0));
+            i.Register(k, "GetOverlappedResultEx", CallConv.Stdcall, 5, c => OverlappedResult(c.Arg(1), c.Arg(2), c.Arg(3)));
             i.Register(k, "SetFilePointer", CallConv.Stdcall, 4, c => SetFilePointer(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3)));
             i.Register(k, "SetFilePointerEx", CallConv.Stdcall, 5, c =>
                 SetFilePointerEx(c.Arg(0), (long)c.Arg64(1), c.Arg(3), c.Arg(4)));
@@ -324,14 +324,22 @@ namespace Nativra.X86.Loader
             if (signal != 0) SignalEvent(signal, true);
         }
 
-        private uint OverlappedResult(uint overlapped, uint bytesOut)
+        private uint OverlappedResult(uint overlapped, uint bytesOut, uint waitMilliseconds)
         {
-            const uint StatusPending = 0x103, ErrorIoIncomplete = 996;
+            const uint ErrorIoIncomplete = 996;
             if (overlapped == 0) { process.LastError = ErrorInvalidParameter; return 0; }
+            if (NetworkBusy) PumpNetwork();   // an overlapped socket call may have ended since
             var status = memory.Read32(overlapped);
+            if (status == StatusPending && waitMilliseconds != 0)
+            {
+                // Only a socket's call can still be pending here: wait for the host to end it.
+                if (process.WaitTimedOut(waitMilliseconds)) { process.LastError = WaitTimeoutError; return 0; }
+                process.BlockOnHost();
+                return 0;
+            }
             if (bytesOut != 0) memory.Write32(bytesOut, memory.Read32(overlapped + 4));
             if (status == 0) return 1;
-            process.LastError = status == StatusEndOfFile ? ErrorHandleEof : status == StatusPending ? ErrorIoIncomplete : status;
+            process.LastError = status == StatusEndOfFile ? ErrorHandleEof : status == StatusPending ? ErrorIoIncomplete : SocketErrorOfStatus(status);
             return 0;
         }
 
@@ -445,6 +453,8 @@ namespace Nativra.X86.Loader
 
         private uint CloseHandle(uint handle)
         {
+            // A socket is a handle too: closing it closes the connection.
+            if (sockets.TryGetValue(handle, out var socket)) { sockets.Remove(handle); ReleaseSocket(socket); return 1; }
             portBindings.Remove(handle);
             if (files.TryGetValue(handle, out var f))
             {

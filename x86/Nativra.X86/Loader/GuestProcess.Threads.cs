@@ -68,6 +68,7 @@ namespace Nativra.X86.Loader
         private int slice;
         private bool switchWanted;
         private bool blocking;
+        private bool hostWake;        // the import that just blocked waits on something the host can end
         private int blockedStreak;    // consecutive turns that ended in a wait with nothing run between
         private long allWaitingSince;
         private uint threadExitSentinel;
@@ -84,6 +85,18 @@ namespace Nativra.X86.Loader
         /// way, and the handler runs again when the thread is next scheduled.
         /// </summary>
         public void Block() => blocking = true;
+
+        /// <summary>
+        /// <see cref="Block"/> for a wait the host itself can end at any moment
+        /// (a packet arrives, a connection completes, a name resolves). The
+        /// deadlock detector must not count it: it only catches waits that
+        /// nothing inside the guest could ever signal.
+        /// </summary>
+        public void BlockOnHost()
+        {
+            blocking = true;
+            hostWake = true;
+        }
 
         /// <summary>Lets other threads run once this import has returned (Sleep(0), SwitchToThread).</summary>
         public void Yield() => switchWanted = true;

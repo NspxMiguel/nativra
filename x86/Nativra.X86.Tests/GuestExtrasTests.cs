@@ -355,18 +355,24 @@ namespace Nativra.X86.Tests
         // --- ws2_32 ---------------------------------------------------------------------
 
         [Fact]
-        public void GetservbyportFindsNoServiceAndSaysWsaNoData()
+        public void GetservbyportKnowsWellKnownPortsAndSaysWsaNoDataOtherwise()
         {
-            const uint port80 = 0x5000;   // in network byte order
-            Assert.Equal(0u, Call("ws2_32.dll", "getservbyport", port80, Str("tcp")));
+            const uint port80 = 0x5000, port12345 = 0x3930;   // in network byte order
+            // A program starts Winsock first; without it the answer is WSANOTINITIALISED.
+            Assert.Equal(0u, Call("ws2_32.dll", "WSAStartup", 0x0202, k.Heap.Alloc(400, zero: true)));
+            var http = Call("ws2_32.dll", "getservbyport", port80, Str("tcp"));
+            Assert.NotEqual(0u, http);
+            Assert.Equal("http", p.Memory.ReadAnsi(p.Memory.Read32(http)));   // servent.s_name
+
+            Assert.Equal(0u, Call("ws2_32.dll", "getservbyport", port12345, Str("tcp")));
             Assert.Equal(11004u, Call("ws2_32.dll", "WSAGetLastError"));   // WSANO_DATA
 
             // wsock32 and the import by ordinal 56 answer the same, through the same last-error slot.
             Call("ws2_32.dll", "WSASetLastError", 0);
-            Assert.Equal(0u, Call("wsock32.dll", "getservbyport", port80, 0));
+            Assert.Equal(0u, Call("wsock32.dll", "getservbyport", port12345, 0));
             Assert.Equal(11004u, Call("wsock32.dll", "WSAGetLastError"));
             Call("ws2_32.dll", "WSASetLastError", 0);
-            Assert.Equal(0u, CallOrdinal("ws2_32.dll", 56, port80, 0));
+            Assert.Equal(0u, CallOrdinal("ws2_32.dll", 56, port12345, 0));
             Assert.Equal(11004u, Call("ws2_32.dll", "WSAGetLastError"));
         }
 

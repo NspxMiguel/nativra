@@ -14,9 +14,9 @@ namespace Nativra.X86.Loader
     // and random numbers), shell32 (known folders inside the game's user
     // folder, command-line splitting), version (VS_VERSIONINFO read from
     // mapped images, synthesised for system DLLs), oleaut32 (BSTR, VARIANT),
-    // comctl32, comdlg32, gdiplus's start-up, and the network as absent:
-    // ws2_32 and wininet start and answer "not connected", so a game takes
-    // its offline path.
+    // comctl32, comdlg32, gdiplus's start-up, and wininet as absent: it
+    // answers "not connected", so a game takes its offline path. (The sockets,
+    // ws2_32 and wsock32, are real: GuestKernel.Network.cs.)
     public sealed partial class GuestKernel
     {
         /// <summary>A known folder as the guest sees it: under C:\\users\\Player, as on Wine.</summary>
@@ -1118,96 +1118,12 @@ namespace Nativra.X86.Loader
             i.Register("gdiplus.dll", "GdipFree", CallConv.Stdcall, 1, c => { heap.Free(c.Arg(0)); return 0; });
         }
 
-        // --- the network, absent ------------------------------------------------------------------------
+        // --- wininet: offline ------------------------------------------------------------------------------
+        // The network proper (ws2_32, wsock32) is in GuestKernel.Network.cs. wininet stays absent: its
+        // calls answer "cannot connect", so a game takes its offline path.
 
-        private uint socketError;
-
-        private void InstallNetwork(GuestImports i)
+        private void InstallWininet(GuestImports i)
         {
-            const string ws = "ws2_32.dll";
-            const uint NetDown = 10050, HostNotFound = 11001, NotInitialised = 10093;
-            var started = false;
-            void Both(string name, int ordinal, int args, HostCall body)
-            {
-                i.Register(ws, name, CallConv.Stdcall, args, body);
-                i.RegisterOrdinal(ws, ordinal, CallConv.Stdcall, args, body);
-                i.Register("wsock32.dll", name, CallConv.Stdcall, args, body);
-                i.RegisterOrdinal("wsock32.dll", ordinal, CallConv.Stdcall, args, body);
-            }
-            uint Fail(uint error) { socketError = started ? error : NotInitialised; return 0xFFFFFFFF; }
-
-            Both("WSAStartup", 115, 2, c =>
-            {
-                started = true;
-                var p = c.Arg(1);
-                memory.WriteBytes(p, new byte[400]);
-                memory.Write16(p, (ushort)Math.Min(c.Arg(0) & 0xFFFF, 0x0202));
-                memory.Write16(p + 2, 0x0202);
-                WriteText(p + 4, "WinSock 2.0", false);
-                WriteText(p + 261, "Running", false);
-                return 0;
-            });
-            Both("WSACleanup", 116, 0, c => { started = false; return 0; });
-            Both("WSAGetLastError", 111, 0, c => socketError);
-            Both("WSASetLastError", 112, 1, c => { socketError = c.Arg(0); return 0; });
-            Both("socket", 23, 3, c => Fail(NetDown));
-            Both("closesocket", 3, 1, c => 0);
-            Both("connect", 4, 3, c => Fail(NetDown));
-            Both("bind", 2, 3, c => Fail(NetDown));
-            Both("listen", 13, 2, c => Fail(NetDown));
-            Both("accept", 1, 3, c => Fail(NetDown));
-            Both("send", 19, 4, c => Fail(NetDown));
-            Both("recv", 16, 4, c => Fail(NetDown));
-            Both("sendto", 20, 6, c => Fail(NetDown));
-            Both("recvfrom", 17, 6, c => Fail(NetDown));
-            Both("shutdown", 22, 2, c => Fail(NetDown));
-            Both("select", 18, 5, c => Fail(NetDown));
-            Both("ioctlsocket", 10, 3, c => Fail(NetDown));
-            Both("setsockopt", 21, 5, c => Fail(NetDown));
-            Both("getsockopt", 7, 5, c => Fail(NetDown));
-            Both("getsockname", 6, 3, c => Fail(NetDown));
-            Both("getpeername", 5, 3, c => Fail(NetDown));
-            Both("gethostbyname", 52, 1, c => { socketError = HostNotFound; return 0; });
-            Both("gethostbyaddr", 51, 3, c => { socketError = HostNotFound; return 0; });
-            Both("getprotobyname", 53, 1, c => 0);
-            Both("getservbyname", 55, 2, c => 0);
-            Both("gethostname", 57, 2, c => { CopyTruncated("xbox", c.Arg(0), c.Arg(1), false); return 0; });
-            Both("htons", 9, 1, c => (uint)(ushort)((c.Arg(0) >> 8) | (c.Arg(0) << 8)));
-            Both("ntohs", 15, 1, c => (uint)(ushort)((c.Arg(0) >> 8) | (c.Arg(0) << 8)));
-            Both("htonl", 8, 1, c => ((c.Arg(0) & 0xFF) << 24) | ((c.Arg(0) & 0xFF00) << 8) | ((c.Arg(0) >> 8) & 0xFF00) | (c.Arg(0) >> 24));
-            Both("ntohl", 14, 1, c => ((c.Arg(0) & 0xFF) << 24) | ((c.Arg(0) & 0xFF00) << 8) | ((c.Arg(0) >> 8) & 0xFF00) | (c.Arg(0) >> 24));
-            Both("inet_addr", 11, 1, c =>
-            {
-                var parts = (CString(c.Arg(0)) ?? "").Split('.');
-                if (parts.Length != 4) return 0xFFFFFFFF;
-                uint value = 0;
-                for (var n = 0; n < 4; n++) { if (!byte.TryParse(parts[n], out var b)) return 0xFFFFFFFF; value |= (uint)b << (8 * n); }
-                return value;
-            });
-            Both("inet_ntoa", 12, 1, c =>
-            {
-                var a = c.Arg(0);
-                WriteText(crtScratch, $"{a & 0xFF}.{(a >> 8) & 0xFF}.{(a >> 16) & 0xFF}.{a >> 24}", false);
-                return crtScratch;
-            });
-            Both("__WSAFDIsSet", 151, 2, c => 0);
-            i.Register(ws, "WSASocketA", CallConv.Stdcall, 6, c => Fail(NetDown));
-            i.Register(ws, "WSASocketW", CallConv.Stdcall, 6, c => Fail(NetDown));
-            i.Register(ws, "WSAIoctl", CallConv.Stdcall, 9, c => Fail(NetDown));
-            i.Register(ws, "WSASend", CallConv.Stdcall, 7, c => Fail(NetDown));
-            i.Register(ws, "WSARecv", CallConv.Stdcall, 7, c => Fail(NetDown));
-            i.Register(ws, "WSAEventSelect", CallConv.Stdcall, 3, c => Fail(NetDown));
-            i.Register(ws, "WSAAsyncSelect", CallConv.Stdcall, 4, c => Fail(NetDown));
-            i.Register(ws, "WSACreateEvent", CallConv.Stdcall, 0, c => CreateEvent(true, false));
-            i.Register(ws, "WSACloseEvent", CallConv.Stdcall, 1, c => CloseHandle(c.Arg(0)));
-            i.Register(ws, "WSAResetEvent", CallConv.Stdcall, 1, c => { if (waitables.TryGetValue(c.Arg(0), out var e) && e is GuestEvent ev) ev.Signaled = false; return 1; });
-            i.Register(ws, "getaddrinfo", CallConv.Stdcall, 4, c => { memory.Write32(c.Arg(3), 0); return HostNotFound; });
-            i.Register(ws, "GetAddrInfoW", CallConv.Stdcall, 4, c => { memory.Write32(c.Arg(3), 0); return HostNotFound; });
-            i.Register(ws, "freeaddrinfo", CallConv.Stdcall, 1, c => 0);
-            i.Register(ws, "FreeAddrInfoW", CallConv.Stdcall, 1, c => 0);
-            i.Register(ws, "getnameinfo", CallConv.Stdcall, 7, c => HostNotFound);
-            i.Register(ws, "inet_pton", CallConv.Stdcall, 3, c => 0);
-
             const string net = "wininet.dll";
             const uint CannotConnect = 12029;
             foreach (var x in new[] { "A", "W" })

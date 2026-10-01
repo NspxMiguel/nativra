@@ -147,6 +147,10 @@ namespace Kiosk.Native
                     result = new GuestRunResult(GuestStop.HostError, detail: error.ToString());
                 }
 
+                // The guest's sockets end with its run: a server's bound port must not outlive it
+                // (the app keeps running, and the next launch binds the same port).
+                kernel.CloseNetwork();
+
                 lines.Add("x86.eip=0x" + process.Cpu.Eip.ToString("X8") + " " + process.Cpu);
                 lines.Add("x86.blocks=" + (process.Jit != null
                     ? process.Jit.BlocksCompiled + " compiled, " + process.Jit.BlocksExecuted + " run, " +

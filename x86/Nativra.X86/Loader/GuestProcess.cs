@@ -650,6 +650,7 @@ namespace Nativra.X86.Loader
             if (recent.Count > RecentImportCount) recent.Dequeue();
             jumped = false;
             blocking = false;
+            hostWake = false;
             var result = import.Handler.Body(call);
             var thread = CurrentThread;
             if (blocking)
@@ -659,6 +660,7 @@ namespace Nativra.X86.Loader
                 thread.Blocked = true;
                 switchWanted = true;
                 blockedStreak++;
+                if (hostWake) allWaitingSince = 0;   // the host can still wake it: this is not a deadlock
                 return;
             }
             thread.Blocked = false;

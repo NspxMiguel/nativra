@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Nativra.X86.Tests
 {
-    /// <summary>gdi32, the rest of user32, winmm, advapi32, shell32, version, oleaut32 and the absent network.</summary>
+    /// <summary>gdi32, the rest of user32, winmm, advapi32, shell32, version, oleaut32 and wininet's offline answers.</summary>
     public sealed class GuestLibrariesTests : IDisposable
     {
         private const uint Code = 0x00600000, Data = 0x00601000;
@@ -300,9 +300,13 @@ namespace Nativra.X86.Tests
             Assert.Equal(6u, p.Memory.Read32(bstr - 4));
             Call("oleaut32.dll", "SysFreeString", bstr);
 
+            // Sockets are real (GuestNetworkTests goes through them); wininet stays offline.
+            Assert.Equal(0xFFFFFFFFu, Call("ws2_32.dll", "socket", 2, 2, 17));
+            Assert.Equal(10093u, Call("ws2_32.dll", "WSAGetLastError"));   // WSANOTINITIALISED before WSAStartup
             Assert.Equal(0u, Call("ws2_32.dll", "WSAStartup", 0x0202, k.Heap.Alloc(400)));
-            Assert.Equal(0xFFFFFFFFu, Call("ws2_32.dll", "socket", 2, 1, 6));
-            Assert.Equal(10050u, Call("ws2_32.dll", "WSAGetLastError"));
+            var udp = Call("ws2_32.dll", "socket", 2, 2, 17);
+            Assert.NotEqual(0xFFFFFFFFu, udp);
+            Assert.Equal(0u, Call("ws2_32.dll", "closesocket", udp));
             Assert.Equal(0x3412u, Call("ws2_32.dll", "htons", 0x1234));
             Assert.Equal(0u, Call("wininet.dll", "InternetGetConnectedState", k.Heap.Alloc(4), 0));
 

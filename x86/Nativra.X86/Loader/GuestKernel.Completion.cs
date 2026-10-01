@@ -93,6 +93,7 @@ namespace Nativra.X86.Loader
         private uint DequeueCompletion(uint portHandle, uint bytesOut, uint keyOut, uint overlappedOut, uint timeout)
         {
             if (!(Object(portHandle) is CompletionPort port)) { process.LastError = ErrorInvalidHandle; return 0; }
+            if (NetworkBusy) PumpNetwork();   // overlapped socket calls that ended since queue their packets here
             if (port.Packets.Count == 0)
             {
                 if (process.WaitTimedOut(timeout))
@@ -101,7 +102,7 @@ namespace Nativra.X86.Loader
                     process.LastError = WaitTimeoutError;
                     return 0;
                 }
-                process.Block();
+                if (NetworkBusy) process.BlockOnHost(); else process.Block();
                 return 0;
             }
             var packet = port.Packets.Dequeue();
@@ -111,7 +112,7 @@ namespace Nativra.X86.Loader
             // A packet for a failed I/O is still dequeued, but the call reports the failure.
             if (packet[3] != 0)
             {
-                process.LastError = packet[3] == StatusEndOfFile ? ErrorHandleEof : packet[3];
+                process.LastError = packet[3] == StatusEndOfFile ? ErrorHandleEof : SocketErrorOfStatus(packet[3]);
                 return 0;
             }
             return 1;
@@ -122,6 +123,7 @@ namespace Nativra.X86.Loader
         {
             if (!(Object(portHandle) is CompletionPort port)) { process.LastError = ErrorInvalidHandle; return 0; }
             if (entries == 0 || count == 0) { process.LastError = ErrorInvalidParameter; return 0; }
+            if (NetworkBusy) PumpNetwork();
             if (port.Packets.Count == 0)
             {
                 if (process.WaitTimedOut(timeout))
@@ -130,7 +132,7 @@ namespace Nativra.X86.Loader
                     process.LastError = WaitTimeoutError;
                     return 0;
                 }
-                process.Block();
+                if (NetworkBusy) process.BlockOnHost(); else process.Block();
                 return 0;
             }
             uint n = 0;

@@ -244,6 +244,7 @@ namespace Nativra.X86.Loader
 
         private void Sleep(uint milliseconds)
         {
+            if (NetworkBusy) PumpNetwork();   // a thread that sleeps while an overlapped call ends should find it ended
             if (milliseconds == 0) { process.Yield(); return; }
             if (!process.WaitTimedOut(milliseconds)) process.Block();
         }
@@ -403,6 +404,7 @@ namespace Nativra.X86.Loader
         {
             var me = Me;
             if (handles.Length == 0) { process.LastError = ErrorInvalidParameter; return WaitFailed; }
+            if (NetworkBusy) PumpNetwork();   // events bound to sockets, and overlapped calls, are the network's to signal
 
             if (all)
             {
@@ -431,7 +433,8 @@ namespace Nativra.X86.Loader
             }
 
             if (process.WaitTimedOut(timeout)) return WaitTimeout;
-            process.Block();
+            // With sockets or overlapped calls outstanding the host can signal what this waits on at any time.
+            if (NetworkBusy) process.BlockOnHost(); else process.Block();
             return 0;
         }
 

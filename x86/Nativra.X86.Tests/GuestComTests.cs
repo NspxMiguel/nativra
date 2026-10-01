@@ -133,6 +133,8 @@ namespace Nativra.X86.Tests
             var sum = kernel.Heap.Alloc(4);
             Assert.Equal(0u, Call(obj, 3, 2, 3, sum));
             Assert.Equal(5u, p.Memory.Read32(sum));
+            Assert.Equal(0u, Call(obj, 3, 4, 3, sum));                  // a second call reuses the cached caller
+            Assert.Equal(7u, p.Memory.Read32(sum));
             Assert.Equal(obj, com.Wrap(com.Unwrap(obj), calc));   // one guest address per object
         }
 

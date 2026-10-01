@@ -109,6 +109,7 @@ namespace Nativra.X86.Loader
         private readonly Dictionary<long, uint> proxies = new Dictionary<long, uint>();       // host object -> guest proxy
         private readonly Dictionary<uint, Proxy> byGuest = new Dictionary<uint, Proxy>();
         private readonly Dictionary<IntPtr, Delegate> callers = new Dictionary<IntPtr, Delegate>();
+        private readonly HashSet<IntPtr> managedCallees = new HashSet<IntPtr>();   // host functions that are C# delegates (tests)
         private readonly IntPtr scratch;   // host-side out slots and structure copies
         private const int ScratchSize = 1024;
         private readonly IntPtr wide;      // host copy for an n:Bytes structure
@@ -585,13 +586,19 @@ namespace Nativra.X86.Loader
 
         private IntPtr CallHost(IntPtr f, IntPtr[] a)
         {
-            if (callers.TryGetValue(f, out var known) && known.GetType().DeclaringType != typeof(GuestCom))
-                return CallManaged(known, a);
-            var probe = Marshal.GetDelegateForFunctionPointer(f, typeof(H1));
-            if (probe.GetType() != typeof(H1))
+            // Kept as a set, not read back from the delegate's type: under .NET
+            // Native a delegate's DeclaringType needs reflection metadata the
+            // console build does not keep, so every second call to a method failed.
+            if (managedCallees.Contains(f)) return CallManaged(callers[f], a);
+            if (!callers.ContainsKey(f))
             {
-                callers[f] = probe;
-                return CallManaged(probe, a);
+                var probe = Marshal.GetDelegateForFunctionPointer(f, typeof(H1));
+                if (probe.GetType() != typeof(H1))
+                {
+                    callers[f] = probe;
+                    managedCallees.Add(f);
+                    return CallManaged(probe, a);
+                }
             }
             switch (a.Length)
             {

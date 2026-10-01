@@ -2,20 +2,33 @@ using System.Collections.Generic;
 
 namespace Nativra.X86.Loader
 {
-    // What the processor looks like, and the process's own threads as a
-    // snapshot: the queries engines make at start-up to size their job
-    // systems and to calibrate timers. The answers agree with GetSystemInfo
-    // (four processors, mask 0xF): one logical processor per core, one
-    // package, one NUMA node.
+    // What the processor looks like, and the process's own threads (and the
+    // process itself, as the only one listed) as a Toolhelp snapshot: the
+    // queries engines make at start-up to size their job systems and to
+    // calibrate timers. The answers agree with GetSystemInfo (four
+    // processors, mask 0xF): one logical processor per core, one package,
+    // one NUMA node.
     public sealed partial class GuestKernel
     {
         private const uint CurrentProcessId = GuestProcess.ProcessId;
         private const uint ProcessorCount = 4;
         private const uint ProcessorMhz = 3800;   // the Series X CPU's clock
-        private const uint ThreadSnapshotFlag = 0x4;   // TH32CS_SNAPTHREAD
+        private const uint ThreadSnapshotFlag = 0x4;    // TH32CS_SNAPTHREAD
+        private const uint ProcessSnapshotFlag = 0x2;   // TH32CS_SNAPPROCESS
 
+        // One entry per snapshot handle, empty when it lists no threads:
+        // CloseHandle forgets a snapshot through this table alone.
         private readonly Dictionary<uint, List<uint>> threadSnapshots = new Dictionary<uint, List<uint>>();
         private readonly Dictionary<uint, int> snapshotCursor = new Dictionary<uint, int>();
+
+        /// <summary>The process list of a snapshot that asked for one: how many threads were live, and where the walk is.</summary>
+        private sealed class ProcessList
+        {
+            public uint Threads;
+            public int Cursor;
+        }
+
+        private readonly Dictionary<uint, ProcessList> processSnapshots = new Dictionary<uint, ProcessList>();
 
         private void InstallSystemInfo(GuestImports i)
         {
@@ -98,13 +111,21 @@ namespace Nativra.X86.Loader
         private uint CreateSnapshot(uint flags)
         {
             const uint InvalidHandleValue = 0xFFFFFFFF;
-            // Modules and processes are not listed; asked for only those, say so.
-            if ((flags & ThreadSnapshotFlag) == 0) { process.LastError = ErrorNotSupported; return InvalidHandleValue; }
+            // Modules and heaps are not listed; asked for only those, say so.
+            if ((flags & (ThreadSnapshotFlag | ProcessSnapshotFlag)) == 0) { process.LastError = ErrorNotSupported; return InvalidHandleValue; }
+
+            // CloseHandle only knows threadSnapshots: drop the process lists it left behind.
+            var closed = new List<uint>();
+            foreach (var old in processSnapshots.Keys) if (!threadSnapshots.ContainsKey(old)) closed.Add(old);
+            foreach (var old in closed) processSnapshots.Remove(old);
+
             var handle = NewHandle();
             var ids = new List<uint>();
             foreach (var t in process.Threads) if (!t.IsDone) ids.Add(t.Id);
-            threadSnapshots[handle] = ids;
+            // A snapshot lists only what it was asked for; the rest is empty, not an error.
+            threadSnapshots[handle] = (flags & ThreadSnapshotFlag) != 0 ? ids : new List<uint>();
             snapshotCursor[handle] = 0;
+            if ((flags & ProcessSnapshotFlag) != 0) processSnapshots[handle] = new ProcessList { Threads = (uint)ids.Count };
             return handle;
         }
 

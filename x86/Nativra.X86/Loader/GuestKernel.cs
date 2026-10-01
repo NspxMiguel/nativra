@@ -215,6 +215,7 @@ namespace Nativra.X86.Loader
             InstallSystemInfo(i);
             InstallSearch();
             InstallCompletion(i);
+            InstallExtras(i);
             InstallUser32(i);
             InstallKernel32(i);
             InstallMsvcrt(i);

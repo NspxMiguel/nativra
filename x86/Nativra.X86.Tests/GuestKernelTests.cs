@@ -144,6 +144,57 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void ProcessSeesItsOwnModulesThroughPsapi()
+        {
+            var p = NewProcess(out var kernel);
+            kernel.ExePath = "C:\\game\\game.exe";
+            var exe = p.LoadExecutable("game.exe", TestPe32.Minimal());
+            var modules = kernel.Heap.Alloc(64, zero: true);
+            var needed = kernel.Heap.Alloc(4, zero: true);
+            var enumerate = p.Imports.Bind("psapi.dll", "EnumProcessModules", -1);
+            Assert.True(p.Call(enumerate, out var ok, 1000, 0xFFFFFFFF, modules, 64, needed).Ok);
+            Assert.Equal(1u, ok);
+            Assert.Equal(exe.BaseAddress, p.Memory.Read32(modules));   // the program first, as on Windows
+
+            var info = kernel.Heap.Alloc(12, zero: true);
+            var moduleInformation = p.Imports.Bind("kernel32.dll", "K32GetModuleInformation", -1);
+            Assert.True(p.Call(moduleInformation, out ok, 1000, 0xFFFFFFFF, exe.BaseAddress, info, 12).Ok);
+            Assert.Equal(1u, ok);
+            Assert.Equal(exe.BaseAddress, p.Memory.Read32(info));
+            Assert.Equal(exe.ImageSize, p.Memory.Read32(info + 4));
+
+            var name = kernel.Heap.Alloc(64, zero: true);
+            var baseName = p.Imports.Bind("psapi.dll", "GetModuleBaseNameA", -1);
+            Assert.True(p.Call(baseName, out var length, 1000, 0xFFFFFFFF, 0, name, 64).Ok);
+            Assert.Equal("game.exe", p.Memory.ReadAnsi(name));
+            Assert.Equal(8u, length);
+
+            var dosError = p.Imports.Bind("ntdll.dll", "RtlNtStatusToDosError", -1);
+            Assert.True(p.Call(dosError, out var error, 1000, 0xC0000034).Ok);
+            Assert.Equal(2u, error);   // STATUS_OBJECT_NAME_NOT_FOUND -> ERROR_FILE_NOT_FOUND
+        }
+
+        [Fact]
+        public void LogicalProcessorInformationExWalksAsSizedRecords()
+        {
+            var p = NewProcess(out var kernel);
+            var length = kernel.Heap.Alloc(4, zero: true);
+            Assert.Equal(0u, CallK(p, "GetLogicalProcessorInformationEx", 0xFFFF, 0, length));
+            var needed = p.Memory.Read32(length);
+            var buffer = kernel.Heap.Alloc(needed);
+            Assert.Equal(1u, CallK(p, "GetLogicalProcessorInformationEx", 0xFFFF, buffer, length));
+            int cores = 0, groups = 0;
+            for (uint at = buffer; at < buffer + needed; at += p.Memory.Read32(at + 4))
+            {
+                var kind = p.Memory.Read32(at);
+                if (kind == 0) cores++;
+                if (kind == 4) { groups++; Assert.Equal(4, (int)p.Memory.ReadBytes(at + 8 + 25, 1)[0]); }
+            }
+            Assert.Equal(4, cores);
+            Assert.Equal(1, groups);
+        }
+
+        [Fact]
         public void LogicalProcessorInformationAgreesWithGetSystemInfo()
         {
             var p = NewProcess(out var kernel);

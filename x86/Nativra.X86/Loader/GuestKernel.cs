@@ -221,6 +221,7 @@ namespace Nativra.X86.Loader
             InstallGdi(i);
             InstallUser32More(i);
             InstallLibraries(i);
+            InstallProcess(i);
         }
 
         // --- handler bodies -----------------------------------------------
@@ -357,7 +358,7 @@ namespace Nativra.X86.Loader
             {
                 path = null;
                 foreach (var image in process.Images)
-                    if (image.BaseAddress == module) { path = Folder(ExePath) + image.Name; break; }
+                    if (image.BaseAddress == module) { path = ModulePath(image.Name); break; }
                 if (path == null && fakeHandles.TryGetValue(module, out var system))
                     path = "C:\\Windows\\System32\\" + system;
                 if (path == null) { process.LastError = ErrorModNotFound; return 0; }

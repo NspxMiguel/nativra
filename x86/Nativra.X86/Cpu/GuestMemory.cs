@@ -49,6 +49,9 @@ namespace Nativra.X86.Cpu
 
         public bool IsNative => host != null;
 
+        /// <summary>Guest pages currently mapped: the process's working set, as far as the guest can tell.</summary>
+        public long MappedPages { get; private set; }
+
         public GuestMemory() : this(false) { }
 
         /// <param name="native">Reserve a real 4 GB region the JIT can address directly.</param>
@@ -90,11 +93,13 @@ namespace Nativra.X86.Cpu
                         if (!HostPages.Current.Commit((IntPtr)(host + ((ulong)page << PageShift)), PageSize))
                             throw new OutOfMemoryException($"could not commit guest page 0x{page << PageShift:X8}");
                         committed[page] = true;
+                        MappedPages++;
                     }
                 }
                 else if (pages[page] == null)
                 {
                     pages[page] = new byte[PageSize];
+                    MappedPages++;
                 }
                 if (page == PageCount - 1) break;
             }
@@ -115,11 +120,13 @@ namespace Nativra.X86.Cpu
                         // and mapping it again finds it zeroed.
                         HostPages.Current.Decommit((IntPtr)(host + ((ulong)page << PageShift)), PageSize);
                         committed[page] = false;
+                        MappedPages--;
                     }
                 }
-                else
+                else if (pages[page] != null)
                 {
                     pages[page] = null;
+                    MappedPages--;
                 }
                 if (page == PageCount - 1) break;
             }

@@ -25,8 +25,9 @@ namespace Nativra.X86.Loader
             if (Files == null || searchMissed.Contains(key)) return null;
             foreach (var folder in SearchFolders())
             {
-                var bytes = ReadGuestFile(folder.TrimEnd('\\') + "\\" + key);
-                if (bytes != null) return bytes;
+                var path = folder.TrimEnd('\\') + "\\" + key;
+                var bytes = ReadGuestFile(path);
+                if (bytes != null) { modulePaths[key] = path; return bytes; }
             }
             searchMissed.Add(key);
             return null;
@@ -67,6 +68,7 @@ namespace Nativra.X86.Loader
             if (file.IndexOf('.') < 0) path += ".dll";
             var bytes = ReadGuestFile(path);
             if (bytes == null) return null;
+            modulePaths[key] = path;
             // Its own imports are looked for beside it first.
             loadingFolders.Push(Folder(path));
             try

@@ -146,6 +146,7 @@ DWORD Coded(UINT x, UINT y, UINT z) { return D3DCOLOR_XRGB(x * 85, y * 85, z * 8
 DWORD Permuted(UINT x, UINT y, UINT z) { return Coded(z, x, y); }
 // A 2x2x2 level: each axis is 0 or full.
 DWORD Corners(UINT x, UINT y, UINT z) { return D3DCOLOR_XRGB(x * 255, y * 255, z * 255) & 0x00FFFFFF; }
+DWORD White(UINT, UINT, UINT) { return 0x00FFFFFF; }
 // Coded, with the box of texels 1..2 on every axis overwritten by white.
 DWORD Whitened(UINT x, UINT y, UINT z)
 {
@@ -682,6 +683,26 @@ int main()
             Check(kept == 0xFF55AAFFu && edited == 0xFFFFFFFFu, "a static volume relocked after upload keeps its texels",
                   Hex(kept) + " / " + Hex(edited));
 
+            // Its CPU copy dropped again, UpdateTexture copies the volume on the GPU.
+            IDirect3DVolumeTexture9* duplicate = nullptr;
+            dev->CreateVolumeTexture(4, 4, 4, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &duplicate, nullptr);
+            if (duplicate) {
+                const HRESULT copied = dev->UpdateTexture(volume, duplicate);
+                dev->SetTexture(1, duplicate);
+                wrong = WrongCells(dev, DrawSliceShader, 4, 4, Whitened, where);
+                report("volume: UpdateTexture copies a static volume on the GPU", wrong, where);
+                Check(copied == D3D_OK, "UpdateTexture from a static volume", Hex(copied));
+                dev->SetTexture(1, volume);
+                duplicate->Release();
+            }
+
+            // sRGB sampling decodes before the shader sees the texel: 85, 170 and 255 become about 23, 102 and 255.
+            dev->SetSamplerState(1, D3DSAMP_SRGBTEXTURE, TRUE);
+            const bool decoded = DrawSliceShader(dev, 3.5f / 4, rb);
+            Check(decoded && Near(rb.At(24, 40), 0x1767FF, 4), "volume: sRGB sampling decodes the texels",
+                  decoded ? Hex(rb.At(24, 40)) : "no readback");
+            dev->SetSamplerState(1, D3DSAMP_SRGBTEXTURE, FALSE);
+
             const D3DBOX outside = { 0, 0, 5, 4, 0, 4 };
             const D3DBOX empty = { 2, 0, 2, 4, 0, 4 };
             Check(volume->LockBox(0, &second, &outside, 0) == D3DERR_INVALIDCALL &&
@@ -807,6 +828,25 @@ int main()
             dev->SetTexture(1, nullptr);
         }
 
+        // --- a volume that generates its own mip levels from level 0 ---
+        IDirect3DVolumeTexture9* generated = nullptr;
+        const HRESULT madeGenerated =
+            dev->CreateVolumeTexture(4, 4, 4, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &generated, nullptr);
+        Check(SUCCEEDED(madeGenerated) && generated, "CreateVolumeTexture (auto-generated mips)", Hex(madeGenerated));
+        if (generated && psVolume) {
+            D3DLOCKED_BOX base = {};
+            if (SUCCEEDED(generated->LockBox(0, &base, nullptr, 0))) { FillVolume(base, 4, White); generated->UnlockBox(0); }
+            // Only level 0 was written; level 1 is white if it was generated from it.
+            dev->SetTexture(1, generated);
+            dev->SetSamplerState(1, D3DSAMP_MIPFILTER, D3DTEXF_POINT);
+            dev->SetSamplerState(1, D3DSAMP_MAXMIPLEVEL, 1);
+            const int wrong = WrongCells(dev, DrawSliceShader, 2, 2, White, where);
+            report("volume: mip levels are generated from level 0", wrong, where);
+            dev->SetSamplerState(1, D3DSAMP_MAXMIPLEVEL, 0);
+            dev->SetSamplerState(1, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+            dev->SetTexture(1, nullptr);
+        }
+
         // --- a DEFAULT-pool volume filled by UpdateTexture from system memory ---
         IDirect3DVolumeTexture9 *staged = nullptr, *resident = nullptr;
         dev->CreateVolumeTexture(4, 4, 4, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &staged, nullptr);
@@ -890,6 +930,7 @@ int main()
         if (dynamic) dynamic->Release();
         if (resident) resident->Release();
         if (staged) staged->Release();
+        if (generated) generated->Release();
         if (chain) chain->Release();
         if (volume) volume->Release();
         if (psVolume) psVolume->Release();

@@ -69,11 +69,28 @@ server:
 8. psapi, real module paths in `GetModuleFileName`,
    `RtlNtStatusToDosError`, `GetLogicalProcessorInformationEx`.
 
+9. **Real networking** (2906bb8): ws2_32/wsock32 on `System.Net.Sockets`
+   — TCP/UDP, select/WSAPoll, WSAEventSelect, overlapped WSASend/WSARecv
+   with completion ports, background DNS. On the way, wsock32's ordinals
+   10–12 turned out to be in a different order from ws2_32's, so the
+   server's `ioctlsocket(FIONBIO)` had been answered by `inet_ntoa`.
+10. **System DLL handles now hold a real PE image** (a5e9c36): steamclient
+    read ws2_32's headers through its handle, which pointed at nothing. Each
+    stand-in handle now maps a small PE32 whose export table lists what the
+    host serves — the shape DRM wrappers that walk export tables also need.
+11. `iphlpapi!GetAdaptersAddresses` (one adapter, the host's IPv4).
+12. **VirtualAlloc handed out the heap's own pages**: the guest heap maps its
+    region only as it grows, so its unmapped part looked free; tier0's
+    small-block heap then freed a pointer it did not own. Fixed.
+
 Result: the server goes through its entire start-up — console, Breakpad,
 VPK mounting (real file I/O on the game's content), steamclient, the mod's
 `server.dll` ("server.dll loaded for Half-Life 2 Deathmatch"), 8 threads —
-and stops at its first socket: the guest network is still deliberately
-absent (`WSAENETDOWN`, "Couldn't allocate any server IP port"). Real
-Winsock over `System.Net.Sockets` is the next step.
+opens its ports ("Network: IP …, mode MP, dedicated Yes, ports 27015 SV /
+27005 CL"), initialises Steam for a LAN server ("SteamAPI_Init(): Loaded
+local 'steamclient.dll' OK") and next asks for `mswsock!AcceptEx`.
+
+CI (`.github/workflows/x86-workload.yml`) downloads the server anonymously
+and runs this under the JIT on the Windows runner on every x86 change.
 
 All fixes have unit tests; CI's Windows runner checks the JIT path.

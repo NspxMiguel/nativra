@@ -82,16 +82,19 @@ namespace Kiosk
                     line.Append(" storage " + error.GetType().Name);
                 }
                 var test = root + "nativra-probe.bin";
-                var handle = CreateFileFromAppW(test, GenericWrite, 0, IntPtr.Zero, CreateAlways, 0, IntPtr.Zero);
+                int fromAppError;
+                var handle = Native.BoundedBroker.Call(
+                    () => CreateFileFromAppW(test, GenericWrite, 0, IntPtr.Zero, CreateAlways, 0, IntPtr.Zero),
+                    Invalid, out fromAppError);
                 if (handle != Invalid && handle != IntPtr.Zero)
                 {
                     CloseHandle(handle);
-                    DeleteFileFromAppW(test);
+                    Native.BoundedBroker.Call(() => DeleteFileFromAppW(test), out _);
                     line.Append(" fromapp write ok");
                 }
                 else
                 {
-                    line.Append(" fromapp error " + Marshal.GetLastWin32Error());
+                    line.Append(" fromapp error " + fromAppError);
                 }
                 report.AppendLine(line.ToString());
             }

@@ -97,10 +97,21 @@ else that raises this — most likely a plain, deliberate access violation
 used as an integrity/anti-debug check with no SEH involved at all, or a
 genuine bug in how the layer serves whatever CEG is probing.
 
-Not chased further tonight — this needs figuring out what CEG is actually
-doing at 0x0020F300 (a stack address, not image code — `Detail` on the
-raised exception came back null, meaning the exception record's own fault
-address was 0, so this was likely a software `RaiseException` call, not a
-hardware access violation the CPU itself trapped). Next step: log the full
-exception record's fields (code, flags, all parameters) at the point
+Not chased further that night — this needs figuring out what CEG is
+actually doing at 0x0020F300 (a stack address, not image code — `Detail` on
+the raised exception came back null, meaning the exception record's own
+fault address was 0, so this was likely a software `RaiseException` call,
+not a hardware access violation the CPU itself trapped). Next step: log the
+full exception record's fields (code, flags, all parameters) at the point
 `EnterHandler` finds no handler, not just the ones already surfaced.
+
+## Update (30/09): the logging is in, not yet read
+
+Added that logging (`GuestKernel.Seh.cs`'s `EnterHandler`, commit b2e4c18):
+on the no-handler/no-filter path, logs code, flags, eip, eax, the parameter
+count and every parameter word of the exception record. CI build is green.
+Not yet installed/run on console (console unavailable that session) — the
+next step is exactly what it was before, just with the tool now in place:
+launch WAVESHAPER on a build containing b2e4c18 or later and read the new
+`unhandled exception code=... flags=... eip=... eax=... nparams=...
+params=[...]` log line.

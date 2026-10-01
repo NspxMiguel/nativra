@@ -121,6 +121,21 @@ different approach (a shorter bound, or accepting that a hang there is
 rarer because it is usually opening a file that is already known to exist).
 Flagged as the clear next step, not attempted blind.
 
+## Update (30/09): the narrower fix shipped
+
+Applied exactly the narrower version above (commit d0d9940, with a csproj
+fix in 2b28e14 — CI caught a missing file reference on first push): a
+shared `BoundedBroker` helper (same 2s-wait-then-error-2 shape as the
+existing `Attributes()` fix) now wraps directory create/remove, delete,
+move, copy and directory listing across `CrtFiles.cs`, `FileWatch.cs` and
+`X86Files.cs` — and a fourth site found on the same sweep, `DriveProbe.cs`'s
+one-shot write-capability probe. `CreateFileFromAppW` itself, and its one
+other use in `DriveProbe.cs` that exists specifically to *measure*
+`CreateFileFromAppW`'s own latency, stay unwrapped — bounding the timing
+probe would corrupt the very measurement it exists to produce. Real
+on-console timing for `CreateFileFromAppW` is still the open question (not
+attempted — no console access that session).
+
 ## Second stop: reproduced, ambiguous — might be the same bug via a new path
 
 Reproduced the "still doesn't reach a frame" issue again on build 395,

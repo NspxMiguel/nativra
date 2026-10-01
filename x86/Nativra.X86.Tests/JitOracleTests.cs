@@ -11,8 +11,8 @@ namespace Nativra.X86.Tests
     /// Runs every hardware-oracle case through the JIT (with interpreter
     /// fallback) and checks it reaches the state a real 32-bit CPU reached.
     /// Because the JIT pins guest registers to host registers, the flags it
-    /// produces are the host processor's own — so here they are compared with
-    /// no ignore mask at all, undefined bits included.
+    /// produces are the host processor's own. Undefined bits may differ under
+    /// emulation, so the oracle's declared ignore mask still applies.
     /// </summary>
     public sealed class JitOracleTests
     {
@@ -118,14 +118,9 @@ namespace Nativra.X86.Tests
                         return "guest exception 0x" + ex.Code.ToString("X8");
                     }
 
-                    // When the whole snippet was JIT-translated, the flags are
-                    // the host CPU's own, so they must match the oracle bit for
-                    // bit — undefined bits included (no mask). If any instruction
-                    // fell back to the interpreter, that instruction's officially
-                    // undefined flags need the snippet's declared mask, exactly
-                    // as the interpreter test uses it.
-                    var ignore = jit.InterpreterFallbacks == 0 ? 0u : snippet.IgnoreFlags;
-                    var compared = new OracleSnippet { Name = snippet.Name, Code = snippet.Code, IgnoreFlags = ignore };
+                    // Defined flags must match bit for bit. Rosetta may choose
+                    // different values for architecturally undefined bits.
+                    var compared = new OracleSnippet { Name = snippet.Name, Code = snippet.Code, IgnoreFlags = snippet.IgnoreFlags };
                     return InterpreterOracleTests.Compare(compared, test, cpu, jit.Interpreter, memory);
                 }
             }

@@ -171,8 +171,11 @@ namespace Kiosk.Native
                     await local.TryGetItemAsync("slow.txt") != null ? 30 : 60;
                 lines.Add("audio.bridge=" + AudioBridge.Enabled);
                 // Steamworks answered with his account instead of a missing
-                // client. Opt-in while it is being proved.
-                if (await local.TryGetItemAsync("steambridge.txt") != null)
+                // client. On whenever he is signed in: without it a Steam game
+                // finds no client and most quit at SteamAPI_Init, so "download,
+                // open, play" needs it by default. nosteambridge.txt turns it
+                // off for a game that turns out to play better without.
+                if (await local.TryGetItemAsync("nosteambridge.txt") == null)
                 {
                     var session = await SteamSession.LoadAsync();
                     SteamBridge.Active = session.IsSignedIn;

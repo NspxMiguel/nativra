@@ -27,6 +27,7 @@ namespace Nativra.X86.Run
             string dlls = null, importsFile = null, traceFile = null;
             var interp = false;
             long budget = 400_000_000, dllBudget = 0;
+            uint steamApp = 0;
             var logLines = 200;
             var rest = new List<string>();
             for (var i = 0; i < args.Length; i++)
@@ -40,12 +41,13 @@ namespace Nativra.X86.Run
                     case "--log": logLines = int.Parse(args[++i]); break;
                     case "--trace": traceFile = args[++i]; break;
                     case "--dll-budget": dllBudget = long.Parse(args[++i]); break;
+                    case "--steam": steamApp = uint.Parse(args[++i]); break;
                     default: rest.Add(args[i]); break;
                 }
             }
             if (rest.Count < 2)
             {
-                Console.Error.WriteLine("usage: nativra-run [--dlls DIR] [--interp] [--budget N] [--imports FILE] <folder> <exe> [arguments...]");
+                Console.Error.WriteLine("usage: nativra-run [--dlls DIR] [--interp] [--budget N] [--imports FILE] [--steam APPID] <folder> <exe> [arguments...]");
                 return 2;
             }
             var folder = Path.GetFullPath(rest[0]);
@@ -79,8 +81,10 @@ namespace Nativra.X86.Run
                 kernel.Files = new HostFolderFiles("C:\\game", folder);
                 kernel.Install();
                 var com = new GuestCom(process, kernel);
-                var steam = new GuestSteam(process, kernel, new MemorySteamAccount { AppId = 562260 });
-                steam.Install();
+                // --steam APPID answers steam_api.dll as the console's bridge does, for a
+                // game that needs a signed-in account. Off by default: a dedicated server
+                // runs its own steamclient.dll, which is the code worth exercising here.
+                if (steamApp != 0) new GuestSteam(process, kernel, new MemorySteamAccount { AppId = steamApp }).Install();
                 using (var sound = new GuestDirectSound(process, kernel, new NullSoundOutput()))
                 {
                     sound.Install();

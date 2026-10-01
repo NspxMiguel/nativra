@@ -1,3 +1,4 @@
+using System;
 using Nativra.X86.Cpu;
 using Nativra.X86.Loader;
 using Xunit;
@@ -27,6 +28,64 @@ namespace Nativra.X86.Tests
             p.Memory.Write32(Data + 0, p.Imports.Bind("kernel32.dll", "RaiseException", -1));
             p.Memory.Write32(Data + 4, p.Imports.Bind("kernel32.dll", "RtlUnwind", -1));
             return p;
+        }
+
+        // AddVectoredExceptionHandler(1, handler) at Data+8, then RaiseException(0xE0001234,
+        // flags, 0, 0) with no frame on the chain at all. The handler (at Code+0x40) stores
+        // the code at Data+0x10 and returns EXCEPTION_CONTINUE_EXECUTION; the program
+        // returns what was stored. Byte 18 is the flags argument.
+        private static byte[] VectoredProgram(bool noncontinuable)
+        {
+            var b = new byte[0x60];
+            for (var n = 0; n < b.Length; n++) b[n] = 0xCC;
+            byte[] main =
+            {
+                0x68, 0x40, 0x00, 0x60, 0x00,             // push handler
+                0x6A, 0x01,                               // push 1 (first)
+                0xFF, 0x15, 0x08, 0x10, 0x60, 0x00,       // call [AddVectoredExceptionHandler]
+                0x6A, 0x00, 0x6A, 0x00,                   // push 0 (arguments), push 0 (count)
+                0x6A, (byte)(noncontinuable ? 1 : 0),     // push flags
+                0x68, 0x34, 0x12, 0x00, 0xE0,             // push 0xE0001234
+                0xFF, 0x15, 0x00, 0x10, 0x60, 0x00,       // call [RaiseException]
+                0xA1, 0x10, 0x10, 0x60, 0x00,             // mov eax, [Data+0x10]
+                0xC3,                                     // ret
+            };
+            byte[] handler =
+            {
+                0x8B, 0x44, 0x24, 0x04,                   // mov eax, [esp+4]   EXCEPTION_POINTERS*
+                0x8B, 0x00,                               // mov eax, [eax]     ExceptionRecord
+                0x8B, 0x00,                               // mov eax, [eax]     ExceptionCode
+                0xA3, 0x10, 0x10, 0x60, 0x00,             // mov [Data+0x10], eax
+                0xB8, 0xFF, 0xFF, 0xFF, 0xFF,             // mov eax, -1        CONTINUE_EXECUTION
+                0xC2, 0x04, 0x00,                         // ret 4
+            };
+            Array.Copy(main, b, main.Length);
+            Array.Copy(handler, 0, b, 0x40, handler.Length);
+            return b;
+        }
+
+        [SkippableTheory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void AVectoredHandlerSeesTheExceptionFirstAndCanContinueIt(bool jit)
+        {
+            var p = Load(VectoredProgram(noncontinuable: false), jit, out var kernel);
+            p.Memory.Write32(Data + 8, p.Imports.Bind("kernel32.dll", "AddVectoredExceptionHandler", -1));
+            var result = p.Call(Code, out var eax, 100_000);
+            Assert.True(result.Ok, result.ToString());
+            Assert.Equal(0xE0001234u, eax);
+        }
+
+        [SkippableTheory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void AVectoredHandlerCannotContinueANoncontinuableException(bool jit)
+        {
+            var p = Load(VectoredProgram(noncontinuable: true), jit, out var kernel);
+            p.Memory.Write32(Data + 8, p.Imports.Bind("kernel32.dll", "AddVectoredExceptionHandler", -1));
+            var result = p.Call(Code, out _, 100_000);
+            Assert.False(result.Ok, "a noncontinuable exception must not resume after RaiseException");
+            Assert.Equal(0xE0001234u, p.Memory.Read32(Data + 0x10));   // the handler still saw it first
         }
 
         // A frame whose handler records the code, clobbers EBX and returns

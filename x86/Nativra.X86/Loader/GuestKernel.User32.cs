@@ -921,6 +921,8 @@ namespace Nativra.X86.Loader
         /// <summary>A nested cdecl call into guest code.</summary>
         internal uint CallGuestCdecl(uint function, params uint[] args) => CallGuest(function, args);
 
+        internal uint CallGuestStdcall(uint function, params uint[] args) => CallGuest(function, args);
+
         /// <summary>A nested stdcall into guest code, for answers a host call needs before it returns.</summary>
         private uint CallGuest(uint function, params uint[] args)
         {

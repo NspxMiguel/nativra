@@ -404,6 +404,7 @@ namespace Nativra.X86.Loader
         {
             var me = Me;
             if (handles.Length == 0) { process.LastError = ErrorInvalidParameter; return WaitFailed; }
+            PollAudio?.Invoke();
             if (NetworkBusy) PumpNetwork();   // events bound to sockets, and overlapped calls, are the network's to signal
 
             if (all)
@@ -434,10 +435,17 @@ namespace Nativra.X86.Loader
 
             if (process.WaitTimedOut(timeout)) return WaitTimeout;
             // With sockets or overlapped calls outstanding the host can signal what this waits on at any time.
-            if (NetworkBusy) process.BlockOnHost(); else process.Block();
+            if (NetworkBusy || (AudioWaitActive != null && AudioWaitActive())) process.BlockOnHost(); else process.Block();
             return 0;
         }
 
         private bool CloseRuntimeHandle(uint handle) => waitables.Remove(handle);
+
+        /// <summary>Audio advances guest event state on the scheduler thread before waits inspect it.</summary>
+        public Action PollAudio { get; set; }
+        public Func<bool> AudioWaitActive { get; set; }
+
+        /// <summary>Signals an event while executing on the guest scheduler thread.</summary>
+        public void SignalAudioEvent(uint handle) => SignalEvent(handle, true);
     }
 }

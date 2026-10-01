@@ -634,9 +634,9 @@ namespace Nativra.X86.Loader
                 }
                 catch (Exception e) when (UsesJit && (e is InvalidOperationException || e is OutOfMemoryException))
                 {
-                    // The code cache could not publish a block. Nothing ran (the
-                    // block is published before it executes), so the interpreter
-                    // picks up from the very same state.
+                    // The code cache could not publish the next block. The JIT
+                    // stored the state of any earlier blocks in this chain, so
+                    // the interpreter picks up at the refused block.
                     JitRefusal = e.Message;
                 }
                 catch (GuestFaultException fe)

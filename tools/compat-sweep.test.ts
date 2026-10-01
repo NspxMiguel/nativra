@@ -22,3 +22,11 @@ test("a 32-bit game that stops reports the layer's reason", () => {
 test("nothing pulled is not a verdict", () => {
   expect(classify(1, "", "", "").status).toBe("no-report");
 });
+
+test("a 32-bit game counts its D3D9 presents as frames", () => {
+  const probe = "x86.run=running\nx86.com 2400x IDirect3DDevice9::Present\nx86.seconds=60.0\nx86.window=0x10010 dispatched=5\n";
+  const v = classify(562260, "frames=0 at 0.0 a second", probe, "");
+  expect(v.frames).toBe(2400);
+  expect(v.fps).toBe(40);
+  expect(v.status).toBe("renders");
+});

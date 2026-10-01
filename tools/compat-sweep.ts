@@ -11,7 +11,7 @@
 
 import { $ } from "bun";
 import { join, resolve } from "node:path";
-import { mkdir, readFile, appendFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, appendFile, writeFile, rm } from "node:fs/promises";
 
 const ROOT = resolve(import.meta.dir, "..");
 const XBDEV = join(ROOT, "src/xbdev.ts");
@@ -28,9 +28,13 @@ export type Verdict = {
 /** Reads the app's own reports (native-pulse.txt, native-probe.txt, crash-log.txt) into a verdict. */
 export function classify(appid: number, pulse: string, probe: string, crash: string): Verdict {
   const frameLine = /^frames=(\d+) at ([\d.]+) a second/m.exec(pulse);
-  const frames = frameLine ? Number(frameLine[1]) : 0;
-  const fps = frameLine ? Number(frameLine[2]) : 0;
   const pick = (re: RegExp, text: string) => re.exec(text)?.[1]?.trim();
+  // A 32-bit game draws through the D3D9 bridge, not the 64-bit pulse: its
+  // frames are the Present calls the probe counts, over the seconds it ran.
+  const presents = Number(pick(/^x86\.com (\d+)x IDirect3DDevice9::Present$/m, probe) ?? 0);
+  const seconds = Number(pick(/^x86\.seconds=([\d.]+)/m, probe) ?? 0);
+  const frames = presents || (frameLine ? Number(frameLine[1]) : 0);
+  const fps = presents ? (seconds > 0 ? Math.round((presents / seconds) * 10) / 10 : 0) : frameLine ? Number(frameLine[2]) : 0;
   const x86 = pick(/^x86\.run=(.*)$/m, probe) ?? pick(/^x86\.init=(?!returned)(.*)$/m, probe);
   const failed = pick(/^x86\.failed=(.{0,160})/m, probe);
   const chain = pick(/chain=(.*)$/m, pulse);
@@ -89,8 +93,12 @@ async function test(appid: number, seconds: number): Promise<Verdict> {
   await pushMarker("autoplay.txt", String(appid));
   await xbdev(["launch", "Kiosk"]);
   await sleep(seconds * 1000);
-  for (const file of ["native-pulse.txt", "native-probe.txt", "crash-log.txt", "x86-imports.txt"])
+  // A pull that fails must not leave the previous game's report in place: it
+  // was read back as this run's result.
+  for (const file of ["native-pulse.txt", "native-probe.txt", "crash-log.txt", "x86-imports.txt"]) {
+    await rm(join(dir, file), { force: true });
     await xbdev(["pull", "Kiosk", file, "LocalState"], dir);
+  }
   await xbdev(["shot", join(dir, "shot.png")]);
   await xbdev(["stop", "Kiosk"]);
   await waitStopped();

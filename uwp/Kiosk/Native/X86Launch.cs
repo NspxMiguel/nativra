@@ -45,7 +45,7 @@ namespace Kiosk.Native
         {
             try
             {
-                return await RunCoreAsync(folderPath, exeName, exeBytes, lines);
+                return await RunCoreAsync(folderPath, exeName, exeBytes, lines, snapshot);
             }
             catch (Exception error)
             {
@@ -56,7 +56,8 @@ namespace Kiosk.Native
             }
         }
 
-        private static async Task<bool> RunCoreAsync(string folderPath, string exeName, byte[] exeBytes, List<string> lines)
+        private static async Task<bool> RunCoreAsync(string folderPath, string exeName, byte[] exeBytes, List<string> lines,
+            Func<List<string>, Task> snapshot)
         {
             // Before anything reserves guest or code memory: the app container
             // refuses the plain VirtualAlloc family, and both the guest space and

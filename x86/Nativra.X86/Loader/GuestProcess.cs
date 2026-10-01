@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using Nativra.X86.Cpu;
 using Nativra.X86.Jit;
@@ -187,7 +188,8 @@ namespace Nativra.X86.Loader
             Cpu = new CpuState();
 
             JitEngine jit = null;
-            if (useJit && memory.IsNative && IntPtr.Size == 8)
+            // The JIT emits x64 code: an arm64 host (a Mac running the tests) interprets.
+            if (useJit && memory.IsNative && IntPtr.Size == 8 && RuntimeInformation.ProcessArchitecture != Architecture.Arm64)
             {
                 try { jit = new JitEngine(Cpu, memory); }
                 catch (InvalidOperationException) { jit = null; }   // executable memory refused

@@ -39,6 +39,20 @@ namespace Nativra.X86.Cpu
             return n;
         }
 
+        /// <summary>
+        /// x86's "real indefinite": the quiet NaN an invalid operation (0/0, inf-inf,
+        /// sqrt of a negative) produces, with the sign bit set. An arm64 host makes a
+        /// positive one instead, so results computed there are put right here.
+        /// </summary>
+        public static readonly double Indefinite = BitConverter.Int64BitsToDouble(unchecked((long)0xFFF8000000000000UL));
+
+        /// <summary>The result, or the x86 indefinite if the operation itself made the NaN.</summary>
+        public static double Invalid(double result, double a, double b) =>
+            double.IsNaN(result) && !double.IsNaN(a) && !double.IsNaN(b) ? Indefinite : result;
+
+        public static double Invalid(double result, double operand) =>
+            double.IsNaN(result) && !double.IsNaN(operand) ? Indefinite : result;
+
         public static float Int32BitsToSingle(int bits) => *(float*)&bits;
 
         public static int SingleToInt32Bits(float value) => *(int*)&value;

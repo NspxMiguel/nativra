@@ -16,7 +16,8 @@ namespace Nativra.X86.Tests
         private const uint StackTop = 0x00300000;
         private const uint Data = 0x00500000;
 
-        private static bool CanJit => IntPtr.Size == 8;
+        private static bool CanJit =>
+            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.X64;
 
         private static JitEngine Fresh(GuestMemory memory, out CpuState cpu)
         {
@@ -30,7 +31,7 @@ namespace Nativra.X86.Tests
         [SkippableFact]
         public void SumLoopWithFallbackBranch()
         {
-            Skip.IfNot(CanJit, "JIT needs a 64-bit host");
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
             using (var memory = new GuestMemory(native: true))
             using (var jit = Fresh(memory, out var cpu))
             {
@@ -58,7 +59,7 @@ namespace Nativra.X86.Tests
         [SkippableFact]
         public void ArraySumThroughGuestMemory()
         {
-            Skip.IfNot(CanJit, "JIT needs a 64-bit host");
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
             using (var memory = new GuestMemory(native: true))
             using (var jit = Fresh(memory, out var cpu))
             {
@@ -90,7 +91,7 @@ namespace Nativra.X86.Tests
         [SkippableFact]
         public void CallAndReturnThroughGuestStack()
         {
-            Skip.IfNot(CanJit, "JIT needs a 64-bit host");
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
             using (var memory = new GuestMemory(native: true))
             using (var jit = Fresh(memory, out var cpu))
             {
@@ -118,7 +119,7 @@ namespace Nativra.X86.Tests
         [SkippableFact]
         public void BlocksAreCachedAcrossIterations()
         {
-            Skip.IfNot(CanJit, "JIT needs a 64-bit host");
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
             using (var memory = new GuestMemory(native: true))
             using (var jit = Fresh(memory, out var cpu))
             {

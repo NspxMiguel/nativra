@@ -58,12 +58,13 @@ namespace Nativra.X86.Tests
             0x00, 0x31, 0xC0, 0xC2, 0x10, 0x00, 0xFF, 0x25, 0x18, 0x10, 0x60, 0x00,
         };
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void MessageLoopRunsTheWindowProcedureUntilQuit(bool jit)
         {
             var p = new GuestProcess(new GuestMemory(native: jit), useJit: jit);
+            Skip.If(jit && !TestHost.CanJit, "JIT needs an x64 host");
             Assert.Equal(jit, p.UsesJit);   // a JIT case must not fall back to the interpreter unnoticed
             var kernel = new GuestKernel(p) { Input = new Keys() };
             kernel.Install();

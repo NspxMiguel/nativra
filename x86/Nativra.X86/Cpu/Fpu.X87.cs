@@ -234,12 +234,12 @@ namespace Nativra.X86.Cpu
         {
             switch (kind)
             {
-                case 0: return st0 + other;
-                case 1: return st0 * other;
-                case 4: return st0 - other;
-                case 5: return other - st0;
-                case 6: return st0 / other;
-                default: return other / st0;
+                case 0: return Bits.Invalid(st0 + other, st0, other);
+                case 1: return Bits.Invalid(st0 * other, st0, other);
+                case 4: return Bits.Invalid(st0 - other, st0, other);
+                case 5: return Bits.Invalid(other - st0, st0, other);
+                case 6: return Bits.Invalid(st0 / other, st0, other);
+                default: return Bits.Invalid(other / st0, st0, other);
             }
         }
 
@@ -412,7 +412,7 @@ namespace Nativra.X86.Cpu
                         case 6: r = b / a; break; // FDIVR ST(i), ST(0)
                         default: r = a / b; break; // FDIV ST(i), ST(0)
                     }
-                    SetSt(rm, r);
+                    SetSt(rm, Bits.Invalid(r, a, b));
                     return true;
                 }
                 case 5:
@@ -447,7 +447,7 @@ namespace Nativra.X86.Cpu
                         case 6: r = b / a; break; // FDIVRP
                         default: r = a / b; break; // FDIVP
                     }
-                    SetSt(rm, r);
+                    SetSt(rm, Bits.Invalid(r, a, b));
                     Pop();
                     return true;
                 }
@@ -535,7 +535,7 @@ namespace Nativra.X86.Cpu
                     {
                         case 0: Remainder(false); return true; // FPREM
                         case 1: { var r = St(1) * Bits.Log2(St(0) + 1.0); Pop(); SetSt(0, r); return true; } // FYL2XP1
-                        case 2: SetSt(0, Math.Sqrt(St(0))); return true;
+                        case 2: { var v = St(0); SetSt(0, Bits.Invalid(Math.Sqrt(v), v)); return true; }
                         case 3: { var v = St(0); SetSt(0, Math.Sin(v)); Push(Math.Cos(v)); status &= unchecked((ushort)~0x400); return true; }
                         case 4: SetSt(0, RoundInteger(St(0))); return true;
                         case 5: SetSt(0, Bits.ScaleB(St(0), (int)Math.Truncate(St(1)))); return true;

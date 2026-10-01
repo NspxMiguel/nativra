@@ -18,7 +18,8 @@ namespace Nativra.X86.Tests
     {
         // Only runnable where a real 4 GB reservation and executable pages are
         // available: the CI windows runner and normal 64-bit desktops.
-        private static bool CanJit => IntPtr.Size == 8;
+        private static bool CanJit =>
+            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.X64;
 
         public static IEnumerable<object[]> Snippets()
         {
@@ -32,7 +33,7 @@ namespace Nativra.X86.Tests
         [MemberData(nameof(Snippets))]
         public void MatchesHardware(OracleSnippet snippet)
         {
-            Skip.IfNot(CanJit, "JIT needs a 64-bit host");
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
             var failures = new List<string>();
             for (var i = 0; i < snippet.Cases.Count; i++)
             {
@@ -66,7 +67,7 @@ namespace Nativra.X86.Tests
         [SkippableFact]
         public void CoversTheExpectedSubsetWithoutFallback()
         {
-            Skip.IfNot(CanJit, "JIT needs a 64-bit host");
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
             var path = OracleVectors.FindFile();
             Skip.If(path == null, "oracle vectors not generated");
 

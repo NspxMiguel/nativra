@@ -21,13 +21,14 @@ namespace Nativra.X86.Tests
             0xC8, 0x89, 0xEC, 0x5D, 0xC3,
         };
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void EbpRelativeOperandsAddressTheFrame(bool jit)
         {
             using (var p = new GuestProcess(new GuestMemory(native: jit), useJit: jit))
             {
+                Skip.If(jit && !TestHost.CanJit, "JIT needs an x64 host");
                 Assert.Equal(jit, p.UsesJit);
                 p.Memory.Map(0x00600000, 0x1000);
                 p.Memory.WriteBytes(0x00600000, Frame);
@@ -46,13 +47,14 @@ namespace Nativra.X86.Tests
             0x4C, 0x24, 0x04, 0xE8, 0x03, 0x00, 0x00, 0x01, 0xC8, 0xC3,
         };
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void ThreeOperandImulWithAMemorySourceIgnoresTheOldDestination(bool jit)
         {
             using (var p = new GuestProcess(new GuestMemory(native: jit), useJit: jit))
             {
+                Skip.If(jit && !TestHost.CanJit, "JIT needs an x64 host");
                 Assert.Equal(jit, p.UsesJit);
                 p.Memory.Map(0x00600000, 0x1000);
                 p.Memory.WriteBytes(0x00600000, ImulMemory);
@@ -73,13 +75,14 @@ namespace Nativra.X86.Tests
             0xC8, 0xC3,
         };
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void HighByteRegistersAndByteSwapsMatchTheInterpreter(bool jit)
         {
             using (var p = new GuestProcess(new GuestMemory(native: jit), useJit: jit))
             {
+                Skip.If(jit && !TestHost.CanJit, "JIT needs an x64 host");
                 Assert.Equal(jit, p.UsesJit);
                 p.Memory.Map(0x00600000, 0x1000);
                 p.Memory.WriteBytes(0x00600000, HighBytes);

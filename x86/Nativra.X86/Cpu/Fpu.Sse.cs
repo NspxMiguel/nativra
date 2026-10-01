@@ -188,14 +188,14 @@ namespace Nativra.X86.Cpu
         {
             switch (op)
             {
-                case 0x58: return a + b;
-                case 0x59: return a * b;
-                case 0x5C: return a - b;
-                case 0x5E: return a / b;
+                case 0x58: return Bits.Invalid(a + b, a, b);
+                case 0x59: return Bits.Invalid(a * b, a, b);
+                case 0x5C: return Bits.Invalid(a - b, a, b);
+                case 0x5E: return Bits.Invalid(a / b, a, b);
                 case 0x5D: return a < b ? a : b;   // MIN: the second operand on NaN or equal
                 case 0x5F: return a > b ? a : b;   // MAX: likewise
-                case 0x51: return single ? Math.Sqrt((float)b) : Math.Sqrt(b);
-                case 0x52: return 1.0 / Math.Sqrt(b);
+                case 0x51: return Bits.Invalid(single ? Math.Sqrt((float)b) : Math.Sqrt(b), b);
+                case 0x52: return Bits.Invalid(1.0 / Math.Sqrt(b), b);
                 default: return 1.0 / b;           // 0x53 RCP
             }
         }

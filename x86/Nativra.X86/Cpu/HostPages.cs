@@ -66,7 +66,12 @@ namespace Nativra.X86.Cpu
         private sealed class Posix : IBackend
         {
             private const int PROT_NONE = 0, PROT_READ = 1, PROT_WRITE = 2, PROT_EXEC = 4;
-            private const int MAP_PRIVATE = 0x02, MAP_ANONYMOUS = 0x20, MAP_NORESERVE = 0x4000;
+            private const int MAP_PRIVATE = 0x02, MAP_FIXED = 0x10;
+
+            // The same flags have different values on macOS (BSD) and Linux.
+            private static readonly bool Mac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+            private static readonly int MAP_ANONYMOUS = Mac ? 0x1000 : 0x20;
+            private static readonly int MAP_NORESERVE = Mac ? 0x40 : 0x4000;
 
             [DllImport("libc", SetLastError = true)]
             private static extern IntPtr mmap(IntPtr addr, UIntPtr length, int prot, int flags, int fd, IntPtr offset);
@@ -84,21 +89,45 @@ namespace Nativra.X86.Cpu
                 return p == new IntPtr(-1) ? IntPtr.Zero : p;
             }
 
-            public bool Commit(IntPtr address, ulong size) =>
-                mprotect(address, (UIntPtr)size, PROT_READ | PROT_WRITE) == 0;
+            // Guest pages are 4 KB; Apple silicon's host pages are 16 KB, and
+            // mprotect only takes whole host pages.
+            private static readonly ulong HostPage = (ulong)Environment.SystemPageSize;
 
-            public bool Protect(IntPtr address, ulong size, bool write, bool execute) =>
-                mprotect(address, (UIntPtr)size,
-                    PROT_READ | (write ? PROT_WRITE : 0) | (execute ? PROT_EXEC : 0)) == 0;
-
-            [DllImport("libc", SetLastError = true)]
-            private static extern int madvise(IntPtr addr, UIntPtr length, int advice);
-
-            public void Decommit(IntPtr address, ulong size)
+            private static void Round(IntPtr address, ulong size, out IntPtr start, out UIntPtr length)
             {
-                const int MADV_DONTNEED = 4;
-                madvise(address, (UIntPtr)size, MADV_DONTNEED);
-                mprotect(address, (UIntPtr)size, PROT_NONE);
+                var from = (ulong)address.ToInt64() & ~(HostPage - 1);
+                var to = ((ulong)address.ToInt64() + size + HostPage - 1) & ~(HostPage - 1);
+                start = new IntPtr((long)from);
+                length = (UIntPtr)(to - from);
+            }
+
+            public bool Commit(IntPtr address, ulong size)
+            {
+                Round(address, size, out var start, out var length);
+                return mprotect(start, length, PROT_READ | PROT_WRITE) == 0;
+            }
+
+            public bool Protect(IntPtr address, ulong size, bool write, bool execute)
+            {
+                Round(address, size, out var start, out var length);
+                return mprotect(start, length,
+                    PROT_READ | (write ? PROT_WRITE : 0) | (execute ? PROT_EXEC : 0)) == 0;
+            }
+
+            // Mapping fresh anonymous pages over the range is the portable way to
+            // get them back zeroed: macOS's MADV_DONTNEED keeps the old contents.
+            // Part of a host page cannot be dropped without its neighbours, so
+            // that part is only zeroed and stays accessible.
+            public unsafe void Decommit(IntPtr address, ulong size)
+            {
+                if (((ulong)address.ToInt64() & (HostPage - 1)) != 0 || (size & (HostPage - 1)) != 0)
+                {
+                    var p = (byte*)address;
+                    for (ulong i = 0; i < size; i++) p[i] = 0;
+                    return;
+                }
+                mmap(address, (UIntPtr)size, PROT_NONE,
+                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, IntPtr.Zero);
             }
 
             public void Release(IntPtr address, ulong size) => munmap(address, (UIntPtr)size);

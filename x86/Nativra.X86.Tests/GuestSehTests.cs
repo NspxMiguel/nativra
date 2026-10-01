@@ -18,6 +18,7 @@ namespace Nativra.X86.Tests
         private static GuestProcess Load(byte[] program, bool jit, out GuestKernel kernel)
         {
             var p = new GuestProcess(new GuestMemory(native: jit), useJit: jit);
+            Skip.If(jit && !TestHost.CanJit, "JIT needs an x64 host");
             Assert.Equal(jit, p.UsesJit);   // a JIT case must not fall back to the interpreter unnoticed
             kernel = new GuestKernel(p);
             kernel.Install();
@@ -65,7 +66,7 @@ namespace Nativra.X86.Tests
             0x0D, 0x34, 0x10, 0x60, 0x00, 0xC1, 0xE1, 0x10, 0x01, 0xC8, 0x5D, 0x5F, 0x5E, 0x5B, 0xC3,
         };
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void HandlerThatContinuesResumesAfterTheRaiseWithItsRegisters(bool jit)
@@ -78,7 +79,7 @@ namespace Nativra.X86.Tests
             Assert.Equal(new[] { 0xE0001234u }, kernel.ExceptionsRaised);
         }
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void CatchUnwindsInnerFramesAndContinuesAtItsLabel(bool jit)
@@ -115,7 +116,7 @@ namespace Nativra.X86.Tests
         private static bool CanRun(bool jit) =>
             !jit || System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void AccessViolationReachesTheGuestHandlerWhichSkipsTheInstruction(bool jit)
@@ -129,7 +130,7 @@ namespace Nativra.X86.Tests
             Assert.Equal(new[] { 0xC0000005u }, kernel.ExceptionsRaised);
         }
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void UnhandledFaultStopsAtTheFaultingInstructionWithItsState(bool jit)

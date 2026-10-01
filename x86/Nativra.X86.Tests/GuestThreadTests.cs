@@ -17,6 +17,7 @@ namespace Nativra.X86.Tests
         private static GuestProcess Load(byte[] program, bool jit, out GuestKernel kernel)
         {
             var p = new GuestProcess(new GuestMemory(native: jit), useJit: jit);
+            Skip.If(jit && !TestHost.CanJit, "JIT needs an x64 host");
             Assert.Equal(jit, p.UsesJit);   // a JIT case must not fall back to the interpreter unnoticed
             kernel = new GuestKernel(p);
             kernel.Install();
@@ -53,7 +54,7 @@ namespace Nativra.X86.Tests
             0xC2, 0x04, 0x00,
         };
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void WaitingThreadResumesWhenTheWorkerExits(bool jit)
@@ -68,7 +69,7 @@ namespace Nativra.X86.Tests
             Assert.Equal(GuestProcess.MainThreadId, p.CurrentThread.Id);
         }
 
-        [Theory]
+        [SkippableTheory]
         [InlineData(false)]
         [InlineData(true)]
         public void SpinningThreadIsPreemptedSoTheOtherCanRun(bool jit)

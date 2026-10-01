@@ -127,6 +127,7 @@
     <Compile Include="Native\FakeSwapChain.cs" />
     <Compile Include="Native\FakeOutput.cs" />
     <Compile Include="Native\FileWatch.cs" />
+    <Compile Include="Native\BoundedBroker.cs" />
     <Compile Include="Native\ShellPath.cs" />
     <Compile Include="Native\UserFolders.cs" />
     <Compile Include="Native\CrtFiles.cs" />

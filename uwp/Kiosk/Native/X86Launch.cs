@@ -96,6 +96,7 @@ namespace Kiosk.Native
                 // Direct3D 9 through the packaged 64-bit layer.
                 var com = new GuestCom(process, kernel);
                 X86Direct3D9.Install(process, kernel, com);
+                PadBridge.InstallX86(process);   // xinput1_3/1_4/9_1_0: the same pad the 64-bit games read
                 // Steamworks for the signed-in account, as the 64-bit bridge answers it:
                 // the game's own steam_api.dll is not mapped, its exports are served.
                 GuestSteam steam = null;

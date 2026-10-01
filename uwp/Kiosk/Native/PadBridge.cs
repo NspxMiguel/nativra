@@ -220,9 +220,10 @@ namespace Kiosk.Native
             }
         }
 
-        public static void Install(SystemImports imports)
+        /// <summary>The XInput answers, made once and shared by the 64-bit loader and the 32-bit layer.</summary>
+        private static void MakeHandlers()
         {
-            SteerSdl();
+            if (state != null) return;
             state = (index, target) =>
             {
                 if (target == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;
@@ -335,6 +336,12 @@ namespace Kiosk.Native
                 return ERROR_SUCCESS;
             };
 
+        }
+
+        public static void Install(SystemImports imports)
+        {
+            SteerSdl();
+            MakeHandlers();
             var ours = new Dictionary<string, IntPtr>
             {
                 { "XInputGetState", Marshal.GetFunctionPointerForDelegate(state) },
@@ -366,6 +373,35 @@ namespace Kiosk.Native
                 {
                     imports.Overrides[module + "!" + pair.Key] = pair.Value;
                 }
+            }
+        }
+    
+        /// <summary>
+        /// The same pad for a 32-bit game: xinput1_3/1_4/9_1_0 served to the x86
+        /// layer, whose structures are the guest's own bytes (XINPUT_STATE and
+        /// friends hold no pointers, so the layouts match), reached at the guest
+        /// address plus the guest space's host base.
+        /// </summary>
+        public static void InstallX86(Nativra.X86.Loader.GuestProcess process)
+        {
+            MakeHandlers();
+            var host = process.Memory.HostBase;
+            IntPtr At(uint guest) => guest == 0 ? IntPtr.Zero : new IntPtr(host.ToInt64() + guest);
+            foreach (var module in new[] { "xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll" })
+            {
+                var i = process.Imports;
+                var cc = Nativra.X86.Loader.CallConv.Stdcall;
+                i.Register(module, "XInputGetState", cc, 2, c => (uint)state(c.Arg(0), At(c.Arg(1))));
+                i.Register(module, "XInputSetState", cc, 2, c => (uint)vibration(c.Arg(0), At(c.Arg(1))));
+                i.Register(module, "XInputGetCapabilities", cc, 3, c => (uint)capabilities(c.Arg(0), c.Arg(1), At(c.Arg(2))));
+                i.Register(module, "XInputEnable", cc, 1, c => { enable((int)c.Arg(0)); return 0; });
+                i.Register(module, "XInputGetBatteryInformation", cc, 3, c => (uint)battery(c.Arg(0), (byte)c.Arg(1), At(c.Arg(2))));
+                // By number too, as the 64-bit table above; #100 is the reading with the guide button.
+                i.RegisterOrdinal(module, 2, cc, 2, c => (uint)state(c.Arg(0), At(c.Arg(1))));
+                i.RegisterOrdinal(module, 3, cc, 2, c => (uint)vibration(c.Arg(0), At(c.Arg(1))));
+                i.RegisterOrdinal(module, 4, cc, 3, c => (uint)capabilities(c.Arg(0), c.Arg(1), At(c.Arg(2))));
+                i.RegisterOrdinal(module, 5, cc, 1, c => { enable((int)c.Arg(0)); return 0; });
+                i.RegisterOrdinal(module, 100, cc, 2, c => (uint)state(c.Arg(0), At(c.Arg(1))));
             }
         }
     }

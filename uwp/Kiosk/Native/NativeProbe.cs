@@ -650,6 +650,10 @@ namespace Kiosk.Native
                                     {
                                         foreach (var n in AudioBridge.Notes) beat.Add("audio " + n);
                                     }
+                                    lock (GraphicsBridge.Notes)
+                                    {
+                                        foreach (var n in GraphicsBridge.Notes) beat.Add("graphics " + n);
+                                    }
                                     lock (LoaderStubs.Said)
                                     {
                                         var from = Math.Max(0, LoaderStubs.Said.Count - 200);

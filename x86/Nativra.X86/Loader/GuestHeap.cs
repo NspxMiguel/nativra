@@ -104,7 +104,11 @@ namespace Nativra.X86.Loader
         {
             if (upTo <= regionBase + committed) return true;
             var target = Round(upTo - regionBase, GuestMemory.PageSize);
-            memory.Map(regionBase + committed, target - committed);
+            // The heap is one private allocation that grows in place. Something else
+            // already holding the next pages (a DLL loaded at its preferred base inside
+            // the region) ends the heap there: it is out of memory, and never shares a
+            // page with that image.
+            if (!memory.MapGrowing(regionBase, committed, target)) return false;
             committed = target;
             return true;
         }

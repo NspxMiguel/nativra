@@ -29,8 +29,12 @@ namespace Nativra.X86.Cpu
     ///   guest address + <see cref="HostBase"/> is the host pointer. The JIT
     ///   emits code against that base, and the interpreter reads the very same
     ///   bytes, so both engines always agree on what the guest sees.
+    ///
+    /// Either way only committed pages exist in the backing. Which addresses are
+    /// free, reserved or committed, and with what protection, is kept by the
+    /// address-space model in GuestMemory.Regions.cs.
     /// </summary>
-    public sealed unsafe class GuestMemory : ICodeReader, IDisposable
+    public sealed unsafe partial class GuestMemory : ICodeReader, IDisposable
     {
         public const int PageShift = 12;
         public const int PageSize = 1 << PageShift;
@@ -49,7 +53,7 @@ namespace Nativra.X86.Cpu
 
         public bool IsNative => host != null;
 
-        /// <summary>Guest pages currently mapped: the process's working set, as far as the guest can tell.</summary>
+        /// <summary>Guest pages currently committed: the process's working set, as far as the guest can tell.</summary>
         public long MappedPages { get; private set; }
 
         public GuestMemory() : this(false) { }
@@ -78,80 +82,8 @@ namespace Nativra.X86.Cpu
             }
         }
 
-        /// <summary>Makes a range addressable, zero-filled. Already-mapped pages keep their contents.</summary>
-        public void Map(uint address, uint size)
-        {
-            if (size == 0) return;
-            var first = address >> PageShift;
-            var last = (uint)(((ulong)address + size - 1) >> PageShift);
-            for (var page = first; page <= last; page++)
-            {
-                if (host != null)
-                {
-                    if (!committed[page])
-                    {
-                        if (!HostPages.Current.Commit((IntPtr)(host + ((ulong)page << PageShift)), PageSize))
-                            throw new OutOfMemoryException($"could not commit guest page 0x{page << PageShift:X8}");
-                        committed[page] = true;
-                        MappedPages++;
-                    }
-                }
-                else if (pages[page] == null)
-                {
-                    pages[page] = new byte[PageSize];
-                    MappedPages++;
-                }
-                if (page == PageCount - 1) break;
-            }
-        }
-
-        public void Unmap(uint address, uint size)
-        {
-            if (size == 0) return;
-            var first = address >> PageShift;
-            var last = (uint)(((ulong)address + size - 1) >> PageShift);
-            for (var page = first; page <= last; page++)
-            {
-                if (host != null)
-                {
-                    if (committed[page])
-                    {
-                        // Keep the reservation, drop the page: the next touch faults,
-                        // and mapping it again finds it zeroed.
-                        HostPages.Current.Decommit((IntPtr)(host + ((ulong)page << PageShift)), PageSize);
-                        committed[page] = false;
-                        MappedPages--;
-                    }
-                }
-                else if (pages[page] != null)
-                {
-                    pages[page] = null;
-                    MappedPages--;
-                }
-                if (page == PageCount - 1) break;
-            }
-        }
-
         public bool IsMapped(uint address) =>
             host != null ? committed[address >> PageShift] : pages[address >> PageShift] != null;
-
-        /// <summary>
-        /// Finds a free, page-aligned range at or above <paramref name="hint"/>.
-        /// Used for stacks, heaps and TEB/PEB blocks; returns 0 when nothing fits.
-        /// </summary>
-        public uint FindFree(uint size, uint hint = 0x00100000)
-        {
-            var need = (size + PageMask) >> PageShift;
-            uint run = 0;
-            for (var page = hint >> PageShift; page < PageCount; page++)
-            {
-                run = IsMappedPage(page) ? 0 : run + 1;
-                if (run == need) return (page - need + 1) << PageShift;
-            }
-            return 0;
-        }
-
-        private bool IsMappedPage(uint page) => host != null ? committed[page] : pages[page] != null;
 
         /// <summary>Host pointer for a guest address, after checking the page is there.</summary>
         private byte* NativeAt(uint address, int size, bool write)

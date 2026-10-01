@@ -50,7 +50,6 @@ namespace Nativra.X86.Loader
 
         private uint commandLineAnsi;
         private uint commandLineWide;
-        private uint virtualCursor = 0x20000000;   // where anonymous VirtualAlloc lands
         private readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
         private long Milliseconds => DeterministicTime ? 60_000 : clock.ElapsedMilliseconds + 60_000;   // never 0, as on a PC that has been up a while
         private long Ticks => DeterministicTime ? 600_000 : clock.ElapsedTicks;
@@ -162,14 +161,7 @@ namespace Nativra.X86.Loader
             i.Register(k, "HeapDestroy", CallConv.Stdcall, 1, c => 1);
             i.Register(k, "HeapCreate", CallConv.Stdcall, 3, c => ProcessHeapHandle);
 
-            i.Register(k, "VirtualAlloc", CallConv.Stdcall, 4, c => VirtualAlloc(c.Arg(0), c.Arg(1)));
-            i.Register(k, "VirtualFree", CallConv.Stdcall, 3, c => 1);
-            i.Register(k, "VirtualProtect", CallConv.Stdcall, 4, c =>
-            {
-                if (c.Arg(3) != 0) memory.Write32(c.Arg(3), 0x04 /* PAGE_READWRITE */);
-                return 1;
-            });
-            i.Register(k, "VirtualQuery", CallConv.Stdcall, 3, c => 0);
+            InstallVirtualMemory(i);
 
             i.Register(k, "TlsAlloc", CallConv.Stdcall, 0, c => TlsAlloc());
             i.Register(k, "TlsFree", CallConv.Stdcall, 1, c => TlsFree(c.Arg(0)));
@@ -227,25 +219,6 @@ namespace Nativra.X86.Loader
         }
 
         // --- handler bodies -----------------------------------------------
-
-        private uint VirtualAlloc(uint address, uint size)
-        {
-            if (size == 0) return 0;
-            if (address == 0)
-            {
-                // The heap maps its region only as it grows, so its unmapped part
-                // looks free; anything handed out there would later be the heap's too.
-                var at = memory.FindFree(size, virtualCursor);
-                if (at != 0 && heap.Overlaps(at, size)) at = memory.FindFree(size, heap.RegionEnd);
-                if (at == 0) return 0;
-                memory.Map(at, size);
-                virtualCursor = at + RoundPage(size);
-                return at;
-            }
-            if (heap.Overlaps(address, size)) { process.LastError = 487; return 0; }   // ERROR_INVALID_ADDRESS
-            memory.Map(address, size);
-            return address;
-        }
 
         private uint TlsAlloc()
         {
@@ -432,9 +405,6 @@ namespace Nativra.X86.Loader
             memory.Write16(p + 32, 6);         // processor level
             memory.Write16(p + 34, 0);         // processor revision
         }
-
-        private static uint RoundPage(uint value) =>
-            (value + GuestMemory.PageSize - 1) / GuestMemory.PageSize * GuestMemory.PageSize;
 
         /// <summary>A module name as Windows matches it: file name only, lower case, ".dll" implied.</summary>
         private static string Trim(string name)

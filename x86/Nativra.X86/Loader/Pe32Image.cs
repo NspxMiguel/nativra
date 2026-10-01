@@ -110,6 +110,9 @@ namespace Nativra.X86.Loader
         public uint ImageSize { get; private set; }
         public uint EntryPoint { get; private set; }   // guest VA, 0 for a DLL with no entry
         public bool IsDll { get; private set; }
+
+        /// <summary>IMAGE_FILE_LARGE_ADDRESS_AWARE: the program can use addresses above 2 GB.</summary>
+        public bool LargeAddressAware { get; private set; }
         public Pe32Tls Tls { get; private set; }
 
         private readonly List<Pe32Import> imports = new List<Pe32Import>();
@@ -203,6 +206,7 @@ namespace Nativra.X86.Loader
             numberOfDirectories = (int)U32(optHeader + OptNumberOfRvaAndSizes);
             var characteristics = U16(peHeader + 22);
             IsDll = (characteristics & 0x2000) != 0;
+            LargeAddressAware = (characteristics & 0x0020) != 0;
 
             sectionTable = optHeader + sizeOfOptional;
             if (sectionTable + sectionCount * SizeOfSectionHeader > file.Length)
@@ -220,10 +224,18 @@ namespace Nativra.X86.Loader
                 ? 0
                 : BaseAddress + U32(optHeader + OptEntryPoint);
 
+            // The whole image is one MEM_IMAGE allocation, as Windows maps it: VirtualQuery
+            // finds its base from any address inside, and nothing else lands in a gap
+            // between sections. A range that is not free (it was just checked) falls back
+            // to plain private memory below.
+            memory.ReserveImage(BaseAddress, RoundUp(ImageSize, GuestMemory.PageSize));
+
             // Headers first, so an image that reads its own headers at run time
             // (many do, to walk their own directories) sees them.
-            memory.Map(BaseAddress, RoundUp(sizeOfHeaders, sectionAlignment));
+            var headerSpan = RoundUp(sizeOfHeaders, sectionAlignment);
+            memory.Map(BaseAddress, headerSpan);
             memory.WriteBytes(BaseAddress, file, 0, (int)Math.Min(sizeOfHeaders, (uint)file.Length));
+            memory.Protect(BaseAddress, headerSpan, Win32Memory.PageReadOnly, out _);
 
             for (var s = 0; s < sectionCount; s++)
             {
@@ -236,6 +248,7 @@ namespace Nativra.X86.Loader
                 var span = RoundUp(virtualSize == 0 ? rawSize : virtualSize, sectionAlignment);
                 if (span == 0) continue;
                 memory.Map(BaseAddress + virtualAddress, span);
+                memory.Protect(BaseAddress + virtualAddress, span, SectionProtection(U32(header + 36)), out _);
 
                 var copy = Math.Min(rawSize, virtualSize == 0 ? rawSize : virtualSize);
                 if (copy > 0 && rawPointer < file.Length)
@@ -244,6 +257,17 @@ namespace Nativra.X86.Loader
                     memory.WriteBytes(BaseAddress + virtualAddress, file, (int)rawPointer, (int)copy);
                 }
             }
+        }
+
+        /// <summary>The page protection Windows gives a section of these IMAGE_SCN_MEM_* characteristics.</summary>
+        private static uint SectionProtection(uint characteristics)
+        {
+            const uint Execute = 0x20000000, Read = 0x40000000, Write = 0x80000000;
+            var x = (characteristics & Execute) != 0;
+            var r = (characteristics & Read) != 0;
+            var w = (characteristics & Write) != 0;
+            if (x) return w ? Win32Memory.PageExecuteReadWrite : r ? Win32Memory.PageExecuteRead : Win32Memory.PageExecute;
+            return w ? Win32Memory.PageReadWrite : r ? Win32Memory.PageReadOnly : Win32Memory.PageNoAccess;
         }
 
         private uint ChooseBase()
@@ -259,11 +283,8 @@ namespace Nativra.X86.Loader
         {
             if (address == 0) return false;
             if ((ulong)address + size > 0xFFFFFFFFul) return false;
-            var first = address >> GuestMemory.PageShift;
-            var last = (uint)(((ulong)address + size - 1) >> GuestMemory.PageShift);
-            for (var page = first; page <= last; page++)
-                if (memory.IsMapped(page << GuestMemory.PageShift)) return false;
-            return true;
+            // Reserved address space is as taken as committed memory.
+            return memory.IsFree(address, size);
         }
 
         // --- relocation ----------------------------------------------------

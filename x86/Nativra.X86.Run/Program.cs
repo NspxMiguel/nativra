@@ -122,6 +122,8 @@ namespace Nativra.X86.Run
                 lines.Add("x86.raised=" + string.Join(",", kernel.ExceptionsRaised.Select(c => c.ToString("X8"))));
                 lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
                 foreach (var text in guestLog) lines.Add("x86.log=" + text);
+                lines.Add("x86.memory=committed " + (memory.MappedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB (" + memory.MappedPages +
+                          " pages), reserved " + (memory.ReservedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB more");
                 lines.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
                 trace?.Dispose();
 

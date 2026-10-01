@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Nativra.X86.Cpu;
 
 namespace Nativra.X86.Loader
 {
@@ -18,7 +19,7 @@ namespace Nativra.X86.Loader
 
         private void BuildStandIn(uint handle, string name)
         {
-            if (memory.IsMapped(handle)) return;   // something else already lives there
+            if (!memory.IsFree(handle, StandInSize)) return;   // something else already lives there
             var names = process.Imports.NamesOf(name);
             names.Sort(string.CompareOrdinal);     // export names are binary-searched
             var functions = new uint[names.Count];
@@ -81,8 +82,11 @@ namespace Nativra.X86.Loader
             Put32(opt + 96, dir);                      // DataDirectory[EXPORT].VirtualAddress
             Put32(opt + 100, text - dir);              // .Size
 
+            // An image like any other to VirtualQuery: the handle is its allocation base.
+            memory.ReserveImage(handle, StandInSize);
             memory.Map(handle, StandInSize);
             memory.WriteBytes(handle, image);
+            memory.Protect(handle, StandInSize, Win32Memory.PageReadOnly, out _);
         }
     }
 }

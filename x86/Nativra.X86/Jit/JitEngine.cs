@@ -26,6 +26,8 @@ namespace Nativra.X86.Jit
         private readonly JitContext ctx;
         private readonly CodeCache cache = new CodeCache();
         private readonly Dictionary<uint, IntPtr> blocks = new Dictionary<uint, IntPtr>();
+        // The cached blocks' guest start addresses by page, so memory that goes away can drop what was translated from it.
+        private readonly Dictionary<uint, List<uint>> blocksByPage = new Dictionary<uint, List<uint>>();
         private readonly Dictionary<IntPtr, BlockFn> delegates = new Dictionary<IntPtr, BlockFn>();
         private readonly Dictionary<IntPtr, BlockMap> maps = new Dictionary<IntPtr, BlockMap>();
 
@@ -49,6 +51,7 @@ namespace Nativra.X86.Jit
             JitFaults.Install();
             Interpreter = new Interpreter(cpu, memory);
             ctx = new JitContext(memory);
+            memory.PagesDiscarded += Invalidate;
         }
 
         /// <summary>
@@ -130,7 +133,44 @@ namespace Nativra.X86.Jit
             var published = Publish(code, translator);
             BlocksCompiled++;
             blocks[eip] = published;
+            var page = eip >> GuestMemory.PageShift;
+            if (!blocksByPage.TryGetValue(page, out var starts)) blocksByPage[page] = starts = new List<uint>();
+            starts.Add(eip);
             return published;
+        }
+
+        /// <summary>
+        /// Forgets the cached blocks that may hold a byte of [address, address+size): that
+        /// memory went back (a free, a decommit), and whatever lands there next is other
+        /// code at the same addresses. A block is at most 256 instructions of 15 bytes, so
+        /// it reaches into the page after the one it starts in, and one that starts a page
+        /// before the range can still run into it.
+        /// </summary>
+        public void Invalidate(uint address, uint size)
+        {
+            if (size == 0 || blocksByPage.Count == 0) return;
+            var first = address >> GuestMemory.PageShift;
+            var last = (uint)(((ulong)address + size - 1) >> GuestMemory.PageShift);
+            if (first > 0) first--;
+            if ((ulong)(last - first) + 1 > (ulong)blocksByPage.Count)
+            {
+                // A range wider than the pages that hold blocks: walk those instead.
+                var affected = new List<uint>();
+                foreach (var page in blocksByPage.Keys)
+                    if (page >= first && page <= last) affected.Add(page);
+                foreach (var page in affected) DropBlocks(page);
+            }
+            else
+            {
+                for (var page = first; page <= last; page++) DropBlocks(page);
+            }
+        }
+
+        private void DropBlocks(uint page)
+        {
+            if (!blocksByPage.TryGetValue(page, out var starts)) return;
+            foreach (var eip in starts) blocks.Remove(eip);
+            blocksByPage.Remove(page);
         }
 
         private IntPtr Publish(byte[] code, BlockTranslator translator)
@@ -178,6 +218,7 @@ namespace Nativra.X86.Jit
 
         public void Dispose()
         {
+            Memory.PagesDiscarded -= Invalidate;
             foreach (var block in maps.Keys) JitFaults.Unregister(block);
             cache.Dispose();
             ctx.Dispose();

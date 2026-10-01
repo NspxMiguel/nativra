@@ -803,12 +803,12 @@ namespace Nativra.X86.Loader
             if (mapping.File == 0)
             {
                 // Page-file memory: one block every view of the mapping shares.
-                if (mapping.Shared == 0) mapping.Shared = VirtualAlloc(0, (uint)mapping.Size);
+                if (mapping.Shared == 0) mapping.Shared = VirtualAlloc(0, (uint)mapping.Size, Win32Memory.MemMapped);
                 at = mapping.Shared + (uint)offset;
             }
             else
             {
-                at = VirtualAlloc(wanted, size);
+                at = VirtualAlloc(wanted, size, Win32Memory.MemMapped);
                 if (at == 0) { process.LastError = ErrorNotEnoughMemory; return 0; }
                 if (!TryFile(mapping.File, out var f)) return 0;
                 var saved = f.Stream.Position;

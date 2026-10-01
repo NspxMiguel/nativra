@@ -1,6 +1,10 @@
 <Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
   <Application>
     <Assembly Name="*Application*" Dynamic="Required All" />
+    <!-- The x86 layer calls host COM methods through delegate types picked at
+         run time (one per argument count); .NET Native strips the ones no code
+         names statically, and the call then fails with MissingMetadataException. -->
+    <Assembly Name="Nativra.X86" Dynamic="Required All" />
   
   </Application>
 </Directives>

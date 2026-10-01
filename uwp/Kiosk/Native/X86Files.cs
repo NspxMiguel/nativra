@@ -103,7 +103,9 @@ namespace Kiosk.Native
         public IEnumerable<GuestFileEntry> List(string folder)
         {
             var data = new byte[592];   // WIN32_FIND_DATAW
-            var find = FindFirstFileExFromAppW(folder.TrimEnd('\\') + "\\*", 1 /* FindExInfoBasic */, data, 0, IntPtr.Zero, 0);
+            var find = BoundedBroker.Call(
+                () => FindFirstFileExFromAppW(folder.TrimEnd('\\') + "\\*", 1 /* FindExInfoBasic */, data, 0, IntPtr.Zero, 0),
+                Invalid, out _);
             if (find == Invalid || find == IntPtr.Zero) return Stat(folder) != null ? new List<GuestFileEntry>() : null;
             var list = new List<GuestFileEntry>();
             try
@@ -128,12 +130,14 @@ namespace Kiosk.Native
 
         public bool CreateDirectory(string path)
         {
-            var made = CreateDirectoryFromAppW(path, IntPtr.Zero);
+            var made = BoundedBroker.Call(() => CreateDirectoryFromAppW(path, IntPtr.Zero), out _);
             if (made) UsbFiles.Forget();   // a folder remembered as missing is there now
             return made;
         }
 
-        public bool Delete(string path) => DeleteFileFromAppW(path) || RemoveDirectoryFromAppW(path);
+        public bool Delete(string path) =>
+            BoundedBroker.Call(() => DeleteFileFromAppW(path), out _) ||
+            BoundedBroker.Call(() => RemoveDirectoryFromAppW(path), out _);
 
         private static GuestFileEntry Entry(string name, uint attributes, long writeTime, long size) => new GuestFileEntry
         {

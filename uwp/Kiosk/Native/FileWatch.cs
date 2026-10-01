@@ -656,11 +656,11 @@ namespace Kiosk.Native
                 if (source == null) return 0;
                 // A null target means "delete at reboot", which a game only
                 // asks for to clean up; deleting now is the nearest thing.
-                if (target == null) return DeleteFileFromAppW(source) ? 1 : 0;
-                if ((flags & MoveReplaceExisting) != 0 && PathExists(target)) DeleteFileFromAppW(target);
-                if (MoveFileFromAppW(source, target)) return 1;
-                if ((flags & MoveCopyAllowed) == 0 || !CopyFileFromAppW(source, target, false)) return 0;
-                DeleteFileFromAppW(source);
+                if (target == null) return BoundedBroker.Call(() => DeleteFileFromAppW(source), out _) ? 1 : 0;
+                if ((flags & MoveReplaceExisting) != 0 && PathExists(target)) BoundedBroker.Call(() => DeleteFileFromAppW(target), out _);
+                if (BoundedBroker.Call(() => MoveFileFromAppW(source, target), out _)) return 1;
+                if ((flags & MoveCopyAllowed) == 0 || !BoundedBroker.Call(() => CopyFileFromAppW(source, target, false), out _)) return 0;
+                BoundedBroker.Call(() => DeleteFileFromAppW(source), out _);
                 return 1;
             };
             var moveExAddress = Marshal.GetFunctionPointerForDelegate(moveEx);
@@ -685,7 +685,10 @@ namespace Kiosk.Native
                 WritePathDelegate wrapper = (name, extra) =>
                 {
                     Invalidate();
-                    return takesTwo ? twoArgs(name, extra) : oneArg(name);
+                    int error;
+                    var ok = BoundedBroker.Call(() => (takesTwo ? twoArgs(name, extra) : oneArg(name)) != 0, out error);
+                    if (!ok) SetLastError((uint)error);
+                    return ok ? 1 : 0;
                 };
                 writers.Add(wrapper);
                 changing[pair[0]] = Marshal.GetFunctionPointerForDelegate(wrapper);

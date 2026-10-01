@@ -356,13 +356,13 @@ namespace Kiosk.Native
                 directories["_mkdir"] = Keep(new MakeDirectory(name =>
                 {
                     FileWatch.Invalidate();
-                    return mkdir(name) == 0 || CreateDirectoryFromAppW(Narrow(name), IntPtr.Zero) ? 0 : -1;
+                    return mkdir(name) == 0 || BoundedBroker.Call(() => CreateDirectoryFromAppW(Narrow(name), IntPtr.Zero), out _) ? 0 : -1;
                 }));
             if (wmkdir != null)
                 directories["_wmkdir"] = Keep(new MakeDirectory(name =>
                 {
                     FileWatch.Invalidate();
-                    return wmkdir(name) == 0 || CreateDirectoryFromAppW(Wide(name), IntPtr.Zero) ? 0 : -1;
+                    return wmkdir(name) == 0 || BoundedBroker.Call(() => CreateDirectoryFromAppW(Wide(name), IntPtr.Zero), out _) ? 0 : -1;
                 }));
 
             // stat on a path: opened through the broker for its attributes,

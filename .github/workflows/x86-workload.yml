@@ -4,7 +4,8 @@ name: x86 real workload
 # Half-Life 2: Deathmatch dedicated server (Source engine, Steam app 232370),
 # which Valve lets anyone download anonymously. It exercises the loader, the
 # guest kernel and the CPU translator with the same engine binaries the Source
-# games use, and fails if the server no longer reaches the milestones it did.
+# games use, and fails if the server no longer reaches the milestones it did:
+# since 2026-10-01 it activates its map and serves (A2S_INFO answers).
 # See docs/progress/hl2dm-dedicated-server.md.
 
 on:
@@ -53,12 +54,14 @@ jobs:
       - name: Run the server through the layer
         shell: pwsh
         run: |
-          dotnet x86/Nativra.X86.Run/bin/Release/net8.0/Nativra.X86.Run.dll --budget 4000000000 --log 800 `
+          dotnet x86/Nativra.X86.Run/bin/Release/net8.0/Nativra.X86.Run.dll --budget 1500000000 --log 800 `
             srcds srcds.exe -console -game hl2mp -insecure +sv_lan 1 +maxplayers 2 +map dm_lockdown | Tee-Object srcds.txt
           $milestones = @(
             'x86.jit=on',
             'Console initialized.',
-            'server.dll loaded for "Half-Life 2 Deathmatch"'
+            'server.dll loaded for "Half-Life 2 Deathmatch"',
+            'Server is hibernating',
+            'VAC secure mode disabled.'
           )
           $missing = $milestones | Where-Object { -not (Select-String -Path srcds.txt -SimpleMatch -Pattern $_ -Quiet) }
           if ($missing) { Write-Error ("missing milestones: " + ($missing -join ' | ')); exit 1 }

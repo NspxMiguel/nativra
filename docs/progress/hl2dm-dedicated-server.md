@@ -83,12 +83,53 @@ server:
     region only as it grows, so its unmapped part looked free; tier0's
     small-block heap then freed a pointer it did not own. Fixed.
 
+13. **advapi32's security family was stubs that lied** (`EqualSid` always
+    false, `IsValidSid` always true, `GetTokenInformation` unsupported — and
+    steamclient logged "GetTokenInformation failed. GetLastError returned: 50"
+    right after `GetLengthSid` was missing). There is now one local user for
+    the whole guest, `S-1-5-21-…-1001`, in binary SID layout, and everything
+    derives from it: the process token (`TokenUser`, `TokenGroups`,
+    `TokenOwner`, `TokenPrimaryGroup`, privileges, `TokenIntegrityLevel`,
+    elevation/type/session), `LookupAccountSid`/`LookupAccountName` round
+    trips, string SIDs, `CheckTokenMembership` (the user is a member of
+    Users and only deny-only in Administrators), `LookupPrivilegeValue`/
+    `AdjustTokenPrivileges` (with `ERROR_NOT_ALL_ASSIGNED`), well-known SIDs,
+    absolute security descriptors and ACLs.
+14. `ole32!CLSIDFromString`, `IIDFromString`, `StringFromCLSID`/`IID`.
+15. **setupapi device enumeration** (`SetupDiClassGuidsFromName`,
+    `SetupDiGetClassDevs`, `EnumDeviceInfo`, `…Interfaces`, `…InstanceId`,
+    `…RegistryProperty`, destroy): real handles and cursors over device sets
+    that are empty, since the guest has no plug-and-play tree; enumeration
+    ends with `ERROR_NO_MORE_ITEMS`, the answer of a machine without that
+    class.
+16. `kernel32!ReplaceFileA/W` (swap in a replacement, optional backup, the
+    documented partial-failure codes).
+17. **crypt32 certificate stores and chains** for steamclient's signature
+    checks: memory/system stores, `CERT_CONTEXT` with a filled `CERT_INFO`
+    (version, serial, issuer/subject, validity, public key, extensions) and
+    reference counting, add dispositions, enumeration, and
+    `CertGetCertificateChain` built by the host's X.509 engine and laid out
+    as `CERT_CHAIN_CONTEXT`/`CERT_SIMPLE_CHAIN`/`CERT_CHAIN_ELEMENT` with the
+    trust-status bits.
+18. **`DisconnectEx`**: Valve's socket layer asserts when the extension
+    function pointer is NULL ("DisconnectEx function pointer is NULL"). It
+    is now served through `WSAIoctl(SIO_GET_EXTENSION_FUNCTION_POINTER)`; with
+    `TF_REUSE_SOCKET` the guest socket gets a fresh host socket.
+
 Result: the server goes through its entire start-up — console, Breakpad,
 VPK mounting (real file I/O on the game's content), steamclient, the mod's
 `server.dll` ("server.dll loaded for Half-Life 2 Deathmatch"), 8 threads —
 opens its ports ("Network: IP …, mode MP, dedicated Yes, ports 27015 SV /
 27005 CL"), initialises Steam for a LAN server ("SteamAPI_Init(): Loaded
-local 'steamclient.dll' OK") and next asks for `mswsock!AcceptEx`.
+local 'steamclient.dll' OK"), starts the Squirrel VM, loads its config and
+activates the server ("SV_ActivateServer: setting tickrate to 66.7", "Server
+is hibernating", "Assigned anonymous gameserver Steam ID", "VAC secure mode
+disabled"). With a 1e9-block budget it then idles in its main loop with no
+exception, and it is genuinely serving: it holds UDP 27015/27005/27020 and
+TCP 27015, and an A2S_INFO query from the host (`\xff\xff\xff\xffTSource Engine
+Query\0`, answered with a challenge, then again with it) returns "Half-Life 2
+Deathmatch", map `dm_lockdown`, folder `hl2mp`, 0 of 2 players, dedicated,
+Windows, version 10889068.
 
 CI (`.github/workflows/x86-workload.yml`) downloads the server anonymously
 and runs this under the JIT on the Windows runner on every x86 change.

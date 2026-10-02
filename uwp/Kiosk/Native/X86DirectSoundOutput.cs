@@ -73,12 +73,25 @@ namespace Kiosk.Native
             finally { Marshal.FreeHGlobal(state); }
         }
         public long FramesPlayed { get { State(out _, out var played); return playedBefore + played; } }
-        public int FramesQueued => (int)Math.Max(0, submitted - FramesPlayed);
+        // The voice's own buffer count, not frames submitted minus frames played: that
+        // difference went negative on the console, the mixer then submitted without
+        // pause, and XAudio2 refused the 65th queued buffer (XAUDIO2_E_INVALID_CALL).
+        public int FramesQueued
+        {
+            get
+            {
+                State(out var queued, out _);
+                return queued >= MaxQueued ? int.MaxValue : (int)(queued * lastFrames);
+            }
+        }
+        private const uint MaxQueued = 32;   // half of XAUDIO2_MAX_QUEUED_BUFFERS
+        private long lastFrames = 512;
         public void Write(float[] stereo)
         {
             if (source == IntPtr.Zero || stereo == null || stereo.Length == 0) return;
             State(out var queued, out _);
             while (pending.Count > queued) Marshal.FreeHGlobal(pending.Dequeue());
+            if (queued >= MaxQueued) return;   // the mixer asks again once the voice has played some
             var samples = Marshal.AllocHGlobal(stereo.Length * 4);
             Marshal.Copy(stereo, 0, samples, stereo.Length);
             var buffer = Marshal.AllocHGlobal(48);
@@ -89,7 +102,7 @@ namespace Kiosk.Native
                 Marshal.WriteIntPtr(buffer, 8, samples);
                 var code = Method<SubmitDelegate>(source, 21)(source, buffer, IntPtr.Zero);
                 if (code < 0) { Marshal.FreeHGlobal(samples); throw new COMException("SubmitSourceBuffer failed 0x" + code.ToString("X8"), code); }
-                pending.Enqueue(samples); submitted += stereo.Length / 2;
+                pending.Enqueue(samples); submitted += stereo.Length / 2; lastFrames = stereo.Length / 2;
             }
             finally { Marshal.FreeHGlobal(buffer); }
         }

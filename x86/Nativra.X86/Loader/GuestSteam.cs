@@ -153,6 +153,20 @@ namespace Nativra.X86.Loader
             }
             E("SteamAPI_Init", 0, c => 1);
             E("SteamAPI_InitSafe", 0, c => 1);
+            // SDK 1.58+: SteamAPI_InitEx/InitFlat are inline and call this, which returns
+            // an ESteamAPIInitResult (0 = OK) and fills a SteamErrMsg (char[1024]) on
+            // failure. Unserved, games built with it started the real check for a
+            // running Steam and relaunched themselves through steam://run.
+            E("SteamInternal_SteamAPI_Init", 2, c =>
+            {
+                if (c.Arg(1) != 0) memory.Write8(c.Arg(1), 0);
+                return 0;
+            });
+            E("SteamAPI_InitFlat", 1, c =>
+            {
+                if (c.Arg(0) != 0) memory.Write8(c.Arg(0), 0);
+                return 0;
+            });
             E("SteamAPI_Shutdown", 0, c => 0);
             E("SteamAPI_RestartAppIfNecessary", 1, c => 0);   // already running as that app
             E("SteamAPI_IsSteamRunning", 0, c => 1);

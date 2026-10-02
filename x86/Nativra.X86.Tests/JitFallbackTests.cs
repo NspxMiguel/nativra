@@ -256,16 +256,17 @@ namespace Nativra.X86.Tests
             using (var memory = new GuestMemory(native: true))
             {
                 memory.Map(Code, 0x1000);
-                memory.Write8(Code, 0x9B); // FWAIT stays in the interpreter.
+                memory.Write8(Code, 0x0F); // CPUID stays in the interpreter.
+                memory.Write8(Code + 1, 0xA2);
                 var cpu = NewCpu();
                 using (var jit = new JitEngine(cpu, memory))
                 {
-                    Assert.True(jit.RunToStop(Code + 1));
+                    Assert.True(jit.RunToStop(Code + 2));
                     Assert.Empty(jit.FallbackCounts);
                     cpu.Eip = Code;
                     jit.CollectFallbacks = true;
-                    Assert.True(jit.RunToStop(Code + 1));
-                    Assert.Equal(1, jit.FallbackCounts["9B"]);
+                    Assert.True(jit.RunToStop(Code + 2));
+                    Assert.Equal(1, jit.FallbackCounts["0F A2"]);
                 }
             }
         }

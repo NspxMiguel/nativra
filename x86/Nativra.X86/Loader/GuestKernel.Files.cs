@@ -549,6 +549,13 @@ namespace Nativra.X86.Loader
                 return InvalidHandleValue;
             }
             var matches = new Queue<GuestFileEntry>();
+            // Every folder but a drive's root lists "." and ".." first, so "*" in an
+            // empty folder still finds something. Steam's client walks its empty
+            // httpcache folders this way and treated the failure as fatal.
+            if (folder.Length > 3)
+                foreach (var dot in new[] { ".", ".." })
+                    if (Wildcard(pattern, dot))
+                        matches.Enqueue(new GuestFileEntry { Name = dot, Attributes = FileAttributes.Directory, WriteTimeUtc = UtcNow });
             foreach (var entry in listing)
                 if (Wildcard(pattern, entry.Name)) matches.Enqueue(entry);
             if (matches.Count == 0)

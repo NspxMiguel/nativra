@@ -246,7 +246,27 @@ namespace Nativra.X86.Tests
             var all = K("FindFirstFileA", A("data\\*.*"), data);
             var count = 1;
             while (K("FindNextFileA", all, data) != 0) count++;
-            Assert.Equal(2, count);
+            Assert.Equal(4, count);   // ".", ".." and the two files
+        }
+
+        [Fact]
+        public void AnEmptyFolderStillListsItsDotEntries()
+        {
+            // Windows lists "." and ".." in every folder but a drive's root, so "*"
+            // never fails on a folder that exists; Steam's client relies on it.
+            Directory.CreateDirectory(Path.Combine(root, "empty"));
+            var data = k.Heap.Alloc(600);
+            var h = K("FindFirstFileW", W("C:\\game\\empty\\*"), data);
+            Assert.NotEqual(0xFFFFFFFFu, h);
+            Assert.Equal(".", p.Memory.ReadUnicode(data + 44));
+            Assert.Equal(0x10u, p.Memory.Read32(data) & 0x10);   // FILE_ATTRIBUTE_DIRECTORY
+            Assert.Equal(1u, K("FindNextFileW", h, data));
+            Assert.Equal("..", p.Memory.ReadUnicode(data + 44));
+            Assert.Equal(0u, K("FindNextFileW", h, data));
+            Assert.Equal(1u, K("FindClose", h));
+
+            // A pattern that cannot match a dot entry still finds nothing.
+            Assert.Equal(0xFFFFFFFFu, K("FindFirstFileW", W("C:\\game\\empty\\*.txt"), data));
         }
 
         [Fact]

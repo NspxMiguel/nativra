@@ -29,6 +29,8 @@ namespace Nativra.X86.Run
             var interp = false;
             long budget = 400_000_000, dllBudget = 0;
             uint steamApp = 0;
+            string until = null;
+            var reachedUntil = false;
             var logLines = 200;
             var fallbackLines = 0;
             var rest = new List<string>();
@@ -45,12 +47,13 @@ namespace Nativra.X86.Run
                     case "--trace": traceFile = args[++i]; break;
                     case "--dll-budget": dllBudget = long.Parse(args[++i]); break;
                     case "--steam": steamApp = uint.Parse(args[++i]); break;
+                    case "--until": until = args[++i]; break;
                     default: rest.Add(args[i]); break;
                 }
             }
             if (rest.Count < 2)
             {
-                Console.Error.WriteLine("usage: nativra-run [--dlls DIR] [--interp] [--budget N] [--fallbacks N] [--imports FILE] [--steam APPID] <folder> <exe> [arguments...]");
+                Console.Error.WriteLine("usage: nativra-run [--dlls DIR] [--interp] [--budget N] [--fallbacks N] [--imports FILE] [--steam APPID] [--until TEXT] <folder> <exe> [arguments...]");
                 return 2;
             }
             var folder = Path.GetFullPath(rest[0]);
@@ -78,6 +81,14 @@ namespace Nativra.X86.Run
                 kernel.Log = text =>
                 {
                     if (guestLog.Count < logLines) guestLog.Add(text);
+                    // --until ends the run once the program says it got where it was meant
+                    // to: a server that comes up then idles would otherwise burn its whole
+                    // budget waiting for players.
+                    if (until != null && text.Contains(until))
+                    {
+                        reachedUntil = true;
+                        throw new GuestExitException(0);
+                    }
                 };
                 var profile = Path.Combine(Path.GetTempPath(), "nativra-run-profile");
                 Directory.CreateDirectory(profile);
@@ -124,6 +135,7 @@ namespace Nativra.X86.Run
                         {
                             result = process.Call(image.EntryPoint, out var exitCode, budget);
                             lines.Add("x86.run=" + result + (result.Ok ? " (entry returned " + exitCode + ")" : ""));
+                            if (reachedUntil) lines.Add("x86.until=reached \"" + until + "\"");
                         }
                     }
                     catch (Exception error)
@@ -180,7 +192,7 @@ namespace Nativra.X86.Run
                 }
             }
             foreach (var line in lines) Console.WriteLine(line);
-            return result != null && (result.Stop == GuestStop.Exited || result.Stop == GuestStop.Returned) ? 0 : 1;
+            return reachedUntil || (result != null && (result.Stop == GuestStop.Exited || result.Stop == GuestStop.Returned)) ? 0 : 1;
         }
 
         private static byte[] Read(string path) => File.Exists(path) ? File.ReadAllBytes(path) : null;

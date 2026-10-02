@@ -81,6 +81,41 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void DuplicatingTheCurrentThreadGivesARealHandleToIt()
+        {
+            // A thread hands itself to another as DuplicateHandle(GetCurrentThread()).
+            // The copy must name that thread and wait like it: not signalled while it
+            // runs. A copied pseudo-handle named the waiter instead, and Valve's
+            // CThread then freed a thread that was still running.
+            var p = Load(new byte[] { 0xC3 }, jit: false, out _);
+            uint K(string name, params uint[] args)
+            {
+                var r = p.Call(p.Imports.Bind("kernel32.dll", name, -1), out var eax, 1_000_000, args);
+                Assert.True(r.Ok, r.ToString());
+                return eax;
+            }
+            const uint Pseudo = 0xFFFFFFFE, WaitTimeout = 0x102, StillActive = 0x103;
+            var copy = Data + 0x40;
+            Assert.Equal(1u, K("DuplicateHandle", 0xFFFFFFFF, Pseudo, 0xFFFFFFFF, copy, 0, 0, 2));
+            var handle = p.Memory.Read32(copy);
+            Assert.NotEqual(Pseudo, handle);
+            Assert.Equal(WaitTimeout, K("WaitForSingleObject", handle, 0));
+            Assert.Equal(WaitTimeout, K("WaitForSingleObject", Pseudo, 0));
+            Assert.Equal(1u, K("GetExitCodeThread", handle, Data + 0x44));
+            Assert.Equal(StillActive, p.Memory.Read32(Data + 0x44));
+            Assert.Equal(1u, K("CloseHandle", handle));
+
+            // A duplicated event outlives the handle it was copied from.
+            var e = K("CreateEventA", 0, 1, 0, 0);
+            Assert.Equal(1u, K("DuplicateHandle", 0xFFFFFFFF, e, 0xFFFFFFFF, copy, 0, 0, 2));
+            var e2 = p.Memory.Read32(copy);
+            Assert.NotEqual(e, e2);
+            Assert.Equal(1u, K("CloseHandle", e));
+            Assert.Equal(1u, K("SetEvent", e2));
+            Assert.Equal(0u, K("WaitForSingleObject", e2, 0));
+        }
+
+        [Fact]
         public void FreeLibraryAndExitThreadEndsTheThreadWithItsCode()
         {
             // WaitForWorker's main with a worker that leaves the way _endthreadex

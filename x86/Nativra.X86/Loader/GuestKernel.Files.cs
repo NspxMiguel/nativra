@@ -151,8 +151,7 @@ namespace Nativra.X86.Loader
             i.Register(k, "GetFileInformationByHandle", CallConv.Stdcall, 2, c => FileInformation(c.Arg(0), c.Arg(1)));
             i.Register(k, "DuplicateHandle", CallConv.Stdcall, 7, c =>
             {
-                // Same process, one thread: the duplicate is the handle itself.
-                if (c.Arg(3) != 0) memory.Write32(c.Arg(3), c.Arg(1));
+                if (c.Arg(3) != 0) memory.Write32(c.Arg(3), DuplicateHandle(c.Arg(1)));
                 return 1;
             });
             i.Register(k, "GetDriveTypeA", CallConv.Stdcall, 1, c => 3);   // DRIVE_FIXED

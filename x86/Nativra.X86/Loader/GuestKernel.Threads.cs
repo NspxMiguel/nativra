@@ -345,7 +345,37 @@ namespace Nativra.X86.Loader
 
         // --- waitable objects ---------------------------------------------------
 
-        private Waitable Object(uint handle) => waitables.TryGetValue(handle, out var w) ? w : null;
+        // GetCurrentThread()'s pseudo-handle names whichever thread uses it, and that
+        // thread is running: waiting on it does not return signalled.
+        private Waitable Object(uint handle) =>
+            handle == PseudoThread ? new ThreadObject { Thread = process.CurrentThread }
+            : waitables.TryGetValue(handle, out var w) ? w : null;
+
+        /// <summary>
+        /// DuplicateHandle within the process. GetCurrentThread()'s pseudo-handle
+        /// becomes a real handle to the calling thread — the way a thread hands
+        /// itself to another, which then waits on it; copying the pseudo-handle let
+        /// the other thread wait on itself instead, and Valve's CThread freed a
+        /// thread still running. A waitable object gets a second handle of its own,
+        /// so closing one leaves the other open. Other handles (files, sockets) are
+        /// shared as before.
+        /// </summary>
+        private uint DuplicateHandle(uint source)
+        {
+            if (source == PseudoThread)
+            {
+                var handle = NewHandle();
+                waitables[handle] = new ThreadObject { Thread = process.CurrentThread };
+                return handle;
+            }
+            if (waitables.TryGetValue(source, out var shared))
+            {
+                var handle = NewHandle();
+                waitables[handle] = shared;
+                return handle;
+            }
+            return source;
+        }
 
         private uint CreateEvent(bool manualReset, bool signaled)
         {

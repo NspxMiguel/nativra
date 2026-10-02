@@ -20,6 +20,7 @@ namespace Nativra.X86.Jit
         private const int Mem = Ctx.MemBaseReg;
         private const int S1 = Ctx.Scratch1;
         private const int S2 = Ctx.Scratch2;
+        private const int S3 = Ctx.Scratch3;
         private const int Ctxr = Ctx.CtxReg;
 
         public bool FullyTranslated { get; private set; }
@@ -61,7 +62,15 @@ namespace Nativra.X86.Jit
 
                 HostOffsets.Add(e.Here);
                 GuestEips.Add(eip);
-                if (!ins.Valid || ins.Rep != 0 || ins.Lock || !TryEmit(ins))
+                if (ins.Op >= 0xA0 && ins.Op <= 0xA3 && ins.Segment == Seg.None &&
+                    code is GuestMemory guestMemory && !guestMemory.IsMapped(ins.Disp))
+                {
+                    EmitExit(eip, Ctx.ReasonFallback);
+                    FullyTranslated = false;
+                    terminated = true;
+                    break;
+                }
+                if (!ins.Valid || ins.Lock || ins.Rep != 0 || !TryEmit(ins))
                 {
                     EmitExit(eip, Ctx.ReasonFallback);
                     FullyTranslated = false;
@@ -191,7 +200,7 @@ namespace Nativra.X86.Jit
             // r12-r14) have no high byte, and AH-style encodings cannot sit in
             // an instruction that needs a REX prefix, which every memory
             // operand here does. Leave those forms to the interpreter.
-            if (UsesHighByteRegister(ins)) return false;
+            if (UsesHighByteRegister(ins)) return EmitHighByte(ins);
 
             if (op >= 0x70 && op <= 0x7F)
                 return EmitConditional(ins, op - 0x70, (uint)(sbyte)ins.Imm);
@@ -271,8 +280,37 @@ namespace Nativra.X86.Jit
                     if (!IsMem(ins)) return false;
                     EmitAddressNoSeg(ins, G[ins.RegField], size);
                     return true;
+                case 0x8F: // POP r/m
+                    if (ins.RegField != 0) return false;
+                    if (!IsMem(ins)) return EmitPop(ins.Rm, size);
+                    e.LoadMem(S3, Mem, G[Reg.Esp], 1, 0, size);
+                    e.Lea(G[Reg.Esp], G[Reg.Esp], -1, 1, StackStep(size));
+                    EmitAddress(ins);
+                    e.StoreMem(S3, Mem, S1, 1, 0, size);
+                    return true;
 
                 case 0x90: return true; // NOP
+                case 0x98:
+                    if (size == 16)
+                    {
+                        e.Movsx(S2, G[Reg.Eax], 8);
+                        e.MovRegRegSized(G[Reg.Eax], S2, 16);
+                    }
+                    else e.Movsx(G[Reg.Eax], G[Reg.Eax], 16);
+                    return true;
+                case 0x99:
+                    if (size == 16) e.U8(0x66);
+                    e.Cdq();
+                    return true;
+                case 0xA0:
+                case 0xA1:
+                case 0xA2:
+                case 0xA3:
+                    EmitAddress(ins);
+                    if (op == 0xA0 || op == 0xA1)
+                        e.LoadMem(G[Reg.Eax], Mem, S1, 1, 0, op == 0xA0 ? 8 : size);
+                    else e.StoreMem(G[Reg.Eax], Mem, S1, 1, 0, op == 0xA2 ? 8 : size);
+                    return true;
                 case 0xC2:
                 case 0xC3:
                     e.LoadMem(S2, Mem, G[Reg.Esp], 1, 0);
@@ -298,6 +336,11 @@ namespace Nativra.X86.Jit
                     else if (size == 32) e.MovRegImm32(G[ins.Rm], ins.Imm);
                     else return false;
                     return true;
+                case 0xC9: // LEAVE
+                    e.MovRegReg(G[Reg.Esp], G[Reg.Ebp]);
+                    e.LoadMem(G[Reg.Ebp], Mem, G[Reg.Esp], 1, 0, size);
+                    e.Lea(G[Reg.Esp], G[Reg.Esp], -1, 1, StackStep(size));
+                    return true;
 
                 case 0xF6:
                 case 0xF7:
@@ -308,6 +351,16 @@ namespace Nativra.X86.Jit
                     else e.IncDecReg(ins.RegField, G[ins.Rm], 8);
                     return true;
                 case 0xFF:
+                    if (ins.RegField == 6)
+                    {
+                        if (IsMem(ins))
+                        {
+                            EmitAddress(ins);
+                            e.LoadMem(S2, Mem, S1, 1, 0, size);
+                            return EmitPush(S2, size);
+                        }
+                        return EmitPush(G[ins.Rm], size);
+                    }
                     if (ins.RegField == 2 || ins.RegField == 4)
                     {
                         if (IsMem(ins)) { EmitAddress(ins); e.LoadMem(S2, Mem, S1, 1, 0); }
@@ -423,13 +476,15 @@ namespace Nativra.X86.Jit
                         return true;
                     case 0xB6:
                     case 0xB7: // movzx
-                        if (IsMem(ins)) { EmitAddress(ins); e.MovzxMem(G[ins.RegField], Mem, S1, 1, 0, low == 0xB6 ? 8 : 16); }
-                        else e.Movzx(G[ins.RegField], G[ins.Rm], low == 0xB6 ? 8 : 16);
+                        if (size == 16 && low == 0xB7) return false;
+                        if (IsMem(ins)) { EmitAddress(ins); e.MovzxMem(G[ins.RegField], Mem, S1, 1, 0, low == 0xB6 ? 8 : 16, size); }
+                        else e.Movzx(G[ins.RegField], G[ins.Rm], low == 0xB6 ? 8 : 16, size);
                         return true;
                     case 0xBE:
                     case 0xBF: // movsx
-                        if (IsMem(ins)) { EmitAddress(ins); e.MovsxMem(G[ins.RegField], Mem, S1, 1, 0, low == 0xBE ? 8 : 16); }
-                        else e.Movsx(G[ins.RegField], G[ins.Rm], low == 0xBE ? 8 : 16);
+                        if (size == 16 && low == 0xBF) return false;
+                        if (IsMem(ins)) { EmitAddress(ins); e.MovsxMem(G[ins.RegField], Mem, S1, 1, 0, low == 0xBE ? 8 : 16, size); }
+                        else e.Movsx(G[ins.RegField], G[ins.Rm], low == 0xBE ? 8 : 16, size);
                         return true;
                     case 0xC8:
                     case 0xC9:
@@ -494,6 +549,134 @@ namespace Nativra.X86.Jit
                 }
             }
             return (rmIsByte && ins.Mod == 3 && ins.Rm >= 4) || (regIsByte && ins.RegField >= 4);
+        }
+
+        private int ReadByteRegister(int guest, int scratch)
+        {
+            if (guest < 4) return G[guest];
+            // AH/CH/DH/BH are bits 8-15 of the first four guest registers.
+            // Extracting them must not change the flags seen by the guest op.
+            e.Pushfq();
+            e.MovRegReg(scratch, G[guest - 4]);
+            e.ShiftImm(5, scratch, 8);
+            e.Popfq();
+            return scratch;
+        }
+
+        private void WriteByteRegister(int guest, int value)
+        {
+            if (guest < 4)
+            {
+                e.MovRegRegSized(G[guest], value, 8);
+                return;
+            }
+            if (value != S2 && value != S3)
+            {
+                e.MovRegReg(S3, value);
+                value = S3;
+            }
+            e.Pushfq();
+            e.AluRegImm(4, G[guest - 4], 0xFFFF00FF);
+            e.AluRegImm(4, value, 0xFF);
+            e.ShiftImm(4, value, 8);
+            e.AluRegReg(1, G[guest - 4], value);
+            e.Popfq();
+        }
+
+        private bool EmitHighByte(in Instruction ins)
+        {
+            var op = ins.Op;
+            if (op < 0x40 && (op & 7) < 4)
+            {
+                var alu = op >> 3;
+                var toReg = (op & 2) != 0;
+                if (IsMem(ins))
+                {
+                    EmitAddress(ins);
+                    var reg = ReadByteRegister(ins.RegField, S2);
+                    if (toReg)
+                    {
+                        e.AluRegMem(alu, reg, Mem, S1, 1, 0, 8);
+                        if (alu != 7 && ins.RegField >= 4) WriteByteRegister(ins.RegField, reg);
+                    }
+                    else e.AluMemReg(alu, reg, Mem, S1, 1, 0, 8);
+                }
+                else
+                {
+                    var dstGuest = toReg ? ins.RegField : ins.Rm;
+                    var srcGuest = toReg ? ins.Rm : ins.RegField;
+                    var dst = ReadByteRegister(dstGuest, S2);
+                    var src = ReadByteRegister(srcGuest, S3);
+                    e.AluRegReg(alu, dst, src, 8);
+                    if (alu != 7 && dstGuest >= 4) WriteByteRegister(dstGuest, dst);
+                }
+                return true;
+            }
+            if (op == 0x80 || op == 0x82)
+            {
+                var dst = ReadByteRegister(ins.Rm, S2);
+                e.AluRegImm(ins.RegField, dst, ins.Imm, 8);
+                if (ins.RegField != 7) WriteByteRegister(ins.Rm, dst);
+                return true;
+            }
+            if (op == 0x84)
+            {
+                if (IsMem(ins))
+                {
+                    EmitAddress(ins);
+                    e.TestMemReg(ReadByteRegister(ins.RegField, S2), Mem, S1, 1, 0, 8);
+                }
+                else e.TestRegReg(ReadByteRegister(ins.Rm, S2), ReadByteRegister(ins.RegField, S3), 8);
+                return true;
+            }
+            if (op == 0x88 || op == 0x8A)
+            {
+                if (IsMem(ins))
+                {
+                    EmitAddress(ins);
+                    if (op == 0x88) e.StoreMem(ReadByteRegister(ins.RegField, S2), Mem, S1, 1, 0, 8);
+                    else
+                    {
+                        var dst = ins.RegField >= 4 ? S2 : G[ins.RegField];
+                        e.LoadMem(dst, Mem, S1, 1, 0, 8);
+                        if (ins.RegField >= 4) WriteByteRegister(ins.RegField, dst);
+                    }
+                }
+                else
+                {
+                    var dst = op == 0x88 ? ins.Rm : ins.RegField;
+                    var src = op == 0x88 ? ins.RegField : ins.Rm;
+                    WriteByteRegister(dst, ReadByteRegister(src, S2));
+                }
+                return true;
+            }
+            if (op == 0xC6)
+            {
+                e.MovRegImm8(S2, (byte)ins.Imm);
+                WriteByteRegister(ins.Rm, S2);
+                return true;
+            }
+            if (op == 0xFE && ins.RegField <= 1)
+            {
+                var dst = ReadByteRegister(ins.Rm, S2);
+                e.IncDecReg(ins.RegField, dst, 8);
+                WriteByteRegister(ins.Rm, dst);
+                return true;
+            }
+            if (op == 0x0FB6 || op == 0x0FBE)
+            {
+                var src = ReadByteRegister(ins.Rm, S2);
+                if (op == 0x0FB6) e.Movzx(G[ins.RegField], src, 8, OpSize(ins));
+                else e.Movsx(G[ins.RegField], src, 8, OpSize(ins));
+                return true;
+            }
+            if (op >= 0x0F90 && op <= 0x0F9F)
+            {
+                e.Setcc(op - 0x0F90, S2);
+                WriteByteRegister(ins.Rm, S2);
+                return true;
+            }
+            return false;
         }
 
         // ---------------------------------------------------------- ALU helpers
@@ -566,10 +749,45 @@ namespace Nativra.X86.Jit
                     return true;
                 case 4:
                 case 5:
-                case 6:
-                case 7: // MUL/IMUL/DIV/IDIV via EDX:EAX
+                    // MUL/IMUL via EDX:EAX
                     if (IsMem(ins)) { EmitAddress(ins); e.Group3Mem(ins.RegField, Mem, S1, 1, 0, width); }
                     else e.Group3(ins.RegField, G[ins.Rm], width);
+                    return true;
+                case 6:
+                case 7: // Check faulting divides before executing them on the host.
+                    if (width != 32) return false;
+                    if (IsMem(ins)) { EmitAddress(ins); e.LoadMem(S2, Mem, S1, 1, 0); }
+                    else e.MovRegReg(S2, G[ins.Rm]);
+                    var bad = "divide_bad_" + e.Here;
+                    var ready = "divide_ready_" + e.Here;
+                    var done = "divide_done_" + e.Here;
+                    e.Pushfq();
+                    e.TestRegReg(S2, S2);
+                    e.Jcc(4, bad);
+                    if (ins.RegField == 6)
+                    {
+                        e.AluRegReg(7, G[Reg.Edx], S2);
+                        e.Jcc(3, bad);
+                    }
+                    else
+                    {
+                        e.MovRegReg(S3, G[Reg.Eax]);
+                        e.ShiftImm(7, S3, 31);
+                        e.AluRegReg(7, G[Reg.Edx], S3);
+                        e.Jcc(5, bad);
+                        e.AluRegImm(7, S2, 0xFFFFFFFF);
+                        e.Jcc(5, ready);
+                        e.AluRegImm(7, G[Reg.Eax], 0x80000000);
+                        e.Jcc(4, bad);
+                    }
+                    e.Label(ready);
+                    e.Popfq();
+                    e.Group3(ins.RegField, S2, 32);
+                    e.Jmp(done);
+                    e.Label(bad);
+                    e.Popfq();
+                    EmitExit(ins.Address, Ctx.ReasonFallback);
+                    e.Label(done);
                     return true;
             }
             return false;

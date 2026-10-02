@@ -56,7 +56,7 @@ namespace Nativra.X86.Jit
         }
 
         // 8-bit forms addressing sil/dil/bpl/spl need a REX even when otherwise unnecessary.
-        private static bool NeedRex(int reg) => false;
+        private static bool NeedRex(int reg) => reg >= 4 && reg <= 7;
 
         /// <summary>Emits REX only when some high register or W bit requires it.</summary>
         private void MaybeRex(bool w, int reg, int index, int rmBase)
@@ -66,7 +66,8 @@ namespace Nativra.X86.Jit
             // guest [ebp+disp] (ebp lives in r12, which always needs a SIB)
             // became [ebp+ebp+disp].
             if (index < 0) index = 0;
-            if (w || (reg & 8) != 0 || (index & 8) != 0 || (rmBase & 8) != 0)
+            if (w || (reg & 8) != 0 || (index & 8) != 0 || (rmBase & 8) != 0 ||
+                NeedRex(reg) || NeedRex(rmBase))
                 U8(0x40 | (w ? 8 : 0) | ((reg & 8) >> 1) | ((index & 8) >> 2) | ((rmBase & 8) >> 3));
         }
 
@@ -417,15 +418,17 @@ namespace Nativra.X86.Jit
             else U32(imm);
         }
 
-        public void MovzxMem(int dst, int baseR, int index, int scale, int disp, int size)
+        public void MovzxMem(int dst, int baseR, int index, int scale, int disp, int size, int outputSize = 32)
         {
+            if (outputSize == 16) U8(0x66);
             MaybeRex(false, dst, index, baseR);
             U8(0x0F); U8(size == 8 ? (byte)0xB6 : (byte)0xB7);
             ModMem(dst, baseR, index, scale, disp);
         }
 
-        public void MovsxMem(int dst, int baseR, int index, int scale, int disp, int size)
+        public void MovsxMem(int dst, int baseR, int index, int scale, int disp, int size, int outputSize = 32)
         {
+            if (outputSize == 16) U8(0x66);
             MaybeRex(false, dst, index, baseR);
             U8(0x0F); U8(size == 8 ? (byte)0xBE : (byte)0xBF);
             ModMem(dst, baseR, index, scale, disp);
@@ -457,16 +460,18 @@ namespace Nativra.X86.Jit
         /// <summary>Adds a 32-bit immediate to a register (top cleared), used for address arithmetic.</summary>
         public void AddRegImm32(int reg, uint imm) => AluRegImm(0, reg, imm);
 
-        public void Movzx(int dst, int src, int size)
+        public void Movzx(int dst, int src, int size, int outputSize = 32)
         {
+            if (outputSize == 16) U8(0x66);
             MaybeRex(false, dst, 0, src);
             U8(0x0F);
             U8(size == 8 ? (byte)0xB6 : (byte)0xB7);
             ModRegReg(dst, src);
         }
 
-        public void Movsx(int dst, int src, int size)
+        public void Movsx(int dst, int src, int size, int outputSize = 32)
         {
+            if (outputSize == 16) U8(0x66);
             MaybeRex(false, dst, 0, src);
             U8(0x0F);
             U8(size == 8 ? (byte)0xBE : (byte)0xBF);

@@ -41,6 +41,8 @@ namespace Nativra.X86.Jit
         public long BlocksCompiled { get; private set; }
         public long BlocksExecuted { get; private set; }
         public long InterpreterFallbacks { get; private set; }
+        public bool CollectFallbacks { get; set; }
+        public Dictionary<string, long> FallbackCounts { get; } = new Dictionary<string, long>();
 
         public JitEngine(CpuState cpu, GuestMemory memory)
         {
@@ -81,6 +83,7 @@ namespace Nativra.X86.Jit
                 if (ctx.ExitReason == Ctx.ReasonFallback)
                 {
                     ctx.Store(Cpu);
+                    CountFallback();
                     Interpreter.Step();
                     InterpreterFallbacks++;
                     return ctx.ExitReason;
@@ -133,6 +136,7 @@ namespace Nativra.X86.Jit
                 if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault(block);
                 if (ctx.ExitReason == Ctx.ReasonFallback)
                 {
+                    CountFallback();
                     Interpreter.Step();
                     InterpreterFallbacks++;
                 }
@@ -155,6 +159,43 @@ namespace Nativra.X86.Jit
             if (!blocksByPage.TryGetValue(page, out var starts)) blocksByPage[page] = starts = new List<uint>();
             starts.Add(eip);
             return published;
+        }
+
+        private void CountFallback()
+        {
+            if (!CollectFallbacks) return;
+            string key;
+            try
+            {
+                var ins = Decoder.Decode(Memory, Cpu.Eip);
+                var bytes = new List<string>();
+                for (var i = 0; i < ins.OpcodeOffset; i++)
+                {
+                    var prefix = Memory.Read8(Cpu.Eip + (uint)i);
+                    if (prefix == 0x66 || prefix == 0x67 || prefix == 0xF2 || prefix == 0xF3)
+                        bytes.Add(prefix.ToString("X2"));
+                }
+                var opBytes = ins.Op > 0xFFFF ? 3 : ins.Op > 0xFF ? 2 : 1;
+                for (var i = 0; i < opBytes; i++)
+                    bytes.Add(Memory.Read8(Cpu.Eip + (uint)ins.OpcodeOffset + (uint)i).ToString("X2"));
+                key = string.Join(" ", bytes);
+                if (ins.HasModRm && (ins.Op == 0x80 || ins.Op == 0x81 || ins.Op == 0x82 ||
+                    ins.Op == 0x83 || ins.Op == 0xC0 || ins.Op == 0xC1 ||
+                    ins.Op == 0xD0 || ins.Op == 0xD1 || ins.Op == 0xD2 ||
+                    ins.Op == 0xD3 || ins.Op == 0xF6 || ins.Op == 0xF7 ||
+                    ins.Op == 0xFE || ins.Op == 0xFF ||
+                    ins.Op == 0x0F00 || ins.Op == 0x0F01 || ins.Op == 0x0F71 ||
+                    ins.Op == 0x0F72 || ins.Op == 0x0F73 || ins.Op == 0x0FAE ||
+                    ins.Op == 0x0FBA || ins.Op == 0x0FC7 ||
+                    (ins.Op >= 0xD8 && ins.Op <= 0xDF)))
+                    key += "/" + ins.RegField;
+            }
+            catch (Exception)
+            {
+                key = "decode error";
+            }
+            FallbackCounts.TryGetValue(key, out var count);
+            FallbackCounts[key] = count + 1;
         }
 
         /// <summary>

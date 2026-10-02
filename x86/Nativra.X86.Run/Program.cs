@@ -18,6 +18,7 @@ namespace Nativra.X86.Run
     ///   --budget N      blocks to run before giving up (default 400 million)
     ///   --imports FILE  write every import with its state (linked/served/MISSING)
     ///   --log N         guest log lines to keep (default 200)
+    ///   --fallbacks N   print the N most frequent JIT fallback opcodes
     ///   --trace FILE    every served import call, with arguments and result
     /// </summary>
     public static class Program
@@ -29,6 +30,7 @@ namespace Nativra.X86.Run
             long budget = 400_000_000, dllBudget = 0;
             uint steamApp = 0;
             var logLines = 200;
+            var fallbackLines = 0;
             var rest = new List<string>();
             for (var i = 0; i < args.Length; i++)
             {
@@ -39,6 +41,7 @@ namespace Nativra.X86.Run
                     case "--budget": budget = long.Parse(args[++i]); break;
                     case "--imports": importsFile = args[++i]; break;
                     case "--log": logLines = int.Parse(args[++i]); break;
+                    case "--fallbacks": fallbackLines = int.Parse(args[++i]); break;
                     case "--trace": traceFile = args[++i]; break;
                     case "--dll-budget": dllBudget = long.Parse(args[++i]); break;
                     case "--steam": steamApp = uint.Parse(args[++i]); break;
@@ -47,7 +50,7 @@ namespace Nativra.X86.Run
             }
             if (rest.Count < 2)
             {
-                Console.Error.WriteLine("usage: nativra-run [--dlls DIR] [--interp] [--budget N] [--imports FILE] [--steam APPID] <folder> <exe> [arguments...]");
+                Console.Error.WriteLine("usage: nativra-run [--dlls DIR] [--interp] [--budget N] [--fallbacks N] [--imports FILE] [--steam APPID] <folder> <exe> [arguments...]");
                 return 2;
             }
             var folder = Path.GetFullPath(rest[0]);
@@ -60,6 +63,7 @@ namespace Nativra.X86.Run
             using (var memory = new GuestMemory(native: true))
             using (var process = new GuestProcess(memory, useJit: !interp))
             {
+                if (process.Jit != null) process.Jit.CollectFallbacks = fallbackLines > 0;
                 StreamWriter trace = null;
                 if (traceFile != null)
                 {
@@ -140,7 +144,11 @@ namespace Nativra.X86.Run
                 lines.Add("x86.raised=" + string.Join(",", kernel.ExceptionsRaised.Select(c => c.ToString("X8"))));
                 lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
                 if (process.Jit != null)
+                {
                     lines.Add($"x86.blocks={process.Jit.BlocksCompiled} compiled, {process.Jit.BlocksExecuted} run, {process.Jit.InterpreterFallbacks} interpreted");
+                    foreach (var pair in process.Jit.FallbackCounts.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(fallbackLines))
+                        lines.Add($"x86.fallback={pair.Key} count={pair.Value}");
+                }
                 foreach (var text in guestLog) lines.Add("x86.log=" + text);
                 lines.Add("x86.memory=committed " + (memory.MappedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB (" + memory.MappedPages +
                           " pages), reserved " + (memory.ReservedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB more");

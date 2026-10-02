@@ -43,6 +43,7 @@ namespace Nativra.X86.Loader
             InstallAdvapi(i);
             InstallSecurity(i);
             InstallOle(i);
+            InstallSetupApi(i);
             InstallShell32(i);
             InstallVersion(i);
             InstallOleAut(i);

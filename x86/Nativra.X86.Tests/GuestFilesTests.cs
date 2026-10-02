@@ -59,6 +59,38 @@ namespace Nativra.X86.Tests
         private const uint OpenExisting = 3, CreateAlways = 2;
 
         [Fact]
+        public void ReplaceFileSwapsTheContentsInAndKeepsABackup()
+        {
+            var data = Path.Combine(root, "data");
+            File.WriteAllText(Path.Combine(data, "save.dat"), "old");
+            File.WriteAllText(Path.Combine(data, "save.tmp"), "new");
+
+            Assert.Equal(1u, K("ReplaceFileW", W("C:\\game\\data\\save.dat"), W("C:\\game\\data\\save.tmp"), W("C:\\game\\data\\save.bak"), 0, 0, 0));
+            Assert.Equal("new", File.ReadAllText(Path.Combine(data, "save.dat")));
+            Assert.Equal("old", File.ReadAllText(Path.Combine(data, "save.bak")));
+            Assert.False(File.Exists(Path.Combine(data, "save.tmp")));   // the replacement is consumed
+
+            // Without a backup, and through the ANSI entry point.
+            File.WriteAllText(Path.Combine(data, "save.tmp"), "newer");
+            Assert.Equal(1u, K("ReplaceFileA", A("data\\save.dat"), A("data\\save.tmp"), 0, 0, 0, 0));
+            Assert.Equal("newer", File.ReadAllText(Path.Combine(data, "save.dat")));
+            Assert.Equal("old", File.ReadAllText(Path.Combine(data, "save.bak")));
+        }
+
+        [Fact]
+        public void ReplaceFileOfAMissingFileFailsAndChangesNothing()
+        {
+            var data = Path.Combine(root, "data");
+            File.WriteAllText(Path.Combine(data, "keep.tmp"), "kept");
+            Assert.Equal(0u, K("ReplaceFileW", W("C:\\game\\data\\absent.dat"), W("C:\\game\\data\\keep.tmp"), 0, 0, 0, 0));
+            Assert.Equal(2u, K("GetLastError"));   // ERROR_FILE_NOT_FOUND
+            Assert.Equal("kept", File.ReadAllText(Path.Combine(data, "keep.tmp")));
+            Assert.Equal(0u, K("ReplaceFileW", W("C:\\game\\data\\readme.txt"), W("C:\\game\\data\\absent.tmp"), 0, 0, 0, 0));
+            Assert.Equal(2u, K("GetLastError"));
+            Assert.Equal("hi", File.ReadAllText(Path.Combine(data, "readme.txt")));
+        }
+
+        [Fact]
         public void LoadLibraryWithAFolderLoadsThatFileAndAnUnknownDllIsNotFound()
         {
             Directory.CreateDirectory(Path.Combine(root, "mod", "bin"));

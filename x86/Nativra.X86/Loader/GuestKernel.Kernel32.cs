@@ -165,6 +165,8 @@ namespace Nativra.X86.Loader
             // --- more file calls ----------------------------------------------------
             i.Register(k, "CopyFileA", CallConv.Stdcall, 3, c => CopyFile(ReadText(c.Arg(0), false), ReadText(c.Arg(1), false), c.Arg(2) != 0, false));
             i.Register(k, "CopyFileW", CallConv.Stdcall, 3, c => CopyFile(ReadText(c.Arg(0), true), ReadText(c.Arg(1), true), c.Arg(2) != 0, false));
+            i.Register(k, "ReplaceFileA", CallConv.Stdcall, 6, c => ReplaceFile(ReadText(c.Arg(0), false), ReadText(c.Arg(1), false), c.Arg(2) != 0 ? ReadText(c.Arg(2), false) : null));
+            i.Register(k, "ReplaceFileW", CallConv.Stdcall, 6, c => ReplaceFile(ReadText(c.Arg(0), true), ReadText(c.Arg(1), true), c.Arg(2) != 0 ? ReadText(c.Arg(2), true) : null));
             i.Register(k, "MoveFileA", CallConv.Stdcall, 2, c => CopyFile(ReadText(c.Arg(0), false), ReadText(c.Arg(1), false), true, true));
             i.Register(k, "MoveFileW", CallConv.Stdcall, 2, c => CopyFile(ReadText(c.Arg(0), true), ReadText(c.Arg(1), true), true, true));
             i.Register(k, "MoveFileExA", CallConv.Stdcall, 3, c => CopyFile(ReadText(c.Arg(0), false), ReadText(c.Arg(1), false), (c.Arg(2) & 1) == 0, true));
@@ -989,6 +991,45 @@ namespace Nativra.X86.Loader
                 return 0;
             }
             if (move) Files.Delete(from);
+            return 1;
+        }
+
+        /// <summary>
+        /// ReplaceFile: the replacement's contents take over the replaced file's
+        /// name (the way a program saves safely: write a temporary file, then
+        /// swap it in), the old contents optionally kept as a backup. The
+        /// replacement is gone afterwards. A missing file is ERROR_FILE_NOT_FOUND;
+        /// the three failures that leave one of them half done have their own
+        /// codes, as on Windows.
+        /// </summary>
+        private uint ReplaceFile(string replaced, string replacement, string backup)
+        {
+            const uint unableToRemoveReplaced = 1175, unableToMoveReplacement = 1176, unableToMoveReplacementBackup = 1177;
+            replaced = FullPath(replaced);
+            replacement = FullPath(replacement);
+            if (Files.Stat(replaced) == null || Files.Stat(replacement) == null) { process.LastError = ErrorFileNotFound; return 0; }
+            try
+            {
+                if (backup != null)
+                {
+                    try
+                    {
+                        using (var source = Files.Open(replaced, FileMode.Open, FileAccess.Read))
+                        using (var target = Files.Open(FullPath(backup), FileMode.Create, FileAccess.Write))
+                            source.CopyTo(target);
+                    }
+                    catch (Exception e) when (e is IOException || e is UnauthorizedAccessException) { process.LastError = unableToRemoveReplaced; return 0; }
+                }
+                try
+                {
+                    using (var source = Files.Open(replacement, FileMode.Open, FileAccess.Read))
+                    using (var target = Files.Open(replaced, FileMode.Create, FileAccess.Write))
+                        source.CopyTo(target);
+                }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException) { process.LastError = backup != null ? unableToMoveReplacementBackup : unableToMoveReplacement; return 0; }
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException) { process.LastError = ErrorAccessDenied; return 0; }
+            Files.Delete(replacement);
             return 1;
         }
 

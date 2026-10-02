@@ -262,6 +262,8 @@ namespace Nativra.X86.Jit
                 }
             }
 
+            if (op >= 0xD8 && op <= 0xDF) return EmitX87(ins);
+
             switch (op)
             {
                 case 0x69:

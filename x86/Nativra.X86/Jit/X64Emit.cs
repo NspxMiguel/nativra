@@ -22,6 +22,7 @@ namespace Nativra.X86.Jit
         public int Length { get; private set; }
 
         private readonly List<(int at, string label)> fixups = new List<(int, string)>();
+        private readonly List<(int at, string label)> fixups8 = new List<(int, string)>();
         private readonly Dictionary<string, int> labels = new Dictionary<string, int>();
 
         public byte[] ToArray()
@@ -558,6 +559,15 @@ namespace Nativra.X86.Jit
             ModMem(reg, baseReg, index, scale, disp);
         }
 
+        /// <summary>A three-byte-opcode reg,reg form (0F 3A xx and friends).</summary>
+        public void Rr3(int prefix, int op0, int op1, int op2, int reg, int rm)
+        {
+            if (prefix != 0) U8(prefix);
+            MaybeRex(false, reg, 0, rm);
+            U8(op0); U8(op1); U8(op2);
+            ModRegReg(reg, rm);
+        }
+
         // ------------------------------------------------------------- stack/misc
 
         public void PushReg(int reg) { MaybeRex(false, 0, 0, reg); U8((byte)(0x50 + (reg & 7))); }
@@ -592,6 +602,14 @@ namespace Nativra.X86.Jit
             U32(0);
         }
 
+        /// <summary>jrcxz rel8: jumps when RCX is zero and leaves the flags alone.</summary>
+        public void Jrcxz(string label)
+        {
+            U8(0xE3);
+            fixups8.Add((Length, label));
+            U8(0);
+        }
+
         public void Jcc(int cc, string label)
         {
             U8(0x0F);
@@ -617,6 +635,14 @@ namespace Nativra.X86.Jit
 
         public void Finish()
         {
+            foreach (var (at, label) in fixups8)
+            {
+                if (!labels.TryGetValue(label, out var target))
+                    throw new InvalidOperationException("unresolved JIT label " + label);
+                var rel = target - (at + 1);
+                if (rel < -128 || rel > 127) throw new InvalidOperationException("short JIT jump out of range to " + label);
+                buffer[at] = (byte)rel;
+            }
             foreach (var (at, label) in fixups)
             {
                 if (!labels.TryGetValue(label, out var target))

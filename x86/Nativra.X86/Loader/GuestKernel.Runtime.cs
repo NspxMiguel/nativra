@@ -219,6 +219,9 @@ namespace Nativra.X86.Loader
                 }
             });
             i.Register(k, "SetStdHandle", CallConv.Stdcall, 2, c => 1);
+            // Obsolete since Windows 95 and a no-op that echoes the count; msvcr100's
+            // low-level I/O start-up still calls it.
+            i.Register(k, "SetHandleCount", CallConv.Stdcall, 1, c => c.Arg(0));
             i.Register(k, "GetConsoleMode", CallConv.Stdcall, 2, c => 0);
             i.Register(k, "GetConsoleCP", CallConv.Stdcall, 0, c => 0);
             i.Register(k, "GetConsoleOutputCP", CallConv.Stdcall, 0, c => 0);

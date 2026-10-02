@@ -54,7 +54,7 @@ jobs:
       - name: Run the server through the layer
         shell: pwsh
         run: |
-          dotnet x86/Nativra.X86.Run/bin/Release/net8.0/Nativra.X86.Run.dll --budget 1500000000 --log 800 `
+          dotnet x86/Nativra.X86.Run/bin/Release/net8.0/Nativra.X86.Run.dll --budget 1500000000 --log 800 --trace srcds-trace.txt `
             srcds srcds.exe -console -game hl2mp -insecure +sv_lan 1 +maxplayers 2 +map dm_lockdown | Tee-Object srcds.txt
           $milestones = @(
             'x86.jit=on',
@@ -64,5 +64,10 @@ jobs:
             'VAC secure mode disabled.'
           )
           $missing = $milestones | Where-Object { -not (Select-String -Path srcds.txt -SimpleMatch -Pattern $_ -Quiet) }
-          if ($missing) { Write-Error ("missing milestones: " + ($missing -join ' | ')); exit 1 }
+          if ($missing) {
+            # The served calls just before the stop, with arguments and results: on
+            # a host-dependent failure this is the part a Mac run cannot show.
+            Get-Content srcds-trace.txt -Tail 120
+            Write-Error ("missing milestones: " + ($missing -join ' | ')); exit 1
+          }
           exit 0

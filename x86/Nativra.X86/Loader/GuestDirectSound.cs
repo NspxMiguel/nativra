@@ -122,8 +122,10 @@ namespace Nativra.X86.Loader
         public void Install()
         {
             process.HostServed.Add(Module);
-            deviceTable = Table("device", new[] { 2, 0, 0, 3, 1, 2, 1, 0, 1, 1, 1, 0 }, Device);
-            bufferTable = Table("buffer", new[] { 2, 0, 0, 1, 2, 3, 1, 1, 1, 1, 1, 7, 3, 1, 1, 1, 1, 1, 0, 4, 0, 3, 3, 4 }, Buffer);
+            // Arguments after `this` per slot, in dsound.h order; a stdcall callee pops
+            // them, so one wrong count misaligns the game's stack.
+            deviceTable = Table("device", new[] { 2, 0, 0, 3, 1, 2, 2, 0, 1, 1, 1, 1 }, Device);
+            bufferTable = Table("buffer", new[] { 2, 0, 0, 1, 2, 3, 1, 1, 1, 1, 2, 7, 3, 1, 1, 1, 1, 1, 0, 4, 0, 3, 3, 4 }, Buffer);
             notifyTable = Table("notify", new[] { 2, 0, 0, 2 }, Notify);
             factoryTable = Table("factory", new[] { 2, 0, 0, 3, 1 }, Factory);
             factory = Make(factoryTable, new Item());

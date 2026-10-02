@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System;
 using System.Threading;
 using Nativra.X86.Cpu;
@@ -41,7 +42,48 @@ namespace Nativra.X86.Tests
             var all = new uint[args.Length + 1]; all[0] = obj; Array.Copy(args, 0, all, 1, args.Length);
             var table = process.Memory.Read32(obj);
             var result = process.Call(process.Memory.Read32(table + (uint)slot * 4), out var value, 1000000, all);
-            Assert.True(result.Ok, result.ToString()); return value;
+            Assert.True(result.Ok, result.ToString());
+            return value;
+        }
+
+        /// <summary>
+        /// Calls <paramref name="function"/> from guest code that measures ESP around
+        /// the call, the way a compiled caller relies on it: zero when the callee
+        /// popped exactly its arguments. (process.Call unwinds its own frame, so it
+        /// cannot tell.)
+        /// </summary>
+        private int StackLeftOver(uint function, uint[] args)
+        {
+            var code = new List<byte> { 0x89, 0xE3 };                    // mov ebx, esp
+            for (var n = args.Length - 1; n >= 0; n--) { code.Add(0x68); code.AddRange(BitConverter.GetBytes(args[n])); }   // push imm32
+            code.Add(0xB8); code.AddRange(BitConverter.GetBytes(function));   // mov eax, function
+            code.AddRange(new byte[] { 0xFF, 0xD0, 0x29, 0xE3, 0x89, 0xD8, 0xC3 });   // call eax; sub ebx, esp; mov eax, ebx; ret
+            var at = P((uint)code.Count);
+            process.Memory.WriteBytes(at, code.ToArray());
+            var result = process.Call(at, out var leftOver, 1000000);
+            Assert.True(result.Ok, result.ToString());
+            return (int)leftOver;
+        }
+
+        [Fact]
+        public void EveryMethodPopsTheArgumentsDsoundHDeclares()
+        {
+            // dsound.h, arguments after `this`. SetCooperativeLevel served with one
+            // argument instead of two sent OpenAL Soft's mixer to address zero.
+            var device = new[] { 2, 0, 0, 3, 1, 2, 2, 0, 1, 1, 1, 1 };
+            var buffer = new[] { 2, 0, 0, 1, 2, 3, 1, 1, 1, 1, 2, 7, 3, 1, 1, 1, 1, 1, 0, 4, 0, 3, 3, 4 };
+            var d = Device("DirectSoundCreate8");
+            var b = Buffer();
+            foreach (var (obj, counts) in new[] { (d, device), (b, buffer) })
+                for (var slot = 3; slot < counts.Length; slot++)
+                {
+                    if (obj == d && slot == 3) continue;   // CreateSoundBuffer needs a real description
+                    var args = new uint[counts[slot] + 1];
+                    args[0] = obj;
+                    for (var n = 1; n < args.Length; n++) args[n] = P(256);   // somewhere valid to write answers
+                    var method = process.Memory.Read32(process.Memory.Read32(obj) + (uint)slot * 4);
+                    Assert.True(StackLeftOver(method, args) == 0, $"slot {slot} left the stack unbalanced");
+                }
         }
         private uint Device(string name)
         {

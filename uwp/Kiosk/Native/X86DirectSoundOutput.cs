@@ -29,6 +29,9 @@ namespace Kiosk.Native
         private readonly Queue<IntPtr> pending = new Queue<IntPtr>();
         private IntPtr engine, mastering, source;
         private long submitted;
+        // Frames played by voices already torn down: a rebuilt voice counts from zero,
+        // and the guest's play cursor must never go back.
+        private long playedBefore;
         public int SampleRate => 48000;
         private static T Method<T>(IntPtr obj, int index) where T : class =>
             Marshal.GetDelegateForFunctionPointer(Marshal.ReadIntPtr(Marshal.ReadIntPtr(obj), index * IntPtr.Size), typeof(T)) as T;
@@ -38,7 +41,7 @@ namespace Kiosk.Native
             if (code < 0 || engine == IntPtr.Zero) throw new COMException("XAudio2Create failed", code);
             code = Method<CreateMasteringVoiceDelegate>(engine, 7)(engine, out mastering, 2, 48000, 0,
                 IntPtr.Zero, IntPtr.Zero, 0);
-            if (code < 0) throw new COMException("CreateMasteringVoice failed", code);
+            if (code < 0) throw new COMException("CreateMasteringVoice failed 0x" + code.ToString("X8"), code);
             var format = Marshal.AllocHGlobal(18);
             try
             {
@@ -51,11 +54,11 @@ namespace Kiosk.Native
                 Marshal.WriteInt16(format, 16, 0);
                 code = Method<CreateSourceVoiceDelegate>(engine, 5)(engine, out source, format, 0, 2,
                     IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
-                if (code < 0) throw new COMException("CreateSourceVoice failed", code);
+                if (code < 0) throw new COMException("CreateSourceVoice failed 0x" + code.ToString("X8"), code);
             }
             finally { Marshal.FreeHGlobal(format); }
             code = Method<VoiceStartDelegate>(source, 19)(source, 0, 0);
-            if (code < 0) throw new COMException("SourceVoice.Start failed", code);
+            if (code < 0) throw new COMException("SourceVoice.Start failed 0x" + code.ToString("X8"), code);
         }
         private void State(out uint queued, out long played)
         {
@@ -69,7 +72,7 @@ namespace Kiosk.Native
             }
             finally { Marshal.FreeHGlobal(state); }
         }
-        public long FramesPlayed { get { State(out _, out var played); return played; } }
+        public long FramesPlayed { get { State(out _, out var played); return playedBefore + played; } }
         public int FramesQueued => (int)Math.Max(0, submitted - FramesPlayed);
         public void Write(float[] stereo)
         {
@@ -85,14 +88,21 @@ namespace Kiosk.Native
                 Marshal.WriteInt32(buffer, 4, stereo.Length * 4);
                 Marshal.WriteIntPtr(buffer, 8, samples);
                 var code = Method<SubmitDelegate>(source, 21)(source, buffer, IntPtr.Zero);
-                if (code < 0) { Marshal.FreeHGlobal(samples); throw new COMException("SubmitSourceBuffer failed", code); }
+                if (code < 0) { Marshal.FreeHGlobal(samples); throw new COMException("SubmitSourceBuffer failed 0x" + code.ToString("X8"), code); }
                 pending.Enqueue(samples); submitted += stereo.Length / 2;
             }
             finally { Marshal.FreeHGlobal(buffer); }
         }
         public void Stop()
         {
-            if (source != IntPtr.Zero) { Method<DestroyDelegate>(source, 18)(source); source = IntPtr.Zero; }
+            if (source != IntPtr.Zero)
+            {
+                State(out _, out var played);
+                playedBefore += played;
+                submitted = playedBefore;   // what was queued on the old voice is gone with it
+                Method<DestroyDelegate>(source, 18)(source);
+                source = IntPtr.Zero;
+            }
             if (mastering != IntPtr.Zero) { Method<DestroyDelegate>(mastering, 18)(mastering); mastering = IntPtr.Zero; }
             while (pending.Count != 0) Marshal.FreeHGlobal(pending.Dequeue());
             if (engine != IntPtr.Zero) { Method<ReleaseDelegate>(engine, 2)(engine); engine = IntPtr.Zero; }

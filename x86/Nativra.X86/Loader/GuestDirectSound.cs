@@ -42,6 +42,8 @@ namespace Nativra.X86.Loader
         private bool running;
         private uint deviceTable, bufferTable, notifyTable, factoryTable, factory;
         private long framesMixed, underruns;
+        private int restarts;
+        private const int MaxRestarts = 5;
         private int buffersCreated;
         private sealed class Notice { public uint Offset, Event; public long Last = -1; }
         private sealed class Item
@@ -425,7 +427,17 @@ namespace Nativra.X86.Loader
                     if (output.FramesQueued < output.SampleRate / 10) output.Write(Mix(512));
                     else Thread.Sleep(4);
                 }
-                catch (Exception e) { Interlocked.Increment(ref underruns); Failure = "mixer stopped: " + e.Message; running = false; }
+                catch (Exception e)
+                {
+                    // A voice that refuses a buffer (the console's audio session
+                    // changing under it) is rebuilt; only one that keeps failing
+                    // silences the game.
+                    Interlocked.Increment(ref underruns);
+                    Failure = "output failed: " + e.Message;
+                    if (++restarts > MaxRestarts) { Failure = "mixer stopped: " + e.Message; running = false; break; }
+                    try { output.Stop(); Thread.Sleep(100); output.Start(); }
+                    catch (Exception again) { Failure = "mixer stopped: " + again.Message; running = false; }
+                }
             }
         }
         public void Dispose()

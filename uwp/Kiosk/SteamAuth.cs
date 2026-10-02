@@ -260,6 +260,7 @@ namespace Kiosk
                             .String(1, session.RefreshToken)
                             .Uint(2, 0) // k_EAuthTokenRevokeLogout
                             .Finish();
+                        SteamAuthLog.Note("revoke refresh=" + SteamAuthLog.Print(session.RefreshToken) + " (sign-out)");
                         var revoke = cm.ServiceAsync("Authentication.RevokeToken#1", request);
                         await Task.WhenAny(revoke, Task.Delay(10000));
                     }

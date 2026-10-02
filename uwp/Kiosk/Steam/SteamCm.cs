@@ -302,6 +302,7 @@ namespace Kiosk.Steam
 
             var response = await waiting;
             var eresult = (int)response.Num(1, 2);
+            SteamAuthLog.Note("logon refresh=" + SteamAuthLog.Print(refreshToken) + " eresult=" + eresult);
             if (eresult != 1) throw new SteamLogOnException(eresult);
 
             steamId = response.Num(20) != 0 ? response.Num(20) : accountId;

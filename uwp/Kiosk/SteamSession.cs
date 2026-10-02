@@ -13,6 +13,46 @@ namespace Kiosk
     }
 
     /// <summary>
+    /// A trail of what happens to the sign-in (LocalState\steam-auth-log.txt):
+    /// log-ons and their results, renewals, saves and clears. The sign-in kept
+    /// disappearing without a cause anyone could see; this is where it shows.
+    /// Tokens appear only as a short hash, never as themselves.
+    /// </summary>
+    public static class SteamAuthLog
+    {
+        private static readonly SemaphoreSlim gate = new SemaphoreSlim(1, 1);
+
+        public static string Print(string token)
+        {
+            if (string.IsNullOrEmpty(token)) return "none";
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(token));
+                return BitConverter.ToString(hash, 0, 4).Replace("-", "").ToLowerInvariant();
+            }
+        }
+
+        public static async void Note(string line)
+        {
+            try
+            {
+                await gate.WaitAsync();
+                try
+                {
+                    var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                        "steam-auth-log.txt", CreationCollisionOption.OpenIfExists);
+                    await FileIO.AppendTextAsync(file, DateTime.UtcNow.ToString("o") + " " + line + "\r\n");
+                }
+                finally { gate.Release(); }
+            }
+            catch
+            {
+                // A trail that cannot be written must not cost the sign-in.
+            }
+        }
+    }
+
+    /// <summary>
     /// What the console remembers about the signed-in Steam account. It lives in
     /// the app's own folder and never leaves the console.
     /// </summary>
@@ -73,6 +113,7 @@ namespace Kiosk
         public async Task SaveAsync()
         {
             current = this;
+            SteamAuthLog.Note("save refresh=" + SteamAuthLog.Print(RefreshToken) + " id=" + (SteamId % 10000));
             try
             {
                 var root = new JsonObject
@@ -94,6 +135,8 @@ namespace Kiosk
 
         public async Task ClearAsync()
         {
+            SteamAuthLog.Note("clear refresh=" + SteamAuthLog.Print(RefreshToken) + " from " +
+                new System.Diagnostics.StackTrace(1, false).ToString().Replace("\r", "").Replace("\n", " | "));
             if (current == this) current = null;
             AccountName = RefreshToken = AccessToken = null;
             SteamId = 0;
@@ -157,7 +200,11 @@ namespace Kiosk
                 if (string.IsNullOrEmpty(RefreshToken) || SteamId == 0)
                     throw new SteamSignInRequiredException();
 
-                var tokens = await SteamAuth.RenewTokensAsync(RefreshToken, SteamId);
+                SteamAuthLog.Note("renew with refresh=" + SteamAuthLog.Print(RefreshToken));
+                Tuple<string, string> tokens;
+                try { tokens = await SteamAuth.RenewTokensAsync(RefreshToken, SteamId); }
+                catch (Exception error) { SteamAuthLog.Note("renew failed: " + error.GetType().Name + " " + error.Message); throw; }
+                SteamAuthLog.Note("renewed: new refresh=" + SteamAuthLog.Print(tokens.Item2));
                 var fresh = tokens.Item1;
                 if (string.IsNullOrEmpty(fresh)) throw new SteamSignInRequiredException();
 

@@ -95,6 +95,7 @@ namespace Kiosk.Native
                 kernel.Log("imports.diagnose kernel32!InterlockedCompareExchange: " +
                     process.Imports.Diagnose("kernel32.dll", "InterlockedCompareExchange"));
                 // Direct3D 9 through the packaged 64-bit layer.
+                if (process.Jit != null) process.Jit.CollectFallbacks = true;   // cheap: one dictionary bump per fallback
                 var com = new GuestCom(process, kernel);
                 X86Direct3D9.Install(process, kernel, com);
                 using (var directSound = new GuestDirectSound(process, kernel, new X86DirectSoundOutput()))
@@ -135,6 +136,11 @@ namespace Kiosk.Native
                           process.Jit.InterpreterFallbacks + " interpreted"
                         : "interpreter"));
                     into.Add("x86.recent=" + string.Join(" ", process.RecentImports));
+                    // What still falls back to the interpreter, most frequent first: the next
+                    // instructions worth translating for this game.
+                    if (process.Jit != null && process.Jit.CollectFallbacks)
+                        foreach (var pair in process.Jit.FallbackCounts.ToArray().OrderByDescending(f => f.Value).Take(15))
+                            into.Add("x86.fallback=" + pair.Key + " count=" + pair.Value);
                     if (process.JitRefusal != null) into.Add("x86.jit.refused=" + process.JitRefusal);
                     if (kernel.ProbedAbsent.Count > 0)
                         into.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));

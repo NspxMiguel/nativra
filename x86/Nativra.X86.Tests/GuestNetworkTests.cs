@@ -1394,5 +1394,88 @@ namespace Nativra.X86.Tests
             Assert.Equal("10.0.0.1", p.Memory.ReadAnsi(ByOrdinal("wsock32.dll", 11, 0x0100000A)));   // inet_ntoa
             Assert.Equal("10.0.0.1", p.Memory.ReadAnsi(ByOrdinal("ws2_32.dll", 12, 0x0100000A)));
         }
+
+        // --- DisconnectEx ---------------------------------------------------------------------------------
+
+        private static readonly Guid WsaIdDisconnectEx = new Guid(0x7fda2e11, 0x8630, 0x436f, 0xa0, 0x31, 0xf5, 0x36, 0xa6, 0xee, 0xc1, 0x57);
+
+        /// <summary>The DisconnectEx entry point a program gets from WSAIoctl(SIO_GET_EXTENSION_FUNCTION_POINTER).</summary>
+        private uint DisconnectExPointer(uint socket)
+        {
+            var id = Alloc(16);
+            p.Memory.WriteBytes(id, WsaIdDisconnectEx.ToByteArray());
+            var output = Alloc(4);
+            Assert.Equal(0u, W("WSAIoctl", socket, 0xC8000006, id, 16, output, 4, Alloc(4), 0, 0));
+            return p.Memory.Read32(output);
+        }
+
+        private uint DisconnectEx(uint entry, uint socket, uint overlapped, uint flags)
+        {
+            var result = p.Call(entry, out var eax, 1_000_000, socket, overlapped, flags, 0);
+            Assert.True(result.Ok, $"DisconnectEx stopped as {result}");
+            return eax;
+        }
+
+        [Fact]
+        public void DisconnectExEndsTheConnectionAndWithReuseTheSocketConnectsAgain()
+        {
+            var server = new TcpListener(IPAddress.Loopback, 0);
+            server.Start();
+            var port = ((IPEndPoint)server.LocalEndpoint).Port;
+            try
+            {
+                var client = Socket(1, 6);
+                var disconnect = DisconnectExPointer(client);
+                Assert.NotEqual(0u, disconnect);
+                Assert.Equal(0u, DisconnectEx(disconnect, client, 0, 0));       // not connected yet
+                Assert.Equal(10057u, Last());                                    // WSAENOTCONN
+
+                Assert.Equal(0u, W("connect", client, Addr("127.0.0.1", port), 16));
+                using (var first = server.AcceptTcpClient())
+                {
+                    Assert.Equal(0u, DisconnectEx(disconnect, client, 0, 0x80));  // an unknown flag
+                    Assert.Equal(10022u, Last());                                // WSAEINVAL
+
+                    var overlapped = Alloc(20);
+                    Assert.Equal(1u, DisconnectEx(disconnect, client, overlapped, 2));   // TF_REUSE_SOCKET
+                    Assert.Equal(0u, p.Memory.Read32(overlapped));               // the call completed: Internal is STATUS_SUCCESS
+                    first.ReceiveTimeout = 5000;
+                    Assert.Equal(0, first.GetStream().Read(new byte[1], 0, 1));   // the peer sees the end of the stream
+
+                    // The same handle is a new, unconnected socket: it connects again.
+                    Assert.Equal(Invalid, W("send", client, Alloc(1), 1, 0));
+                    Assert.Equal(10057u, Last());                                // WSAENOTCONN
+                    Assert.Equal(0u, W("connect", client, Addr("127.0.0.1", port), 16));
+                    using (var second = server.AcceptTcpClient())
+                    {
+                        var data = Alloc(2);
+                        p.Memory.WriteAnsi(data, "ok");
+                        Assert.Equal(2u, W("send", client, data, 2, 0));
+                        var got = new byte[2];
+                        second.ReceiveTimeout = 5000;
+                        Assert.Equal(2, second.GetStream().Read(got, 0, 2));
+                        Assert.Equal((byte)'o', got[0]);
+
+                        // Without reuse the connection ends and the socket is only good for closing.
+                        Assert.Equal(1u, DisconnectEx(disconnect, client, 0, 0));
+                        Assert.Equal(0, second.GetStream().Read(new byte[1], 0, 1));
+                        Assert.Equal(Invalid, W("send", client, data, 2, 0));
+                        Assert.Equal(0u, W("closesocket", client));
+                    }
+                }
+            }
+            finally { server.Stop(); }
+        }
+
+        [Fact]
+        public void DisconnectExIsRefusedOnADatagramSocketAndOnAHandleThatIsNoSocket()
+        {
+            var udp = Socket(2, 17);
+            var disconnect = DisconnectExPointer(udp);
+            Assert.Equal(0u, DisconnectEx(disconnect, udp, 0, 0));
+            Assert.Equal(10045u, Last());                                        // WSAEOPNOTSUPP
+            Assert.Equal(0u, DisconnectEx(disconnect, 0x7777, 0, 0));
+            Assert.Equal(NotSock, Last());
+        }
     }
 }

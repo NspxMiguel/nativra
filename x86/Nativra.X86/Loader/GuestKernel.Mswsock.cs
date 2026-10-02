@@ -9,8 +9,9 @@ namespace Nativra.X86.Loader
     // GetAcceptExSockaddrs are mswsock exports (wsock32 forwards them, ws2_32 does not have them);
     // ConnectEx is not an export at all, and a program reaches all of them through
     // WSAIoctl(SIO_GET_EXTENSION_FUNCTION_POINTER) with the function's GUID. Both ways hand out the
-    // same entry points, as the real DLL does. TransmitFile, TransmitPackets, DisconnectEx and
-    // WSARecvMsg are not offered: the lookup of those fails with WSAEOPNOTSUPP, and a program that
+    // same entry points, as the real DLL does. DisconnectEx is offered (it only has to take a
+    // connection down, and with TF_REUSE_SOCKET hand the socket back for a new AcceptEx or
+    // ConnectEx). TransmitFile, TransmitPackets and WSARecvMsg are not offered: the lookup of those fails with WSAEOPNOTSUPP, and a program that
     // imports TransmitFile finds it failing with the same error (so it can take its send path).
     //
     // The two calls are overlapped calls, and run on the machinery of GuestKernel.NetworkEvents.cs:
@@ -54,6 +55,8 @@ namespace Nativra.X86.Loader
             // ConnectEx has no export; its entry point is a host function of this layer's own, found by GUID.
             i.Register("nativra.dll", "ConnectEx", CallConv.Stdcall, 7, Guarded(
                 c => ConnectEx(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3), c.Arg(4), c.Arg(5), c.Arg(6)), NetFail.Zero, true));
+            i.Register("nativra.dll", "DisconnectEx", CallConv.Stdcall, 4, Guarded(
+                c => DisconnectEx(c.Arg(0), c.Arg(1), c.Arg(2)), NetFail.Zero, true));
         }
 
         // --- WSAIoctl(SIO_GET_EXTENSION_FUNCTION_POINTER) -------------------------------------------------------
@@ -72,7 +75,8 @@ namespace Nativra.X86.Loader
             else if (id == WsaIdGetAcceptExSockaddrs) { module = "mswsock.dll"; name = "GetAcceptExSockaddrs"; }
             else if (id == WsaIdConnectEx) { module = "nativra.dll"; name = "ConnectEx"; }
             else if (id == WsaIdWsaSendMsg) { module = "ws2_32.dll"; name = "WSASendMsg"; }
-            else if (id == WsaIdTransmitFile || id == WsaIdTransmitPackets || id == WsaIdDisconnectEx || id == WsaIdWsaRecvMsg)
+            else if (id == WsaIdDisconnectEx) { module = "nativra.dll"; name = "DisconnectEx"; }
+            else if (id == WsaIdTransmitFile || id == WsaIdTransmitPackets || id == WsaIdWsaRecvMsg)
                 return WsaEopnotsupp;
             else return WsaEinval;
             memory.Write32(output, process.Imports.Bind(module, name, -1));
@@ -334,6 +338,62 @@ namespace Nativra.X86.Loader
             }
             op.Bytes = (uint)op.Sent;
             return true;
+        }
+
+        // --- DisconnectEx ---------------------------------------------------------------------------------------
+
+        // DisconnectEx(s, overlapped, flags, reserved): takes a connected stream socket's connection down. Calls
+        // still pending on the socket end as aborted. With TF_REUSE_SOCKET the socket comes back as a new,
+        // unconnected one that AcceptEx or ConnectEx may use; without it, the connection is shut down in both
+        // directions and the socket is only good for closing. Nothing waits (the host's close does not), so the
+        // call has ended when it returns, and an overlapped one completes at once, as AcceptEx and friends do.
+
+        private const uint TfReuseSocket = 0x2;
+
+        private uint DisconnectEx(uint handle, uint overlapped, uint flags) =>
+            DisconnectExCall(handle, overlapped, flags) == 0 ? 1u : 0u;
+
+        private uint DisconnectExCall(uint handle, uint overlapped, uint flags)
+        {
+            if (overlapped != 0) memory.Write32(overlapped, StatusPending);
+            if (!TrySocket(handle, out var s)) return SocketFailed;
+            Settle(s);
+            if ((flags & ~TfReuseSocket) != 0) return SockFail(WsaEinval);
+            if (s.Type != SocketType.Stream) return SockFail(WsaEopnotsupp);
+            if (!s.Connected) return SockFail(WsaEnotconn);
+
+            CancelPending(s);
+            try { s.Host.Shutdown(SocketShutdown.Both); }
+            catch (SocketException) { }   // the peer may have reset it already: it is down either way
+            s.Connected = false;
+            if ((flags & TfReuseSocket) != 0) Renew(s);
+            else s.ShutdownReceive = s.ShutdownSend = true;
+
+            if (overlapped == 0) return 0;
+            return BeginOverlapped(new PendingIo { Socket = s, Kind = IoKind.Disconnect, Overlapped = overlapped }, 0, 0);
+        }
+
+        /// <summary>The same guest socket on a fresh host socket, as a new unconnected one (its handle, event selection and buffer sizes stay).</summary>
+        private void Renew(GuestSocket s)
+        {
+            var old = s.Host;
+            s.Host = new Socket(s.Family, s.Type, ProtocolType.Tcp) { Blocking = false };
+            CloseHost(old);
+            DropTransfers(s.Handle);
+            s.Bound = s.Listening = s.Connected = s.Connecting = s.AcceptPending = false;
+            s.ShutdownReceive = s.ShutdownSend = false;
+            s.Peeked = null;
+            s.PeekedFrom = null;
+            s.Peer = null;
+            s.ConnectError = 0;
+            s.ReadArmed = s.AcceptArmed = true;
+            s.WriteArmed = s.ClosePosted = false;
+            try
+            {
+                if (s.ReceiveBufferSize != 0) s.Host.ReceiveBufferSize = s.ReceiveBufferSize;
+                if (s.SendBufferSize != 0) s.Host.SendBufferSize = s.SendBufferSize;
+            }
+            catch (SocketException) { }
         }
 
         // --- TransmitFile ---------------------------------------------------------------------------------------

@@ -26,7 +26,7 @@ namespace Nativra.X86.Loader
 
         private readonly List<GuestSocket> eventSockets = new List<GuestSocket>();
 
-        private enum IoKind { Receive, Send, Accept, Connect }
+        private enum IoKind { Receive, Send, Accept, Connect, Disconnect }
 
         /// <summary>An overlapped WSARecv, WSASend, AcceptEx or ConnectEx that could not finish at once.</summary>
         private sealed class PendingIo
@@ -503,6 +503,7 @@ namespace Nativra.X86.Loader
         {
             if (op.Kind == IoKind.Accept) return AdvanceAccept(op);
             if (op.Kind == IoKind.Connect) return AdvanceConnect(op);
+            if (op.Kind == IoKind.Disconnect) return true;   // DisconnectEx has done its work by the time it is queued
             var s = op.Socket;
             if (op.Kind == IoKind.Receive)
             {

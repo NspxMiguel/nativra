@@ -10,8 +10,8 @@ namespace Nativra.X86.Loader
     // The smaller system DLLs games import, each as a whole surface:
     // winmm (waveOut playing in real time, with WOM_DONE through callbacks,
     // events or messages; multimedia timers; joysticks as unplugged),
-    // advapi32 (a registry kept in the game folder, users, tokens, hashing
-    // and random numbers), shell32 (known folders inside the game's user
+    // advapi32 (a registry kept in the game folder, users, hashing and random
+    // numbers; the security family is in GuestKernel.Security.cs), shell32 (known folders inside the game's user
     // folder, command-line splitting), version (VS_VERSIONINFO read from
     // mapped images, synthesised for system DLLs), oleaut32 (BSTR, VARIANT),
     // comctl32, comdlg32, gdiplus's start-up, and wininet as absent: it
@@ -41,6 +41,7 @@ namespace Nativra.X86.Loader
             InstallWinmm(i);
             InstallRegistry(i);
             InstallAdvapi(i);
+            InstallSecurity(i);
             InstallShell32(i);
             InstallVersion(i);
             InstallOleAut(i);
@@ -754,24 +755,6 @@ namespace Nativra.X86.Loader
                 return 1;
             });
             i.Register(a, "CryptDestroyHash", CallConv.Stdcall, 1, c => { hashes.Remove(c.Arg(0)); hashInput.Remove(c.Arg(0)); return 1; });
-            i.Register(a, "OpenProcessToken", CallConv.Stdcall, 3, c => { memory.Write32(c.Arg(2), 0x00C0FFE0); return 1; });
-            i.Register(a, "OpenThreadToken", CallConv.Stdcall, 4, c => { process.LastError = 1008; return 0; });   // ERROR_NO_TOKEN
-            i.Register(a, "GetTokenInformation", CallConv.Stdcall, 5, c =>
-            {
-                if (c.Arg(1) == 20 && c.Arg(3) >= 4) { memory.Write32(c.Arg(2), 0); memory.Write32(c.Arg(4), 4); return 1; }   // TokenElevation: not elevated
-                process.LastError = ErrorNotSupported;
-                return 0;
-            });
-            i.Register(a, "AllocateAndInitializeSid", CallConv.Stdcall, 11, c => { memory.Write32(c.Arg(10), heap.Alloc(16, zero: true)); return 1; });
-            i.Register(a, "FreeSid", CallConv.Stdcall, 1, c => { heap.Free(c.Arg(0)); return 0; });
-            i.Register(a, "CheckTokenMembership", CallConv.Stdcall, 3, c => { memory.Write32(c.Arg(2), 0); return 1; });
-            i.Register(a, "EqualSid", CallConv.Stdcall, 2, c => 0);
-            i.Register(a, "IsValidSid", CallConv.Stdcall, 1, c => 1);
-            i.Register(a, "LookupPrivilegeValueA", CallConv.Stdcall, 3, c => 1);
-            i.Register(a, "LookupPrivilegeValueW", CallConv.Stdcall, 3, c => 1);
-            i.Register(a, "AdjustTokenPrivileges", CallConv.Stdcall, 6, c => 1);
-            i.Register(a, "InitializeSecurityDescriptor", CallConv.Stdcall, 2, c => 1);
-            i.Register(a, "SetSecurityDescriptorDacl", CallConv.Stdcall, 4, c => 1);
             i.Register(a, "RegisterEventSourceA", CallConv.Stdcall, 2, c => 0x00C0FFE4);
             i.Register(a, "RegisterEventSourceW", CallConv.Stdcall, 2, c => 0x00C0FFE4);
             i.Register(a, "ReportEventA", CallConv.Stdcall, 9, c => 1);

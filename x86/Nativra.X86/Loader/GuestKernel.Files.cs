@@ -462,6 +462,7 @@ namespace Nativra.X86.Loader
             // A socket is a handle too: closing it closes the connection.
             if (sockets.TryGetValue(handle, out var socket)) { sockets.Remove(handle); ReleaseSocket(socket); return 1; }
             portBindings.Remove(handle);
+            if (tokens.Remove(handle)) return 1;
             if (files.TryGetValue(handle, out var f))
             {
                 f.Stream?.Dispose();

@@ -42,11 +42,14 @@ namespace Kiosk.Native
         private delegate uint MaxDataDelegate(int type, IntPtr preparsed);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int AnyDelegate(IntPtr a, IntPtr b, IntPtr c, IntPtr d);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int PropertyDelegate(IntPtr set, IntPtr info, uint property, IntPtr type, IntPtr buffer, uint size, IntPtr required);
 
         [DllImport("api-ms-win-core-errorhandling-l1-1-0.dll")]
         private static extern void SetLastError(uint error);
 
         private const uint ErrorNoMoreItems = 259;
+        private const uint ErrorInvalidData = 13;
         private const uint ErrorInsufficientBuffer = 122;
         private const int HidpStatusSuccess = 0x00110000;
 
@@ -150,7 +153,23 @@ namespace Kiosk.Native
                     return 1;
                 })),
                 ["SetupDiDestroyDeviceInfoList"] = Keep(new OneDelegate(set => 1)),
+                // Registry properties of the one device listed: none recorded, which is
+                // what Windows answers for a property a device does not have. Rewired
+                // (Cuphead) asks for them on every device and gave up on HID input
+                // entirely when the function itself was missing.
+                ["SetupDiGetDeviceRegistryPropertyA"] = Keep(new PropertyDelegate((set, info, property, type, buffer, size, required) =>
+                {
+                    SetLastError(ErrorInvalidData);
+                    return 0;
+                })),
+                ["SetupDiGetDeviceRegistryPropertyW"] = Keep(new PropertyDelegate((set, info, property, type, buffer, size, required) =>
+                {
+                    SetLastError(ErrorInvalidData);
+                    return 0;
+                })),
             };
+            // Mono looks a P/Invoke up by its declared name before adding A or W.
+            setup["SetupDiGetDeviceRegistryProperty"] = setup["SetupDiGetDeviceRegistryPropertyW"];
             foreach (var pair in setup)
             {
                 imports.Overrides["SETUPAPI.dll!" + pair.Key] = pair.Value;

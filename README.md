@@ -192,7 +192,7 @@ owner's Steam library by Nativra itself.
 | --- | --- | --- | --- |
 | Seraph's Last Stand | Unity (x64, D3D11) | ✅ Verified | 60 fps with the controller; "In-Game" for Steam friends. |
 | Hades | Supergiant (x64, D3D11) | 🟡 Playable | 60 fps from a USB drive, controller and sound; memory runs near the app limit. |
-| WAVESHAPER | GameMaker (32-bit, D3D9) | 🟡 Playable | First 32-bit game: Steam sign-in, menus and gameplay with the controller; gameplay ~2 fps and no sound yet (both in progress). |
+| WAVESHAPER | GameMaker (32-bit, D3D9) | 🟡 Playable | First 32-bit game: Steam sign-in, ~59 fps gameplay with the controller and sound; in the default desktop mapping START confirms (View + Menu switches to a plain pad). |
 | Little Nightmares | Unreal Engine 4 (x64) | ⛔ Not working | D3D11 device and swap chain created; no frame yet. |
 | LEGO Jurassic World | TT Games (x64, D3D11) | ⛔ Not working | Starts and creates its window; stops before the first frame. |
 | Brawlhalla | Adobe AIR (x64) | ⛔ Not working | AIR cannot find its application descriptor. |

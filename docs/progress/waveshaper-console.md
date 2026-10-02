@@ -46,17 +46,20 @@ installed straight from each CI release (`kiosk-build-N`).
    run's report in place. Reports are now removed before each pull, and a
    32-bit game's frames are its `IDirect3DDevice9::Present` calls.
 
-## Where it stands
+## Where it stands (2026-10-02, build 438)
 
-Title screen, menus (about 20 fps) and a level (about 2 fps). With the
-default desktop controller mapping, START confirms and A clicks; holding
-Menu+View switches to a plain XInput pad.
+Playable at about 59 fps with sound. What changed since the first gameplay
+at ~2 fps:
 
-Next:
+- **The JIT translates branches and chains blocks**, then integer, SSE,
+  SSE conversions, x87, MMX, string and `cmpxchg` forms. In this game the
+  share of blocks that end in the interpreter fell from all of them to 1.4%;
+  the probe's `x86.fallback=` lines name what is left.
+- **DirectSound for 32-bit games** (OpenAL Soft's backend), mixed on the
+  host and played through the console's XAudio2. Two bugs on the way: three
+  methods were served with the wrong argument count (the stack drifted and
+  OpenAL called address zero), and the voice was overfilled past XAudio2's
+  64-buffer limit; the queue is now the voice's own buffer count.
 
-- **Speed.** The JIT ends every block at a branch and steps the branch in
-  the interpreter (`x86.blocks=… run, … interpreted` are equal), so each
-  few instructions cost a trip through managed code. Translating branches
-  and chaining blocks is in progress.
-- **Sound.** OpenAL Soft finds no `dsound.dll`; a DirectSound for 32-bit
-  games is in progress.
+With the default desktop controller mapping START confirms and A clicks;
+holding View + Menu switches to a plain XInput pad.

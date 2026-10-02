@@ -67,9 +67,11 @@ jobs:
           if ($missing) {
             # The served calls just before the stop, with arguments and results: on
             # a host-dependent failure this is the part a Mac run cannot show.
-            Get-Content srcds-trace.txt -Tail 6000 |
+            $tid = ((Get-Content srcds-trace.txt -Tail 1) -split ' ')[-1]
+            Select-String -Path srcds-trace.txt -SimpleMatch -Pattern "tid $tid" |
+              ForEach-Object { $_.Line } |
               Where-Object { $_ -notmatch '!(Heap(Alloc|Free|Size|ReAlloc)|GetLastError|SetLastError|TlsGetValue|FlsGetValue|EnterCriticalSection|LeaveCriticalSection)\(' } |
-              Select-Object -Last 150
+              Select-Object -Last 200
             Write-Error ("missing milestones: " + ($missing -join ' | ')); exit 1
           }
           exit 0

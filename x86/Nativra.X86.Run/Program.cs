@@ -92,91 +92,91 @@ namespace Nativra.X86.Run
                 using (var sound = new GuestDirectSound(process, kernel, new NullSoundOutput()))
                 {
                     sound.Install();
-                // No renderer here, but d3d9.dll exists as on the console, so a game
-                // takes the same path: D3D9Ex is unavailable and plain D3D9 fails.
-                process.Imports.Register("d3d9.dll", "Direct3DCreate9Ex", CallConv.Stdcall, 2, c =>
-                {
-                    if (c.Arg(1) != 0) process.Memory.Write32(c.Arg(1), 0);
-                    return 0x8876086A;   // D3DERR_NOTAVAILABLE
-                });
-                process.Imports.Register("d3d9.dll", "Direct3DCreate9", CallConv.Stdcall, 1, c => 0);
-
-                process.ModuleSource = name =>
-                    Read(Path.Combine(folder, name)) ?? Read(Path.Combine(folder, "bin", name)) ??
-                    (dlls != null ? Read(Path.Combine(dlls, name)) : null);
-
-                try
-                {
-                    var image = process.LoadExecutable(exe, File.ReadAllBytes(Path.Combine(folder, exe)));
-                    lines.Add("x86.image=" + exe + " base=0x" + image.BaseAddress.ToString("X8") +
-                              " entry=0x" + image.EntryPoint.ToString("X8"));
-                    lines.Add("x86.jit=" + (process.UsesJit ? "on" : "off (interpreter)"));
-                    lines.Add("x86.modules=" + string.Join(",", process.Images.Select(i => i.Name)));
-                    foreach (var group in process.Images.SelectMany(i => i.Imports)
-                                 .Where(i => GuestImports.InRegion(i.Bound)).GroupBy(i => i.Module).OrderBy(g => g.Key))
+                    // No renderer here, but d3d9.dll exists as on the console, so a game
+                    // takes the same path: D3D9Ex is unavailable and plain D3D9 fails.
+                    process.Imports.Register("d3d9.dll", "Direct3DCreate9Ex", CallConv.Stdcall, 2, c =>
                     {
-                        var served = group.Count(i => process.Imports.TryResolve(i.Bound, out var g) && g.Handler != null);
-                        lines.Add("x86.imports." + group.Key + "=" + group.Count() + " (" + served + " served)");
-                    }
-                    result = process.InitializeModules(budget);
-                    lines.Add("x86.init=" + result);
-                    if (result.Ok)
+                        if (c.Arg(1) != 0) process.Memory.Write32(c.Arg(1), 0);
+                        return 0x8876086A;   // D3DERR_NOTAVAILABLE
+                    });
+                    process.Imports.Register("d3d9.dll", "Direct3DCreate9", CallConv.Stdcall, 1, c => 0);
+
+                    process.ModuleSource = name =>
+                        Read(Path.Combine(folder, name)) ?? Read(Path.Combine(folder, "bin", name)) ??
+                        (dlls != null ? Read(Path.Combine(dlls, name)) : null);
+
+                    try
                     {
-                        result = process.Call(image.EntryPoint, out var exitCode, budget);
-                        lines.Add("x86.run=" + result + (result.Ok ? " (entry returned " + exitCode + ")" : ""));
-                    }
-                }
-                catch (Exception error)
-                {
-                    lines.Add("x86.failed=" + error.ToString().Replace("\r", "").Replace("\n", " | "));
-                }
-
-                lines.Add("x86.eip=0x" + process.Cpu.Eip.ToString("X8") + " " + process.Cpu);
-                lines.Add("x86.modules.end=" + string.Join(",", process.Images.Select(i => i.Name + "@" + i.BaseAddress.ToString("X8"))));
-                lines.Add("x86.recent=" + string.Join(" ", process.RecentImports));
-                if (kernel.ProbedAbsent.Count > 0)
-                    lines.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));
-                if (kernel.FilesNotFound.Count > 0)
-                    lines.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(80)));
-                if (com.MissingClasses.Count > 0)
-                    lines.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
-                lines.Add("x86.dsound=buffers " + sound.BuffersCreated + " frames " + sound.FramesMixed + " underruns " + sound.Underruns);
-                lines.Add("x86.raised=" + string.Join(",", kernel.ExceptionsRaised.Select(c => c.ToString("X8"))));
-                lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
-                if (process.Jit != null)
-                {
-                    lines.Add($"x86.blocks={process.Jit.BlocksCompiled} compiled, {process.Jit.BlocksExecuted} run, {process.Jit.InterpreterFallbacks} interpreted");
-                    foreach (var pair in process.Jit.FallbackCounts.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(fallbackLines))
-                        lines.Add($"x86.fallback={pair.Key} count={pair.Value}");
-                }
-                foreach (var text in guestLog) lines.Add("x86.log=" + text);
-                lines.Add("x86.memory=committed " + (memory.MappedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB (" + memory.MappedPages +
-                          " pages), reserved " + (memory.ReservedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB more");
-                lines.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
-                trace?.Dispose();
-
-                var missing = process.Images.SelectMany(i => i.Imports)
-                    .Where(i => GuestImports.InRegion(i.Bound) && !(process.Imports.TryResolve(i.Bound, out var g) && g.Handler != null))
-                    .Select(i => i.ToString()).Distinct().OrderBy(s => s).ToList();
-                lines.Add("x86.unserved(" + missing.Count + ")=" + string.Join(",", missing));
-
-                if (importsFile != null)
-                {
-                    var report = new List<string>();
-                    foreach (var image in process.Images)
-                    {
-                        report.Add("[" + image.Name + "] base=0x" + image.BaseAddress.ToString("X8"));
-                        foreach (var import in image.Imports)
+                        var image = process.LoadExecutable(exe, File.ReadAllBytes(Path.Combine(folder, exe)));
+                        lines.Add("x86.image=" + exe + " base=0x" + image.BaseAddress.ToString("X8") +
+                                  " entry=0x" + image.EntryPoint.ToString("X8"));
+                        lines.Add("x86.jit=" + (process.UsesJit ? "on" : "off (interpreter)"));
+                        lines.Add("x86.modules=" + string.Join(",", process.Images.Select(i => i.Name)));
+                        foreach (var group in process.Images.SelectMany(i => i.Imports)
+                                     .Where(i => GuestImports.InRegion(i.Bound)).GroupBy(i => i.Module).OrderBy(g => g.Key))
                         {
-                            string state;
-                            if (!GuestImports.InRegion(import.Bound)) state = "linked";
-                            else if (process.Imports.TryResolve(import.Bound, out var g) && g.Handler != null) state = "served";
-                            else state = "MISSING";
-                            report.Add("  " + import + " " + state);
+                            var served = group.Count(i => process.Imports.TryResolve(i.Bound, out var g) && g.Handler != null);
+                            lines.Add("x86.imports." + group.Key + "=" + group.Count() + " (" + served + " served)");
+                        }
+                        result = process.InitializeModules(budget);
+                        lines.Add("x86.init=" + result);
+                        if (result.Ok)
+                        {
+                            result = process.Call(image.EntryPoint, out var exitCode, budget);
+                            lines.Add("x86.run=" + result + (result.Ok ? " (entry returned " + exitCode + ")" : ""));
                         }
                     }
-                    File.WriteAllLines(importsFile, report);
-                }
+                    catch (Exception error)
+                    {
+                        lines.Add("x86.failed=" + error.ToString().Replace("\r", "").Replace("\n", " | "));
+                    }
+
+                    lines.Add("x86.eip=0x" + process.Cpu.Eip.ToString("X8") + " " + process.Cpu);
+                    lines.Add("x86.modules.end=" + string.Join(",", process.Images.Select(i => i.Name + "@" + i.BaseAddress.ToString("X8"))));
+                    lines.Add("x86.recent=" + string.Join(" ", process.RecentImports));
+                    if (kernel.ProbedAbsent.Count > 0)
+                        lines.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));
+                    if (kernel.FilesNotFound.Count > 0)
+                        lines.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(80)));
+                    if (com.MissingClasses.Count > 0)
+                        lines.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
+                    lines.Add("x86.dsound=buffers " + sound.BuffersCreated + " frames " + sound.FramesMixed + " underruns " + sound.Underruns);
+                    lines.Add("x86.raised=" + string.Join(",", kernel.ExceptionsRaised.Select(c => c.ToString("X8"))));
+                    lines.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
+                    if (process.Jit != null)
+                    {
+                        lines.Add($"x86.blocks={process.Jit.BlocksCompiled} compiled, {process.Jit.BlocksExecuted} run, {process.Jit.InterpreterFallbacks} interpreted");
+                        foreach (var pair in process.Jit.FallbackCounts.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(fallbackLines))
+                            lines.Add($"x86.fallback={pair.Key} count={pair.Value}");
+                    }
+                    foreach (var text in guestLog) lines.Add("x86.log=" + text);
+                    lines.Add("x86.memory=committed " + (memory.MappedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB (" + memory.MappedPages +
+                              " pages), reserved " + (memory.ReservedPages * GuestMemory.PageSize / (1024 * 1024)) + " MB more");
+                    lines.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
+                    trace?.Dispose();
+
+                    var missing = process.Images.SelectMany(i => i.Imports)
+                        .Where(i => GuestImports.InRegion(i.Bound) && !(process.Imports.TryResolve(i.Bound, out var g) && g.Handler != null))
+                        .Select(i => i.ToString()).Distinct().OrderBy(s => s).ToList();
+                    lines.Add("x86.unserved(" + missing.Count + ")=" + string.Join(",", missing));
+
+                    if (importsFile != null)
+                    {
+                        var report = new List<string>();
+                        foreach (var image in process.Images)
+                        {
+                            report.Add("[" + image.Name + "] base=0x" + image.BaseAddress.ToString("X8"));
+                            foreach (var import in image.Imports)
+                            {
+                                string state;
+                                if (!GuestImports.InRegion(import.Bound)) state = "linked";
+                                else if (process.Imports.TryResolve(import.Bound, out var g) && g.Handler != null) state = "served";
+                                else state = "MISSING";
+                                report.Add("  " + import + " " + state);
+                            }
+                        }
+                        File.WriteAllLines(importsFile, report);
+                    }
                 }
             }
             foreach (var line in lines) Console.WriteLine(line);

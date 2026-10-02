@@ -100,7 +100,7 @@ namespace Nativra.X86.Jit
                     terminated = true;
                     break;
                 }
-                if (!ins.Valid || (ins.Lock && !LockIsAtomicHere(ins)) || (ins.Rep != 0 && ins.Op < 0x0F00 && !IsStringOp(ins.Op)) || !TryEmit(ins))
+                if (!ins.Valid || (ins.Lock && !LockIsAtomicHere(ins)) || (ins.Rep != 0 && ins.Op < 0x0F00 && !IsStringOp(ins.Op) && !RepIsIgnored(ins.Op)) || !TryEmit(ins))
                 {
                     EmitExit(eip, Ctx.ReasonFallback);
                     FullyTranslated = false;
@@ -333,7 +333,22 @@ namespace Nativra.X86.Jit
                     e.StoreMem(S3, Mem, S1, 1, 0, size);
                     return true;
 
-                case 0x90: return true; // NOP
+                case 0x90: return true; // NOP / PAUSE
+                case 0x9B: return true; // FWAIT: the interpreter raises no pending x87 exception either
+                case 0x9E: EmitSahf(); return true;
+                case 0x9F: EmitLahf(); return true;
+                case 0x91:
+                case 0x92:
+                case 0x93:
+                case 0x94:
+                case 0x95:
+                case 0x96:
+                case 0x97:  // XCHG eAX, r32
+                    if (size != 32) return false;
+                    e.MovRegReg(S1, G[Reg.Eax], true);
+                    e.MovRegReg(G[Reg.Eax], G[op - 0x90], true);
+                    e.MovRegReg(G[op - 0x90], S1, true);
+                    return true;
                 case 0x98:
                     if (size == 16)
                     {
@@ -477,8 +492,13 @@ namespace Nativra.X86.Jit
                 case 0xB5:
                 case 0xB6:
                 case 0xB7:
-                    // mov r8, imm8 — only the low four map to a clean host low byte.
-                    if (op - 0xB0 >= 4) return false;
+                    if (op - 0xB0 >= 4)
+                    {
+                        // AH, CH, DH, BH: bits 8-15 of one of the first four registers.
+                        e.MovRegImm8(S2, (byte)ins.Imm);
+                        WriteByteRegister(op - 0xB0, S2);
+                        return true;
+                    }
                     e.MovRegImm8(G[op - 0xB0], (byte)ins.Imm);
                     return true;
                 case 0xB8:
@@ -498,8 +518,9 @@ namespace Nativra.X86.Jit
             if (op >= 0x0F00 && op <= 0x0FFF)
             {
                 if (EmitSse(ins)) return true;
-                if (ins.Rep != 0) return false;
                 var low = op & 0xFF;
+                if (low == 0x0D || (low >= 0x18 && low <= 0x1F)) return true;   // prefetch hints and multi-byte NOP: no operand access
+                if (ins.Rep != 0) return false;
                 if (low >= 0x90 && low <= 0x9F)  // setcc
                 {
                     var cc = low - 0x90;
@@ -516,6 +537,20 @@ namespace Nativra.X86.Jit
                 }
                 switch (low)
                 {
+                    case 0xA3:
+                    case 0xAB:
+                    case 0xB3:
+                    case 0xBB:
+                    case 0xBA:
+                        return EmitBitTest(ins, low, size);
+                    case 0xA4:
+                    case 0xA5:
+                    case 0xAC:
+                    case 0xAD:
+                        return EmitDoubleShift(ins, low, size);
+                    case 0xBC:
+                    case 0xBD:
+                        return EmitBitScan(ins, low == 0xBC, size);
                     case 0xB0:
                     case 0xB1: // cmpxchg r/m, r (the host's own, lock prefix and all)
                         return EmitCmpxchg(ins, low == 0xB0 ? 8 : size);
@@ -793,6 +828,14 @@ namespace Nativra.X86.Jit
                     var src = op == 0x88 ? ins.RegField : ins.Rm;
                     WriteByteRegister(dst, ReadByteRegister(src, S2));
                 }
+                return true;
+            }
+            if (op == 0xF6 && ins.RegField <= 3)
+            {
+                var dst = ReadByteRegister(ins.Rm, S2);
+                if (ins.RegField <= 1) { e.TestRegImm(dst, ins.Imm, 8); return true; }
+                e.Group3(ins.RegField, dst, 8);
+                WriteByteRegister(ins.Rm, dst);
                 return true;
             }
             if (op == 0xC6)

@@ -9,7 +9,12 @@ namespace Nativra.X86.Jit
 
         /// <summary>The locked forms that are emitted with their own LOCK prefix.</summary>
         private static bool LockIsAtomicHere(in Instruction ins) =>
-            ins.Mod != 3 && (ins.Op == 0x0FB0 || ins.Op == 0x0FB1 || (ins.Op == 0x0FC7 && ins.RegField == 1));
+            ins.Mod != 3 && (ins.Op == 0x0FB0 || ins.Op == 0x0FB1 || (ins.Op == 0x0FC7 && ins.RegField == 1) ||
+                             ins.Op == 0x0FAB || ins.Op == 0x0FB3 || ins.Op == 0x0FBB ||
+                             (ins.Op == 0x0FBA && ins.RegField >= 5));
+
+        /// <summary>Opcodes below 0F00 that ignore a REP/REPNE prefix (PAUSE, REP RET, a prefixed FWAIT).</summary>
+        private static bool RepIsIgnored(int op) => op == 0x90 || op == 0x9B || op == 0xC2 || op == 0xC3;
 
         /// <summary>
         /// MOVS/STOS/LODS, with and without REP. Each iteration works on the guest

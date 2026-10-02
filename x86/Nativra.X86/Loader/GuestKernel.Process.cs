@@ -39,6 +39,20 @@ namespace Nativra.X86.Loader
             }
 
             i.Register("ntdll.dll", "RtlNtStatusToDosError", CallConv.Stdcall, 1, c => DosError(c.Arg(0)));
+            // NtSetInformationThread(thread, class, info, length). Games call it with
+            // ThreadHideFromDebugger (17) through GetProcAddress and call the result
+            // unchecked (Castle Crashers jumped to address zero). No debugger can
+            // attach here, so hiding succeeds; other classes are accepted as Windows
+            // accepts them for a thread the caller owns.
+            foreach (var name in new[] { "NtSetInformationThread", "ZwSetInformationThread" })
+                i.Register("ntdll.dll", name, CallConv.Stdcall, 4, c =>
+                {
+                    const uint StatusSuccess = 0, StatusInvalidHandle = 0xC0000008, StatusInfoLengthMismatch = 0xC0000004;
+                    const uint ThreadHideFromDebugger = 17;
+                    if (ThreadFor(c.Arg(0)) == null) return StatusInvalidHandle;
+                    if (c.Arg(1) == ThreadHideFromDebugger && c.Arg(3) != 0) return StatusInfoLengthMismatch;
+                    return StatusSuccess;
+                });
             i.Register("kernel32.dll", "GetTempPath2A", CallConv.Stdcall, 2, c => CopyPath(Folder(ExePath), c.Arg(1), c.Arg(0), false));
             i.Register("kernel32.dll", "GetTempPath2W", CallConv.Stdcall, 2, c => CopyPath(Folder(ExePath), c.Arg(1), c.Arg(0), true));
             // EnumSystemLocalesEx(proc, flags, lParam, reserved): proc(name, LOCALE_WINDOWS, lParam).

@@ -281,6 +281,12 @@ namespace Nativra.X86.Loader
             {
                 firstChanceLogged++;
                 Log("exception " + DescribeRecord(d.Record) + DescribeContext(d.Context));
+                // What the program called just before: an exception thrown in start-up
+                // (a C++ throw, a failed check) is usually the answer to one of these.
+                if (firstChanceLogged <= 3)
+                    Log("exception after " + string.Join(" ", System.Linq.Enumerable.Where(process.RecentImports,
+                        name => !name.Contains("Heap") && !name.Contains("LastError") && !name.Contains("FlsGetValue") &&
+                                !name.Contains("TlsGetValue") && !name.Contains("CriticalSection") && !name.Contains("nativra.dll"))));
             }
             d.Vectored = vectored.Count == 0 ? null : vectored.ConvertAll(e => e.Value).ToArray();
             d.NextVectored = 0;

@@ -713,7 +713,7 @@ namespace Nativra.X86.Loader
         /// handle it (SEH dispatch), false to stop with a fault.
         /// </summary>
         public Func<GuestException, bool> HardwareException { get; set; }
-        private const int RecentImportCount = 24;
+        private const int RecentImportCount = 64;
         private readonly Queue<string> recent = new Queue<string>();
 
         /// <summary>The last imports the guest called, oldest first: where a stuck or crashed run was.</summary>

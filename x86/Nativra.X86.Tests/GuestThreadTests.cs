@@ -116,6 +116,23 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void HidingAThreadFromTheDebuggerSucceeds()
+        {
+            // ntdll!NtSetInformationThread(GetCurrentThread(), ThreadHideFromDebugger, 0, 0),
+            // reached through GetProcAddress as anti-debug code does.
+            var p = Load(new byte[] { 0xC3 }, jit: false, out _);
+            uint K(string module, string name, params uint[] args)
+            {
+                var r = p.Call(p.Imports.Bind(module, name, -1), out var eax, 1_000_000, args);
+                Assert.True(r.Ok, r.ToString());
+                return eax;
+            }
+            Assert.Equal(0u, K("ntdll.dll", "NtSetInformationThread", 0xFFFFFFFE, 17, 0, 0));
+            Assert.Equal(0xC0000004u, K("ntdll.dll", "NtSetInformationThread", 0xFFFFFFFE, 17, Data, 4));
+            Assert.Equal(0xC0000008u, K("ntdll.dll", "NtSetInformationThread", 0x12345678, 17, 0, 0));
+        }
+
+        [Fact]
         public void FreeLibraryAndExitThreadEndsTheThreadWithItsCode()
         {
             // WaitForWorker's main with a worker that leaves the way _endthreadex

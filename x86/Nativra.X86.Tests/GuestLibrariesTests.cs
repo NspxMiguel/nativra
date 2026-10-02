@@ -67,6 +67,20 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void AbsentServicesFailTheWayWindowsDoes()
+        {
+            // DirectInput and WinHTTP are not offered: a game that probes them must
+            // get a failure it can handle, not an unserved import.
+            var device = k.Heap.Alloc(4);
+            p.Memory.Write32(device, 0xDEADBEEF);
+            Assert.Equal(0x80070015u, Call("dinput8.dll", "DirectInput8Create", 0, 0x0800, 0, device, 0));
+            Assert.Equal(0u, p.Memory.Read32(device));
+            Assert.Equal(0u, Call("winhttp.dll", "WinHttpOpen", 0, 0, 0, 0, 0));
+            Assert.Equal(12004u, Call("kernel32.dll", "GetLastError"));
+            Assert.Equal(1u, Call("winhttp.dll", "WinHttpCloseHandle", 0));
+        }
+
+        [Fact]
         public void GdiMovesPixelsBetweenMemoryDcs()
         {
             var a = G("CreateCompatibleDC", 0);

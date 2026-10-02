@@ -216,6 +216,7 @@ namespace Nativra.X86.Loader
             InstallLibraries(i);
             InstallProcess(i);
             InstallAdapters(i);
+            InstallAbsent(i);
         }
 
         // --- handler bodies -----------------------------------------------

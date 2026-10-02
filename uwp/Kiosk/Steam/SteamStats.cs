@@ -123,7 +123,7 @@ namespace Kiosk.Steam
             cm.Unsolicited += (emsg, body) => Heard(cm, emsg, body);
             try
             {
-                await cm.LogOnAsync(account.SteamId, account.RefreshToken);
+                await cm.LogOnAsync(account.SteamId, await account.RefreshTokenForLogOnAsync());
                 // Online, the way the client announces itself; Steam answers
                 // with the friends list and everyone's state.
                 await cm.NotifyAsync(EMsgChangeStatus, new ProtoWriter().Uint(1, 1).Finish());

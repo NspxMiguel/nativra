@@ -288,7 +288,7 @@ namespace Kiosk
         /// in for good: each renewal pushes the expiry forward, where a token
         /// that is never renewed runs out after a few months.
         /// </summary>
-        public static async Task<Tuple<string, string>> RenewTokensAsync(string refreshToken, ulong steamId)
+        public static async Task<Tuple<string, string>> RenewTokensAsync(string refreshToken, ulong steamId, bool rotate)
         {
             // SteamClient tokens must be renewed over an authenticated CM
             // connection. The public HTTP endpoint can reject a valid session.
@@ -304,7 +304,7 @@ namespace Kiosk
                 }
                 var request = new Steam.ProtoWriter()
                     .String(1, refreshToken).Fixed64(2, steamId)
-                    .Uint(3, 1) // k_ETokenRenewalType_Allow
+                    .Uint(3, rotate ? 1u : 0u) // k_ETokenRenewalType_Allow / _None
                     .Finish();
                 var response = await cm.ServiceAsync(
                     "Authentication.GenerateAccessTokenForApp#1", request);

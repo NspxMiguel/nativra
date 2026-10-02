@@ -99,7 +99,7 @@ namespace Kiosk.Steam
                         await cm.ConnectAsync(endpoint);
                         try
                         {
-                            await cm.LogOnAsync(session.SteamId, session.RefreshToken);
+                            await cm.LogOnAsync(session.SteamId, await session.RefreshTokenForLogOnAsync());
                         }
                         catch (SteamLogOnException refused) when (refused.Result == 5 && !renewedOnce)
                         {
@@ -109,7 +109,7 @@ namespace Kiosk.Steam
                             renewedOnce = true;
                             if (await session.ForgetIfRefusedAsync()) throw;
                             await cm.ConnectAsync(endpoint);   // Steam closes the socket after a refused log-on
-                            await cm.LogOnAsync(session.SteamId, session.RefreshToken);
+                            await cm.LogOnAsync(session.SteamId, await session.RefreshTokenForLogOnAsync());
                         }
                         connected = true;
                         break;

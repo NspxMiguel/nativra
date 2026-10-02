@@ -153,6 +153,50 @@ namespace Kiosk
         }
 
         /// <summary>
+        /// The refresh token to log on with, read only after any renewal in
+        /// progress has finished, so a log-on never uses a token that is being
+        /// replaced at that moment.
+        /// </summary>
+        public async Task<string> RefreshTokenForLogOnAsync()
+        {
+            await renewing.WaitAsync();
+            renewing.Release();
+            return RefreshToken;
+        }
+
+        /// <summary>True when the JWT's "exp" is missing or less than <paramref name="margin"/> away.</summary>
+        public static bool ExpiresWithin(string token, TimeSpan margin)
+        {
+            var claims = Claims(token);
+            if (claims == null) return true;
+            var exp = claims.GetNamedNumber("exp", 0);
+            if (exp <= 0) return true;
+            return DateTimeOffset.FromUnixTimeSeconds((long)exp) - DateTimeOffset.UtcNow < margin;
+        }
+
+        private static JsonObject Claims(string token)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(token)) return null;
+                var parts = token.Split('.');
+                if (parts.Length < 2) return null;
+                var payload = parts[1].Replace('-', '+').Replace('_', '/');
+                switch (payload.Length % 4)
+                {
+                    case 2: payload += "=="; break;
+                    case 3: payload += "="; break;
+                }
+                var json = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+                return JsonObject.TryParse(json, out var claims) ? claims : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Steam's tokens are JWTs whose "sub" claim is the steamid — reading it
         /// here saves a round trip and needs no publisher API key.
         /// </summary>
@@ -200,9 +244,17 @@ namespace Kiosk
                 if (string.IsNullOrEmpty(RefreshToken) || SteamId == 0)
                     throw new SteamSignInRequiredException();
 
-                SteamAuthLog.Note("renew with refresh=" + SteamAuthLog.Print(RefreshToken));
+                SteamAuthLog.Note("renew with refresh=" + SteamAuthLog.Print(RefreshToken) +
+                    " rotate=" + ExpiresWithin(RefreshToken, TimeSpan.FromDays(30)));
                 Tuple<string, string> tokens;
-                try { tokens = await SteamAuth.RenewTokensAsync(RefreshToken, SteamId); }
+                // Rotating the refresh token is what keeps a console signed in for
+                // good, but Steam treats a log-on with a token it has already
+                // replaced as theft and revokes the whole family, the new token
+                // included. Rotation is therefore asked for only when the token is
+                // within a month of expiring, not at every start, which made the
+                // window for that collision open every time the app opened.
+                var rotate = ExpiresWithin(RefreshToken, TimeSpan.FromDays(30));
+                try { tokens = await SteamAuth.RenewTokensAsync(RefreshToken, SteamId, rotate); }
                 catch (Exception error) { SteamAuthLog.Note("renew failed: " + error.GetType().Name + " " + error.Message); throw; }
                 SteamAuthLog.Note("renewed: new refresh=" + SteamAuthLog.Print(tokens.Item2));
                 var fresh = tokens.Item1;

@@ -336,7 +336,9 @@ namespace Nativra.X86.Loader
                 foreach (var t in process.Threads) fls.Remove(((ulong)t.Id << 32) | idx);
                 return 1;
             });
-            i.Register(k, "FlsGetValue", CallConv.Stdcall, 1, c => fls.TryGetValue(FlsKey(c.Arg(0)), out var v) ? v : 0);
+            HostCall flsGet = c => fls.TryGetValue(FlsKey(c.Arg(0)), out var v) ? v : 0;
+            i.Register(k, "FlsGetValue", CallConv.Stdcall, 1, flsGet);
+            i.Register(k, "FlsGetValue2", CallConv.Stdcall, 1, flsGet);   // the Windows 10 variant that leaves the last error alone
             i.Register(k, "FlsSetValue", CallConv.Stdcall, 2, c =>
             {
                 if (c.Arg(0) >= flsUsed.Length || !flsUsed[c.Arg(0)]) return 0;

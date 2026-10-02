@@ -95,7 +95,7 @@ async function test(appid: number, seconds: number): Promise<Verdict> {
   await sleep(seconds * 1000);
   // A pull that fails must not leave the previous game's report in place: it
   // was read back as this run's result.
-  for (const file of ["native-pulse.txt", "native-probe.txt", "crash-log.txt", "x86-imports.txt"]) {
+  for (const file of ["native-pulse.txt", "native-probe.txt", "crash-log.txt", "x86-imports.txt", "unity.log"]) {
     await rm(join(dir, file), { force: true });
     await xbdev(["pull", "Kiosk", file, "LocalState"], dir);
   }

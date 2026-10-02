@@ -54,11 +54,25 @@ namespace Nativra.X86.Tests
 
         private uint M(uint obj, int slot, params uint[] args)
         {
-            var esp = p.Cpu.Esp;
-            var result = Method(obj, slot, out var eax, args);
+            // Called from guest code that measures ESP around the call, the way a
+            // compiled caller relies on it (process.Call unwinds its own frame, so
+            // comparing ESP after it proves nothing): a thiscall callee must pop
+            // exactly its arguments.
+            var function = p.Memory.Read32(p.Memory.Read32(obj) + (uint)slot * 4);
+            var answer = k.Heap.Alloc(4, zero: true);
+            var code = new System.Collections.Generic.List<byte> { 0x89, 0xE3 };   // mov ebx, esp
+            for (var n = args.Length - 1; n >= 0; n--) { code.Add(0x68); code.AddRange(BitConverter.GetBytes(args[n])); }   // push imm32
+            code.Add(0xB9); code.AddRange(BitConverter.GetBytes(obj));        // mov ecx, this
+            code.Add(0xB8); code.AddRange(BitConverter.GetBytes(function));   // mov eax, method
+            code.AddRange(new byte[] { 0xFF, 0xD0, 0xA3 });                    // call eax; mov [answer], eax
+            code.AddRange(BitConverter.GetBytes(answer));
+            code.AddRange(new byte[] { 0x29, 0xE3, 0x89, 0xD8, 0xC3 });        // sub ebx, esp; mov eax, ebx; ret
+            var stub = k.Heap.Alloc((uint)code.Count);
+            p.Memory.WriteBytes(stub, code.ToArray());
+            var result = p.Call(stub, out var leftOver, 10_000_000);
             Assert.True(result.Ok, $"slot {slot} stopped as {result}");
-            Assert.Equal(esp, p.Cpu.Esp);   // the callee popped exactly its arguments
-            return eax;
+            Assert.True(leftOver == 0, $"slot {slot} left {(int)leftOver} bytes on the stack");
+            return p.Memory.Read32(answer);
         }
 
         private uint Str(string text)

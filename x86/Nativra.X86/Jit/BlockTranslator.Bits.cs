@@ -29,18 +29,70 @@ namespace Nativra.X86.Jit
             return true;
         }
 
-        /// <summary>SHLD/SHRD by an immediate or by CL.</summary>
+        /// <summary>
+        /// SHLD/SHRD by an immediate or by CL. The host leaves OF and AF undefined
+        /// and shifts a 16-bit operand by more than 16 its own way, so the flags
+        /// are rebuilt as the interpreter defines them (OF is whether the sign
+        /// changed, AF is clear), and a 16-bit count above 16 stays with the
+        /// interpreter. A count that masks to zero changes nothing.
+        /// </summary>
         private bool EmitDoubleShift(in Instruction ins, int low, int size)
         {
             var prefix = size == 16 ? 0x66 : 0;
             var immediate = (low & 1) == 0;
+            if (immediate)
+            {
+                var count = ins.Imm & 0x1F;
+                if (count == 0 || (size == 16 && count > 16)) return false;
+            }
+            var bad = NewLabel("dshift_bad");
+            var done = NewLabel("dshift_done");
+            if (!immediate && size == 16)
+            {
+                e.Pushfq();
+                e.MovRegReg(S2, G[Reg.Ecx]);
+                e.AluRegImm(4, S2, 0x1F);
+                e.AluRegImm(7, S2, 16);
+                e.Jcc(7, bad);   // above
+                e.Popfq();
+            }
+
             if (IsMem(ins))
             {
                 EmitAddress(ins);
-                e.Rm(prefix, false, 0x0F, low, G[ins.RegField], Mem, S1, 1, 0);
+                e.LoadMem(S3, Mem, S1, 1, 0, size);
             }
+            else e.MovRegReg(S3, G[ins.Rm]);
+            e.Pushfq();
+            if (IsMem(ins)) e.Rm(prefix, false, 0x0F, low, G[ins.RegField], Mem, S1, 1, 0);
             else e.Rr(prefix, false, 0x0F, low, G[ins.RegField], G[ins.Rm]);
             if (immediate) e.U8((byte)ins.Imm);
+            e.Pushfq();
+            if (IsMem(ins)) e.LoadMem(S2, Mem, S1, 1, 0, size);
+            else e.MovRegReg(S2, G[ins.Rm]);
+            e.AluRegReg(6, S3, S2);                 // old ^ new
+            e.ShiftImm(5, S3, (byte)(size - 1));
+            e.AluRegImm(4, S3, 1);
+            e.ShiftImm(4, S3, 11);                  // OF: the sign changed
+            e.PopReg(S2);                           // the host's flags after the shift
+            e.AluRegImm(4, S2, ~(Flag.OF | Flag.AF));
+            e.AluRegReg(1, S2, S3);
+            e.PopReg(S1);                           // the flags from before
+            if (!immediate)
+            {
+                e.TestRegImm(G[Reg.Ecx], 0x1F, 8);
+                e.Cmovcc(4, S2, S1);                // a count of zero leaves them alone
+            }
+            e.PushReg(S2);
+            e.Popfq();
+            if (!immediate && size == 16)
+            {
+                e.Jmp(done);
+                e.Label(bad);
+                e.Popfq();
+                EmitExit(ins.Address, Ctx.ReasonFallback);
+                e.Label(done);
+            }
             return true;
         }
 

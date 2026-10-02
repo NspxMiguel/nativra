@@ -303,9 +303,15 @@ namespace Nativra.X86.Jit
                 case 0x87:   // XCHG r/m, r
                     {
                         var width = op == 0x86 ? 8 : size;
-                        if (IsMem(ins)) return false; // memory xchg carries an implicit lock; leave it to the interpreter
-                                                      // Partial-register swaps are rare; decided before anything is
-                                                      // emitted, or the interpreter would swap them a second time.
+                        if (IsMem(ins))
+                        {
+                            // The host's memory XCHG carries the same implicit lock.
+                            EmitAddress(ins);
+                            e.Rm(width == 16 ? 0x66 : 0, false, op, -1, G[ins.RegField], Mem, S1, 1, 0);
+                            return true;
+                        }
+                        // Partial-register swaps are rare; decided before anything is
+                        // emitted, or the interpreter would swap them a second time.
                         if (width != 32) return false;
                         if (ins.Rm != ins.RegField)
                         {
@@ -406,7 +412,7 @@ namespace Nativra.X86.Jit
                     return EmitGroup3(ins, op == 0xF6 ? 8 : size);
                 case 0xFE:
                     if (ins.RegField > 1) return false;
-                    if (IsMem(ins)) { EmitAddress(ins); e.IncDecMem(ins.RegField, Mem, S1, 1, 0, 8); }
+                    if (IsMem(ins)) { EmitAddress(ins); if (ins.Lock) e.U8(0xF0); e.IncDecMem(ins.RegField, Mem, S1, 1, 0, 8); }
                     else e.IncDecReg(ins.RegField, G[ins.Rm], 8);
                     return true;
                 case 0xFF:
@@ -429,7 +435,7 @@ namespace Nativra.X86.Jit
                         return true;
                     }
                     if (ins.RegField > 1) return false;
-                    if (IsMem(ins)) { EmitAddress(ins); e.IncDecMem(ins.RegField, Mem, S1, 1, 0, size); }
+                    if (IsMem(ins)) { EmitAddress(ins); if (ins.Lock) e.U8(0xF0); e.IncDecMem(ins.RegField, Mem, S1, 1, 0, size); }
                     else e.IncDecReg(ins.RegField, G[ins.Rm], size);
                     return true;
 
@@ -554,6 +560,9 @@ namespace Nativra.X86.Jit
                     case 0xB0:
                     case 0xB1: // cmpxchg r/m, r (the host's own, lock prefix and all)
                         return EmitCmpxchg(ins, low == 0xB0 ? 8 : size);
+                    case 0xC0:
+                    case 0xC1: // xadd r/m, r
+                        return EmitXadd(ins, low == 0xC0 ? 8 : size);
                     case 0xC7: // cmpxchg8b m64
                         return EmitCmpxchg8b(ins);
                     case 0xAE: // ldmxcsr / stmxcsr

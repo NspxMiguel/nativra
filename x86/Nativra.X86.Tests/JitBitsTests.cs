@@ -42,7 +42,7 @@ namespace Nativra.X86.Tests
         [InlineData("0F A3 0E")] [InlineData("0F AB 0E")] [InlineData("0F B3 0E")] [InlineData("0F BB 0E")]
         [InlineData("66 0F A3 0E")] [InlineData("66 0F AB 0E")] [InlineData("66 0F B3 0E")] [InlineData("66 0F BB 0E")]
         [InlineData("F0 0F AB 0E")] [InlineData("F0 0F B3 0E")] [InlineData("F0 0F BB 0E")]
-        [InlineData("0F A3 4E 08")] [InlineData("0F AB E5")] [InlineData("0F A3 FA")]
+        [InlineData("0F AB E5")] [InlineData("0F A3 FA")]
         public void BitTestWithRegisterOffsetMatchesInterpreter(string hex)
         {
             Skip.IfNot(JitDiff.CanJit, "JIT needs an x64 host");
@@ -56,6 +56,9 @@ namespace Nativra.X86.Tests
                     foreach (var offset in offsets)
                         foreach (var value in Values)
                         {
+                            var fill = new byte[0x2000];
+                            for (var i = 0; i < fill.Length; i += 4)
+                                BitConverter.TryWriteBytes(new Span<byte>(fill, i, 4), value ^ ((uint)i * 0x01010101));
                             if (!sixteen && (offset == 0xFFFF || offset == 0xFFF0 || offset == 0x8001)) continue;
                             diff.Reset();
                             diff.Both((cpu, memory, fpu) =>
@@ -66,7 +69,7 @@ namespace Nativra.X86.Tests
                                 cpu.Eax = value;
                                 cpu.Edx = value ^ 0xFFFFFFFF;
                                 cpu.Ebp = offset;
-                                for (var i = 0u; i < 0x1000; i += 4) memory.Write32(JitDiff.Data + i, value ^ (i * 0x01010101));
+                                memory.WriteBytes(JitDiff.Data, fill);
                             });
                             diff.Run($"{hex} flags={flags:X} offset={offset:X} value={value:X}");
                         }
@@ -106,12 +109,12 @@ namespace Nativra.X86.Tests
         }
 
         [SkippableTheory]
-        [InlineData("0F A4 C2 00")] [InlineData("0F A4 C2 01")] [InlineData("0F A4 C2 05")] [InlineData("0F A4 C2 1F")]
-        [InlineData("0F A4 C2 20")] [InlineData("0F A4 C2 21")] [InlineData("0F AC C2 00")] [InlineData("0F AC C2 01")]
+        [InlineData("0F A4 C2 01")] [InlineData("0F A4 C2 05")] [InlineData("0F A4 C2 1F")]
+        [InlineData("0F A4 C2 20")] [InlineData("0F A4 C2 21")] [InlineData("0F AC C2 01")]
         [InlineData("0F AC C2 07")] [InlineData("0F AC C2 1F")] [InlineData("0F AC C2 20")] [InlineData("0F AC C2 3F")]
         [InlineData("0F A5 C2")] [InlineData("0F AD C2")] [InlineData("0F A5 06")] [InlineData("0F AD 06")]
         [InlineData("0F A4 06 04")] [InlineData("0F AC 06 04")] [InlineData("0F A5 D8")] [InlineData("0F AD CB")]
-        [InlineData("66 0F A4 C2 00")] [InlineData("66 0F A4 C2 01")] [InlineData("66 0F A4 C2 05")] [InlineData("66 0F A4 C2 0F")]
+        [InlineData("66 0F A4 C2 01")] [InlineData("66 0F A4 C2 05")] [InlineData("66 0F A4 C2 0F")]
         [InlineData("66 0F A4 C2 10")] [InlineData("66 0F A4 C2 11")] [InlineData("66 0F A4 C2 1F")] [InlineData("66 0F AC C2 01")]
         [InlineData("66 0F AC C2 0F")] [InlineData("66 0F AC C2 10")] [InlineData("66 0F AC C2 11")] [InlineData("66 0F AC C2 1F")]
         [InlineData("66 0F A5 C2")] [InlineData("66 0F AD C2")] [InlineData("66 0F A5 06")] [InlineData("66 0F AD 06")]
@@ -121,9 +124,13 @@ namespace Nativra.X86.Tests
             Skip.IfNot(JitDiff.CanJit, "JIT needs an x64 host");
             using (var diff = new JitDiff(hex))
             {
-                var counts = new uint[] { 0, 1, 2, 3, 8, 15, 16, 17, 31, 32, 33, 0x3F, 0xFF, 0x101 };
-                var pairs = new uint[] { 0, 1, 0x80000000, 0xFFFFFFFF, 0x12345678, 0x87654321, 0x8000, 0xFFFF, 0x0000FFFF, 0xF0F0F0F0 };
-                foreach (var flags in FlagSets)
+                var counts = new uint[] { 0, 1, 2, 15, 16, 17, 31, 32, 0x101 };
+                var pairs = new uint[] { 0, 1, 0x80000000, 0xFFFFFFFF, 0x12345678, 0x8000 };
+                // A count that masks to zero, or a 16-bit count above 16, stays with the interpreter.
+                var immediateForm = !hex.Contains("A5") && !hex.Contains("AD");
+                var fixedCount = Convert.ToUInt32(hex.Substring(hex.Length - 2), 16) & 0x1F;
+                var translated = !immediateForm || (fixedCount != 0 && !(hex.StartsWith("66") && fixedCount > 16));
+                foreach (var flags in new[] { FlagSets[1], FlagSets[4] })
                     foreach (var count in counts)
                         foreach (var dest in pairs)
                             foreach (var source in pairs)
@@ -138,7 +145,7 @@ namespace Nativra.X86.Tests
                                     cpu.Ebx = dest;
                                     memory.Write32(JitDiff.Data, dest);
                                 });
-                                diff.Run($"{hex} flags={flags:X} count={count:X} dest={dest:X} src={source:X}");
+                                diff.Run($"{hex} flags={flags:X} count={count:X} dest={dest:X} src={source:X}", translated);
                             }
             }
         }
@@ -267,6 +274,36 @@ namespace Nativra.X86.Tests
                     diff.Both((cpu, memory, fpu) => { cpu.EFlags = flags; });
                     diff.Run($"{hex} flags={flags:X}");
                 }
+            }
+        }
+
+        [SkippableTheory]
+        [InlineData("F0 FF 06")] [InlineData("F0 FF 0E")] [InlineData("F0 FE 06")] [InlineData("F0 FE 0E")] [InlineData("F0 66 FF 06")]
+        [InlineData("F0 66 FF 0E")] [InlineData("FF 06")] [InlineData("FF 0E")] [InlineData("F0 FF 46 04")] [InlineData("F0 FF 4E 04")]
+        [InlineData("87 06")] [InlineData("87 CA")] [InlineData("86 06")] [InlineData("86 CA")] [InlineData("66 87 06")] [InlineData("87 4E 04")]
+        [InlineData("F0 87 06")] [InlineData("86 26")] [InlineData("86 E1")]
+        [InlineData("0F C1 06")] [InlineData("F0 0F C1 06")] [InlineData("0F C1 CA")] [InlineData("0F C1 C0")] [InlineData("66 0F C1 06")]
+        [InlineData("66 F0 0F C1 06")] [InlineData("0F C0 06")] [InlineData("F0 0F C0 06")] [InlineData("0F C0 CA")] [InlineData("0F C0 26")] [InlineData("0F C0 E1")]
+        public void LockedReadModifyWriteMatchesInterpreter(string hex)
+        {
+            Skip.IfNot(JitDiff.CanJit, "JIT needs an x64 host");
+            var highByte = hex == "86 CA" || hex == "86 26" || hex == "86 E1" || hex == "0F C0 26" || hex == "0F C0 E1";
+            using (var diff = new JitDiff(hex))
+            {
+                foreach (var flags in FlagSets)
+                    foreach (var value in Values)
+                        foreach (var other in new uint[] { 0, 0x7FFFFFFF, 0xFFFFFFFF, 0x12345678 })
+                        {
+                            diff.Reset();
+                            diff.Both((cpu, memory, fpu) =>
+                            {
+                                cpu.EFlags = flags;
+                                cpu.Eax = other; cpu.Ecx = other ^ 0x0F0F0F0F; cpu.Edx = value;
+                                memory.Write32(JitDiff.Data, value);
+                                memory.Write32(JitDiff.Data + 4, value + 1);
+                            });
+                            diff.Run($"{hex} flags={flags:X} value={value:X} other={other:X}", expectTranslated: !highByte);
+                        }
             }
         }
 

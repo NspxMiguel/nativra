@@ -11,7 +11,9 @@ namespace Nativra.X86.Jit
         private static bool LockIsAtomicHere(in Instruction ins) =>
             ins.Mod != 3 && (ins.Op == 0x0FB0 || ins.Op == 0x0FB1 || (ins.Op == 0x0FC7 && ins.RegField == 1) ||
                              ins.Op == 0x0FAB || ins.Op == 0x0FB3 || ins.Op == 0x0FBB ||
-                             (ins.Op == 0x0FBA && ins.RegField >= 5));
+                             (ins.Op == 0x0FBA && ins.RegField >= 5) || ins.Op == 0x0FC0 || ins.Op == 0x0FC1 ||
+                             ins.Op == 0x86 || ins.Op == 0x87 ||
+                             ((ins.Op == 0xFE || ins.Op == 0xFF) && ins.RegField <= 1));
 
         /// <summary>Opcodes below 0F00 that ignore a REP/REPNE prefix (PAUSE, REP RET, a prefixed FWAIT).</summary>
         private static bool RepIsIgnored(int op) => op == 0x90 || op == 0x9B || op == 0xC2 || op == 0xC3;
@@ -100,6 +102,24 @@ namespace Nativra.X86.Jit
             e.Label(equal);
             e.AluRegReg(7, S3, S3, width);
             e.Label(end);
+            return true;
+        }
+
+        /// <summary>XADD: the host's own, with its LOCK prefix when the guest has one.</summary>
+        private bool EmitXadd(in Instruction ins, int width)
+        {
+            if (ins.Lock && !IsMem(ins)) return false;
+            // AH..BH and friends are not host registers of their own.
+            if (width == 8 && (ins.RegField >= 4 || (!IsMem(ins) && ins.Rm >= 4))) return false;
+            var prefix = width == 16 ? 0x66 : 0;
+            var opcode = width == 8 ? 0xC0 : 0xC1;
+            if (IsMem(ins))
+            {
+                EmitAddress(ins);
+                if (ins.Lock) e.U8(0xF0);
+                e.Rm(prefix, false, 0x0F, opcode, G[ins.RegField], Mem, S1, 1, 0);
+            }
+            else e.Rr(prefix, false, 0x0F, opcode, G[ins.RegField], G[ins.Rm]);
             return true;
         }
 

@@ -131,7 +131,18 @@ Query\0`, answered with a challenge, then again with it) returns "Half-Life 2
 Deathmatch", map `dm_lockdown`, folder `hl2mp`, 0 of 2 players, dedicated,
 Windows, version 10889068.
 
+On the Windows runner it first stopped in Steam's `tier0_s.dll` just after
+`SteamAPI_Init`: **`DuplicateHandle` copied handles as they were**, so a
+thread handing itself to another as `DuplicateHandle(GetCurrentThread())`
+gave it the pseudo-handle, and waiting on that pseudo-handle reported it
+signalled. Steam's client judged a worker thread finished, freed its
+`CThread` while it ran, and the thread faulted calling the freed object's
+`OnExit`. On a Mac the worker happened to finish first. The pseudo-handle
+now duplicates into a real handle to the calling thread. On the way,
+`FindFirstFile` learned to list `.` and `..` like Windows.
+
 CI (`.github/workflows/x86-workload.yml`) downloads the server anonymously
-and runs this under the JIT on the Windows runner on every x86 change.
+and runs this under the JIT on the Windows runner on every x86 change, until
+the server logs "VAC secure mode disabled." (`--until`): about 60 s.
 
 All fixes have unit tests; CI's Windows runner checks the JIT path.

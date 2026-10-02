@@ -200,6 +200,17 @@ namespace Nativra.X86.Cpu
             }
         }
 
+        /// <summary>
+        /// MINPS/MAXPS/MINSS/MAXSS select one of the two operands as it is, quiet or
+        /// signalling NaN included, so they work on the raw lane bits.
+        /// </summary>
+        private static uint MinMaxLane(int op, uint a, uint b)
+        {
+            var x = Bits.Int32BitsToSingle((int)a);
+            var y = Bits.Int32BitsToSingle((int)b);
+            return (op == 0x5D ? x < y : x > y) ? a : b;
+        }
+
         private bool FloatOp(in Instruction ins, int op, int pfx)
         {
             var d = ins.RegField;
@@ -369,7 +380,8 @@ namespace Nativra.X86.Cpu
                     if (pfx == 3) // scalar single
                     {
                         var b = ReadScalarRm(ins, 4);
-                        a.SetF(0, RoundF(FloatArith(op, a.F(0), b.F(0), true)));
+                        if (op == 0x5D || op == 0x5F) a.SetD(0, MinMaxLane(op, a.D(0), b.D(0)));
+                        else a.SetF(0, RoundF(FloatArith(op, a.F(0), b.F(0), true)));
                     }
                     else if (pfx == 2) // scalar double
                     {
@@ -384,7 +396,11 @@ namespace Nativra.X86.Cpu
                     else // packed single
                     {
                         var b = ReadXmmRm(ins);
-                        for (var i = 0; i < 4; i++) a.SetF(i, RoundF(FloatArith(op, a.F(i), b.F(i), true)));
+                        for (var i = 0; i < 4; i++)
+                        {
+                            if (op == 0x5D || op == 0x5F) a.SetD(i, MinMaxLane(op, a.D(i), b.D(i)));
+                            else a.SetF(i, RoundF(FloatArith(op, a.F(i), b.F(i), true)));
+                        }
                     }
                     SetXmm(d, a);
                     return true;

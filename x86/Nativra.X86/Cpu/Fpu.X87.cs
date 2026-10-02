@@ -34,6 +34,33 @@ namespace Nativra.X86.Cpu
             this.owner = owner;
         }
 
+        /// <summary>Copies the x87/MMX register file into a JIT context block (see Ctx).</summary>
+        internal unsafe void ExportNative(byte* block)
+        {
+            for (var i = 0; i < 8; i++)
+            {
+                *(ulong*)(block + Jit.Ctx.Mm + i * 8) = mant[i];
+                *(ushort*)(block + Jit.Ctx.Sexp + i * 2) = sexp[i];
+                block[Jit.Ctx.Empty + i] = empty[i] ? (byte)1 : (byte)0;
+            }
+            *(uint*)(block + Jit.Ctx.Top) = (uint)top;
+            *(uint*)(block + Jit.Ctx.Control) = Control;
+            *(uint*)(block + Jit.Ctx.Status) = status;
+        }
+
+        internal unsafe void ImportNative(byte* block)
+        {
+            for (var i = 0; i < 8; i++)
+            {
+                mant[i] = *(ulong*)(block + Jit.Ctx.Mm + i * 8);
+                sexp[i] = *(ushort*)(block + Jit.Ctx.Sexp + i * 2);
+                empty[i] = block[Jit.Ctx.Empty + i] != 0;
+            }
+            top = (int)(*(uint*)(block + Jit.Ctx.Top) & 7);
+            Control = (ushort)*(uint*)(block + Jit.Ctx.Control);
+            status = (ushort)*(uint*)(block + Jit.Ctx.Status);
+        }
+
         private CpuState Cpu => owner.Cpu;
         private GuestMemory Memory => owner.Memory;
 

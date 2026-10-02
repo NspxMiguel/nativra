@@ -27,8 +27,22 @@ namespace Nativra.X86.Jit
         public const int ExitReason = 56;
         public const int ExitData = 60;    // fault address, or the imm a helper needs
         public const int Scratch = 64;     // 8 bytes of spill room for helper glue
+        public const int Mxcsr = 72;       // guest MXCSR, mirrored for blocks that use SSE
         public const int Xmm = 128;         // 8 guest XMM registers, 16 bytes each
-        public const int Size = 256;
+
+        // The x87/MMX register file in the interpreter's own layout, for blocks
+        // that touch it: physical registers (not stack-relative), a byte per
+        // register for "empty", the stack top and the control/status words.
+        public const int Mm = 256;         // 8 qwords: the 64-bit significands, also the MMX registers
+        public const int Sexp = 320;       // 8 words: sign and exponent (0xFFFF while holding MMX data)
+        public const int Top = 336;        // dword, 0..7
+        public const int Control = 340;    // dword: the x87 control word
+        public const int Status = 344;     // dword: the status word as the interpreter keeps it (TOP kept apart)
+        public const int Empty = 352;      // 8 bytes, 1 = empty
+        public const int PhysTab = 360;    // 16 bytes: PhysTab[i] = i & 7, so a stack index needs no AND
+        public const int SaveXmm14 = 384;  // the caller's xmm14/xmm15, which blocks borrow as temporaries
+        public const int SaveXmm15 = 400;
+        public const int Size = 416;
 
         /// <summary>Guest register N lives in this host register during a block.</summary>
         public static readonly int[] GuestToHost =
@@ -61,6 +75,7 @@ namespace Nativra.X86.Jit
         {
             block = (byte*)Marshal.AllocHGlobal(Ctx.Size);
             for (var i = 0; i < Ctx.Size; i++) block[i] = 0;
+            for (var i = 0; i < 16; i++) block[Ctx.PhysTab + i] = (byte)(i & 7);
             *(ulong*)(block + Ctx.MemBase) = (ulong)memory.HostBase.ToInt64();
         }
 
@@ -92,6 +107,7 @@ namespace Nativra.X86.Jit
 
         public void LoadXmm(FpuUnit fpu)
         {
+            *(uint*)(block + Ctx.Mxcsr) = fpu.Mxcsr;
             for (var i = 0; i < 8; i++)
             {
                 *(ulong*)(block + Ctx.Xmm + i * 16) = fpu.XmmLo[i];
@@ -101,12 +117,17 @@ namespace Nativra.X86.Jit
 
         public void StoreXmm(FpuUnit fpu)
         {
+            fpu.Mxcsr = *(uint*)(block + Ctx.Mxcsr);
             for (var i = 0; i < 8; i++)
             {
                 fpu.XmmLo[i] = *(ulong*)(block + Ctx.Xmm + i * 16);
                 fpu.XmmHi[i] = *(ulong*)(block + Ctx.Xmm + i * 16 + 8);
             }
         }
+
+        public void LoadX87(FpuUnit fpu) => fpu.ExportNative(block);
+
+        public void StoreX87(FpuUnit fpu) => fpu.ImportNative(block);
 
         public void Dispose()
         {

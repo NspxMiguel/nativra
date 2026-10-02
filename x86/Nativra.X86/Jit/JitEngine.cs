@@ -37,6 +37,7 @@ namespace Nativra.X86.Jit
             public int[] HostOffsets;
             public uint[] GuestEips;
             public bool UsesSse;
+            public bool UsesX87;
         }
 
         public long BlocksCompiled { get; private set; }
@@ -73,9 +74,12 @@ namespace Nativra.X86.Jit
                 IntPtr block;
                 try { block = GetBlock(ctx.Eip, 0); }
                 catch { ctx.Store(Cpu); throw; }
-                if (maps[block].UsesSse) ctx.LoadXmm(Interpreter.Fpu);
+                var map = maps[block];
+                if (map.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
+                if (map.UsesX87) ctx.LoadX87(Interpreter.Fpu);
                 DelegateFor(block)(ctx.Pointer);
-                if (maps[block].UsesSse) ctx.StoreXmm(Interpreter.Fpu);
+                if (map.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
+                if (map.UsesX87) ctx.StoreX87(Interpreter.Fpu);
                 BlocksExecuted++;
                 LastRunBlocks++;
                 if (ctx.ExitReason == Ctx.ReasonFault)
@@ -133,8 +137,10 @@ namespace Nativra.X86.Jit
                 LastInstructionCount = translator.InstructionCount;
                 var block = Publish(code, translator);
                 if (translator.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
+                if (translator.UsesX87) ctx.LoadX87(Interpreter.Fpu);
                 DelegateFor(block)(ctx.Pointer);
                 if (translator.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
+                if (translator.UsesX87) ctx.StoreX87(Interpreter.Fpu);
                 BlocksCompiled++;
                 BlocksExecuted++;
                 ctx.Store(Cpu);
@@ -245,6 +251,7 @@ namespace Nativra.X86.Jit
                 HostOffsets = translator.HostOffsets.ToArray(),
                 GuestEips = translator.GuestEips.ToArray(),
                 UsesSse = translator.UsesSse,
+                UsesX87 = translator.UsesX87,
             };
             JitFaults.Register(block, code.Length, block + translator.FaultExitOffset);
             return block;

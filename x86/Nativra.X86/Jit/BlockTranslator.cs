@@ -14,7 +14,7 @@ namespace Nativra.X86.Jit
     /// A translated control-flow instruction ends the block at its target.
     /// Untranslated instructions still return to the reference interpreter.
     /// </summary>
-    public sealed class BlockTranslator
+    public sealed partial class BlockTranslator
     {
         private static readonly int[] G = Ctx.GuestToHost;
         private const int Mem = Ctx.MemBaseReg;
@@ -26,6 +26,10 @@ namespace Nativra.X86.Jit
         public bool FullyTranslated { get; private set; }
         public int InstructionCount { get; private set; }
         public bool UsesSse { get; private set; }
+        /// <summary>The block touches the x87/MMX register file, which then travels in the context.</summary>
+        public bool UsesX87 { get; private set; }
+        /// <summary>The block borrows xmm14/xmm15 as temporaries (callee-saved on Windows).</summary>
+        private bool usesTemps;
 
         /// <summary>Host code offset where each guest instruction's translation starts, in order.</summary>
         public List<int> HostOffsets { get; } = new List<int>();
@@ -44,13 +48,37 @@ namespace Nativra.X86.Jit
         /// </summary>
         public byte[] Translate(ICodeReader code, uint startEip, uint stopEip, int maxInstructions = 256)
         {
+            // Whether a block needs the XMM registers (or the borrowed temporaries)
+            // is only known after translating it, but the registers must be set up
+            // before any early exit can reach the epilogue that stores them back. So
+            // a block that turns out to need them is translated once more with the
+            // setup in its prologue.
+            preload = false;
+            var bytes = TranslatePass(code, startEip, stopEip, maxInstructions);
+            if (!UsesSse && !usesTemps) return bytes;
+            preload = true;
+            return TranslatePass(code, startEip, stopEip, maxInstructions);
+        }
+
+        private bool preload;
+        private int labelCounter;
+
+        private byte[] TranslatePass(ICodeReader code, uint startEip, uint stopEip, int maxInstructions)
+        {
             e = new X64Emit();
             FullyTranslated = true;
             InstructionCount = 0;
-            UsesSse = false;
+            var wantSse = preload && UsesSse;
+            var wantTemps = preload && usesTemps;
+            UsesSse = wantSse;
+            usesTemps = wantTemps;
+            UsesX87 = false;
+            labelCounter = 0;
             HostOffsets.Clear();
             GuestEips.Clear();
             EmitPrologue();
+            if (wantSse) LoadGuestXmm();
+            if (wantTemps) SaveTemps();
 
             var eip = startEip;
             var terminated = false;
@@ -127,6 +155,11 @@ namespace Nativra.X86.Jit
                 for (var i = 0; i < 8; i++) e.SseMemReg(0, 0x11, Ctxr, -1, 1, Ctx.Xmm + i * 16, i);
                 e.SseRegMem(0, 0x10, 6, Ctxr, -1, 1, 96);
                 e.SseRegMem(0, 0x10, 7, Ctxr, -1, 1, 112);
+            }
+            if (usesTemps)
+            {
+                e.SseRegMem(0, 0x10, 14, Ctxr, -1, 1, Ctx.SaveXmm14);
+                e.SseRegMem(0, 0x10, 15, Ctxr, -1, 1, Ctx.SaveXmm15);
             }
             for (var i = 0; i < 8; i++) e.StoreCtx(G[i], Ctxr, Ctx.Regs + i * 4);
 
@@ -515,7 +548,11 @@ namespace Nativra.X86.Jit
         private void EnsureXmm()
         {
             if (UsesSse) return;
-            UsesSse = true;
+            UsesSse = true;   // the first pass only records the need; see Translate
+        }
+
+        private void LoadGuestXmm()
+        {
             // XMM6/7 belong to the caller on Windows; guest XMM state lives
             // in the context so each block can enter and leave independently.
             e.SseMemReg(0, 0x11, Ctxr, -1, 1, 96, 6);
@@ -523,8 +560,21 @@ namespace Nativra.X86.Jit
             for (var i = 0; i < 8; i++) e.SseRegMem(0, 0x10, i, Ctxr, -1, 1, Ctx.Xmm + i * 16);
         }
 
+        /// <summary>xmm14 and xmm15 are scratch for the x87 and MMX paths; they are callee-saved on Windows.</summary>
+        private void EnsureTemps()
+        {
+            usesTemps = true;
+        }
+
+        private void SaveTemps()
+        {
+            e.SseMemReg(0, 0x11, Ctxr, -1, 1, Ctx.SaveXmm14, 14);
+            e.SseMemReg(0, 0x11, Ctxr, -1, 1, Ctx.SaveXmm15, 15);
+        }
+
         private bool EmitSse(in Instruction ins)
         {
+            if (EmitSseExtra(ins)) return true;
             var op = ins.Op & 0xFF;
             var prefix = ins.Rep != 0 ? ins.Rep : ins.OpSize16 ? 0x66 : 0;
             var ordinary = prefix == 0 || prefix == 0x66;

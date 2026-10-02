@@ -535,6 +535,29 @@ namespace Nativra.X86.Jit
             ModMem(src, baseReg, index, scale, disp);
         }
 
+        /// <summary>
+        /// Any register,register encoding: [prefix] [REX] op0 [op1] ModRM(reg, rm).
+        /// <paramref name="op1"/> is -1 for a one-byte opcode.
+        /// </summary>
+        public void Rr(int prefix, bool wide, int op0, int op1, int reg, int rm)
+        {
+            if (prefix != 0) U8(prefix);
+            MaybeRex(wide, reg, 0, rm);
+            U8(op0);
+            if (op1 >= 0) U8(op1);
+            ModRegReg(reg, rm);
+        }
+
+        /// <summary>Any register,[base + index*scale + disp] encoding.</summary>
+        public void Rm(int prefix, bool wide, int op0, int op1, int reg, int baseReg, int index, int scale, int disp)
+        {
+            if (prefix != 0) U8(prefix);
+            MaybeRex(wide, reg, index, baseReg);
+            U8(op0);
+            if (op1 >= 0) U8(op1);
+            ModMem(reg, baseReg, index, scale, disp);
+        }
+
         // ------------------------------------------------------------- stack/misc
 
         public void PushReg(int reg) { MaybeRex(false, 0, 0, reg); U8((byte)(0x50 + (reg & 7))); }

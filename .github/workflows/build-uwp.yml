@@ -11,6 +11,7 @@ on:
       # redist shims, so changes there must go through .NET Native too.
       - "x86/Nativra.X86/**"
       - "native/directx-redist/**"
+      - "native/vc-redist/**"
       - ".github/workflows/build-uwp.yml"
   workflow_dispatch:
 
@@ -104,6 +105,15 @@ jobs:
           Copy-Item $ucrt.FullName $out
           Write-Host "C runtime from $($crt.FullName) and $($ucrt.DirectoryName)"
           Get-ChildItem $out | Select-Object Name, Length | Format-Table -AutoSize
+
+      # Games built with Visual C++ 2010, 2012 or 2013 import msvcr100/110/120 and
+      # msvcp100/110/120, which the console does not have. Microsoft's own
+      # redistributables are downloaded here, checked (Authenticode, SHA-256) and
+      # extracted into the same folder, so the x86 layer maps them for a game
+      # that does not carry its own copy. They are never committed.
+      - name: Take the redistributable 2010, 2012 and 2013 C runtimes
+        shell: pwsh
+        run: ./native/vc-redist/fetch.ps1 -Out uwp\Redist\x86
 
       - name: Restore
         run: msbuild uwp\Kiosk.sln /t:Restore /p:Configuration=Release /p:Platform=x64

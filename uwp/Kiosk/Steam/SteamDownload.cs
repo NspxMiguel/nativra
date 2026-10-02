@@ -91,12 +91,26 @@ namespace Kiosk.Steam
                 var endpoints = await SteamCm.EndpointsAsync();
                 Exception last = null;
                 var connected = false;
+                var renewedOnce = false;
                 foreach (var endpoint in endpoints.GetRange(0, Math.Min(5, endpoints.Count)))
                 {
                     try
                     {
                         await cm.ConnectAsync(endpoint);
-                        await cm.LogOnAsync(session.SteamId, session.RefreshToken);
+                        try
+                        {
+                            await cm.LogOnAsync(session.SteamId, session.RefreshToken);
+                        }
+                        catch (SteamLogOnException refused) when (refused.Result == 5 && !renewedOnce)
+                        {
+                            // The refresh token may have been rotated by a renewal that
+                            // ran while this started; renew (or learn the sign-in is
+                            // really gone) and log on once more with the current one.
+                            renewedOnce = true;
+                            if (await session.ForgetIfRefusedAsync()) throw;
+                            await cm.ConnectAsync(endpoint);   // Steam closes the socket after a refused log-on
+                            await cm.LogOnAsync(session.SteamId, session.RefreshToken);
+                        }
                         connected = true;
                         break;
                     }

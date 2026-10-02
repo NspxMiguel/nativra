@@ -624,10 +624,13 @@ namespace Kiosk
             }
             catch (Exception error) when (SteamAuth.MeansSignedOut(error))
             {
-                // A session Steam no longer accepts is not a download error:
-                // drop it so the app asks for the phone instead of retrying.
-                try { await (await SteamSession.LoadAsync()).ClearAsync(); } catch { }
-                StatusText.Text = Texts.Get("steam.signinagain");
+                // A refusal can be for a token rotated a moment ago; the sign-in is
+                // dropped (and the phone asked for) only when Steam confirms it.
+                var forgotten = true;
+                try { forgotten = await (await SteamSession.LoadAsync()).ForgetIfRefusedAsync(); } catch { }
+                StatusText.Text = forgotten
+                    ? Texts.Get("steam.signinagain")
+                    : Texts.Get("steam.downloadfailed", "auto", error.Message);
             }
             catch (Exception error)
             {

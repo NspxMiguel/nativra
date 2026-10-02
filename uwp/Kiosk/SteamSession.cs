@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Data.Json;
 using Windows.Storage;
@@ -26,7 +27,23 @@ namespace Kiosk
 
         public bool IsSignedIn => !string.IsNullOrEmpty(RefreshToken) && SteamId != 0;
 
+        // One session for the whole app. Renewing can rotate the refresh token,
+        // and Steam then refuses the old one: with a copy per screen, a download
+        // that started while the home screen renewed logged on with the old token,
+        // got eresult 5, and the app deleted a sign-in that was perfectly good.
+        private static SteamSession current;
+        private static readonly SemaphoreSlim renewing = new SemaphoreSlim(1, 1);
+
         public static async Task<SteamSession> LoadAsync()
+        {
+            var shared = current;
+            if (shared != null && shared.IsSignedIn) return shared;
+            var loaded = await ReadAsync();
+            current = loaded;
+            return loaded;
+        }
+
+        private static async Task<SteamSession> ReadAsync()
         {
             try
             {
@@ -55,6 +72,7 @@ namespace Kiosk
 
         public async Task SaveAsync()
         {
+            current = this;
             try
             {
                 var root = new JsonObject
@@ -76,6 +94,7 @@ namespace Kiosk
 
         public async Task ClearAsync()
         {
+            if (current == this) current = null;
             AccountName = RefreshToken = AccessToken = null;
             SteamId = 0;
             try
@@ -127,17 +146,57 @@ namespace Kiosk
         public async Task<string> EnsureAccessTokenAsync(bool force = false)
         {
             if (!force && !string.IsNullOrEmpty(AccessToken)) return AccessToken;
-            if (string.IsNullOrEmpty(RefreshToken) || SteamId == 0)
-                throw new SteamSignInRequiredException();
+            // One renewal at a time: two at once would each rotate the token and
+            // the slower one would save a token Steam had already replaced.
+            var asked = RefreshToken;
+            await renewing.WaitAsync();
+            try
+            {
+                // Someone renewed while this waited: theirs is the token to use.
+                if (RefreshToken != asked && !string.IsNullOrEmpty(AccessToken)) return AccessToken;
+                if (string.IsNullOrEmpty(RefreshToken) || SteamId == 0)
+                    throw new SteamSignInRequiredException();
 
-            var tokens = await SteamAuth.RenewTokensAsync(RefreshToken, SteamId);
-            var fresh = tokens.Item1;
-            if (string.IsNullOrEmpty(fresh)) throw new SteamSignInRequiredException();
+                var tokens = await SteamAuth.RenewTokensAsync(RefreshToken, SteamId);
+                var fresh = tokens.Item1;
+                if (string.IsNullOrEmpty(fresh)) throw new SteamSignInRequiredException();
 
-            AccessToken = fresh;
-            if (!string.IsNullOrEmpty(tokens.Item2)) RefreshToken = tokens.Item2;
-            await SaveAsync();
-            return fresh;
+                AccessToken = fresh;
+                if (!string.IsNullOrEmpty(tokens.Item2)) RefreshToken = tokens.Item2;
+                await SaveAsync();
+                return fresh;
+            }
+            finally
+            {
+                renewing.Release();
+            }
+        }
+
+        /// <summary>
+        /// Called when Steam refused a log-on with this session. The refusal may
+        /// have been for a token that was rotated a moment earlier, so the
+        /// sign-in is forgotten only when renewing with the current refresh token
+        /// also fails — Steam itself confirming the session is gone. True when it
+        /// was forgotten; false when the session still works and the caller can
+        /// simply try again.
+        /// </summary>
+        public async Task<bool> ForgetIfRefusedAsync()
+        {
+            try
+            {
+                await EnsureAccessTokenAsync(force: true);
+                return false;
+            }
+            catch (SteamSignInRequiredException)
+            {
+                await ClearAsync();
+                return true;
+            }
+            catch
+            {
+                // No answer from Steam is not a refusal: keep the sign-in.
+                return false;
+            }
         }
     }
 }

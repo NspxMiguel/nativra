@@ -210,7 +210,7 @@ namespace Kiosk
 
         // ------------------------------------------------------------- library
 
-        private async Task ShowLibraryAsync()
+        private async Task ShowLibraryAsync(bool retried = false)
         {
             SignInPanel.Visibility = Visibility.Collapsed;
             LibraryPanel.Visibility = Visibility.Visible;
@@ -251,7 +251,13 @@ namespace Kiosk
             }
             catch (SteamSignInRequiredException)
             {
-                await session.ClearAsync();
+                // Forgotten only when Steam confirms it; a token rotated a moment
+                // ago is renewed and the library is simply asked for again.
+                if (!await session.ForgetIfRefusedAsync())
+                {
+                    if (!retried) await ShowLibraryAsync(retried: true);
+                    return;
+                }
                 allGames.Clear();
                 Games.Clear();
                 Shelves.Clear();

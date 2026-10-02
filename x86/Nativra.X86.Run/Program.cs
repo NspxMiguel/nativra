@@ -137,7 +137,7 @@ namespace Nativra.X86.Run
                     if (kernel.ProbedAbsent.Count > 0)
                         lines.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));
                     if (kernel.FilesNotFound.Count > 0)
-                        lines.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(80)));
+                        lines.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().TakeLast(80)));
                     if (com.MissingClasses.Count > 0)
                         lines.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
                     lines.Add("x86.dsound=buffers " + sound.BuffersCreated + " frames " + sound.FramesMixed + " underruns " + sound.Underruns);

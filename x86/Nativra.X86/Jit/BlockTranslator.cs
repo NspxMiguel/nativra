@@ -25,6 +25,7 @@ namespace Nativra.X86.Jit
 
         public bool FullyTranslated { get; private set; }
         public int InstructionCount { get; private set; }
+        public bool UsesSse { get; private set; }
 
         /// <summary>Host code offset where each guest instruction's translation starts, in order.</summary>
         public List<int> HostOffsets { get; } = new List<int>();
@@ -46,6 +47,7 @@ namespace Nativra.X86.Jit
             e = new X64Emit();
             FullyTranslated = true;
             InstructionCount = 0;
+            UsesSse = false;
             HostOffsets.Clear();
             GuestEips.Clear();
             EmitPrologue();
@@ -70,7 +72,7 @@ namespace Nativra.X86.Jit
                     terminated = true;
                     break;
                 }
-                if (!ins.Valid || ins.Lock || ins.Rep != 0 || !TryEmit(ins))
+                if (!ins.Valid || ins.Lock || (ins.Rep != 0 && ins.Op < 0x0F00) || !TryEmit(ins))
                 {
                     EmitExit(eip, Ctx.ReasonFallback);
                     FullyTranslated = false;
@@ -120,6 +122,12 @@ namespace Nativra.X86.Jit
 
         private void EmitEpilogue()
         {
+            if (UsesSse)
+            {
+                for (var i = 0; i < 8; i++) e.SseMemReg(0, 0x11, Ctxr, -1, 1, Ctx.Xmm + i * 16, i);
+                e.SseRegMem(0, 0x10, 6, Ctxr, -1, 1, 96);
+                e.SseRegMem(0, 0x10, 7, Ctxr, -1, 1, 112);
+            }
             for (var i = 0; i < 8; i++) e.StoreCtx(G[i], Ctxr, Ctx.Regs + i * 4);
 
             // Merge host arithmetic flags back over the kept guest bits.
@@ -453,6 +461,8 @@ namespace Nativra.X86.Jit
             // Two-byte map.
             if (op >= 0x0F00 && op <= 0x0FFF)
             {
+                if (EmitSse(ins)) return true;
+                if (ins.Rep != 0) return false;
                 var low = op & 0xFF;
                 if (low >= 0x90 && low <= 0x9F)  // setcc
                 {
@@ -500,6 +510,78 @@ namespace Nativra.X86.Jit
             }
 
             return false;
+        }
+
+        private void EnsureXmm()
+        {
+            if (UsesSse) return;
+            UsesSse = true;
+            // XMM6/7 belong to the caller on Windows; guest XMM state lives
+            // in the context so each block can enter and leave independently.
+            e.SseMemReg(0, 0x11, Ctxr, -1, 1, 96, 6);
+            e.SseMemReg(0, 0x11, Ctxr, -1, 1, 112, 7);
+            for (var i = 0; i < 8; i++) e.SseRegMem(0, 0x10, i, Ctxr, -1, 1, Ctx.Xmm + i * 16);
+        }
+
+        private bool EmitSse(in Instruction ins)
+        {
+            var op = ins.Op & 0xFF;
+            var prefix = ins.Rep != 0 ? ins.Rep : ins.OpSize16 ? 0x66 : 0;
+            var ordinary = prefix == 0 || prefix == 0x66;
+            var scalar = prefix == 0xF2 || prefix == 0xF3;
+            var load = op == 0x10 || op == 0x12 || op == 0x28 || op == 0x6F;
+            var store = op == 0x11 || op == 0x13 || op == 0x29 || op == 0x7F;
+            var arithmetic = op == 0x58 || op == 0x59 || op == 0x5C || op == 0x5E;
+            var packed = op == 0x14 || op == 0x54 || op == 0x55 || op == 0x56 ||
+                         op == 0x57 || op == 0xFE || op == 0xFB;
+            if (ins.Op < 0x0F00 || ins.Op > 0x0FFF ||
+                !(load || store || arithmetic || packed || op == 0x70 || op == 0x73 ||
+                  op == 0x6E || op == 0xC5 || op == 0xC4 || op == 0x2F)) return false;
+            if ((op == 0x12 || op == 0x13) && (!ordinary || (op == 0x13 && !IsMem(ins)) ||
+                (op == 0x12 && !IsMem(ins)))) return false;
+            if ((op == 0x28 || op == 0x29 || op == 0x14 || op == 0x54 || op == 0x55 ||
+                 op == 0x56 || op == 0x57 || op == 0x2F) && !ordinary) return false;
+            if ((op == 0xFE || op == 0xFB) && prefix != 0x66) return false;
+            if ((op == 0x6F || op == 0x7F) && prefix != 0x66 && prefix != 0xF3) return false;
+            if ((op == 0x70 || op == 0x73 || op == 0x6E || op == 0xC5 || op == 0xC4) && prefix != 0x66) return false;
+            if (op == 0x73 && (ins.Mod != 3 || (ins.RegField != 3 && ins.RegField != 7))) return false;
+            if (op == 0xC5 && ins.Mod != 3) return false;
+            if (op == 0xC4 && !IsMem(ins) && ins.Rm >= 4) return false;
+            if (op == 0x2F && scalar) return false;
+            if (IsMem(ins)) EmitAddress(ins);
+            EnsureXmm();
+            if (op == 0x6E || op == 0xC4)
+            {
+                if (IsMem(ins)) e.SseRegMem(prefix, op, ins.RegField, Mem, S1, 1, 0);
+                else e.SseRegReg(prefix, op, ins.RegField, G[ins.Rm]);
+                if (op == 0xC4) e.U8((byte)ins.Imm);
+            }
+            else if (op == 0xC5)
+            {
+                e.SseRegReg(prefix, op, G[ins.RegField], ins.Rm);
+                e.U8((byte)ins.Imm);
+            }
+            else if (op == 0x73)
+            {
+                e.SseRegReg(prefix, op, ins.RegField, ins.Rm);
+                e.U8((byte)ins.Imm);
+            }
+            else if (store)
+            {
+                var nativeOp = op == 0x29 ? 0x11 : op;
+                var nativePrefix = op == 0x7F ? 0xF3 : prefix;
+                if (IsMem(ins)) e.SseMemReg(nativePrefix, nativeOp, Mem, S1, 1, 0, ins.RegField);
+                else e.SseRegReg(nativePrefix, nativeOp, ins.RegField, ins.Rm);
+            }
+            else
+            {
+                var nativeOp = op == 0x28 ? 0x10 : op;
+                var nativePrefix = op == 0x6F ? 0xF3 : prefix;
+                if (IsMem(ins)) e.SseRegMem(nativePrefix, nativeOp, ins.RegField, Mem, S1, 1, 0);
+                else e.SseRegReg(nativePrefix, nativeOp, ins.RegField, ins.Rm);
+                if (op == 0x70) e.U8((byte)ins.Imm);
+            }
+            return true;
         }
 
         private bool EmitConditional(in Instruction ins, int cc, uint displacement)

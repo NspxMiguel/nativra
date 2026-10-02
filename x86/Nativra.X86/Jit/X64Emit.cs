@@ -511,6 +511,30 @@ namespace Nativra.X86.Jit
 
         public void Cdq() => U8(0x99);
 
+        public void SseRegReg(int prefix, int opcode, int dst, int src)
+        {
+            if (prefix != 0) U8(prefix);
+            MaybeRex(false, dst, 0, src);
+            U8(0x0F); U8(opcode);
+            ModRegReg(dst, src);
+        }
+
+        public void SseRegMem(int prefix, int opcode, int dst, int baseReg, int index, int scale, int disp)
+        {
+            if (prefix != 0) U8(prefix);
+            MaybeRex(false, dst, index, baseReg);
+            U8(0x0F); U8(opcode);
+            ModMem(dst, baseReg, index, scale, disp);
+        }
+
+        public void SseMemReg(int prefix, int opcode, int baseReg, int index, int scale, int disp, int src)
+        {
+            if (prefix != 0) U8(prefix);
+            MaybeRex(false, src, index, baseReg);
+            U8(0x0F); U8(opcode);
+            ModMem(src, baseReg, index, scale, disp);
+        }
+
         // ------------------------------------------------------------- stack/misc
 
         public void PushReg(int reg) { MaybeRex(false, 0, 0, reg); U8((byte)(0x50 + (reg & 7))); }

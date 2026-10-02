@@ -94,6 +94,105 @@ namespace Nativra.X86.Tests
         }
 
         [SkippableTheory]
+        [InlineData("F2 0F 10 06")]
+        [InlineData("F2 0F 58 C1")]
+        [InlineData("F2 0F 59 06")]
+        [InlineData("F2 0F 5C C1")]
+        [InlineData("66 0F 59 C1")]
+        [InlineData("66 0F 12 06")]
+        [InlineData("66 0F 28 06")]
+        [InlineData("66 0F 54 C1")]
+        [InlineData("66 0F 6F 06")]
+        [InlineData("66 0F 7F 07")]
+        [InlineData("66 0F 70 C1 1B")]
+        [InlineData("66 0F 73 F8 01")]
+        [InlineData("66 0F C5 C1 00")]
+        [InlineData("66 0F 6E 06")]
+        [InlineData("66 0F 14 C1")]
+        public void SseInstructionMatchesInterpreter(string hex)
+        {
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
+            var code = Convert.FromHexString(hex.Replace(" ", ""));
+            using (var expectedMemory = new GuestMemory())
+            using (var actualMemory = new GuestMemory(native: true))
+            {
+                foreach (var memory in new[] { expectedMemory, actualMemory })
+                {
+                    memory.Map(Code, 0x1000);
+                    memory.Map(Data, 0x1000);
+                    memory.Map(Stack - 0x1000, 0x2000);
+                    memory.WriteBytes(Code, code);
+                    memory.Write64(Data, (ulong)BitConverter.DoubleToInt64Bits(3.5));
+                    memory.Write64(Data + 8, (ulong)BitConverter.DoubleToInt64Bits(-2.25));
+                }
+                var expected = NewCpu();
+                var actual = NewCpu();
+                var interpreter = new Interpreter(expected, expectedMemory);
+                using (var jit = new JitEngine(actual, actualMemory))
+                {
+                    foreach (var fpu in new[] { interpreter.Fpu, jit.Interpreter.Fpu })
+                    {
+                        fpu.XmmLo[0] = (ulong)BitConverter.DoubleToInt64Bits(1.5);
+                        fpu.XmmHi[0] = (ulong)BitConverter.DoubleToInt64Bits(4.25);
+                        fpu.XmmLo[1] = (ulong)BitConverter.DoubleToInt64Bits(2.25);
+                        fpu.XmmHi[1] = (ulong)BitConverter.DoubleToInt64Bits(5.5);
+                    }
+                    interpreter.Step();
+                    Assert.True(jit.RunToStop(Code + (uint)code.Length));
+                    Assert.True(jit.LastFullyTranslated, hex);
+                    Assert.Equal(0, jit.InterpreterFallbacks);
+                    Assert.Equal(expected.R, actual.R);
+                    Assert.Equal(expected.EFlags & Flag.Arith, actual.EFlags & Flag.Arith);
+                    Assert.Equal(interpreter.Fpu.XmmLo, jit.Interpreter.Fpu.XmmLo);
+                    Assert.Equal(interpreter.Fpu.XmmHi, jit.Interpreter.Fpu.XmmHi);
+                    Assert.Equal(expectedMemory.Read64(Data), actualMemory.Read64(Data));
+                    Assert.Equal(expectedMemory.Read64(Data + 8), actualMemory.Read64(Data + 8));
+                }
+            }
+        }
+
+        [SkippableTheory]
+        [InlineData(0x58)]
+        [InlineData(0x59)]
+        [InlineData(0x5C)]
+        [InlineData(0x5E)]
+        public void ScalarDoubleArithmeticMatchesExceptionalValues(byte opcode)
+        {
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
+            var values = new[] { 0.0, -0.0, 1.5, -2.0, double.PositiveInfinity,
+                                 double.NegativeInfinity, double.NaN };
+            using (var expectedMemory = new GuestMemory())
+            using (var actualMemory = new GuestMemory(native: true))
+            {
+                var code = new byte[] { 0xF2, 0x0F, opcode, 0xC1 };
+                foreach (var memory in new[] { expectedMemory, actualMemory })
+                {
+                    memory.Map(Code, 0x1000);
+                    memory.WriteBytes(Code, code);
+                }
+                var expected = NewCpu();
+                var actual = NewCpu();
+                var interpreter = new Interpreter(expected, expectedMemory);
+                using (var jit = new JitEngine(actual, actualMemory))
+                {
+                    foreach (var left in values)
+                        foreach (var right in values)
+                        {
+                            expected.Eip = actual.Eip = Code;
+                            var a = (ulong)BitConverter.DoubleToInt64Bits(left);
+                            var b = (ulong)BitConverter.DoubleToInt64Bits(right);
+                            interpreter.Fpu.XmmLo[0] = jit.Interpreter.Fpu.XmmLo[0] = a;
+                            interpreter.Fpu.XmmLo[1] = jit.Interpreter.Fpu.XmmLo[1] = b;
+                            interpreter.Step();
+                            Assert.True(jit.RunToStop(Code + (uint)code.Length));
+                            Assert.Equal(interpreter.Fpu.XmmLo[0], jit.Interpreter.Fpu.XmmLo[0]);
+                            Assert.Equal(interpreter.Fpu.XmmLo[1], jit.Interpreter.Fpu.XmmLo[1]);
+                        }
+                }
+            }
+        }
+
+        [SkippableTheory]
         [InlineData("F7 F1", 0u, 0u, 0u, true)]
         [InlineData("F7 F1", 0xFFFFFFFFu, 1u, 1u, true)]
         [InlineData("F7 F1", 100u, 0u, 3u, false)]

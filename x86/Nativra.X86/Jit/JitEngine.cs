@@ -36,6 +36,7 @@ namespace Nativra.X86.Jit
         {
             public int[] HostOffsets;
             public uint[] GuestEips;
+            public bool UsesSse;
         }
 
         public long BlocksCompiled { get; private set; }
@@ -72,7 +73,9 @@ namespace Nativra.X86.Jit
                 IntPtr block;
                 try { block = GetBlock(ctx.Eip, 0); }
                 catch { ctx.Store(Cpu); throw; }
+                if (maps[block].UsesSse) ctx.LoadXmm(Interpreter.Fpu);
                 DelegateFor(block)(ctx.Pointer);
+                if (maps[block].UsesSse) ctx.StoreXmm(Interpreter.Fpu);
                 BlocksExecuted++;
                 LastRunBlocks++;
                 if (ctx.ExitReason == Ctx.ReasonFault)
@@ -129,7 +132,9 @@ namespace Nativra.X86.Jit
                 LastFullyTranslated = translator.FullyTranslated;
                 LastInstructionCount = translator.InstructionCount;
                 var block = Publish(code, translator);
+                if (translator.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
                 DelegateFor(block)(ctx.Pointer);
+                if (translator.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
                 BlocksCompiled++;
                 BlocksExecuted++;
                 ctx.Store(Cpu);
@@ -239,6 +244,7 @@ namespace Nativra.X86.Jit
             {
                 HostOffsets = translator.HostOffsets.ToArray(),
                 GuestEips = translator.GuestEips.ToArray(),
+                UsesSse = translator.UsesSse,
             };
             JitFaults.Register(block, code.Length, block + translator.FaultExitOffset);
             return block;

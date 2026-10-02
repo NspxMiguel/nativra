@@ -27,7 +27,8 @@ namespace Nativra.X86.Jit
         public const int ExitReason = 56;
         public const int ExitData = 60;    // fault address, or the imm a helper needs
         public const int Scratch = 64;     // 8 bytes of spill room for helper glue
-        public const int Size = 128;
+        public const int Xmm = 128;         // 8 guest XMM registers, 16 bytes each
+        public const int Size = 256;
 
         /// <summary>Guest register N lives in this host register during a block.</summary>
         public static readonly int[] GuestToHost =
@@ -87,6 +88,24 @@ namespace Nativra.X86.Jit
             for (var i = 0; i < 8; i++) cpu.R[i] = GetReg(i);
             cpu.Eip = Eip;
             cpu.EFlags = EFlags;
+        }
+
+        public void LoadXmm(FpuUnit fpu)
+        {
+            for (var i = 0; i < 8; i++)
+            {
+                *(ulong*)(block + Ctx.Xmm + i * 16) = fpu.XmmLo[i];
+                *(ulong*)(block + Ctx.Xmm + i * 16 + 8) = fpu.XmmHi[i];
+            }
+        }
+
+        public void StoreXmm(FpuUnit fpu)
+        {
+            for (var i = 0; i < 8; i++)
+            {
+                fpu.XmmLo[i] = *(ulong*)(block + Ctx.Xmm + i * 16);
+                fpu.XmmHi[i] = *(ulong*)(block + Ctx.Xmm + i * 16 + 8);
+            }
         }
 
         public void Dispose()

@@ -100,7 +100,7 @@ namespace Nativra.X86.Jit
                     terminated = true;
                     break;
                 }
-                if (!ins.Valid || ins.Lock || (ins.Rep != 0 && ins.Op < 0x0F00) || !TryEmit(ins))
+                if (!ins.Valid || (ins.Lock && !LockIsAtomicHere(ins)) || (ins.Rep != 0 && ins.Op < 0x0F00 && !IsStringOp(ins.Op)) || !TryEmit(ins))
                 {
                     EmitExit(eip, Ctx.ReasonFallback);
                     FullyTranslated = false;
@@ -263,6 +263,7 @@ namespace Nativra.X86.Jit
             }
 
             if (op >= 0xD8 && op <= 0xDF) return EmitX87(ins);
+            if (IsStringOp(op)) return EmitString(ins, op, size);
 
             switch (op)
             {
@@ -515,6 +516,13 @@ namespace Nativra.X86.Jit
                 }
                 switch (low)
                 {
+                    case 0xB0:
+                    case 0xB1: // cmpxchg r/m, r (the host's own, lock prefix and all)
+                        return EmitCmpxchg(ins, low == 0xB0 ? 8 : size);
+                    case 0xC7: // cmpxchg8b m64
+                        return EmitCmpxchg8b(ins);
+                    case 0xAE: // ldmxcsr / stmxcsr
+                        return EmitMxcsr(ins);
                     case 0xAF: // imul r, r/m
                         if (IsMem(ins)) { EmitAddress(ins); e.ImulRegMem(G[ins.RegField], Mem, S1, 1, 0, size); }
                         else e.ImulRegReg(G[ins.RegField], G[ins.Rm], size);
@@ -576,6 +584,7 @@ namespace Nativra.X86.Jit
 
         private bool EmitSse(in Instruction ins)
         {
+            if (EmitMmx(ins)) return true;
             if (EmitSseExtra(ins)) return true;
             var op = ins.Op & 0xFF;
             var prefix = ins.Rep != 0 ? ins.Rep : ins.OpSize16 ? 0x66 : 0;
@@ -673,6 +682,8 @@ namespace Nativra.X86.Jit
                     case 0xD0:
                     case 0xD2:                 // r/m8 with an opcode extension
                         rmIsByte = true; regIsByte = false; break;
+                    case 0x0FB0:                        // cmpxchg r/m8, r8
+                        rmIsByte = regIsByte = true; break;
                     case 0x0FB6:
                     case 0x0FBE:                        // movzx/movsx from r/m8
                         rmIsByte = true; regIsByte = false; break;

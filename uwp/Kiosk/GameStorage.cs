@@ -164,6 +164,43 @@ namespace Kiosk
         }
 
         /// <summary>
+        /// LocalState\forget.txt lists app ids, one per line, whose downloaded
+        /// files are deleted from every place they may be, then the list itself:
+        /// space handed back without the Device Portal, which cannot reach a USB
+        /// drive. Steam's copy is untouched; the game downloads again on request.
+        /// Returns the ids it removed.
+        /// </summary>
+        public static async Task<List<uint>> ForgetListedAsync()
+        {
+            var removed = new List<uint>();
+            var list = await ApplicationData.Current.LocalFolder.TryGetItemAsync("forget.txt") as StorageFile;
+            if (list == null) return removed;
+            foreach (var line in (await FileIO.ReadTextAsync(list)).Split('\n'))
+            {
+                if (!uint.TryParse(line.Trim(), out var appId)) continue;
+                foreach (var place in await PlacesAsync())
+                {
+                    try
+                    {
+                        var games = await GamesFolderAsync(place.Id, false);
+                        if (games == null) continue;
+                        if (await games.TryGetItemAsync(appId.ToString()) is StorageFolder game)
+                        {
+                            await game.DeleteAsync(StorageDeleteOption.PermanentDelete);
+                            if (!removed.Contains(appId)) removed.Add(appId);
+                        }
+                    }
+                    catch
+                    {
+                        // A place that cannot be reached keeps its copy; the rest still go.
+                    }
+                }
+            }
+            await list.DeleteAsync(StorageDeleteOption.PermanentDelete);
+            return removed;
+        }
+
+        /// <summary>
         /// Moves a game's folder to another place, file by file: each file is
         /// copied, then removed from where it was, so a move cut short leaves
         /// every file whole in one place or the other and can simply run

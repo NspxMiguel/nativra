@@ -197,6 +197,7 @@ namespace Kiosk
             Native.PadBridge.Watch();
             DownloadManager.Changed += OnDownloadsChanged;
             if (DownloadManager.Active() == null) DownloadManager.ClearStaleMarker();
+            var forget = GameStorage.ForgetListedAsync();   // games listed in forget.txt give their space back
             InitializeGameHost();
             InitializeDiagnostics();
             ApplyStaticText();

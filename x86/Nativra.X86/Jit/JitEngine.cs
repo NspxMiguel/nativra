@@ -154,27 +154,23 @@ namespace Nativra.X86.Jit
                     LastFullyTranslated = translator.FullyTranslated;
                     LastInstructionCount = translator.InstructionCount;
                     var block = Publish(code, translator);
-                    try
+                    if (translator.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
+                    if (translator.UsesX87) ctx.LoadX87(Interpreter.Fpu);
+                    JitFaults.SetExecution(Memory.HostBase, Cpu.Eip);
+                    try { DelegateFor(block)(ctx.Pointer); }
+                    finally { JitFaults.ClearExecution(); }
+                    if (translator.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
+                    if (translator.UsesX87) ctx.StoreX87(Interpreter.Fpu);
+                    BlocksCompiled++;
+                    BlocksExecuted++;
+                    ctx.Store(Cpu);
+                    if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault(block);
+                    if (ctx.ExitReason == Ctx.ReasonFallback)
                     {
-                        if (translator.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
-                        if (translator.UsesX87) ctx.LoadX87(Interpreter.Fpu);
-                        JitFaults.SetExecution(Memory.HostBase, Cpu.Eip);
-                        try { DelegateFor(block)(ctx.Pointer); }
-                        finally { JitFaults.ClearExecution(); }
-                        if (translator.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
-                        if (translator.UsesX87) ctx.StoreX87(Interpreter.Fpu);
-                        BlocksCompiled++;
-                        BlocksExecuted++;
-                        ctx.Store(Cpu);
-                        if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault(block);
-                        if (ctx.ExitReason == Ctx.ReasonFallback)
-                        {
-                            CountFallback();
-                            Interpreter.Step();
-                            InterpreterFallbacks++;
-                        }
+                        CountFallback();
+                        Interpreter.Step();
+                        InterpreterFallbacks++;
                     }
-                    finally { ReleaseBlock(block); }
                 }
                 return Cpu.Eip == stop;
             }

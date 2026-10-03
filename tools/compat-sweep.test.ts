@@ -30,3 +30,11 @@ test("a 32-bit game counts its D3D9 presents as frames", () => {
   expect(v.fps).toBe(40);
   expect(v.status).toBe("renders");
 });
+
+test("a 32-bit run never inherits the pulse's frames", () => {
+  const stale = "frames=810 at 21.4 a second work=none";
+  const probe = "x86.run=exited with code 53\nx86.seconds=5.5\nx86.window=0x0 dispatched=0\n";
+  const v = classify(204360, stale, probe, "");
+  expect(v.frames).toBe(0);
+  expect(v.status).not.toBe("renders");
+});

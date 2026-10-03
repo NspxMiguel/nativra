@@ -33,8 +33,9 @@ export function classify(appid: number, pulse: string, probe: string, crash: str
   // frames are the Present calls the probe counts, over the seconds it ran.
   const presents = Number(pick(/^x86\.com (\d+)x IDirect3DDevice9::Present$/m, probe) ?? 0);
   const seconds = Number(pick(/^x86\.seconds=([\d.]+)/m, probe) ?? 0);
-  const frames = presents || (frameLine ? Number(frameLine[1]) : 0);
-  const fps = presents ? (seconds > 0 ? Math.round((presents / seconds) * 10) / 10 : 0) : frameLine ? Number(frameLine[2]) : 0;
+  const is32 = /^x86\.(image|run)=/m.test(probe);
+  const frames = is32 ? presents : frameLine ? Number(frameLine[1]) : 0;
+  const fps = is32 ? (seconds > 0 ? Math.round((presents / seconds) * 10) / 10 : 0) : frameLine ? Number(frameLine[2]) : 0;
   const x86 = pick(/^x86\.run=(.*)$/m, probe) ?? pick(/^x86\.init=(?!returned)(.*)$/m, probe);
   const failed = pick(/^x86\.failed=(.{0,160})/m, probe);
   const chain = pick(/chain=(.*)$/m, pulse);
@@ -90,6 +91,9 @@ async function test(appid: number, seconds: number): Promise<Verdict> {
   await mkdir(dir, { recursive: true });
   await xbdev(["stop", "Kiosk"]);
   await waitStopped();
+  // The console keeps the last run's reports; a game that writes none must not
+  // inherit the previous game's frames.
+  await xbdev(["rm", "Kiosk", "native-pulse.txt", "native-probe.txt", "unity.log", "x86-imports.txt", "--dir", "LocalState"]);
   await pushMarker("autoplay.txt", String(appid));
   await xbdev(["launch", "Kiosk"]);
   await sleep(seconds * 1000);

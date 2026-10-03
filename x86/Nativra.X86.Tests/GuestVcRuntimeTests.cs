@@ -117,5 +117,37 @@ namespace Nativra.X86.Tests
             output.WriteLine(name + " unserved(" + unserved.Count + ")=" + string.Join(",", unserved));
             Assert.True(result.Ok, name + " stopped as " + result.Stop + " at 0x" + result.FaultAddress.ToString("X8") + " after " + string.Join(" ", p.RecentImports));
         }
+
+        [SkippableFact]
+        public void RealMsvcr120InitializersAndCommonEntryPointsRun()
+        {
+            var folder = Environment.GetEnvironmentVariable("NATIVRA_VC_REDIST");
+            Skip.If(string.IsNullOrEmpty(folder) || !File.Exists(Path.Combine(folder ?? "", "msvcr120.dll")),
+                "set NATIVRA_VC_REDIST to the extracted x86 VC++ redistributable DLLs");
+
+            var p = NewProcess();
+            p.ModuleSource = n => File.Exists(Path.Combine(folder, n)) ? File.ReadAllBytes(Path.Combine(folder, n)) : null;
+            p.LoadExecutable("game.exe", TestPe32.Minimal());
+            var first = p.Images.Count;
+            var runtime = p.LoadModule("msvcr120.dll");
+            Assert.NotNull(runtime);
+            Assert.True(p.AttachModulesFrom(first).Ok);
+
+            var empty = new GuestHeap(p.Memory, 0x30000000, 0x10000000).Alloc(128, zero: true);
+            void Run(string name, params uint[] args)
+            {
+                var address = runtime.Export(name);
+                Assert.NotEqual(0u, address);
+                var result = p.Call(address, out _, 50_000_000, args);
+                Assert.True(result.Ok, name + " stopped as " + result + " after " + string.Join(" ", p.RecentImports));
+            }
+            Run("_initterm_e", empty, empty);
+            Run("__crtGetShowWindowMode");
+            Run("_controlfp_s", empty, 0, 0);
+            Run("setlocale", 0, 0);
+            p.Memory.WriteAnsi(empty, "vc runtime smoke test\n");
+            Run("printf", empty);
+            Run("_cexit");
+        }
     }
 }

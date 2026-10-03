@@ -13,6 +13,9 @@ namespace Nativra.X86.Jit
         private bool EmitBitTest(in Instruction ins, int low, int size)
         {
             var immediate = low == 0xBA;
+            // Host bit-string addressing can escape the 4 GB guest reservation for
+            // a negative register offset. The interpreter validates the full address.
+            if (!immediate && IsMem(ins)) return false;
             if (immediate && ins.RegField < 4) return false;
             var prefix = size == 16 ? 0x66 : 0;
             var reg = immediate ? ins.RegField : G[ins.RegField];

@@ -71,7 +71,7 @@ namespace Nativra.X86.Tests
                                 cpu.Ebp = offset;
                                 memory.WriteBytes(JitDiff.Data, fill);
                             });
-                            diff.Run($"{hex} flags={flags:X} offset={offset:X} value={value:X}");
+                            diff.Run($"{hex} flags={flags:X} offset={offset:X} value={value:X}", expectTranslated: hex.Contains("0E") || hex.Contains("4E") ? false : true);
                         }
             }
         }

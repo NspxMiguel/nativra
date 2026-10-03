@@ -125,7 +125,10 @@ namespace Nativra.X86.Tests
             Skip.If(string.IsNullOrEmpty(folder) || !File.Exists(Path.Combine(folder ?? "", "msvcr120.dll")),
                 "set NATIVRA_VC_REDIST to the extracted x86 VC++ redistributable DLLs");
 
-            var p = NewProcess();
+            var work = Path.Combine(Path.GetTempPath(), "nativra-vc-runtime-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(work);
+            var p = new GuestProcess(new GuestMemory(), useJit: false);
+            new GuestKernel(p) { ExePath = "C:\\game\\game.exe", Files = new HostFolderFiles("C:\\game", work) }.Install();
             p.ModuleSource = n => File.Exists(Path.Combine(folder, n)) ? File.ReadAllBytes(Path.Combine(folder, n)) : null;
             p.LoadExecutable("game.exe", TestPe32.Minimal());
             var first = p.Images.Count;
@@ -134,20 +137,37 @@ namespace Nativra.X86.Tests
             Assert.True(p.AttachModulesFrom(first).Ok);
 
             var empty = new GuestHeap(p.Memory, 0x30000000, 0x10000000).Alloc(128, zero: true);
-            void Run(string name, params uint[] args)
+            uint Run(string name, params uint[] args)
             {
                 var address = runtime.Export(name);
                 Assert.NotEqual(0u, address);
-                var result = p.Call(address, out _, 50_000_000, args);
+                var result = p.Call(address, out var eax, 50_000_000, args);
                 Assert.True(result.Ok, name + " stopped as " + result + " after " + string.Join(" ", p.RecentImports));
+                return eax;
             }
-            Run("_initterm_e", empty, empty);
+            Assert.Equal(0u, Run("_initterm_e", empty, empty));
             Run("__crtGetShowWindowMode");
+            Assert.Equal(0u, Run("__getmainargs", empty, empty + 4, empty + 8, 0, empty + 12));
             Run("_controlfp_s", empty, 0, 0);
             Run("setlocale", 0, 0);
             p.Memory.WriteAnsi(empty, "vc runtime smoke test\n");
             Run("printf", empty);
+            p.Memory.WriteAnsi(empty, "C:\\game\\runtime-probe.txt");
+            p.Memory.WriteAnsi(empty + 64, "wb");
+            p.Memory.WriteAnsi(empty + 80, "hello");
+            var stream = Run("fopen", empty, empty + 64);
+            Assert.NotEqual(0u, stream);
+            Assert.Equal(5u, Run("fwrite", empty + 80, 1, 5, stream));
+            Assert.Equal(0u, Run("fclose", stream));
+            p.Memory.WriteAnsi(empty + 64, "rb");
+            stream = Run("fopen", empty, empty + 64);
+            Assert.NotEqual(0u, stream);
+            Assert.Equal(5u, Run("fread", empty + 96, 1, 5, stream));
+            Assert.Equal("hello", p.Memory.ReadAnsi(empty + 96));
+            Assert.Equal(0u, Run("fclose", stream));
             Run("_cexit");
+            p.Dispose();
+            Directory.Delete(work, true);
         }
     }
 }

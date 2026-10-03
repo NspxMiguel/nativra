@@ -215,13 +215,10 @@ HRESULT Image::Lock(UINT sub, D3DLOCKED_RECT* locked, const RECT* rect, DWORD fl
     if (!locked || sub >= subs.size()) return D3DERR_INVALIDCALL;
     Subresource& s = subs[sub];
     if (s.locked) return D3DERR_INVALIDCALL;
-    if (rect && (rect->left < 0 || rect->top < 0 || rect->left >= rect->right || rect->top >= rect->bottom ||
-                 static_cast<UINT>(rect->right) > s.width || static_cast<UINT>(rect->bottom) > s.height))
-        return D3DERR_INVALIDCALL;
-    if (rect && fmt->block && ((rect->left | rect->top) % 4 != 0 ||
-        (rect->right % 4 != 0 && static_cast<UINT>(rect->right) != s.width) ||
-        (rect->bottom % 4 != 0 && static_cast<UINT>(rect->bottom) != s.height)))
-        return D3DERR_INVALIDCALL;
+    // The retail runtime does not reject a lock rectangle that is empty, reaches past
+    // the surface or is not block-aligned (only the debug runtime does): it hands out
+    // the pointer anyway. A game that locks with such a rectangle uses what it gets,
+    // so refusing made it dereference the null pBits (WAVESHAPER, GameMaker).
     if (!Shadow(sub)) return E_OUTOFMEMORY;
 
     // Whatever the GPU drew into a render target has to be read back first.

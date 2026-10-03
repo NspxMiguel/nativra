@@ -170,8 +170,9 @@ namespace Nativra.X86.Tests
             Assert.Equal(0u, Call("kernel32.dll", "WaitForSingleObject", evt, 0));   // WOM_OPEN signals it, as on Windows
             Call("kernel32.dll", "ResetEvent", evt);
             var header = k.Heap.Alloc(32, zero: true);
-            p.Memory.Write32(header, k.Heap.Alloc(1764));
-            p.Memory.Write32(header + 4, 1764);    // 10 ms
+            // A longer buffer leaves room for a busy test host to reach waveOutClose before playback ends.
+            p.Memory.Write32(header, k.Heap.Alloc(88200));
+            p.Memory.Write32(header + 4, 88200);    // 500 ms
             Call("winmm.dll", "waveOutPrepareHeader", wave, header, 32);
             Assert.Equal(0u, Call("winmm.dll", "waveOutWrite", wave, header, 32));
             Assert.Equal(0x10u, p.Memory.Read32(header + 16) & 0x11);   // queued, not done
@@ -181,7 +182,7 @@ namespace Nativra.X86.Tests
             var time = k.Heap.Alloc(12, zero: true);
             p.Memory.Write32(time, 4);                                   // TIME_BYTES
             Call("winmm.dll", "waveOutGetPosition", wave, time, 12);
-            Assert.Equal(1764u, p.Memory.Read32(time + 4));
+            Assert.Equal(88200u, p.Memory.Read32(time + 4));
             Assert.Equal(0u, Call("winmm.dll", "waveOutClose", wave));
         }
 

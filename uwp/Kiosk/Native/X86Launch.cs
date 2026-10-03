@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Nativra.X86.Cpu;
+using Nativra.X86.Jit;
 using Nativra.X86.Loader;
 using Windows.Storage;
 
@@ -68,12 +69,28 @@ namespace Kiosk.Native
             // only: the A/B check when a game behaves differently under the JIT.
             var local = ApplicationData.Current.LocalFolder;
             var interpreterOnly = await local.TryGetItemAsync("x86interp.txt") != null;
+            var noX87Environment = await local.TryGetItemAsync("nojit-x87env.txt") != null;
+            var noJecxz = await local.TryGetItemAsync("nojit-jecxz.txt") != null;
+            var noBlockCache = await local.TryGetItemAsync("nojit-blockcache.txt") != null;
+            var noComFast = await local.TryGetItemAsync("nocom-fast.txt") != null;
+            var faultPath = System.IO.Path.Combine(local.Path, "native-fault.txt");
+            var switches = "x86interp=" + interpreterOnly + " nojit-x87env=" + noX87Environment +
+                " nojit-jecxz=" + noJecxz + " nojit-blockcache=" + noBlockCache + " nocom-fast=" + noComFast;
+            System.IO.File.WriteAllText(faultPath, "x86.switches=" + switches + Environment.NewLine);
+            JitEngine.ConfigureFaultReport(faultPath, System.IO.Path.Combine(local.Path, "native-probe.txt"));
+            lines.Add("x86.switches=" + switches);
 
             var started = System.Diagnostics.Stopwatch.StartNew();
             GuestRunResult result;
             using (var memory = new GuestMemory(native: true))
             using (var process = new GuestProcess(memory, useJit: !interpreterOnly))
             {
+                if (process.Jit != null)
+                {
+                    process.Jit.DisableX87Environment = noX87Environment;
+                    process.Jit.DisableJecxz = noJecxz;
+                    process.Jit.DisableBlockCache = noBlockCache;
+                }
                 var kernel = new GuestKernel(process);
                 kernel.ExePath = folderPath.TrimEnd('\\') + "\\" + exeName;
                 kernel.SetCommandLine("\"" + kernel.ExePath + "\"");
@@ -97,6 +114,7 @@ namespace Kiosk.Native
                 // Direct3D 9 through the packaged 64-bit layer.
                 if (process.Jit != null) process.Jit.CollectFallbacks = true;   // cheap: one dictionary bump per fallback
                 var com = new GuestCom(process, kernel);
+                com.UseHeapArguments = noComFast;
                 X86Direct3D9.Install(process, kernel, com);
                 using (var directSound = new GuestDirectSound(process, kernel, new X86DirectSoundOutput()))
                 {
@@ -130,11 +148,13 @@ namespace Kiosk.Native
                 // Where the game is: registers, recent calls, its log, the bridges' counters.
                 void Describe(List<string> into)
                 {
+                    into.Add("x86.switches=" + switches);
                     into.Add("x86.eip=0x" + process.Cpu.Eip.ToString("X8") + " " + process.Cpu);
                     into.Add("x86.blocks=" + (process.Jit != null
                         ? process.Jit.BlocksCompiled + " compiled, " + process.Jit.BlocksExecuted + " run, " +
                           process.Jit.InterpreterFallbacks + " interpreted"
                         : "interpreter"));
+                    if (process.Jit != null) into.Add("x86.code-cache=" + process.Jit.CodeCacheBytes + " bytes");
                     into.Add("x86.recent=" + string.Join(" ", process.RecentImports));
                     // What still falls back to the interpreter, most frequent first: the next
                     // instructions worth translating for this game.

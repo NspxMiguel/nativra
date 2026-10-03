@@ -159,6 +159,7 @@ namespace Nativra.X86.Run
                     if (process.Jit != null)
                     {
                         lines.Add($"x86.blocks={process.Jit.BlocksCompiled} compiled, {process.Jit.BlocksExecuted} run, {process.Jit.InterpreterFallbacks} interpreted");
+                        lines.Add($"x86.code-cache={process.Jit.CodeCacheBytes} bytes");
                         foreach (var pair in process.Jit.FallbackCounts.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(fallbackLines))
                             lines.Add($"x86.fallback={pair.Key} count={pair.Value}");
                     }

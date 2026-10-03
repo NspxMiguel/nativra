@@ -184,11 +184,15 @@ namespace Nativra.X86.Cpu
                 case 0xC0: case 0xC1:
                 {
                     var width = op == 0xC0 ? 8 : size;
+                    // The source register can also be the memory base or SIB index.
+                    // Keep the original address before XADD replaces that register.
+                    var address = ins.Mod == 3 ? 0u : LinearAddress(ins);
                     var dest = ReadRm(ins, width);
                     var src = GetReg(ins.RegField, width);
                     var sum = Alu(0, dest, src, width);
                     SetReg(ins.RegField, width, dest);
-                    WriteRm(ins, width, sum);
+                    if (ins.Mod == 3) WriteRm(ins, width, sum);
+                    else WriteMem(address, width, sum);
                     return;
                 }
                 case 0xC7:

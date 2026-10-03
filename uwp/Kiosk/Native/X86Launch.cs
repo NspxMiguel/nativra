@@ -108,168 +108,168 @@ namespace Kiosk.Native
                 }
                 using (var heartbeat = new X86Heartbeat(System.IO.Path.Combine(local.Path, "x86-heartbeat.txt"), process, memory, switches))
                 {
-                var kernel = new GuestKernel(process);
-                kernel.ExePath = folderPath.TrimEnd('\\') + "\\" + exeName;
-                kernel.SetCommandLine("\"" + kernel.ExePath + "\"");
-                var guestLog = new List<string>();
-                kernel.Log = text => { if (guestLog.Count < LogLines) guestLog.Add(text); };
-                // The same input the 64-bit path reads (pad as mouse and keys),
-                // delivered as messages on the game's window.
-                kernel.Input = new ConsoleInput();
-                // Documents, Saved Games, AppData...: the same profile folders a
-                // 64-bit game gets, so saves live in one place whatever the game's bitness.
-                // The guest sees C:\users\Player (Wine's layout); it lands in LocalState\profile.
-                if (UserFolders.Root == null) UserFolders.Root = System.IO.Path.Combine(local.Path, "profile");
-                kernel.ProfileRoot = UserFolders.Root;
-                // Files through the removable drive's folder handle or the broker:
-                // System.IO cannot reach a game on a USB drive.
-                await UsbFiles.InstallAsync();
-                kernel.Files = new X86Files();
-                kernel.Install();
-                kernel.Log("imports.diagnose kernel32!InterlockedCompareExchange: " +
-                    process.Imports.Diagnose("kernel32.dll", "InterlockedCompareExchange"));
-                // Direct3D 9 through the packaged 64-bit layer.
-                if (process.Jit != null) process.Jit.CollectFallbacks = true;   // cheap: one dictionary bump per fallback
-                var com = new GuestCom(process, kernel);
-                com.UseHeapArguments = noComFast;
-                X86Direct3D9.Install(process, kernel, com);
-                using (var directSound = new GuestDirectSound(process, kernel, new X86DirectSoundOutput()))
-                {
-                    directSound.Install();
-                PadBridge.InstallX86(process);   // xinput1_3/1_4/9_1_0: the same pad the 64-bit games read
-                // Steamworks for the signed-in account, as the 64-bit bridge answers it:
-                // the game's own steam_api.dll is not mapped, its exports are served.
-                GuestSteam steam = null;
-                if (SteamBridge.Active)
-                {
-                    SteamBridge.Resolve("SteamAPI_Init");   // loads the account's saved achievements and stats
-                    steam = new GuestSteam(process, kernel, new X86SteamAccount());
-                    steam.Install();
-                }
-                // XAudio 2.7 through the packaged 64-bit shim, as for a 64-bit game.
-                var xaudio = new XAudio27Com(process, kernel, com);
-                xaudio.Install((clsid, iid, made) => XAudio27Route.Create(clsid, iid, made));
-
-                var packaged = System.IO.Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "x86");
-                var fromPackage = new List<string>();
-                process.ModuleSource = name =>
-                {
-                    if (steam != null && name.Equals("steam_api.dll", StringComparison.OrdinalIgnoreCase)) return null;
-                    var bytes = ReadGameModule(folderPath, name);
-                    if (bytes != null) return bytes;
-                    bytes = ReadPackagedModule(packaged, name);
-                    if (bytes != null) fromPackage.Add(name);
-                    return bytes;
-                };
-
-                // Where the game is: registers, recent calls, its log, the bridges' counters.
-                void Describe(List<string> into)
-                {
-                    into.Add("x86.switches=" + switches);
-                    into.Add("x86.eip=0x" + process.Cpu.Eip.ToString("X8") + " " + process.Cpu);
-                    into.Add("x86.blocks=" + (process.Jit != null
-                        ? process.Jit.BlocksCompiled + " compiled, " + process.Jit.BlocksExecuted + " run, " +
-                          process.Jit.InterpreterFallbacks + " interpreted"
-                        : "interpreter"));
-                    if (process.Jit != null) into.Add("x86.code-cache=" + process.Jit.CodeCacheBytes + " bytes");
-                    into.Add("x86.recent=" + string.Join(" ", process.RecentImports));
-                    // What still falls back to the interpreter, most frequent first: the next
-                    // instructions worth translating for this game.
-                    if (process.Jit != null && process.Jit.CollectFallbacks)
-                        foreach (var pair in process.Jit.FallbackCounts.ToArray().OrderByDescending(f => f.Value).Take(15))
-                            into.Add("x86.fallback=" + pair.Key + " count=" + pair.Value);
-                    if (process.JitRefusal != null) into.Add("x86.jit.refused=" + process.JitRefusal);
-                    if (kernel.ProbedAbsent.Count > 0)
-                        into.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));
-                    if (kernel.FilesNotFound.Count > 0)
-                        into.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(LogLines)));
-                    foreach (var text in guestLog.ToArray()) into.Add("x86.log=" + text);
-                    into.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
-                    into.Add("x86.window=0x" + kernel.InputWindow.ToString("X") + " dispatched=" + kernel.MessagesDispatched);
-                    // Whether the pad reaches the game: its XInput polls, and the keys the host window holds.
-                    into.Add("x86.pad=reads " + PadBridge.Reads + " probes " + PadBridge.Probes +
-                             " held " + PointerBridge.HostKeys.Count(down => down));
-                    into.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
-                    into.Add("x86.dsound=buffers " + directSound.BuffersCreated + " frames " + directSound.FramesMixed +
-                             " underruns " + directSound.Underruns +
-                             (directSound.Failure != null ? " (" + directSound.Failure + ")" : ""));
-                    into.Add("x86.xaudio=" + XAudio27Route.Note + " callbacks=" + xaudio.CallbacksDelivered +
-                              " dropped=" + xaudio.CallbacksDropped + " effect-chains-dropped=" + xaudio.EffectChainsDropped);
-                    if (com.MissingClasses.Count > 0)
-                        into.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
-                    foreach (var call in com.Calls.OrderByDescending(pair => pair.Value).Take(40))
-                        into.Add("x86.com " + call.Value + "x " + call.Key);
-                    if (steam != null)
-                    {
-                        into.Add("x86.steam=" + string.Join(",", steam.Versions));
-                        foreach (var call in steam.Calls.OrderByDescending(pair => pair.Value).Take(30))
-                            into.Add("x86.steam " + call.Value + "x " + call.Key);
-                    }
-                    into.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
-                }
-
-                result = null;
-                try
-                {
-                    var image = process.LoadExecutable(exeName, exeBytes);
-                    lines.Add("x86.image=" + exeName +
-                              " base=0x" + image.BaseAddress.ToString("X8") +
-                              " preferred=0x" + image.PreferredBase.ToString("X8") +
-                              " entry=0x" + image.EntryPoint.ToString("X8") +
-                              " size=0x" + image.ImageSize.ToString("X"));
-                    lines.Add("x86.jit=" + (process.UsesJit ? "on" : interpreterOnly ? "off (x86interp.txt)" : "unavailable"));
-                    lines.Add("x86.modules=" + string.Join(",", process.Images.Select(i => i.Name)));
-                    if (fromPackage.Count > 0) lines.Add("x86.packaged=" + string.Join(",", fromPackage));
-                    ReportImports(process, lines);
-
-                    result = process.InitializeModules(BlockBudget);
-                    lines.Add("x86.init=" + result);
-                    lines.Add("x86.init.diagnose=" +
+                    var kernel = new GuestKernel(process);
+                    kernel.ExePath = folderPath.TrimEnd('\\') + "\\" + exeName;
+                    kernel.SetCommandLine("\"" + kernel.ExePath + "\"");
+                    var guestLog = new List<string>();
+                    kernel.Log = text => { if (guestLog.Count < LogLines) guestLog.Add(text); };
+                    // The same input the 64-bit path reads (pad as mouse and keys),
+                    // delivered as messages on the game's window.
+                    kernel.Input = new ConsoleInput();
+                    // Documents, Saved Games, AppData...: the same profile folders a
+                    // 64-bit game gets, so saves live in one place whatever the game's bitness.
+                    // The guest sees C:\users\Player (Wine's layout); it lands in LocalState\profile.
+                    if (UserFolders.Root == null) UserFolders.Root = System.IO.Path.Combine(local.Path, "profile");
+                    kernel.ProfileRoot = UserFolders.Root;
+                    // Files through the removable drive's folder handle or the broker:
+                    // System.IO cannot reach a game on a USB drive.
+                    await UsbFiles.InstallAsync();
+                    kernel.Files = new X86Files();
+                    kernel.Install();
+                    kernel.Log("imports.diagnose kernel32!InterlockedCompareExchange: " +
                         process.Imports.Diagnose("kernel32.dll", "InterlockedCompareExchange"));
-                    if (result.Ok)
+                    // Direct3D 9 through the packaged 64-bit layer.
+                    if (process.Jit != null) process.Jit.CollectFallbacks = true;   // cheap: one dictionary bump per fallback
+                    var com = new GuestCom(process, kernel);
+                    com.UseHeapArguments = noComFast;
+                    X86Direct3D9.Install(process, kernel, com);
+                    using (var directSound = new GuestDirectSound(process, kernel, new X86DirectSoundOutput()))
                     {
-                        // The report is otherwise written only when the game ends; while it
-                        // plays, a copy goes out every half minute so a sweep sees where it is.
-                        var playing = new System.Threading.CancellationTokenSource();
-                        var reporter = snapshot == null ? Task.CompletedTask : Task.Run(async () =>
+                        directSound.Install();
+                        PadBridge.InstallX86(process);   // xinput1_3/1_4/9_1_0: the same pad the 64-bit games read
+                                                         // Steamworks for the signed-in account, as the 64-bit bridge answers it:
+                                                         // the game's own steam_api.dll is not mapped, its exports are served.
+                        GuestSteam steam = null;
+                        if (SteamBridge.Active)
                         {
-                            while (!playing.IsCancellationRequested)
+                            SteamBridge.Resolve("SteamAPI_Init");   // loads the account's saved achievements and stats
+                            steam = new GuestSteam(process, kernel, new X86SteamAccount());
+                            steam.Install();
+                        }
+                        // XAudio 2.7 through the packaged 64-bit shim, as for a 64-bit game.
+                        var xaudio = new XAudio27Com(process, kernel, com);
+                        xaudio.Install((clsid, iid, made) => XAudio27Route.Create(clsid, iid, made));
+
+                        var packaged = System.IO.Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "x86");
+                        var fromPackage = new List<string>();
+                        process.ModuleSource = name =>
+                        {
+                            if (steam != null && name.Equals("steam_api.dll", StringComparison.OrdinalIgnoreCase)) return null;
+                            var bytes = ReadGameModule(folderPath, name);
+                            if (bytes != null) return bytes;
+                            bytes = ReadPackagedModule(packaged, name);
+                            if (bytes != null) fromPackage.Add(name);
+                            return bytes;
+                        };
+
+                        // Where the game is: registers, recent calls, its log, the bridges' counters.
+                        void Describe(List<string> into)
+                        {
+                            into.Add("x86.switches=" + switches);
+                            into.Add("x86.eip=0x" + process.Cpu.Eip.ToString("X8") + " " + process.Cpu);
+                            into.Add("x86.blocks=" + (process.Jit != null
+                                ? process.Jit.BlocksCompiled + " compiled, " + process.Jit.BlocksExecuted + " run, " +
+                                  process.Jit.InterpreterFallbacks + " interpreted"
+                                : "interpreter"));
+                            if (process.Jit != null) into.Add("x86.code-cache=" + process.Jit.CodeCacheBytes + " bytes");
+                            into.Add("x86.recent=" + string.Join(" ", process.RecentImports));
+                            // What still falls back to the interpreter, most frequent first: the next
+                            // instructions worth translating for this game.
+                            if (process.Jit != null && process.Jit.CollectFallbacks)
+                                foreach (var pair in process.Jit.FallbackCounts.ToArray().OrderByDescending(f => f.Value).Take(15))
+                                    into.Add("x86.fallback=" + pair.Key + " count=" + pair.Value);
+                            if (process.JitRefusal != null) into.Add("x86.jit.refused=" + process.JitRefusal);
+                            if (kernel.ProbedAbsent.Count > 0)
+                                into.Add("x86.probed-absent=" + string.Join(",", kernel.ProbedAbsent.Distinct()));
+                            if (kernel.FilesNotFound.Count > 0)
+                                into.Add("x86.files-not-found=" + string.Join(",", kernel.FilesNotFound.Distinct().Take(LogLines)));
+                            foreach (var text in guestLog.ToArray()) into.Add("x86.log=" + text);
+                            into.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
+                            into.Add("x86.window=0x" + kernel.InputWindow.ToString("X") + " dispatched=" + kernel.MessagesDispatched);
+                            // Whether the pad reaches the game: its XInput polls, and the keys the host window holds.
+                            into.Add("x86.pad=reads " + PadBridge.Reads + " probes " + PadBridge.Probes +
+                                     " held " + PointerBridge.HostKeys.Count(down => down));
+                            into.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
+                            into.Add("x86.dsound=buffers " + directSound.BuffersCreated + " frames " + directSound.FramesMixed +
+                                     " underruns " + directSound.Underruns +
+                                     (directSound.Failure != null ? " (" + directSound.Failure + ")" : ""));
+                            into.Add("x86.xaudio=" + XAudio27Route.Note + " callbacks=" + xaudio.CallbacksDelivered +
+                                      " dropped=" + xaudio.CallbacksDropped + " effect-chains-dropped=" + xaudio.EffectChainsDropped);
+                            if (com.MissingClasses.Count > 0)
+                                into.Add("x86.com.missing-classes=" + string.Join(",", com.MissingClasses));
+                            foreach (var call in com.Calls.OrderByDescending(pair => pair.Value).Take(40))
+                                into.Add("x86.com " + call.Value + "x " + call.Key);
+                            if (steam != null)
                             {
-                                try { await Task.Delay(SnapshotEvery, playing.Token); } catch (TaskCanceledException) { break; }
-                                try
-                                {
-                                    var now = new List<string>(lines) { "x86.run=running" };
-                                    Describe(now);
-                                    await snapshot(now);
-                                }
-                                catch (Exception) { }   // lists in use by the game thread; the next tick tries again
+                                into.Add("x86.steam=" + string.Join(",", steam.Versions));
+                                foreach (var call in steam.Calls.OrderByDescending(pair => pair.Value).Take(30))
+                                    into.Add("x86.steam " + call.Value + "x " + call.Key);
                             }
-                        });
-                        uint exitCode;
-                        try { result = process.Call(image.EntryPoint, out exitCode, GameBudget); }
-                        finally { playing.Cancel(); }
-                        await reporter;
-                        lines.Add("x86.run=" + result + (result.Ok ? " (entry returned " + exitCode + ")" : ""));
-                        // The run line keeps only the exception's first line; the stack says where.
-                        if (result.Stop == GuestStop.HostError && result.Detail != null)
-                            lines.Add("x86.host-error=" + result.Detail.Replace("\r", "").Replace("\n", " | "));
+                            into.Add("x86.seconds=" + started.Elapsed.TotalSeconds.ToString("0.0"));
+                        }
+
+                        result = null;
+                        try
+                        {
+                            var image = process.LoadExecutable(exeName, exeBytes);
+                            lines.Add("x86.image=" + exeName +
+                                      " base=0x" + image.BaseAddress.ToString("X8") +
+                                      " preferred=0x" + image.PreferredBase.ToString("X8") +
+                                      " entry=0x" + image.EntryPoint.ToString("X8") +
+                                      " size=0x" + image.ImageSize.ToString("X"));
+                            lines.Add("x86.jit=" + (process.UsesJit ? "on" : interpreterOnly ? "off (x86interp.txt)" : "unavailable"));
+                            lines.Add("x86.modules=" + string.Join(",", process.Images.Select(i => i.Name)));
+                            if (fromPackage.Count > 0) lines.Add("x86.packaged=" + string.Join(",", fromPackage));
+                            ReportImports(process, lines);
+
+                            result = process.InitializeModules(BlockBudget);
+                            lines.Add("x86.init=" + result);
+                            lines.Add("x86.init.diagnose=" +
+                                process.Imports.Diagnose("kernel32.dll", "InterlockedCompareExchange"));
+                            if (result.Ok)
+                            {
+                                // The report is otherwise written only when the game ends; while it
+                                // plays, a copy goes out every half minute so a sweep sees where it is.
+                                var playing = new System.Threading.CancellationTokenSource();
+                                var reporter = snapshot == null ? Task.CompletedTask : Task.Run(async () =>
+                                {
+                                    while (!playing.IsCancellationRequested)
+                                    {
+                                        try { await Task.Delay(SnapshotEvery, playing.Token); } catch (TaskCanceledException) { break; }
+                                        try
+                                        {
+                                            var now = new List<string>(lines) { "x86.run=running" };
+                                            Describe(now);
+                                            await snapshot(now);
+                                        }
+                                        catch (Exception) { }   // lists in use by the game thread; the next tick tries again
+                                    }
+                                });
+                                uint exitCode;
+                                try { result = process.Call(image.EntryPoint, out exitCode, GameBudget); }
+                                finally { playing.Cancel(); }
+                                await reporter;
+                                lines.Add("x86.run=" + result + (result.Ok ? " (entry returned " + exitCode + ")" : ""));
+                                // The run line keeps only the exception's first line; the stack says where.
+                                if (result.Stop == GuestStop.HostError && result.Detail != null)
+                                    lines.Add("x86.host-error=" + result.Detail.Replace("\r", "").Replace("\n", " | "));
+                            }
+                        }
+                        catch (Exception error)
+                        {
+                            // Whatever broke, the report below still says where the game was.
+                            lines.Add("x86.failed=" + Flat(error));
+                            result = new GuestRunResult(GuestStop.HostError, detail: error.ToString());
+                        }
+
+                        // The guest's sockets end with its run: a server's bound port must not outlive it
+                        // (the app keeps running, and the next launch binds the same port).
+                        kernel.CloseNetwork();
+
+                        Describe(lines);
+
+                        await WriteImportsAsync(process, kernel);
                     }
-                }
-                catch (Exception error)
-                {
-                    // Whatever broke, the report below still says where the game was.
-                    lines.Add("x86.failed=" + Flat(error));
-                    result = new GuestRunResult(GuestStop.HostError, detail: error.ToString());
-                }
-
-                // The guest's sockets end with its run: a server's bound port must not outlive it
-                // (the app keeps running, and the next launch binds the same port).
-                kernel.CloseNetwork();
-
-                Describe(lines);
-
-                await WriteImportsAsync(process, kernel);
-                }
                 }
             }
             return result.Stop == GuestStop.Exited || result.Stop == GuestStop.Returned;

@@ -43,15 +43,17 @@ namespace Nativra.X86.Cpu
                 case 0x80000000:
                     a = 0x80000004;
                     break;
-                case 0x80000002: case 0x80000003: case 0x80000004:
-                {
-                    var brand = "Nativra x86 on x64".PadRight(48, '\0');
-                    var offset = (int)(leaf - 0x80000002) * 16;
-                    uint Word(int at) => (uint)(brand[offset + at] | (brand[offset + at + 1] << 8) |
-                                               (brand[offset + at + 2] << 16) | (brand[offset + at + 3] << 24));
-                    a = Word(0); b = Word(4); c = Word(8); d = Word(12);
-                    break;
-                }
+                case 0x80000002:
+                case 0x80000003:
+                case 0x80000004:
+                    {
+                        var brand = "Nativra x86 on x64".PadRight(48, '\0');
+                        var offset = (int)(leaf - 0x80000002) * 16;
+                        uint Word(int at) => (uint)(brand[offset + at] | (brand[offset + at + 1] << 8) |
+                                                   (brand[offset + at + 2] << 16) | (brand[offset + at + 3] << 24));
+                        a = Word(0); b = Word(4); c = Word(8); d = Word(12);
+                        break;
+                    }
             }
             Cpu.Eax = a; Cpu.Ebx = b; Cpu.Ecx = c; Cpu.Edx = d;
         }
@@ -89,62 +91,80 @@ namespace Nativra.X86.Cpu
                     }
                     switch (ins.RegField)
                     {
-                        case 0: case 1: // SGDT/SIDT: six bytes in 32-bit mode
-                        {
-                            var at = LinearAddress(ins);
-                            Memory.Write16(at, 0x7F);
-                            Memory.Write32(at + 2, ins.RegField == 0 ? 0x80B95000u : 0x80B95400u);
-                            return;
-                        }
+                        case 0:
+                        case 1: // SGDT/SIDT: six bytes in 32-bit mode
+                            {
+                                var at = LinearAddress(ins);
+                                Memory.Write16(at, 0x7F);
+                                Memory.Write32(at + 2, ins.RegField == 0 ? 0x80B95000u : 0x80B95400u);
+                                return;
+                            }
                         case 4: WriteMem(LinearAddress(ins), 16, 0x0033); return;
                         case 7: return; // INVLPG would fault in user mode; CLFLUSHOPT-like no-op is harmless here
                     }
                     throw new GuestException(GuestException.PrivilegedInstruction, ins.Address);
-                case 0x0B: case 0xB9: case 0xFF:
+                case 0x0B:
+                case 0xB9:
+                case 0xFF:
                     throw new GuestException(GuestException.IllegalInstruction, ins.Address);
-                case 0x0D: case 0x18: case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E: case 0x1F:
+                case 0x0D:
+                case 0x18:
+                case 0x19:
+                case 0x1A:
+                case 0x1B:
+                case 0x1C:
+                case 0x1D:
+                case 0x1E:
+                case 0x1F:
                     return; // prefetch hints and multi-byte NOP
                 case 0x31:
-                {
-                    var ticks = (ulong)Clock.ElapsedTicks;
-                    Cpu.Eax = (uint)ticks;
-                    Cpu.Edx = (uint)(ticks >> 32);
-                    return;
-                }
+                    {
+                        var ticks = (ulong)Clock.ElapsedTicks;
+                        Cpu.Eax = (uint)ticks;
+                        Cpu.Edx = (uint)(ticks >> 32);
+                        return;
+                    }
                 case 0xA0: Push(SegmentSelector(Seg.Fs), size); return;
                 case 0xA1: Pop(size); return;
                 case 0xA8: Push(SegmentSelector(Seg.Gs), size); return;
                 case 0xA9: Pop(size); return;
                 case 0xA2: Cpuid(); return;
-                case 0xA3: case 0xAB: case 0xB3: case 0xBB:
+                case 0xA3:
+                case 0xAB:
+                case 0xB3:
+                case 0xBB:
                     BitTest(ins, size, (op >> 3) & 3, GetReg(ins.RegField, size), true);
                     return;
                 case 0xBA:
                     if (ins.RegField < 4) throw new GuestException(GuestException.IllegalInstruction, ins.Address);
                     BitTest(ins, size, ins.RegField - 4, ins.Imm, false);
                     return;
-                case 0xA4: case 0xA5: case 0xAC: case 0xAD:
-                {
-                    var count = (op & 1) == 0 ? ins.Imm : Cpu.Ecx;
-                    WriteRm(ins, size, DoubleShift(ReadRm(ins, size), GetReg(ins.RegField, size), count, size, op < 0xAC));
-                    return;
-                }
-                case 0xAF: SetReg(ins.RegField, size, IMul2(GetReg(ins.RegField, size), ReadRm(ins, size), size)); return;
-                case 0xB0: case 0xB1:
-                {
-                    var width = op == 0xB0 ? 8 : size;
-                    var dest = ReadRm(ins, width);
-                    var acc = GetReg(Reg.Eax, width);
-                    Alu(7, acc, dest, width);
-                    if ((Cpu.EFlags & Flag.ZF) != 0) WriteRm(ins, width, GetReg(ins.RegField, width));
-                    else
+                case 0xA4:
+                case 0xA5:
+                case 0xAC:
+                case 0xAD:
                     {
-                        // Real hardware writes the destination back either way.
-                        WriteRm(ins, width, dest);
-                        SetReg(Reg.Eax, width, dest);
+                        var count = (op & 1) == 0 ? ins.Imm : Cpu.Ecx;
+                        WriteRm(ins, size, DoubleShift(ReadRm(ins, size), GetReg(ins.RegField, size), count, size, op < 0xAC));
+                        return;
                     }
-                    return;
-                }
+                case 0xAF: SetReg(ins.RegField, size, IMul2(GetReg(ins.RegField, size), ReadRm(ins, size), size)); return;
+                case 0xB0:
+                case 0xB1:
+                    {
+                        var width = op == 0xB0 ? 8 : size;
+                        var dest = ReadRm(ins, width);
+                        var acc = GetReg(Reg.Eax, width);
+                        Alu(7, acc, dest, width);
+                        if ((Cpu.EFlags & Flag.ZF) != 0) WriteRm(ins, width, GetReg(ins.RegField, width));
+                        else
+                        {
+                            // Real hardware writes the destination back either way.
+                            WriteRm(ins, width, dest);
+                            SetReg(Reg.Eax, width, dest);
+                        }
+                        return;
+                    }
                 case 0xB6: SetReg(ins.RegField, size, ReadRm(ins, 8)); return;
                 case 0xB7: SetReg(ins.RegField, size, ReadRm(ins, 16)); return;
                 case 0xBE: SetReg(ins.RegField, size, (uint)(sbyte)ReadRm(ins, 8)); return;
@@ -159,42 +179,44 @@ namespace Nativra.X86.Cpu
                         if (v == 0) Cpu.EFlags |= Flag.ZF;
                     }
                     return;
-                case 0xBC: case 0xBD:
-                {
-                    var v = ReadRm(ins, size);
-                    if (ins.Rep == 0xF3)
+                case 0xBC:
+                case 0xBD:
                     {
-                        // TZCNT / LZCNT: what the hardware under the JIT does.
-                        uint count;
-                        if (op == 0xBC) count = v == 0 ? (uint)size : (uint)Bits.TrailingZeros(v);
-                        else count = v == 0 ? (uint)size
-                            : (uint)(Bits.LeadingZeros(v) - (32 - size));
-                        SetReg(ins.RegField, size, count);
-                        SetFlags(v == 0, (Cpu.EFlags & Flag.OF) != 0, (Cpu.EFlags & Flag.AF) != 0);
-                        Cpu.SetFlag(Flag.ZF, count == 0);
+                        var v = ReadRm(ins, size);
+                        if (ins.Rep == 0xF3)
+                        {
+                            // TZCNT / LZCNT: what the hardware under the JIT does.
+                            uint count;
+                            if (op == 0xBC) count = v == 0 ? (uint)size : (uint)Bits.TrailingZeros(v);
+                            else count = v == 0 ? (uint)size
+                                : (uint)(Bits.LeadingZeros(v) - (32 - size));
+                            SetReg(ins.RegField, size, count);
+                            SetFlags(v == 0, (Cpu.EFlags & Flag.OF) != 0, (Cpu.EFlags & Flag.AF) != 0);
+                            Cpu.SetFlag(Flag.ZF, count == 0);
+                            return;
+                        }
+                        if (v == 0) { Cpu.EFlags |= Flag.ZF; return; }
+                        Cpu.EFlags &= ~Flag.ZF;
+                        SetReg(ins.RegField, size, op == 0xBC
+                            ? (uint)Bits.TrailingZeros(v)
+                            : (uint)(31 - Bits.LeadingZeros(v)));
                         return;
                     }
-                    if (v == 0) { Cpu.EFlags |= Flag.ZF; return; }
-                    Cpu.EFlags &= ~Flag.ZF;
-                    SetReg(ins.RegField, size, op == 0xBC
-                        ? (uint)Bits.TrailingZeros(v)
-                        : (uint)(31 - Bits.LeadingZeros(v)));
-                    return;
-                }
-                case 0xC0: case 0xC1:
-                {
-                    var width = op == 0xC0 ? 8 : size;
-                    // The source register can also be the memory base or SIB index.
-                    // Keep the original address before XADD replaces that register.
-                    var address = ins.Mod == 3 ? 0u : LinearAddress(ins);
-                    var dest = ReadRm(ins, width);
-                    var src = GetReg(ins.RegField, width);
-                    var sum = Alu(0, dest, src, width);
-                    SetReg(ins.RegField, width, dest);
-                    if (ins.Mod == 3) WriteRm(ins, width, sum);
-                    else WriteMem(address, width, sum);
-                    return;
-                }
+                case 0xC0:
+                case 0xC1:
+                    {
+                        var width = op == 0xC0 ? 8 : size;
+                        // The source register can also be the memory base or SIB index.
+                        // Keep the original address before XADD replaces that register.
+                        var address = ins.Mod == 3 ? 0u : LinearAddress(ins);
+                        var dest = ReadRm(ins, width);
+                        var src = GetReg(ins.RegField, width);
+                        var sum = Alu(0, dest, src, width);
+                        SetReg(ins.RegField, width, dest);
+                        if (ins.Mod == 3) WriteRm(ins, width, sum);
+                        else WriteMem(address, width, sum);
+                        return;
+                    }
                 case 0xC7:
                     if (ins.RegField == 1 && ins.Mod != 3)
                     {
@@ -215,7 +237,10 @@ namespace Nativra.X86.Cpu
                         return;
                     }
                     throw new GuestException(GuestException.IllegalInstruction, ins.Address);
-                case 0x05: case 0x07: case 0x34: case 0x35:
+                case 0x05:
+                case 0x07:
+                case 0x34:
+                case 0x35:
                     throw new GuestException(GuestException.IllegalInstruction, ins.Address);
             }
 

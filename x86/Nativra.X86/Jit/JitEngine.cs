@@ -50,6 +50,9 @@ namespace Nativra.X86.Jit
         public bool DisableX87Environment { get; set; }
         public bool DisableJecxz { get; set; }
         public bool DisableBlockCache { get; set; }
+        public JitFormSwitches DisabledForms { get; set; }
+        public uint RunningEip { get; private set; }
+        public int RunningThreadId { get; private set; }
         public Dictionary<string, long> FallbackCounts { get; } = new Dictionary<string, long>();
 
         public static void ConfigureFaultReport(string path, string probePath = null) => JitFaults.ConfigureReport(path, probePath);
@@ -88,7 +91,9 @@ namespace Nativra.X86.Jit
                     {
                         if (map.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
                         if (map.UsesX87) ctx.LoadX87(Interpreter.Fpu);
-                        JitFaults.SetExecution(Memory.HostBase, map.GuestEips.Length > 0 ? map.GuestEips[0] : ctx.Eip);
+                        RunningEip = map.GuestEips.Length > 0 ? map.GuestEips[0] : ctx.Eip;
+                        RunningThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
+                        JitFaults.SetExecution(Memory.HostBase, RunningEip);
                         try { map.Function(ctx.Pointer); }
                         finally { JitFaults.ClearExecution(); }
                         if (map.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
@@ -149,14 +154,16 @@ namespace Nativra.X86.Jit
                 {
                     if (Cpu.Eip == stop) return true;
                     ctx.Load(Cpu);
-                    var translator = new BlockTranslator { DisableX87Environment = DisableX87Environment, DisableJecxz = DisableJecxz };
+                    var translator = new BlockTranslator { DisableX87Environment = DisableX87Environment, DisableJecxz = DisableJecxz, DisabledForms = DisabledForms };
                     var code = translator.Translate(Memory, Cpu.Eip, stop);
                     LastFullyTranslated = translator.FullyTranslated;
                     LastInstructionCount = translator.InstructionCount;
                     var block = Publish(code, translator);
                     if (translator.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
                     if (translator.UsesX87) ctx.LoadX87(Interpreter.Fpu);
-                    JitFaults.SetExecution(Memory.HostBase, Cpu.Eip);
+                    RunningEip = Cpu.Eip;
+                    RunningThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
+                    JitFaults.SetExecution(Memory.HostBase, RunningEip);
                     try { DelegateFor(block)(ctx.Pointer); }
                     finally { JitFaults.ClearExecution(); }
                     if (translator.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
@@ -180,7 +187,7 @@ namespace Nativra.X86.Jit
         {
             if (blocks.TryGetValue(eip, out var cached)) return cached;
 
-            var translator = new BlockTranslator { DisableX87Environment = DisableX87Environment, DisableJecxz = DisableJecxz };
+            var translator = new BlockTranslator { DisableX87Environment = DisableX87Environment, DisableJecxz = DisableJecxz, DisabledForms = DisabledForms };
             var code = translator.Translate(Memory, eip, stopEip);
             LastFullyTranslated = translator.FullyTranslated;
             LastInstructionCount = translator.InstructionCount;
@@ -196,7 +203,7 @@ namespace Nativra.X86.Jit
 
         private BlockMap CompileTransient(uint eip)
         {
-            var translator = new BlockTranslator { DisableX87Environment = DisableX87Environment, DisableJecxz = DisableJecxz };
+            var translator = new BlockTranslator { DisableX87Environment = DisableX87Environment, DisableJecxz = DisableJecxz, DisabledForms = DisabledForms };
             var code = translator.Translate(Memory, eip, 0);
             LastFullyTranslated = translator.FullyTranslated;
             LastInstructionCount = translator.InstructionCount;

@@ -12,6 +12,26 @@ namespace Nativra.X86.Jit
         /// exponent word becomes 0xFFFF, TOP becomes 0 and every register is marked
         /// in use (EMMS marks them empty again). Nothing here touches the flags.
         /// </summary>
+        private static bool IsMmxForm(in Instruction ins)
+        {
+            if (ins.Op < 0x0F00 || ins.Op > 0x0FFF || ins.Rep != 0 || ins.OpSize16) return false;
+            switch (ins.Op & 0xFF)
+            {
+                case 0x77: case 0x6E: case 0x7E: case 0x6F: case 0x7F: case 0xE7:
+                case 0x70: case 0x71: case 0x72: case 0x73: case 0xC4: case 0xC5: case 0xD7:
+                case 0xFC: case 0xFD: case 0xFE: case 0xD4: case 0xF8: case 0xF9: case 0xFA: case 0xFB:
+                case 0xEC: case 0xED: case 0xE8: case 0xE9: case 0xDC: case 0xDD: case 0xD8: case 0xD9:
+                case 0xD5: case 0xE5: case 0xE4: case 0xF4: case 0xF5: case 0xF6: case 0xE0: case 0xE3:
+                case 0xDA: case 0xDE: case 0xEA: case 0xEE: case 0xDB: case 0xDF: case 0xEB: case 0xEF:
+                case 0x74: case 0x75: case 0x76: case 0x64: case 0x65: case 0x66:
+                case 0xD1: case 0xD2: case 0xD3: case 0xE1: case 0xE2: case 0xF1: case 0xF2: case 0xF3:
+                case 0x60: case 0x61: case 0x62: case 0x63: case 0x67: case 0x6B:
+                case 0x68: case 0x69: case 0x6A:
+                    return true;
+                default: return false;
+            }
+        }
+
         private bool EmitMmx(in Instruction ins)
         {
             if (ins.Op < 0x0F00 || ins.Op > 0x0FFF) return false;

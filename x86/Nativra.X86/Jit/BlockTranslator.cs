@@ -30,6 +30,7 @@ namespace Nativra.X86.Jit
         public bool UsesX87 { get; private set; }
         public bool DisableX87Environment { get; set; }
         public bool DisableJecxz { get; set; }
+        public JitFormSwitches DisabledForms { get; set; }
         /// <summary>The block borrows xmm14/xmm15 as temporaries (callee-saved on Windows).</summary>
         private bool usesTemps;
 
@@ -102,7 +103,7 @@ namespace Nativra.X86.Jit
                     terminated = true;
                     break;
                 }
-                if (!ins.Valid || (ins.Lock && !LockIsAtomicHere(ins)) || (ins.Rep != 0 && ins.Op < 0x0F00 && !IsStringOp(ins.Op) && !RepIsIgnored(ins.Op)) || !TryEmit(ins))
+                if (!ins.Valid || (ins.Lock && !LockIsAtomicHere(ins)) || (ins.Rep != 0 && ins.Op < 0x0F00 && !IsStringOp(ins.Op) && !RepIsIgnored(ins.Op)) || IsDisabled(ins) || !TryEmit(ins))
                 {
                     EmitExit(eip, Ctx.ReasonFallback);
                     FullyTranslated = false;
@@ -233,6 +234,25 @@ namespace Nativra.X86.Jit
         // --------------------------------------------------------------- emit
 
         private static int OpSize(in Instruction ins) => ins.OpSize16 ? 16 : 32;
+
+        private bool IsDisabled(in Instruction ins)
+        {
+            var op = ins.Op;
+            var forms = DisabledForms;
+            if ((forms & JitFormSwitches.Lock) != 0 && (ins.Lock || (ins.Mod != 3 && (op == 0x86 || op == 0x87)))) return true;
+            if ((forms & JitFormSwitches.Bits) != 0 && (op == 0x0FA3 || op == 0x0FAB || op == 0x0FB3 || op == 0x0FBB || op == 0x0FBA)) return true;
+            if ((forms & JitFormSwitches.Shld) != 0 && (op == 0x0FA4 || op == 0x0FA5 || op == 0x0FAC || op == 0x0FAD)) return true;
+            if ((forms & JitFormSwitches.Bsf) != 0 && (op == 0x0FBC || op == 0x0FBD)) return true;
+            if ((forms & JitFormSwitches.Xchg) != 0 && (op == 0x86 || op == 0x87 || (op >= 0x91 && op <= 0x97))) return true;
+            if ((forms & JitFormSwitches.Lahf) != 0 && (op == 0x9E || op == 0x9F)) return true;
+            if ((forms & JitFormSwitches.HighByte) != 0 && ((op >= 0xB4 && op <= 0xB7) || UsesHighByteRegister(ins))) return true;
+            if ((forms & JitFormSwitches.Nops) != 0 && (op == 0x90 || op == 0x9B || op == 0x0F0D || (op >= 0x0F18 && op <= 0x0F1F))) return true;
+            if ((forms & JitFormSwitches.RetForm) != 0 && ((op == 0xC2) || (op == 0xC3 && ins.Rep != 0))) return true;
+            if ((forms & JitFormSwitches.Strings) != 0 && (IsStringOp(op) || op == 0x0FB0 || op == 0x0FB1 || op == 0x0FC7 || op == 0x0FAE)) return true;
+            if ((forms & JitFormSwitches.X87) != 0 && op >= 0xD8 && op <= 0xDF) return true;
+            if ((forms & JitFormSwitches.Mmx) != 0 && IsMmxForm(ins)) return true;
+            return false;
+        }
 
         private bool TryEmit(in Instruction ins)
         {

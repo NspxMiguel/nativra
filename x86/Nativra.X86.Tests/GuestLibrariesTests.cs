@@ -67,6 +67,20 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void LibrariesThatAnswerImportsAreStillAbsentToLoadLibrary()
+        {
+            // A game that loads dinput8 by name and finds it falls into DirectInput and
+            // never fills its XInput pad list (WAVESHAPER then read address zero); a game
+            // that imports it statically still needs the import served.
+            foreach (var name in new[] { "dinput8.dll", "winhttp.dll" })
+            {
+                Assert.Equal(0u, Call("kernel32.dll", "LoadLibraryA", Str(name)));
+                Assert.Equal(126u, Call("kernel32.dll", "GetLastError"));   // ERROR_MOD_NOT_FOUND
+            }
+            Assert.NotEqual(0u, p.Imports.Bind("dinput8.dll", "DirectInput8Create", -1));
+        }
+
+        [Fact]
         public void AbsentServicesFailTheWayWindowsDoes()
         {
             // DirectInput and WinHTTP are not offered: a game that probes them must

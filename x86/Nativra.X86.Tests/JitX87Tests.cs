@@ -130,6 +130,36 @@ namespace Nativra.X86.Tests
         private static readonly int[] AllDepths = { 0, 1, 2, 8 };
         private static readonly ushort[] Quick = { 0x037F, 0x027F, 0x007F, 0x0F7F };
 
+        [SkippableFact]
+        public void EnvironmentStoreMatchesInterpreterForEveryTagClass()
+        {
+            Skip.IfNot(JitDiff.CanJit, "JIT needs an x64 host");
+            Sweep("D9 36", Mem.None, normal: false, AllDepths, Quick, 24, mustTranslate: true);
+        }
+
+        [SkippableFact]
+        public void EnvironmentLoadMatchesInterpreterForTagsAndTop()
+        {
+            Skip.IfNot(JitDiff.CanJit, "JIT needs an x64 host");
+            using (var diff = new JitDiff("D9 26"))
+            {
+                foreach (var tag in new ushort[] { 0, 0xFFFF, 0xAAAA, 0x5555, 0xE4B1 })
+                    for (var top = 0; top < 8; top++)
+                    {
+                        diff.Reset();
+                        diff.Both((cpu, memory, fpu) =>
+                        {
+                            SetX87(fpu, 5, 4, 0x037F, i => Pick(i + top, false));
+                            memory.Write32(JitDiff.Data, 0xFFFF027F);
+                            memory.Write32(JitDiff.Data + 4, (uint)(0xFFFF0000 | 0x0041 | (top << 11)));
+                            memory.Write32(JitDiff.Data + 8, (uint)(0xFFFF0000 | tag));
+                        });
+                        diff.Run($"fldenv tag={tag:X4} top={top}");
+                        Assert.Equal(0, diff.Jit.InterpreterFallbacks);
+                    }
+            }
+        }
+
         public static IEnumerable<object[]> MemoryForms()
         {
             var forms = new (string hex, Mem kind)[]

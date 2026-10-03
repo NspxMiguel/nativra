@@ -25,7 +25,7 @@ namespace Nativra.X86.Jit
 
         private readonly JitContext ctx;
         private readonly CodeCache cache = new CodeCache();
-        private readonly Dictionary<uint, IntPtr> blocks = new Dictionary<uint, IntPtr>();
+        private readonly Dictionary<uint, BlockMap> blocks = new Dictionary<uint, BlockMap>();
         // The cached blocks' guest start addresses by page, so memory that goes away can drop what was translated from it.
         private readonly Dictionary<uint, List<uint>> blocksByPage = new Dictionary<uint, List<uint>>();
         private readonly Dictionary<IntPtr, BlockFn> delegates = new Dictionary<IntPtr, BlockFn>();
@@ -34,6 +34,8 @@ namespace Nativra.X86.Jit
         /// <summary>Where each guest instruction of a block starts in its host code.</summary>
         private sealed class BlockMap
         {
+            public IntPtr Pointer;
+            public BlockFn Function;
             public int[] HostOffsets;
             public uint[] GuestEips;
             public bool UsesSse;
@@ -71,13 +73,12 @@ namespace Nativra.X86.Jit
             LastRunBlocks = 0;
             for (var i = 0; i < maxBlocks; i++)
             {
-                IntPtr block;
-                try { block = GetBlock(ctx.Eip, 0); }
+                BlockMap map;
+                try { map = GetBlock(ctx.Eip, 0); }
                 catch { ctx.Store(Cpu); throw; }
-                var map = maps[block];
                 if (map.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
                 if (map.UsesX87) ctx.LoadX87(Interpreter.Fpu);
-                DelegateFor(block)(ctx.Pointer);
+                map.Function(ctx.Pointer);
                 if (map.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
                 if (map.UsesX87) ctx.StoreX87(Interpreter.Fpu);
                 BlocksExecuted++;
@@ -85,7 +86,7 @@ namespace Nativra.X86.Jit
                 if (ctx.ExitReason == Ctx.ReasonFault)
                 {
                     ctx.Store(Cpu);
-                    RaiseFault(block);
+                    RaiseFault(map.Pointer);
                 }
                 if (ctx.ExitReason == Ctx.ReasonFallback)
                 {
@@ -155,7 +156,7 @@ namespace Nativra.X86.Jit
             return Cpu.Eip == stop;
         }
 
-        private IntPtr GetBlock(uint eip, uint stopEip)
+        private BlockMap GetBlock(uint eip, uint stopEip)
         {
             if (blocks.TryGetValue(eip, out var cached)) return cached;
 
@@ -165,11 +166,12 @@ namespace Nativra.X86.Jit
             LastInstructionCount = translator.InstructionCount;
             var published = Publish(code, translator);
             BlocksCompiled++;
-            blocks[eip] = published;
+            var map = maps[published];
+            blocks[eip] = map;
             var page = eip >> GuestMemory.PageShift;
             if (!blocksByPage.TryGetValue(page, out var starts)) blocksByPage[page] = starts = new List<uint>();
             starts.Add(eip);
-            return published;
+            return map;
         }
 
         private void CountFallback()
@@ -200,6 +202,8 @@ namespace Nativra.X86.Jit
                     ins.Op == 0x0FBA || ins.Op == 0x0FC7 ||
                     (ins.Op >= 0xD8 && ins.Op <= 0xDF)))
                     key += "/" + ins.RegField;
+                if (ins.Op >= 0xD8 && ins.Op <= 0xDF && ins.Mod == 3)
+                    key += "/" + ins.Rm;
             }
             catch (Exception)
             {
@@ -248,6 +252,8 @@ namespace Nativra.X86.Jit
             var block = cache.Publish(code);
             maps[block] = new BlockMap
             {
+                Pointer = block,
+                Function = DelegateFor(block),
                 HostOffsets = translator.HostOffsets.ToArray(),
                 GuestEips = translator.GuestEips.ToArray(),
                 UsesSse = translator.UsesSse,

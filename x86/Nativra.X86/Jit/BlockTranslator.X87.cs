@@ -217,7 +217,9 @@ namespace Nativra.X86.Jit
                         {
                             case 0: return EmitX87LoadFloat(ins, 32);
                             case 2: case 3: return EmitX87StoreFloat(ins, 32, reg == 3);
+                            case 4: EmitFldenv(ins); return true;
                             case 5: EmitFldcw(ins); return true;
+                            case 6: EmitFnstenv(ins); return true;
                             case 7: EmitFnstcw(ins); return true;
                         }
                         return false;
@@ -535,6 +537,101 @@ namespace Nativra.X86.Jit
             UsesX87 = true;
             e.MovzxMem(S2, Mem, S1, 1, 0, 16);
             e.StoreCtx(S2, Ctxr, Ctx.Control);
+        }
+
+        private void EmitFldenv(in Instruction ins)
+        {
+            EmitAddress(ins);
+            UsesX87 = true;
+            e.MovzxMem(S2, Mem, S1, 1, 0, 16);
+            e.MovzxMem(S3, Mem, S1, 1, 4, 16);
+            e.MovzxMem(R8, Mem, S1, 1, 8, 16);
+            e.Pushfq();
+            e.StoreCtx(S2, Ctxr, Ctx.Control);
+            e.StoreCtx(S3, Ctxr, Ctx.Status);
+            e.ShiftImm(5, S3, 11);
+            e.AluRegImm(4, S3, 7);
+            e.StoreCtx(S3, Ctxr, Ctx.Top);
+            for (var p = 0; p < 8; p++)
+            {
+                var empty = NewLabel("env_empty");
+                var done = NewLabel("env_done");
+                e.MovRegReg(S3, R8);
+                if (p != 0) e.ShiftImm(5, S3, (byte)(p * 2));
+                e.AluRegImm(4, S3, 3);
+                e.AluRegImm(7, S3, 3);
+                e.Jcc(4, empty);
+                e.MovMemImm(Ctxr, -1, 1, Ctx.Empty + p, 0, 8);
+                e.Jmp(done);
+                e.Label(empty);
+                e.MovMemImm(Ctxr, -1, 1, Ctx.Empty + p, 1, 8);
+                e.Label(done);
+            }
+            e.Popfq();
+        }
+
+        private void EmitFnstenv(in Instruction ins)
+        {
+            EmitAddress(ins);
+            UsesX87 = true;
+            e.Pushfq();
+            e.MovRegImm32(S2, 0);
+            for (var p = 0; p < 8; p++)
+            {
+                var full = NewLabel("tag_full");
+                var zero = NewLabel("tag_zero");
+                var special = NewLabel("tag_special");
+                var done = NewLabel("tag_done");
+                e.MovzxMem(R8, Ctxr, -1, 1, Ctx.Empty + p, 8);
+                e.TestRegReg(R8, R8);
+                e.Jcc(4, full);
+                e.AluRegImm(1, S2, (uint)(3 << (p * 2)));
+                e.Jmp(done);
+                e.Label(full);
+                e.MovzxMem(R9, Ctxr, -1, 1, Ctx.Sexp + p * 2, 16);
+                e.LoadMem(R8, Ctxr, -1, 1, Ctx.Mm + p * 8, 64);
+                e.AluRegImm(4, R9, 0x7FFF);
+                e.Jcc(4, zero);
+                e.AluRegImm(7, R9, 0x7FFF);
+                e.Jcc(4, special);
+                Test64(R8, R8);
+                e.Jcc(9, special);
+                e.Jmp(done);
+                e.Label(zero);
+                Test64(R8, R8);
+                e.Jcc(5, special);
+                e.AluRegImm(1, S2, (uint)(1 << (p * 2)));
+                e.Jmp(done);
+                e.Label(special);
+                e.AluRegImm(1, S2, (uint)(2 << (p * 2)));
+                e.Label(done);
+            }
+            e.AluRegImm(1, S2, 0xFFFF0000);
+            e.Popfq();
+            e.StoreCtx(S2, Ctxr, Ctx.Scratch);
+
+            e.Pushfq();
+            e.LoadCtx(S3, Ctxr, Ctx.Control);
+            e.AluRegImm(1, S3, 0xFFFF0000);
+            e.Popfq();
+            e.StoreMem(S3, Mem, S1, 1, 0);
+            e.Pushfq();
+            EmitStatusWord();
+            e.AluRegImm(1, S2, 0xFFFF0000);
+            e.Popfq();
+            e.StoreMem(S2, Mem, S1, 1, 4);
+            // Keep the tag in the JIT scratch slot while EmitStatusWord borrows S2.
+            e.LoadCtx(S2, Ctxr, Ctx.Scratch);
+            e.StoreMem(S2, Mem, S1, 1, 8);
+            e.MovMemImm(Mem, S1, 1, 12, 0);
+            e.MovMemImm(Mem, S1, 1, 16, 0x23);
+            e.MovMemImm(Mem, S1, 1, 20, 0);
+            e.MovMemImm(Mem, S1, 1, 24, 0x2B);
+            e.Pushfq();
+            e.LoadCtx(S2, Ctxr, Ctx.Control);
+            e.AluRegImm(1, S2, 0x3F);
+            e.StoreCtx(S2, Ctxr, Ctx.Control);
+            e.Popfq();
         }
 
         private void EmitFnstcw(in Instruction ins)

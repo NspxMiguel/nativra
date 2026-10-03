@@ -195,7 +195,7 @@ namespace Nativra.X86.Jit
         private static bool IsBranch(in Instruction ins) =>
             (ins.Op >= 0x70 && ins.Op <= 0x7F) ||
             (ins.Op >= 0x0F80 && ins.Op <= 0x0F8F) ||
-            ins.Op == 0xE8 || ins.Op == 0xE9 || ins.Op == 0xEB ||
+            ins.Op == 0xE3 || ins.Op == 0xE8 || ins.Op == 0xE9 || ins.Op == 0xEB ||
             ins.Op == 0xC2 || ins.Op == 0xC3 ||
             (ins.Op == 0xFF && (ins.RegField == 2 || ins.RegField == 4));
 
@@ -390,6 +390,16 @@ namespace Nativra.X86.Jit
                     EmitExit(unchecked(ins.Next + ins.Imm), Ctx.ReasonNext);
                     return true;
                 case 0xEB:
+                    EmitExit(unchecked(ins.Next + (uint)(sbyte)ins.Imm), Ctx.ReasonNext);
+                    return true;
+                case 0xE3: // JECXZ tests ECX without changing the guest's flags.
+                    e.Pushfq();
+                    e.TestRegReg(G[Reg.Ecx], G[Reg.Ecx]);
+                    e.Jcc(4, "jecxz_taken");
+                    e.Popfq();
+                    EmitExit(ins.Next, Ctx.ReasonNext);
+                    e.Label("jecxz_taken");
+                    e.Popfq();
                     EmitExit(unchecked(ins.Next + (uint)(sbyte)ins.Imm), Ctx.ReasonNext);
                     return true;
                 case 0xC6: // MOV r/m8, imm8

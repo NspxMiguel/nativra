@@ -39,6 +39,29 @@ namespace Nativra.X86.Tests
             }
         }
 
+        [SkippableTheory]
+        [InlineData(0u, 7u)]
+        [InlineData(1u, 2u)]
+        [InlineData(0x10000u, 2u)]
+        public void JecxzMatchesInterpreterWithoutChangingFlags(uint ecx, uint offset)
+        {
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
+            using (var jit = Fresh(out var memory, out var cpu))
+            using (memory)
+            {
+                memory.WriteBytes(Code, new byte[] { 0xE3, 0x05 });
+                cpu.Ecx = ecx;
+                cpu.EFlags = Flag.Fixed | Flag.CF | Flag.OF;
+                var expected = cpu.Clone();
+                new Interpreter(expected, memory).Step();
+                jit.RunBlock(1);
+                Assert.Equal(Code + offset, cpu.Eip);
+                Assert.Equal(expected.Eip, cpu.Eip);
+                Assert.Equal(expected.EFlags, cpu.EFlags);
+                Assert.Equal(0, jit.InterpreterFallbacks);
+            }
+        }
+
         [SkippableFact]
         public void EveryConditionMatchesInterpreterForAllArithmeticFlagCombinations()
         {

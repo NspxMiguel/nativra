@@ -73,9 +73,23 @@ namespace Kiosk.Native
             var noJecxz = await local.TryGetItemAsync("nojit-jecxz.txt") != null;
             var noBlockCache = await local.TryGetItemAsync("nojit-blockcache.txt") != null;
             var noComFast = await local.TryGetItemAsync("nocom-fast.txt") != null;
-            var faultPath = System.IO.Path.Combine(local.Path, "native-fault.txt");
+            var formNames = new[] { "bits", "shld", "bsf", "lock", "xchg", "lahf", "highbyte", "nops", "retform", "strings", "x87", "mmx" };
+            var formValues = new[] { JitFormSwitches.Bits, JitFormSwitches.Shld, JitFormSwitches.Bsf,
+                JitFormSwitches.Lock, JitFormSwitches.Xchg, JitFormSwitches.Lahf,
+                JitFormSwitches.HighByte, JitFormSwitches.Nops, JitFormSwitches.RetForm,
+                JitFormSwitches.Strings, JitFormSwitches.X87, JitFormSwitches.Mmx };
+            var noNewForms = await local.TryGetItemAsync("nojit-newforms.txt") != null;
+            var disabledForms = noNewForms ? JitFormSwitches.All : JitFormSwitches.None;
             var switches = "x86interp=" + interpreterOnly + " nojit-x87env=" + noX87Environment +
-                " nojit-jecxz=" + noJecxz + " nojit-blockcache=" + noBlockCache + " nocom-fast=" + noComFast;
+                " nojit-jecxz=" + noJecxz + " nojit-blockcache=" + noBlockCache + " nocom-fast=" + noComFast +
+                " nojit-newforms=" + noNewForms;
+            for (var i = 0; i < formNames.Length; i++)
+            {
+                var selected = await local.TryGetItemAsync("nojit-" + formNames[i] + ".txt") != null;
+                if (selected) disabledForms |= formValues[i];
+                switches += " nojit-" + formNames[i] + "=" + (selected || noNewForms);
+            }
+            var faultPath = System.IO.Path.Combine(local.Path, "native-fault.txt");
             System.IO.File.WriteAllText(faultPath, "x86.switches=" + switches + Environment.NewLine);
             JitEngine.ConfigureFaultReport(faultPath, System.IO.Path.Combine(local.Path, "native-probe.txt"));
             lines.Add("x86.switches=" + switches);
@@ -90,7 +104,10 @@ namespace Kiosk.Native
                     process.Jit.DisableX87Environment = noX87Environment;
                     process.Jit.DisableJecxz = noJecxz;
                     process.Jit.DisableBlockCache = noBlockCache;
+                    process.Jit.DisabledForms = disabledForms;
                 }
+                using (var heartbeat = new X86Heartbeat(System.IO.Path.Combine(local.Path, "x86-heartbeat.txt"), process, memory, switches))
+                {
                 var kernel = new GuestKernel(process);
                 kernel.ExePath = folderPath.TrimEnd('\\') + "\\" + exeName;
                 kernel.SetCommandLine("\"" + kernel.ExePath + "\"");
@@ -253,8 +270,70 @@ namespace Kiosk.Native
 
                 await WriteImportsAsync(process, kernel);
                 }
+                }
             }
             return result.Stop == GuestStop.Exited || result.Stop == GuestStop.Returned;
+        }
+
+        private sealed class X86Heartbeat : IDisposable
+        {
+            private readonly string path;
+            private readonly GuestProcess process;
+            private readonly GuestMemory memory;
+            private readonly string switches;
+            private readonly System.Threading.ManualResetEvent stopped = new System.Threading.ManualResetEvent(false);
+            private readonly System.Threading.Thread thread;
+
+            public X86Heartbeat(string path, GuestProcess process, GuestMemory memory, string switches)
+            {
+                this.path = path;
+                this.process = process;
+                this.memory = memory;
+                this.switches = switches;
+                Write();
+                thread = new System.Threading.Thread(Run) { IsBackground = true, Name = "x86 heartbeat" };
+                thread.Start();
+            }
+
+            private void Run()
+            {
+                while (!stopped.WaitOne(2000)) Write();
+            }
+
+            private void Write()
+            {
+                try
+                {
+                    var jit = process.Jit;
+                    var cache = jit == null ? 0 : jit.CodeCacheBytes;
+                    var guest = memory.MappedPages * GuestMemory.PageSize;
+                    var managed = GC.GetTotalMemory(false);
+                    ulong appMemory = 0;
+                    try { appMemory = Windows.System.MemoryManager.AppMemoryUsage; } catch (Exception) { }
+                    System.IO.File.WriteAllText(path,
+                        "time=" + DateTime.UtcNow.ToString("o") + Environment.NewLine +
+                        "x86.switches=" + switches + Environment.NewLine +
+                        "x86.eip=0x" + process.Cpu.Eip.ToString("X8") + Environment.NewLine +
+                        "x86.running-block=0x" + (jit == null ? 0 : jit.RunningEip).ToString("X8") + Environment.NewLine +
+                        "x86.running-thread=" + (jit == null ? 0 : jit.RunningThreadId) + Environment.NewLine +
+                        "x86.blocks=" + (jit == null ? 0 : jit.BlocksCompiled) + " compiled, " +
+                            (jit == null ? 0 : jit.BlocksExecuted) + " run" + Environment.NewLine +
+                        "x86.code-cache=" + cache + " bytes" + Environment.NewLine +
+                        "x86.guest-committed=" + guest + " bytes" + Environment.NewLine +
+                        "x86.managed=" + managed + " bytes" + Environment.NewLine +
+                        "x86.private-estimate=" + (guest + cache + managed) + " bytes" + Environment.NewLine +
+                        "x86.app-memory=" + appMemory + " bytes" + Environment.NewLine);
+                }
+                catch (Exception) { }
+            }
+
+            public void Dispose()
+            {
+                stopped.Set();
+                thread.Join();
+                Write();
+                stopped.Dispose();
+            }
         }
 
         /// <summary>A DLL from the game's own folder, or null when the game does not carry it.</summary>

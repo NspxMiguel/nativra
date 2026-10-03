@@ -35,6 +35,8 @@ namespace Nativra.X86.Jit
         private sealed class BlockMap
         {
             public IntPtr Pointer;
+            public int Length;
+            public IntPtr FaultStub;
             public BlockFn Function;
             public int[] HostOffsets;
             public uint[] GuestEips;
@@ -64,6 +66,7 @@ namespace Nativra.X86.Jit
             Cpu = cpu;
             Memory = memory;
             JitFaults.Install();
+            JitFaults.RegisterGuestBase(memory.HostBase);
             Interpreter = new Interpreter(cpu, memory);
             ctx = new JitContext(memory);
             memory.PagesDiscarded += Invalidate;
@@ -93,7 +96,8 @@ namespace Nativra.X86.Jit
                         if (map.UsesX87) ctx.LoadX87(Interpreter.Fpu);
                         RunningEip = map.GuestEips.Length > 0 ? map.GuestEips[0] : ctx.Eip;
                         RunningThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
-                        JitFaults.SetExecution(Memory.HostBase, RunningEip);
+                        JitFaults.SetExecution(Memory.HostBase, RunningEip, map.Pointer,
+                            map.Length, map.FaultStub, map.HostOffsets, map.GuestEips);
                         try { map.Function(ctx.Pointer); }
                         finally { JitFaults.ClearExecution(); }
                         if (map.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
@@ -103,7 +107,7 @@ namespace Nativra.X86.Jit
                         if (ctx.ExitReason == Ctx.ReasonFault)
                         {
                             ctx.Store(Cpu);
-                            RaiseFault(map.Pointer);
+                            RaiseFault();
                         }
                         if (ctx.ExitReason == Ctx.ReasonFallback)
                         {
@@ -159,11 +163,13 @@ namespace Nativra.X86.Jit
                     LastFullyTranslated = translator.FullyTranslated;
                     LastInstructionCount = translator.InstructionCount;
                     var block = Publish(code, translator);
+                    var map = maps[block];
                     if (translator.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
                     if (translator.UsesX87) ctx.LoadX87(Interpreter.Fpu);
                     RunningEip = Cpu.Eip;
                     RunningThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
-                    JitFaults.SetExecution(Memory.HostBase, RunningEip);
+                    JitFaults.SetExecution(Memory.HostBase, RunningEip, block,
+                        map.Length, map.FaultStub, map.HostOffsets, map.GuestEips);
                     try { DelegateFor(block)(ctx.Pointer); }
                     finally { JitFaults.ClearExecution(); }
                     if (translator.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
@@ -171,7 +177,7 @@ namespace Nativra.X86.Jit
                     BlocksCompiled++;
                     BlocksExecuted++;
                     ctx.Store(Cpu);
-                    if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault(block);
+                    if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault();
                     if (ctx.ExitReason == Ctx.ReasonFallback)
                     {
                         CountFallback();
@@ -221,6 +227,12 @@ namespace Nativra.X86.Jit
                 delegates.Remove(pointer);
                 cache.Release(pointer);
             }
+        }
+
+        internal void UnregisterFaultRangeForTesting(uint eip)
+        {
+            lock (cache)
+                if (blocks.TryGetValue(eip, out var map)) JitFaults.Unregister(map.Pointer);
         }
 
         private void CountFallback()
@@ -310,6 +322,8 @@ namespace Nativra.X86.Jit
             maps[block] = new BlockMap
             {
                 Pointer = block,
+                Length = code.Length,
+                FaultStub = block + translator.FaultExitOffset,
                 Function = DelegateFor(block),
                 HostOffsets = translator.HostOffsets.ToArray(),
                 GuestEips = translator.GuestEips.ToArray(),
@@ -326,17 +340,13 @@ namespace Nativra.X86.Jit
         /// instruction whose host code faulted and raise the guest access
         /// violation, exactly as the interpreter would have.
         /// </summary>
-        private void RaiseFault(IntPtr block)
+        private void RaiseFault()
         {
-            JitFaults.Pending = false;
-            var offset = (long)(JitFaults.Rip - (ulong)block.ToInt64());
-            var map = maps[block];
-            var eip = map.GuestEips.Length > 0 ? map.GuestEips[0] : Cpu.Eip;
-            for (var i = 0; i < map.HostOffsets.Length && map.HostOffsets[i] <= offset; i++) eip = map.GuestEips[i];
+            if (!JitFaults.TakeFault(out _, out var address, out var access, out var eip))
+                throw new InvalidOperationException("JIT fault exit without a recorded access violation");
             Cpu.Eip = eip;
-
-            var guest = (uint)(JitFaults.Address - (ulong)Memory.HostBase.ToInt64());
-            throw new GuestException(GuestException.AccessViolation, eip, JitFaults.Access, guest);
+            var guest = (uint)(address - (ulong)Memory.HostBase.ToInt64());
+            throw new GuestException(GuestException.AccessViolation, eip, access, guest);
         }
 
         public bool LastFullyTranslated { get; private set; }
@@ -358,6 +368,7 @@ namespace Nativra.X86.Jit
             {
                 Memory.PagesDiscarded -= Invalidate;
                 foreach (var block in maps.Keys) JitFaults.Unregister(block);
+                JitFaults.UnregisterGuestBase(Memory.HostBase);
                 cache.Dispose();
                 ctx.Dispose();
             }

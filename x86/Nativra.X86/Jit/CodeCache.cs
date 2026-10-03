@@ -65,6 +65,7 @@ namespace Nativra.X86.Jit
             var region = new Region { Address = address, Size = size };
             regions.Add(region);
             AllocatedBytes += (long)size;
+            JitFaults.RegisterPage(address, size);
             return region;
         }
 
@@ -76,6 +77,7 @@ namespace Nativra.X86.Jit
                 blocks.Remove(address);
                 if (--region.Blocks != 0) return;
                 regions.Remove(region);
+                JitFaults.UnregisterPage(region.Address);
                 host.Release(region.Address, region.Size);
                 AllocatedBytes -= (long)region.Size;
             }
@@ -85,7 +87,11 @@ namespace Nativra.X86.Jit
         {
             lock (this)
             {
-                foreach (var region in regions) host.Release(region.Address, region.Size);
+                foreach (var region in regions)
+                {
+                    JitFaults.UnregisterPage(region.Address);
+                    host.Release(region.Address, region.Size);
+                }
                 regions.Clear();
                 blocks.Clear();
                 AllocatedBytes = 0;

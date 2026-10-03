@@ -338,7 +338,9 @@ namespace Nativra.X86.Loader
                 var value = c.Arg(guestArg++);
                 switch (code[0])
                 {
-                    case 'u': case 'h': case 'f':
+                    case 'u':
+                    case 'h':
+                    case 'f':
                         args[argCount++] = (new IntPtr((long)value));
                         break;
                     case 's':
@@ -351,109 +353,109 @@ namespace Nativra.X86.Loader
                         args[argCount++] = (IntPtr.Zero);
                         break;
                     case 'n':
-                    {
-                        var target = value;
-                        var size = int.Parse(code.Substring(2));
-                        if (size + 16 > WideSize) throw new InvalidOperationException("structure too large in " + key);
-                        args[argCount++] = (target == 0 ? IntPtr.Zero : wide);
-                        if (target != 0)
                         {
-                            var bytes = Memory.ReadBytes(target, size);
-                            Marshal.Copy(bytes, 0, wide, size);
-                            for (var k = size; k < size + 16; k++) Marshal.WriteByte(wide, k, 0);
-                            outputTargets[a] = target;
-                            outputSizes[a] = size;
+                            var target = value;
+                            var size = int.Parse(code.Substring(2));
+                            if (size + 16 > WideSize) throw new InvalidOperationException("structure too large in " + key);
+                            args[argCount++] = (target == 0 ? IntPtr.Zero : wide);
+                            if (target != 0)
+                            {
+                                var bytes = Memory.ReadBytes(target, size);
+                                Marshal.Copy(bytes, 0, wide, size);
+                                for (var k = size; k < size + 16; k++) Marshal.WriteByte(wide, k, 0);
+                                outputTargets[a] = target;
+                                outputSizes[a] = size;
+                            }
+                            break;
                         }
-                        break;
-                    }
                     case 'i':
                         args[argCount++] = (Unwrap(value));
                         break;
                     case 'o':
-                    {
-                        var target = value;
-                        var at = Slot(ref slot, 1);
-                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
-                        break;
-                    }
-                    case 'q':
-                    {
-                        var iidAddress = value;
-                        var target = c.Arg(guestArg++);
-                        var at = Slot(ref slot, 1);
-                        args[argCount++] = (GuestToHost(iidAddress));
-                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; outputExtras[a] = iidAddress; }
-                        break;
-                    }
-                    case 'V':
-                    {
-                        var target = value;
-                        var at = Slot(ref slot, 1);
-                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
-                        break;
-                    }
-                    case 'L':
-                    {
-                        // D3DLOCKED_RECT: { INT Pitch; void* pBits } — 8 bytes here, 16 on the host.
-                        var target = value;
-                        var at = Slot(ref slot, 2);
-                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
-                        break;
-                    }
-                    case 'B':
-                    {
-                        // D3DLOCKED_BOX: { INT RowPitch; INT SlicePitch; void* pBits } — 12 bytes here, 16 on the host.
-                        var target = value;
-                        var at = Slot(ref slot, 2);
-                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
-                        break;
-                    }
-                    case 'P':
-                    {
-                        // D3DPRESENT_PARAMETERS: hDeviceWindow is 4 bytes at +28 here,
-                        // 8 bytes at +32 on the host, which moves everything after it.
-                        var guest = value;
-                        var at = Slot(ref slot, 8);
-                        args[argCount++] = (guest == 0 ? IntPtr.Zero : at);
-                        if (guest != 0)
                         {
-                            PresentToHost(guest, at);
-                            outputTargets[a] = guest;
-                            outputSlots[a] = at;
+                            var target = value;
+                            var at = Slot(ref slot, 1);
+                            args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                            if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
+                            break;
                         }
-                        break;
-                    }
-                    case 'C':
-                    {
-                        // D3DDEVICE_CREATION_PARAMETERS: { UINT, D3DDEVTYPE, HWND, DWORD }.
-                        var target = value;
-                        var at = Slot(ref slot, 3);
-                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
-                        break;
-                    }
-                    default:
-                    {
-                        if (!translators.TryGetValue(code[0], out var translate))
-                            throw new InvalidOperationException("bad signature code " + code + " in " + key);
-                        var taken = slot;
-                        if (outs == null) outs = new List<Action>();
-                        args[argCount++] = (translate(value, count =>
+                    case 'q':
                         {
-                            var at = scratch + taken * 8;
-                            taken += count;
-                            if (taken * 8 > ScratchSize) throw new InvalidOperationException("COM bridge scratch exhausted");
-                            for (var k = 0; k < count; k++) Marshal.WriteInt64(at, k * 8, 0);
-                            return at;
-                        }, outs));
-                        slot = taken;
-                        break;
-                    }
+                            var iidAddress = value;
+                            var target = c.Arg(guestArg++);
+                            var at = Slot(ref slot, 1);
+                            args[argCount++] = (GuestToHost(iidAddress));
+                            args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                            if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; outputExtras[a] = iidAddress; }
+                            break;
+                        }
+                    case 'V':
+                        {
+                            var target = value;
+                            var at = Slot(ref slot, 1);
+                            args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                            if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
+                            break;
+                        }
+                    case 'L':
+                        {
+                            // D3DLOCKED_RECT: { INT Pitch; void* pBits } — 8 bytes here, 16 on the host.
+                            var target = value;
+                            var at = Slot(ref slot, 2);
+                            args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                            if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
+                            break;
+                        }
+                    case 'B':
+                        {
+                            // D3DLOCKED_BOX: { INT RowPitch; INT SlicePitch; void* pBits } — 12 bytes here, 16 on the host.
+                            var target = value;
+                            var at = Slot(ref slot, 2);
+                            args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                            if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
+                            break;
+                        }
+                    case 'P':
+                        {
+                            // D3DPRESENT_PARAMETERS: hDeviceWindow is 4 bytes at +28 here,
+                            // 8 bytes at +32 on the host, which moves everything after it.
+                            var guest = value;
+                            var at = Slot(ref slot, 8);
+                            args[argCount++] = (guest == 0 ? IntPtr.Zero : at);
+                            if (guest != 0)
+                            {
+                                PresentToHost(guest, at);
+                                outputTargets[a] = guest;
+                                outputSlots[a] = at;
+                            }
+                            break;
+                        }
+                    case 'C':
+                        {
+                            // D3DDEVICE_CREATION_PARAMETERS: { UINT, D3DDEVTYPE, HWND, DWORD }.
+                            var target = value;
+                            var at = Slot(ref slot, 3);
+                            args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                            if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
+                            break;
+                        }
+                    default:
+                        {
+                            if (!translators.TryGetValue(code[0], out var translate))
+                                throw new InvalidOperationException("bad signature code " + code + " in " + key);
+                            var taken = slot;
+                            if (outs == null) outs = new List<Action>();
+                            args[argCount++] = (translate(value, count =>
+                            {
+                                var at = scratch + taken * 8;
+                                taken += count;
+                                if (taken * 8 > ScratchSize) throw new InvalidOperationException("COM bridge scratch exhausted");
+                                for (var k = 0; k < count; k++) Marshal.WriteInt64(at, k * 8, 0);
+                                return at;
+                            }, outs));
+                            slot = taken;
+                            break;
+                        }
                 }
             }
 
@@ -483,12 +485,12 @@ namespace Nativra.X86.Loader
                 switch (code[0])
                 {
                     case 'n':
-                    {
-                        var back = new byte[outputSizes[a]];
-                        Marshal.Copy(wide, back, 0, back.Length);
-                        Memory.WriteBytes(target, back);
-                        break;
-                    }
+                        {
+                            var back = new byte[outputSizes[a]];
+                            Marshal.Copy(wide, back, 0, back.Length);
+                            Memory.WriteBytes(target, back);
+                            break;
+                        }
                     case 'o': Memory.Write32(target, Wrap(Marshal.ReadIntPtr(at), byName[code.Substring(2)])); break;
                     case 'q': Memory.Write32(target, WrapByIid(Marshal.ReadIntPtr(at), outputExtras[a])); break;
                     case 'V': Memory.Write32(target, HostToGuest(Marshal.ReadIntPtr(at))); break;

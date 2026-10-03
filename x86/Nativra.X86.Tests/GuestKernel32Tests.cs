@@ -198,7 +198,7 @@ namespace Nativra.X86.Tests
             }
             var timer = Q("CreateWaitableTimerW", 0, 1, 0);
             var due = kq.Heap.Alloc(8);
-            q.Memory.Write64(due, unchecked((ulong)-20 * 10_000));   // 20 ms from now
+            q.Memory.Write64(due, unchecked((ulong)-250 * 10_000));  // leave time for the guest's zero-timeout call
             Assert.Equal(1u, Q("SetWaitableTimer", timer, due, 0, 0, 0, 0));
             Assert.Equal(0x102u, Q("WaitForSingleObject", timer, 0));   // WAIT_TIMEOUT: not yet
             Assert.Equal(0u, Q("WaitForSingleObject", timer, 5000));    // signalled once due

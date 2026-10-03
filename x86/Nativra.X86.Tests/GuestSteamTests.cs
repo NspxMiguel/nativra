@@ -84,6 +84,33 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void SteamRegistryExposesTheInstallAndActiveProcess()
+        {
+            var handle = k.Heap.Alloc(4);
+            Assert.Equal(0u, CallRegistry("RegOpenKeyExA", 0x80000001, Str("Software\\Valve\\Steam"), 0, 0x20019, handle));
+            var path = k.Heap.Alloc(128);
+            var size = k.Heap.Alloc(4);
+            p.Memory.Write32(size, 128);
+            Assert.Equal(0u, CallRegistry("RegQueryValueExA", p.Memory.Read32(handle), Str("SteamPath"), 0, 0, path, size));
+            Assert.Equal("C:\\Program Files (x86)\\Steam", p.Memory.ReadAnsi(path));
+            Assert.Equal(0u, CallRegistry("RegOpenKeyExA", 0x80000001, Str("Software\\Valve\\Steam\\ActiveProcess"), 0, 0x20019, handle));
+            p.Memory.Write32(size, 4);
+            Assert.Equal(0u, CallRegistry("RegQueryValueExA", p.Memory.Read32(handle), Str("pid"), 0, 0, path, size));
+            Assert.Equal(GuestProcess.ProcessId, p.Memory.Read32(path));
+            Assert.Equal(0u, CallRegistry("RegOpenKeyExA", 0x80000002, Str("SOFTWARE\\Valve\\Steam"), 0, 0x20019, handle));
+            p.Memory.Write32(size, 128);
+            Assert.Equal(0u, CallRegistry("RegQueryValueExA", p.Memory.Read32(handle), Str("InstallPath"), 0, 0, path, size));
+            Assert.Equal("C:\\Program Files (x86)\\Steam", p.Memory.ReadAnsi(path));
+        }
+
+        private uint CallRegistry(string name, params uint[] args)
+        {
+            var result = p.Call(p.Imports.Bind("advapi32.dll", name, -1), out var value, 1_000_000, args);
+            Assert.True(result.Ok, result.ToString());
+            return value;
+        }
+
+        [Fact]
         public void LoadLibraryReachesTheServedApiNotTheGamesOwnCopy()
         {
             // The game ships its own steam_api.dll, which would look for a running

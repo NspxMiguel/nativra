@@ -145,6 +145,7 @@ namespace Nativra.X86.Loader
 
         public void Install()
         {
+            kernel.InstallSteamRegistry();
             process.HostServed.Add(Api);   // the game's own copy would look for a running Steam
             var i = process.Imports;
             void E(string name, int args, HostCall body)

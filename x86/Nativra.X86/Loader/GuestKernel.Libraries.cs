@@ -405,6 +405,19 @@ namespace Nativra.X86.Loader
         private readonly Dictionary<uint, string> regHandles = new Dictionary<uint, string>();
         private uint nextRegHandle = 0x00F00010;
         private bool registryLoaded;
+        private int registryMissLogs;
+        private int registryQueryLogs;
+
+        public void InstallSteamRegistry()
+        {
+            EnsureRegistry();
+            const string path = "C:\\Program Files (x86)\\Steam";
+            const string key = "HKCU\\Software\\Valve\\Steam";
+            SetRegValue(key, "SteamPath", 1, Encoding.Unicode.GetBytes(path + "\0"), false);
+            SetRegValue(key, "SteamExe", 1, Encoding.Unicode.GetBytes(path + "\\steam.exe\0"), false);
+            SetRegValue(key + "\\ActiveProcess", "pid", 4, BitConverter.GetBytes(GuestProcess.ProcessId), false);
+            SetRegValue("HKLM\\SOFTWARE\\Valve\\Steam", "InstallPath", 1, Encoding.Unicode.GetBytes(path + "\0"), false);
+        }
 
         private string RegistryFile => Folder(ExePath) + "nativra-registry.txt";
 
@@ -544,7 +557,14 @@ namespace Nativra.X86.Loader
                 i.Register(a, "RegOpenKey" + s, CallConv.Stdcall, 3, c => OpenKey(c.Arg(0), c.Arg(1), c.Arg(2), w, false, 0));
                 i.Register(a, "RegCreateKeyEx" + s, CallConv.Stdcall, 9, c => OpenKey(c.Arg(0), c.Arg(1), c.Arg(7), w, true, c.Arg(8)));
                 i.Register(a, "RegCreateKey" + s, CallConv.Stdcall, 3, c => OpenKey(c.Arg(0), c.Arg(1), c.Arg(2), w, true, 0));
-                i.Register(a, "RegQueryValueEx" + s, CallConv.Stdcall, 6, c => QueryValue(RegPath(c.Arg(0), 0, w), c.Arg(1), c.Arg(3), c.Arg(4), c.Arg(5), w));
+                i.Register(a, "RegQueryValueEx" + s, CallConv.Stdcall, 6, c =>
+                {
+                    var path = RegPath(c.Arg(0), 0, w);
+                    var name = c.Arg(1) == 0 ? "" : ReadText(c.Arg(1), w);
+                    var result = QueryValue(path, c.Arg(1), c.Arg(3), c.Arg(4), c.Arg(5), w);
+                    if (registryQueryLogs++ < 32) Log?.Invoke("RegQueryValue " + path + "!" + name + " -> " + result);
+                    return result;
+                });
                 i.Register(a, "RegQueryValue" + s, CallConv.Stdcall, 4, c => QueryValue(RegPath(c.Arg(0), c.Arg(1), w), 0, 0, c.Arg(2), c.Arg(3), w));
                 i.Register(a, "RegGetValue" + s, CallConv.Stdcall, 7, c => QueryValue(RegPath(c.Arg(0), c.Arg(1), w), c.Arg(2), c.Arg(4), c.Arg(5), c.Arg(6), w));
                 i.Register(a, "RegSetValueEx" + s, CallConv.Stdcall, 6, c => SetValue(RegPath(c.Arg(0), 0, w), c.Arg(1), c.Arg(3), c.Arg(4), c.Arg(5), w));
@@ -580,7 +600,11 @@ namespace Nativra.X86.Loader
             var path = RegPath(key, subKey, wide);
             if (path == null) return 6;   // ERROR_INVALID_HANDLE
             var exists = registry.ContainsKey(path);
-            if (!exists && !create) return 2;   // ERROR_FILE_NOT_FOUND
+            if (!exists && !create)
+            {
+                if (registryMissLogs++ < 32) Log?.Invoke("RegOpenKey missing " + path);
+                return 2;   // ERROR_FILE_NOT_FOUND
+            }
             if (!exists) { EnsureKey(path); SaveRegistry(); }
             if (disposition != 0) memory.Write32(disposition, exists ? 2u : 1u);   // REG_OPENED_EXISTING_KEY / REG_CREATED_NEW_KEY
             return OpenKeyResult(path, result);

@@ -25,6 +25,7 @@ namespace Nativra.X86.Run
     {
         public static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--microbench") return Microbenchmarks.Run();
             string dlls = null, importsFile = null, traceFile = null;
             var interp = false;
             long budget = 400_000_000, dllBudget = 0;

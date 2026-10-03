@@ -44,6 +44,7 @@ namespace Nativra.X86.Loader
 
         internal readonly List<ComMethod> methods = new List<ComMethod>();
         internal uint GuestVtable;
+        internal string[] CallKeys;
 
         internal ComInterface(string name, Guid iid, ComInterface parent, bool unknown)
         {
@@ -283,10 +284,12 @@ namespace Nativra.X86.Loader
         {
             if (face.GuestVtable != 0) return face.GuestVtable;
             var table = kernel.Heap.Alloc((uint)face.Methods.Count * 4);
+            face.CallKeys = new string[face.Methods.Count];
             for (var n = 0; n < face.Methods.Count; n++)
             {
                 var method = face.Methods[n];
                 var function = face.Name + "::" + method.Name;
+                face.CallKeys[n] = function;
                 process.Imports.Register("nativra-com.dll", function, CallConv.Stdcall, 1 + method.GuestDwords,
                     c => Invoke(c, method));
                 Memory.Write32(table + (uint)n * 4, process.Imports.Bind("nativra-com.dll", function, -1));
@@ -306,21 +309,28 @@ namespace Nativra.X86.Loader
             return offset > 0 && offset < 0x100000000L ? (uint)offset : 0;
         }
 
-        private ulong Invoke(GuestCall c, ComMethod method)
+        private unsafe ulong Invoke(GuestCall c, ComMethod method)
         {
             var self = c.Arg(0);
             if (!byGuest.TryGetValue(self, out var proxy)) return 0x80004003;   // E_POINTER
-            var key = proxy.Interface.Name + "::" + method.Name;
+            var key = proxy.Interface.CallKeys[method.Slot];
             Calls.TryGetValue(key, out var n);
             Calls[key] = n + 1;
             if (method.Skip) return 0;
 
             var host = proxy.Host;
             var function = Marshal.ReadIntPtr(Marshal.ReadIntPtr(host), method.Slot * IntPtr.Size);
-            var args = new List<IntPtr>(method.Args.Length + 2) { host };
+            IntPtr* args = stackalloc IntPtr[method.Args.Length + 2];
+            var argCount = 1;
+            args[0] = host;
             var slot = 0;          // next free 8-byte slot in scratch
             var guestArg = 1;
-            var outs = new List<Action>();
+            List<Action> outs = null;
+            uint* outputTargets = stackalloc uint[method.Args.Length];
+            uint* outputExtras = stackalloc uint[method.Args.Length];
+            IntPtr* outputSlots = stackalloc IntPtr[method.Args.Length];
+            int* outputSizes = stackalloc int[method.Args.Length];
+            for (var a = 0; a < method.Args.Length; a++) outputTargets[a] = 0;
 
             for (var a = 0; a < method.Args.Length; a++)
             {
@@ -329,47 +339,42 @@ namespace Nativra.X86.Loader
                 switch (code[0])
                 {
                     case 'u': case 'h': case 'f':
-                        args.Add(new IntPtr((long)value));
+                        args[argCount++] = (new IntPtr((long)value));
                         break;
                     case 's':
-                        args.Add(new IntPtr((int)value));
+                        args[argCount++] = (new IntPtr((int)value));
                         break;
                     case 'p':
-                        args.Add(GuestToHost(value));
+                        args[argCount++] = (GuestToHost(value));
                         break;
                     case 'x':
-                        args.Add(IntPtr.Zero);
+                        args[argCount++] = (IntPtr.Zero);
                         break;
                     case 'n':
                     {
                         var target = value;
                         var size = int.Parse(code.Substring(2));
                         if (size + 16 > WideSize) throw new InvalidOperationException("structure too large in " + key);
-                        args.Add(target == 0 ? IntPtr.Zero : wide);
+                        args[argCount++] = (target == 0 ? IntPtr.Zero : wide);
                         if (target != 0)
                         {
                             var bytes = Memory.ReadBytes(target, size);
                             Marshal.Copy(bytes, 0, wide, size);
                             for (var k = size; k < size + 16; k++) Marshal.WriteByte(wide, k, 0);
-                            outs.Add(() =>
-                            {
-                                var back = new byte[size];
-                                Marshal.Copy(wide, back, 0, size);
-                                Memory.WriteBytes(target, back);
-                            });
+                            outputTargets[a] = target;
+                            outputSizes[a] = size;
                         }
                         break;
                     }
                     case 'i':
-                        args.Add(Unwrap(value));
+                        args[argCount++] = (Unwrap(value));
                         break;
                     case 'o':
                     {
                         var target = value;
                         var at = Slot(ref slot, 1);
-                        args.Add(target == 0 ? IntPtr.Zero : at);
-                        var face = byName[code.Substring(2)];
-                        if (target != 0) outs.Add(() => Memory.Write32(target, Wrap(Marshal.ReadIntPtr(at), face)));
+                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
                         break;
                     }
                     case 'q':
@@ -377,17 +382,17 @@ namespace Nativra.X86.Loader
                         var iidAddress = value;
                         var target = c.Arg(guestArg++);
                         var at = Slot(ref slot, 1);
-                        args.Add(GuestToHost(iidAddress));
-                        args.Add(target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) outs.Add(() => Memory.Write32(target, WrapByIid(Marshal.ReadIntPtr(at), iidAddress)));
+                        args[argCount++] = (GuestToHost(iidAddress));
+                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; outputExtras[a] = iidAddress; }
                         break;
                     }
                     case 'V':
                     {
                         var target = value;
                         var at = Slot(ref slot, 1);
-                        args.Add(target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) outs.Add(() => Memory.Write32(target, HostToGuest(Marshal.ReadIntPtr(at))));
+                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
                         break;
                     }
                     case 'L':
@@ -395,12 +400,8 @@ namespace Nativra.X86.Loader
                         // D3DLOCKED_RECT: { INT Pitch; void* pBits } — 8 bytes here, 16 on the host.
                         var target = value;
                         var at = Slot(ref slot, 2);
-                        args.Add(target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) outs.Add(() =>
-                        {
-                            Memory.Write32(target, (uint)Marshal.ReadInt32(at));
-                            Memory.Write32(target + 4, HostToGuest(Marshal.ReadIntPtr(at, 8)));
-                        });
+                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
                         break;
                     }
                     case 'B':
@@ -408,13 +409,8 @@ namespace Nativra.X86.Loader
                         // D3DLOCKED_BOX: { INT RowPitch; INT SlicePitch; void* pBits } — 12 bytes here, 16 on the host.
                         var target = value;
                         var at = Slot(ref slot, 2);
-                        args.Add(target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) outs.Add(() =>
-                        {
-                            Memory.Write32(target, (uint)Marshal.ReadInt32(at));
-                            Memory.Write32(target + 4, (uint)Marshal.ReadInt32(at, 4));
-                            Memory.Write32(target + 8, HostToGuest(Marshal.ReadIntPtr(at, 8)));
-                        });
+                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
                         break;
                     }
                     case 'P':
@@ -423,11 +419,12 @@ namespace Nativra.X86.Loader
                         // 8 bytes at +32 on the host, which moves everything after it.
                         var guest = value;
                         var at = Slot(ref slot, 8);
-                        args.Add(guest == 0 ? IntPtr.Zero : at);
+                        args[argCount++] = (guest == 0 ? IntPtr.Zero : at);
                         if (guest != 0)
                         {
                             PresentToHost(guest, at);
-                            outs.Add(() => PresentToGuest(at, guest));
+                            outputTargets[a] = guest;
+                            outputSlots[a] = at;
                         }
                         break;
                     }
@@ -436,14 +433,8 @@ namespace Nativra.X86.Loader
                         // D3DDEVICE_CREATION_PARAMETERS: { UINT, D3DDEVTYPE, HWND, DWORD }.
                         var target = value;
                         var at = Slot(ref slot, 3);
-                        args.Add(target == 0 ? IntPtr.Zero : at);
-                        if (target != 0) outs.Add(() =>
-                        {
-                            Memory.Write32(target, (uint)Marshal.ReadInt32(at));
-                            Memory.Write32(target + 4, (uint)Marshal.ReadInt32(at, 4));
-                            Memory.Write32(target + 8, (uint)Marshal.ReadInt64(at, 8));
-                            Memory.Write32(target + 12, (uint)Marshal.ReadInt32(at, 16));
-                        });
+                        args[argCount++] = (target == 0 ? IntPtr.Zero : at);
+                        if (target != 0) { outputTargets[a] = target; outputSlots[a] = at; }
                         break;
                     }
                     default:
@@ -451,7 +442,8 @@ namespace Nativra.X86.Loader
                         if (!translators.TryGetValue(code[0], out var translate))
                             throw new InvalidOperationException("bad signature code " + code + " in " + key);
                         var taken = slot;
-                        args.Add(translate(value, count =>
+                        if (outs == null) outs = new List<Action>();
+                        args[argCount++] = (translate(value, count =>
                         {
                             var at = scratch + taken * 8;
                             taken += count;
@@ -465,24 +457,60 @@ namespace Nativra.X86.Loader
                 }
             }
 
-            var hostArgs = args.ToArray();
+            if (argCount > 12) throw new InvalidOperationException("too many arguments for the COM bridge: " + argCount);
             ulong result;
             if (method.FloatReturn)
             {
-                var f = CallFloat(function, hostArgs);
+                var f = CallFloat(function, args, argCount);
                 process.Interpreter.Fpu.Push(f);
                 result = 0;
             }
             else if (method.Args.Length > 0 && method.Args[0] == "f")
             {
-                result = (uint)CallWithFloat(function, hostArgs).ToInt64();
+                result = (uint)CallWithFloat(function, args, argCount).ToInt64();
             }
             else
             {
-                result = (uint)CallHost(function, hostArgs).ToInt64();
+                result = (uint)CallHost(function, args, argCount).ToInt64();
             }
 
-            foreach (var o in outs) o();
+            for (var a = 0; a < method.Args.Length; a++)
+            {
+                var target = outputTargets[a];
+                if (target == 0) continue;
+                var at = outputSlots[a];
+                var code = method.Args[a];
+                switch (code[0])
+                {
+                    case 'n':
+                    {
+                        var back = new byte[outputSizes[a]];
+                        Marshal.Copy(wide, back, 0, back.Length);
+                        Memory.WriteBytes(target, back);
+                        break;
+                    }
+                    case 'o': Memory.Write32(target, Wrap(Marshal.ReadIntPtr(at), byName[code.Substring(2)])); break;
+                    case 'q': Memory.Write32(target, WrapByIid(Marshal.ReadIntPtr(at), outputExtras[a])); break;
+                    case 'V': Memory.Write32(target, HostToGuest(Marshal.ReadIntPtr(at))); break;
+                    case 'L':
+                        Memory.Write32(target, (uint)Marshal.ReadInt32(at));
+                        Memory.Write32(target + 4, HostToGuest(Marshal.ReadIntPtr(at, 8)));
+                        break;
+                    case 'B':
+                        Memory.Write32(target, (uint)Marshal.ReadInt32(at));
+                        Memory.Write32(target + 4, (uint)Marshal.ReadInt32(at, 4));
+                        Memory.Write32(target + 8, HostToGuest(Marshal.ReadIntPtr(at, 8)));
+                        break;
+                    case 'P': PresentToGuest(at, target); break;
+                    case 'C':
+                        Memory.Write32(target, (uint)Marshal.ReadInt32(at));
+                        Memory.Write32(target + 4, (uint)Marshal.ReadInt32(at, 4));
+                        Memory.Write32(target + 8, (uint)Marshal.ReadInt64(at, 8));
+                        Memory.Write32(target + 12, (uint)Marshal.ReadInt32(at, 16));
+                        break;
+                }
+            }
+            if (outs != null) foreach (var o in outs) o();
             if (method.Name == "Release" && proxy.Interface.IsUnknown && (uint)result == 0) Forget(self);
             else if (!proxy.Interface.IsUnknown && method.Name == "DestroyVoice") Forget(self);
             return result;
@@ -560,7 +588,7 @@ namespace Nativra.X86.Loader
         /// delegate, not as the shape asked for (host objects written in C#,
         /// which the tests use). Call it with its own parameter types.
         /// </summary>
-        private static IntPtr CallManaged(Delegate d, IntPtr[] a)
+        private static unsafe IntPtr CallManaged(Delegate d, IntPtr* a)
         {
             var parameters = d.Method.GetParameters();
             var values = new object[parameters.Length];
@@ -584,7 +612,7 @@ namespace Nativra.X86.Loader
             }
         }
 
-        private IntPtr CallHost(IntPtr f, IntPtr[] a)
+        private unsafe IntPtr CallHost(IntPtr f, IntPtr* a, int count)
         {
             // Kept as a set, not read back from the delegate's type: under .NET
             // Native a delegate's DeclaringType needs reflection metadata the
@@ -600,7 +628,7 @@ namespace Nativra.X86.Loader
                     return CallManaged(probe, a);
                 }
             }
-            switch (a.Length)
+            switch (count)
             {
                 case 1: return Caller<H1>(f)(a[0]);
                 case 2: return Caller<H2>(f)(a[0], a[1]);
@@ -614,16 +642,16 @@ namespace Nativra.X86.Loader
                 case 10: return Caller<H10>(f)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9]);
                 case 11: return Caller<H11>(f)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10]);
                 case 12: return Caller<H12>(f)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11]);
-                default: throw new InvalidOperationException("too many arguments for the COM bridge: " + a.Length);
+                default: throw new InvalidOperationException("too many arguments for the COM bridge: " + count);
             }
         }
 
-        private IntPtr CallWithFloat(IntPtr f, IntPtr[] a)
+        private unsafe IntPtr CallWithFloat(IntPtr f, IntPtr* a, int count)
         {
             var probe = Marshal.GetDelegateForFunctionPointer(f, typeof(H1));
             if (probe.GetType() != typeof(H1)) return CallManaged(probe, a);
             var value = BitConverter.ToSingle(BitConverter.GetBytes((uint)a[1].ToInt64()), 0);
-            switch (a.Length)
+            switch (count)
             {
                 case 2: return Caller<HFloat1>(f)(a[0], value);
                 case 3: return Caller<HFloat2>(f)(a[0], value, a[2]);
@@ -632,9 +660,12 @@ namespace Nativra.X86.Loader
             }
         }
 
-        private double CallFloat(IntPtr f, IntPtr[] a)
+        private unsafe double CallFloat(IntPtr f, IntPtr* a, int count)
         {
-            if (a.Length != 1) throw new InvalidOperationException("unsupported float return signature");
+            if (count != 1) throw new InvalidOperationException("unsupported float return signature");
+            var probe = Marshal.GetDelegateForFunctionPointer(f, typeof(H1));
+            if (probe.GetType() != typeof(H1))
+                return BitConverter.ToSingle(BitConverter.GetBytes((int)CallManaged(probe, a).ToInt64()), 0);
             return Caller<RFloat1>(f)(a[0]);
         }
     }

@@ -79,6 +79,7 @@ namespace Nativra.X86.Loader
         public int Ordinal { get; }
         public uint Sentinel { get; }
         public HostFunction Handler { get; internal set; }
+        private readonly string displayName;
 
         public GuestImport(string module, string function, int ordinal, uint sentinel)
         {
@@ -86,12 +87,12 @@ namespace Nativra.X86.Loader
             Function = function;
             Ordinal = ordinal;
             Sentinel = sentinel;
+            displayName = function == null ? module + "#" + ordinal : module + "!" + function;
         }
 
         public bool ByOrdinal => Function == null;
 
-        public override string ToString() =>
-            ByOrdinal ? $"{Module}#{Ordinal}" : $"{Module}!{Function}";
+        public override string ToString() => displayName;
     }
 
     /// <summary>

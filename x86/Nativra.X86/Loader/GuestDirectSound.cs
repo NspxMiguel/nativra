@@ -288,6 +288,7 @@ namespace Nativra.X86.Loader
             if (item.Bytes == 0) return 0;
             var frame = item.Playing ? item.PlayBasePosition + Math.Max(0, output.FramesPlayed - item.StartFrame) *
                 (double)item.Frequency / output.SampleRate : item.PlayBasePosition;
+            if (!item.Looping) frame = Math.Min(frame, item.Bytes / item.BlockAlign - 1);
             return (uint)(((long)frame * item.BlockAlign) % item.Bytes);
         }
         private HostCall Buffer(int slot)
@@ -305,13 +306,13 @@ namespace Nativra.X86.Loader
                 case 8: return c => { memory.Write32(A(c, 0), Get(c).Frequency); return 0; };
                 case 9: return c => { var i = Get(c); memory.Write32(A(c, 0), (uint)((i.Playing ? 1 : 0) | (i.Playing && i.Looping ? 4 : 0))); return 0; };
                 case 11: return c => Lock(c);
-                case 12: return c => { var i = Get(c); i.Playing = true; i.Looping = (A(c, 2) & 1) != 0; i.PlayBasePosition = i.Position; i.StartFrame = output.FramesPlayed; i.LastFrame = i.StartFrame; return 0; };
-                case 13: return c => { var i = Get(c); if (i.BlockAlign != 0) i.Position = i.PlayBasePosition = (A(c, 0) % Math.Max(1, i.Bytes)) / i.BlockAlign; return 0; };
+                case 12: return c => { var i = Get(c); lock (gate) { if (!i.Playing) { i.PlayBasePosition = i.Position; i.StartFrame = output.FramesPlayed; i.LastFrame = i.StartFrame; } i.Playing = true; i.Looping = (A(c, 2) & 1) != 0; } return 0; };
+                case 13: return c => { var i = Get(c); lock (gate) { if (i.BlockAlign != 0) { i.Position = i.PlayBasePosition = (A(c, 0) % Math.Max(1, i.Bytes)) / i.BlockAlign; i.StartFrame = output.FramesPlayed; i.LastFrame = i.StartFrame; } } return 0; };
                 case 14: return c => ReadFormat(Get(c), A(c, 0)) ? 0u : BadParam;
                 case 15: return c => { Get(c).Volume = Math.Max(-10000, Math.Min(0, (int)A(c, 0))); return 0; };
                 case 16: return c => { Get(c).Pan = Math.Max(-10000, Math.Min(10000, (int)A(c, 0))); return 0; };
-                case 17: return c => { Get(c).Frequency = A(c, 0) == 0 ? (uint)output.SampleRate : A(c, 0); return 0; };
-                case 18: return c => { var i = Get(c); i.PlayBasePosition = Position(i) / Math.Max(1, i.BlockAlign); i.Playing = false; StopNotice(i); return 0; };
+                case 17: return c => { var i = Get(c); lock (gate) { i.PlayBasePosition = Position(i) / Math.Max(1, i.BlockAlign); i.StartFrame = output.FramesPlayed; i.Frequency = A(c, 0) == 0 ? (uint)output.SampleRate : A(c, 0); } return 0; };
+                case 18: return c => { var i = Get(c); lock (gate) { i.PlayBasePosition = Position(i) / Math.Max(1, i.BlockAlign); i.Position = i.PlayBasePosition; i.Playing = false; } StopNotice(i); return 0; };
                 case 19: return c => 0;
                 default: return c => 0;
             }

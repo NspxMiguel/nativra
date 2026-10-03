@@ -129,6 +129,67 @@ namespace Nativra.X86.Tests
             Assert.Equal(0u, process.Memory.Read32(status));
         }
         [Fact]
+        public void SeekingWhilePlayingMovesTheCursorAndTheMixerTogether()
+        {
+            var buffer = Buffer(0, 64, 16, 1);
+            var data = P(); var length = P();
+            M(buffer, 11, 0, 64, data, length, 0, 0, 0);
+            var samples = process.Memory.Read32(data);
+            process.Memory.Write16(samples, 8192);
+            process.Memory.Write16(samples + 16, 16384);
+            M(buffer, 12, 0, 0, 1);
+            output.FramesPlayed = 3;
+            Assert.Equal(0u, M(buffer, 13, 16));
+            var play = P();
+            M(buffer, 4, play, 0);
+            Assert.Equal(16u, process.Memory.Read32(play));
+            Assert.InRange(sound.Mix(1)[0], 0.49f, 0.51f);
+            output.FramesPlayed = 4;
+            M(buffer, 4, play, 0);
+            Assert.Equal(18u, process.Memory.Read32(play));
+        }
+        [Fact]
+        public void RepeatedPlayDoesNotRestartAnAlreadyPlayingBuffer()
+        {
+            var buffer = Buffer();
+            M(buffer, 12, 0, 0, 1);
+            output.FramesPlayed = 4;
+            M(buffer, 12, 0, 0, 1);
+            var play = P();
+            M(buffer, 4, play, 0);
+            Assert.Equal(16u, process.Memory.Read32(play));
+        }
+        [Fact]
+        public void NonLoopingPlaybackStopsAtTheLastFrame()
+        {
+            var buffer = Buffer();
+            M(buffer, 12, 0, 0, 0);
+            output.FramesPlayed = 30;
+            var play = P();
+            M(buffer, 4, play, 0);
+            Assert.Equal(60u, process.Memory.Read32(play));
+            sound.PollNotifications();
+            var status = P();
+            M(buffer, 9, status);
+            Assert.Equal(0u, process.Memory.Read32(status));
+            M(buffer, 4, play, 0);
+            Assert.Equal(60u, process.Memory.Read32(play));
+        }
+        [Fact]
+        public void LoopingPlaybackWrapsWithoutStopping()
+        {
+            var buffer = Buffer();
+            M(buffer, 12, 0, 0, 1);
+            output.FramesPlayed = 18;
+            var play = P();
+            M(buffer, 4, play, 0);
+            Assert.Equal(8u, process.Memory.Read32(play));
+            sound.PollNotifications();
+            var status = P();
+            M(buffer, 9, status);
+            Assert.Equal(5u, process.Memory.Read32(status));
+        }
+        [Fact]
         public void NotifyInterfaceSignalsCrossedOffsetsAndStop()
         {
             var buffer = Buffer(0x18000); var iid = P(); var result = P();

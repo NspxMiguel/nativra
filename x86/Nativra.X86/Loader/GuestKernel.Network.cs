@@ -104,6 +104,7 @@ namespace Nativra.X86.Loader
             public IPEndPoint PeekedFrom;
             public long ConnectedAt;                  // Milliseconds when the connection was made (SO_CONNECT_TIME)
             public uint ConnectError;                 // a connect that failed, until the guest has been told
+            public uint HostErrorTaken;               // the host's own SO_ERROR for that failure: Windows keeps reporting it after it was read
             public uint ConnectWaiter;                // the thread inside a blocking connect
             public bool ShutdownReceive, ShutdownSend;
             public IPEndPoint Peer;
@@ -621,7 +622,7 @@ namespace Nativra.X86.Loader
                 s.ConnectedAt = Milliseconds;
                 s.WriteArmed = true;
             }
-            else s.ConnectError = error;
+            else { s.ConnectError = error; s.HostErrorTaken = error; }
             Post(s, NetFdConnect, error);
         }
 
@@ -1214,7 +1215,13 @@ namespace Nativra.X86.Loader
                 s.ConnectError = 0;
                 return error;
             }
-            try { return (uint)(int)s.Host.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Error); }
+            try
+            {
+                var host = (uint)(int)s.Host.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Error);
+                // SO_ERROR is read once: Windows keeps answering the refused connect's code, Linux and
+                // macOS clear it, and the guest was already told.
+                return host != 0 && host == s.HostErrorTaken ? 0u : host;
+            }
             catch (SocketException) { return 0; }
         }
     }

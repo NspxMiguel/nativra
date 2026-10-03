@@ -46,6 +46,7 @@ namespace Nativra.X86.Loader
         private readonly Dictionary<string, uint> fakeByName =
             new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> probedAbsent = new List<string>();
+        private int dynamicLookupLogs;
         private readonly bool[] tlsUsed = new bool[64];
 
         private uint commandLineAnsi;
@@ -143,7 +144,17 @@ namespace Nativra.X86.Loader
             i.Register(k, "LoadLibraryExA", CallConv.Stdcall, 3, c => LoadLibrary(c.Arg(0), false));
             i.Register(k, "LoadLibraryExW", CallConv.Stdcall, 3, c => LoadLibrary(c.Arg(0), true));
             i.Register(k, "FreeLibrary", CallConv.Stdcall, 1, c => 1);
-            i.Register(k, "GetProcAddress", CallConv.Stdcall, 2, c => GetProcAddress(c.Arg(0), c.Arg(1)));
+            i.Register(k, "GetProcAddress", CallConv.Stdcall, 2, c =>
+            {
+                var result = GetProcAddress(c.Arg(0), c.Arg(1));
+                if (dynamicLookupLogs++ < 64)
+                {
+                    var module = fakeHandles.TryGetValue(c.Arg(0), out var system) ? system : process.Describe(c.Arg(0));
+                    var name = c.Arg(1) < 0x10000 ? "#" + c.Arg(1) : memory.ReadAnsi(c.Arg(1));
+                    Log?.Invoke("GetProcAddress " + module + "!" + name + " -> 0x" + result.ToString("X8"));
+                }
+                return result;
+            });
             i.Register(k, "GetModuleFileNameA", CallConv.Stdcall, 3, c =>
                 ModuleFileName(c.Arg(0), c.Arg(1), c.Arg(2), false));
             i.Register(k, "GetModuleFileNameW", CallConv.Stdcall, 3, c =>

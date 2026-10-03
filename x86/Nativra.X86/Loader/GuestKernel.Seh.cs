@@ -390,16 +390,18 @@ namespace Nativra.X86.Loader
             if (context == 0 || !memory.IsMapped(context)) return "";
             uint esp = memory.Read32(context + 0xC4), ebp = memory.Read32(context + 0xB4), ecx = memory.Read32(context + 0xAC);
             var frames = new List<string>();
+            var words = new List<string>();
             for (uint n = 0; n < 96 && frames.Count < 12; n++)
             {
                 var at = esp + n * 4;
                 if (!memory.IsMapped(at)) break;
                 var word = memory.Read32(at);
+                if (n < 12) words.Add(word.ToString("X8"));
                 var where = Where(word);
                 if (where.Length > 0) frames.Add(where.Trim().Trim('(', ')'));
             }
             return " esp=0x" + esp.ToString("X8") + " ebp=0x" + ebp.ToString("X8") + " ecx=0x" + ecx.ToString("X8") +
-                " stack=[" + string.Join(" < ", frames) + "]";
+                " stack=[" + string.Join(" < ", frames) + "] words=[" + string.Join(",", words) + "]";
         }
 
         /// <summary>An exception record on one line: code, flags, where, and every parameter.</summary>

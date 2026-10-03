@@ -45,6 +45,8 @@ namespace Nativra.X86.Run
                     Marshal.WriteIntPtr(host, vtable);
                     var obj = com.Wrap(host, face);
                     var entry = memory.Read32(memory.Read32(obj) + 12);
+                    var sample = process.Call(entry, out var returned, 100, obj, 123);
+                    if (!sample.Ok || returned != 123) throw new InvalidOperationException("COM benchmark guest call failed");
                     for (var n = 0; n < 1000; n++) process.Call(entry, out _, 100, obj, (uint)n);
                     GC.Collect();
                     var before = GC.GetAllocatedBytesForCurrentThread();

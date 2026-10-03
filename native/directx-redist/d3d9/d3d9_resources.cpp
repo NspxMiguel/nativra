@@ -215,6 +215,13 @@ HRESULT Image::Lock(UINT sub, D3DLOCKED_RECT* locked, const RECT* rect, DWORD fl
     if (!locked || sub >= subs.size()) return D3DERR_INVALIDCALL;
     Subresource& s = subs[sub];
     if (s.locked) return D3DERR_INVALIDCALL;
+    if (rect && (rect->left < 0 || rect->top < 0 || rect->left >= rect->right || rect->top >= rect->bottom ||
+                 static_cast<UINT>(rect->right) > s.width || static_cast<UINT>(rect->bottom) > s.height))
+        return D3DERR_INVALIDCALL;
+    if (rect && fmt->block && ((rect->left | rect->top) % 4 != 0 ||
+        (rect->right % 4 != 0 && static_cast<UINT>(rect->right) != s.width) ||
+        (rect->bottom % 4 != 0 && static_cast<UINT>(rect->bottom) != s.height)))
+        return D3DERR_INVALIDCALL;
     if (!Shadow(sub)) return E_OUTOFMEMORY;
 
     // Whatever the GPU drew into a render target has to be read back first.
@@ -232,7 +239,7 @@ HRESULT Image::Lock(UINT sub, D3DLOCKED_RECT* locked, const RECT* rect, DWORD fl
     locked->Pitch = static_cast<INT>(s.pitch);
     s.locked = true;
     s.valid = s.valid || !(flags & D3DLOCK_READONLY);
-    lockReadOnly = (flags & D3DLOCK_READONLY) != 0;
+    s.lockReadOnly = (flags & D3DLOCK_READONLY) != 0;
     return D3D_OK;
 }
 
@@ -240,7 +247,7 @@ HRESULT Image::Unlock(UINT sub)
 {
     if (sub >= subs.size() || !subs[sub].locked) return D3DERR_INVALIDCALL;
     subs[sub].locked = false;
-    if (texture && !lockReadOnly) {
+    if (texture && !subs[sub].lockReadOnly) {
         Upload(sub);
         const UINT level = sub % levels;
         if (level == 0 && (usage & D3DUSAGE_AUTOGENMIPMAP) && Srv(false))
@@ -947,8 +954,8 @@ HRESULT BufferData::Init()
 HRESULT BufferData::Lock(UINT offset, UINT bytes, void** data, DWORD flags)
 {
     if (!data) return D3DERR_INVALIDCALL;
-    if (offset > size) offset = size;
-    if (bytes == 0 || offset + bytes > size) bytes = size - offset;
+    if (offset >= size || (bytes != 0 && bytes > size - offset)) return D3DERR_INVALIDCALL;
+    if (bytes == 0) bytes = size - offset;
     if (!shadow) {
         shadow = static_cast<uint8_t*>(LockMemoryAlloc(size));
         if (!shadow) return E_OUTOFMEMORY;

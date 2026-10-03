@@ -72,6 +72,7 @@ struct Subresource {
     uint8_t* shadow = nullptr;   // D3D9-layout copy the game locks
     UINT pitch = 0;              // D3D9 row pitch of the shadow
     bool locked = false;
+    bool lockReadOnly = false;
     bool valid = false;          // shadow holds current contents
     bool evicted = false;        // shadow dropped after upload; the GPU copy is the contents
 };
@@ -111,7 +112,6 @@ public:
     std::vector<Subresource> subs;
 
 private:
-    bool lockReadOnly = false;
     ID3D11ShaderResourceView* srv[2] = {};
     std::vector<ID3D11RenderTargetView*> rtv[2];
     std::vector<ID3D11DepthStencilView*> dsv;

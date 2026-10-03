@@ -130,6 +130,36 @@ namespace Nativra.X86.Tests
         private static readonly int[] AllDepths = { 0, 1, 2, 8 };
         private static readonly ushort[] Quick = { 0x037F, 0x027F, 0x007F, 0x0F7F };
 
+        [SkippableTheory]
+        [InlineData(0u)]
+        [InlineData(1u)]
+        public void EnvironmentAndMmxAcrossJecxzAtPageBoundary(uint ecx)
+        {
+            Skip.IfNot(JitDiff.CanJit, "JIT needs an x64 host");
+            using (var diff = new JitDiff("D9 E8 D9 36 E3 02 0F 77 D9 26 EB 00"))
+            {
+                diff.Both((cpu, memory, fpu) =>
+                {
+                    cpu.Ecx = ecx;
+                    cpu.Esi = JitDiff.Data + 0xFF0;
+                });
+                diff.Run("x87 environment, MMX and JECXZ across blocks and data pages");
+                Assert.Equal(0, diff.Jit.InterpreterFallbacks);
+            }
+        }
+
+        [SkippableFact]
+        public void DisabledEnvironmentTranslationReturnsToInterpreter()
+        {
+            Skip.IfNot(JitDiff.CanJit, "JIT needs an x64 host");
+            using (var diff = new JitDiff("D9 36"))
+            {
+                diff.Jit.DisableX87Environment = true;
+                diff.Run("disabled x87 environment", expectTranslated: false);
+                Assert.Equal(1, diff.Jit.InterpreterFallbacks);
+            }
+        }
+
         [SkippableFact]
         public void EnvironmentStoreMatchesInterpreterForEveryTagClass()
         {

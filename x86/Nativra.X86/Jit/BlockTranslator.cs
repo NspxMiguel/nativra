@@ -28,6 +28,8 @@ namespace Nativra.X86.Jit
         public bool UsesSse { get; private set; }
         /// <summary>The block touches the x87/MMX register file, which then travels in the context.</summary>
         public bool UsesX87 { get; private set; }
+        public bool DisableX87Environment { get; set; }
+        public bool DisableJecxz { get; set; }
         /// <summary>The block borrows xmm14/xmm15 as temporaries (callee-saved on Windows).</summary>
         private bool usesTemps;
 
@@ -393,6 +395,7 @@ namespace Nativra.X86.Jit
                     EmitExit(unchecked(ins.Next + (uint)(sbyte)ins.Imm), Ctx.ReasonNext);
                     return true;
                 case 0xE3: // JECXZ tests ECX without changing the guest's flags.
+                    if (DisableJecxz) return false;
                     e.Pushfq();
                     e.TestRegReg(G[Reg.Ecx], G[Reg.Ecx]);
                     e.Jcc(4, "jecxz_taken");

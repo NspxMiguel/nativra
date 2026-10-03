@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace Nativra.X86.Jit
@@ -40,6 +41,31 @@ namespace Nativra.X86.Jit
         private struct Range
         {
             public ulong Start, End, Stub;
+            public int[] HostOffsets;
+            public uint[] GuestEips;
+        }
+
+        private static string reportPath;
+        private static string probePath;
+        [ThreadStatic] private static ulong guestBase;
+        [ThreadStatic] private static uint runningEip;
+
+        public static void ConfigureReport(string path, string probe)
+        {
+            reportPath = path;
+            probePath = probe;
+        }
+
+        public static void SetExecution(IntPtr memoryBase, uint eip)
+        {
+            guestBase = (ulong)memoryBase.ToInt64();
+            runningEip = eip;
+        }
+
+        public static void ClearExecution()
+        {
+            guestBase = 0;
+            runningEip = 0;
         }
 
         [ThreadStatic] public static bool Pending;
@@ -71,7 +97,7 @@ namespace Nativra.X86.Jit
         }
 
         /// <summary>Makes a published block's code eligible, with the address of its fault exit.</summary>
-        public static void Register(IntPtr start, int length, IntPtr faultStub)
+        public static void Register(IntPtr start, int length, IntPtr faultStub, int[] hostOffsets, uint[] guestEips)
         {
             if (!Installed) return;
             lock (gate)
@@ -80,6 +106,8 @@ namespace Nativra.X86.Jit
                     Start = (ulong)start.ToInt64(),
                     End = (ulong)start.ToInt64() + (ulong)length,
                     Stub = (ulong)faultStub.ToInt64(),
+                    HostOffsets = hostOffsets,
+                    GuestEips = guestEips,
                 });
         }
 
@@ -94,23 +122,72 @@ namespace Nativra.X86.Jit
         {
             var record = Marshal.ReadIntPtr(pointers);
             var context = Marshal.ReadIntPtr(pointers, IntPtr.Size);
-            if ((uint)Marshal.ReadInt32(record) != StatusAccessViolation) return ExceptionContinueSearch;
+            var status = (uint)Marshal.ReadInt32(record);
 
             var rip = (ulong)Marshal.ReadInt64(context, ContextRip);
             ulong stub = 0;
+            ulong start = 0;
+            ulong codeAddress = 0;
+            var eip = runningEip;
+            var address = (ulong)Marshal.ReadInt64(record, RecordInformation + 8);
+            var addressInCode = false;
             lock (gate)
             {
                 foreach (var r in ranges)
-                    if (rip >= r.Start && rip < r.End) { stub = r.Stub; break; }
+                {
+                    if (address >= r.Start && address < r.End)
+                    {
+                        addressInCode = true;
+                        if (codeAddress == 0) { start = r.Start; codeAddress = address; }
+                    }
+                    if (rip >= r.Start && rip < r.End)
+                    {
+                        stub = r.Stub;
+                        start = r.Start;
+                        codeAddress = rip;
+                        for (var i = 0; i < r.HostOffsets.Length && (ulong)r.HostOffsets[i] <= rip - r.Start; i++)
+                            eip = r.GuestEips[i];
+                    }
+                }
             }
-            if (stub == 0) return ExceptionContinueSearch;   // not ours: the host's own crash
+            var addressInGuest = guestBase != 0 && address >= guestBase && address - guestBase < 0x100000000UL;
+            if ((stub != 0 && (status != StatusAccessViolation || !addressInGuest || addressInCode)) || addressInCode)
+                WriteNativeFault(status, rip, address, start, codeAddress, eip);
+            if (stub == 0 || status != StatusAccessViolation || !addressInGuest || addressInCode)
+                return ExceptionContinueSearch;
 
             Pending = true;
             Rip = rip;
             Access = (uint)Marshal.ReadInt64(record, RecordInformation);
-            Address = (ulong)Marshal.ReadInt64(record, RecordInformation + 8);
+            Address = address;
             Marshal.WriteInt64(context, ContextRip, (long)stub);
             return ExceptionContinueExecution;
+        }
+
+        private static void WriteNativeFault(uint status, ulong rip, ulong address, ulong block, ulong codeAddress, uint eip)
+        {
+            if (reportPath == null) return;
+            try
+            {
+                var line = "status=0x" + status.ToString("X8") + " host=0x" + rip.ToString("X16") +
+                    " address=0x" + address.ToString("X16") + " code-offset=" +
+                    (block == 0 ? "outside" : "0x" + (codeAddress - block).ToString("X")) +
+                    " guest-eip=0x" + eip.ToString("X8") + Environment.NewLine;
+                WriteLine(reportPath, line);
+                if (probePath != null) WriteLine(probePath, "x86.log=native-fault " + line);
+            }
+            catch (Exception) { }
+        }
+
+        private static void WriteLine(string path, string line)
+        {
+            using (var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+            using (var writer = new StreamWriter(stream))
+            {
+                writer.Write(line);
+                writer.Flush();
+                stream.Flush(true);
+            }
         }
     }
 }

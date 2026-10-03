@@ -63,6 +63,55 @@ namespace Nativra.X86.Tests
         }
 
         [SkippableFact]
+        public void DisabledJecxzReturnsToInterpreter()
+        {
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
+            using (var jit = Fresh(out var memory, out var cpu))
+            using (memory)
+            {
+                memory.WriteBytes(Code, new byte[] { 0xE3, 0x05 });
+                cpu.Ecx = 0;
+                jit.DisableJecxz = true;
+                jit.RunBlock(1);
+                Assert.Equal(Code + 7, cpu.Eip);
+                Assert.Equal(1, jit.InterpreterFallbacks);
+            }
+        }
+
+        [SkippableFact]
+        public void DisabledBlockCacheCompilesEachEntryAgain()
+        {
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
+            using (var jit = Fresh(out var memory, out var cpu))
+            using (memory)
+            {
+                memory.WriteBytes(Code, new byte[] { 0xEB, 0xFE });
+                jit.DisableBlockCache = true;
+                jit.RunBlock(2);
+                Assert.Equal(Code, cpu.Eip);
+                Assert.Equal(2, jit.BlocksCompiled);
+                Assert.Equal(2, jit.BlocksExecuted);
+            }
+        }
+
+        [SkippableFact]
+        public void JecxzCrossesCodePageBoundary()
+        {
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
+            using (var jit = Fresh(out var memory, out var cpu))
+            using (memory)
+            {
+                memory.Map(Code + 0x1000, 0x1000);
+                memory.WriteBytes(Code + 0xFFF, new byte[] { 0xE3, 0x05 });
+                cpu.Eip = Code + 0xFFF;
+                cpu.Ecx = 0;
+                jit.RunBlock(1);
+                Assert.Equal(Code + 0x1006, cpu.Eip);
+                Assert.Equal(0, jit.InterpreterFallbacks);
+            }
+        }
+
+        [SkippableFact]
         public void EveryConditionMatchesInterpreterForAllArithmeticFlagCombinations()
         {
             Skip.IfNot(CanJit, "JIT needs an x64 host");
@@ -200,6 +249,7 @@ namespace Nativra.X86.Tests
                 Assert.Equal(64, jit.LastRunBlocks);
                 Assert.Equal(64, jit.BlocksExecuted);
                 Assert.Equal(0, jit.InterpreterFallbacks);
+                Assert.True(jit.CodeCacheBytes < 64 * 1024, "small blocks must share executable pages");
             }
         }
 
@@ -218,6 +268,26 @@ namespace Nativra.X86.Tests
                 cpu.Eip = Code;
                 jit.RunBlock(2);
                 Assert.Equal(Code + 9, cpu.Eip);
+            }
+        }
+
+        [SkippableFact]
+        public void UnmappedAndReusedCodePageCannotUseOldEntry()
+        {
+            Skip.IfNot(CanJit, "JIT needs an x64 host");
+            using (var jit = Fresh(out var memory, out var cpu))
+            using (memory)
+            {
+                memory.WriteBytes(Code, new byte[] { 0xEB, 0x00, 0xEB, 0x00 });
+                jit.RunBlock(2);
+                Assert.Equal(Code + 4, cpu.Eip);
+                memory.Unmap(Code, 0x1000);
+                Assert.Equal(0, jit.CodeCacheBytes);
+                memory.Map(Code, 0x1000);
+                memory.WriteBytes(Code, new byte[] { 0xEB, 0x05 });
+                cpu.Eip = Code;
+                jit.RunBlock(1);
+                Assert.Equal(Code + 7, cpu.Eip);
             }
         }
 

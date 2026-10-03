@@ -103,6 +103,7 @@ namespace Nativra.X86.Loader
     /// </summary>
     public sealed class GuestCom
     {
+        public bool UseHeapArguments { get; set; }
         private readonly GuestProcess process;
         private readonly GuestKernel kernel;
         private readonly Dictionary<string, ComInterface> byName = new Dictionary<string, ComInterface>(StringComparer.Ordinal);
@@ -461,20 +462,13 @@ namespace Nativra.X86.Loader
 
             if (argCount > 12) throw new InvalidOperationException("too many arguments for the COM bridge: " + argCount);
             ulong result;
-            if (method.FloatReturn)
+            if (UseHeapArguments)
             {
-                var f = CallFloat(function, args, argCount);
-                process.Interpreter.Fpu.Push(f);
-                result = 0;
+                var copy = new IntPtr[argCount];
+                for (var a = 0; a < argCount; a++) copy[a] = args[a];
+                fixed (IntPtr* heapArgs = copy) result = InvokeHost(function, heapArgs, argCount, method);
             }
-            else if (method.Args.Length > 0 && method.Args[0] == "f")
-            {
-                result = (uint)CallWithFloat(function, args, argCount).ToInt64();
-            }
-            else
-            {
-                result = (uint)CallHost(function, args, argCount).ToInt64();
-            }
+            else result = InvokeHost(function, args, argCount, method);
 
             for (var a = 0; a < method.Args.Length; a++)
             {
@@ -516,6 +510,18 @@ namespace Nativra.X86.Loader
             if (method.Name == "Release" && proxy.Interface.IsUnknown && (uint)result == 0) Forget(self);
             else if (!proxy.Interface.IsUnknown && method.Name == "DestroyVoice") Forget(self);
             return result;
+        }
+
+        private unsafe ulong InvokeHost(IntPtr function, IntPtr* args, int argCount, ComMethod method)
+        {
+            if (method.FloatReturn)
+            {
+                process.Interpreter.Fpu.Push(CallFloat(function, args, argCount));
+                return 0;
+            }
+            if (method.Args.Length > 0 && method.Args[0] == "f")
+                return (uint)CallWithFloat(function, args, argCount).ToInt64();
+            return (uint)CallHost(function, args, argCount).ToInt64();
         }
 
         private IntPtr Slot(ref int slot, int count)

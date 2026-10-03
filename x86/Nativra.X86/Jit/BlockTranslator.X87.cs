@@ -220,9 +220,9 @@ namespace Nativra.X86.Jit
                         {
                             case 0: return EmitX87LoadFloat(ins, 32);
                             case 2: case 3: return EmitX87StoreFloat(ins, 32, reg == 3);
-                            case 4: EmitFldenv(ins); return true;
+                            case 4: if (DisableX87Environment) return false; EmitFldenv(ins); return true;
                             case 5: EmitFldcw(ins); return true;
-                            case 6: EmitFnstenv(ins); return true;
+                            case 6: if (DisableX87Environment) return false; EmitFnstenv(ins); return true;
                             case 7: EmitFnstcw(ins); return true;
                         }
                         return false;

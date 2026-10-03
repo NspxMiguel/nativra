@@ -44,9 +44,15 @@ namespace Nativra.X86.Jit
 
         public long BlocksCompiled { get; private set; }
         public long BlocksExecuted { get; private set; }
+        public long CodeCacheBytes => cache.AllocatedBytes;
         public long InterpreterFallbacks { get; private set; }
         public bool CollectFallbacks { get; set; }
+        public bool DisableX87Environment { get; set; }
+        public bool DisableJecxz { get; set; }
+        public bool DisableBlockCache { get; set; }
         public Dictionary<string, long> FallbackCounts { get; } = new Dictionary<string, long>();
+
+        public static void ConfigureFaultReport(string path, string probePath = null) => JitFaults.ConfigureReport(path, probePath);
 
         public JitEngine(CpuState cpu, GuestMemory memory)
         {
@@ -69,37 +75,46 @@ namespace Nativra.X86.Jit
         public int RunBlock(int maxBlocks = 64, uint stopEip = 0)
         {
             if (maxBlocks < 1) throw new ArgumentOutOfRangeException(nameof(maxBlocks));
-            ctx.Load(Cpu);
-            LastRunBlocks = 0;
-            for (var i = 0; i < maxBlocks; i++)
+            lock (cache)
             {
-                BlockMap map;
-                try { map = GetBlock(ctx.Eip, 0); }
-                catch { ctx.Store(Cpu); throw; }
-                if (map.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
-                if (map.UsesX87) ctx.LoadX87(Interpreter.Fpu);
-                map.Function(ctx.Pointer);
-                if (map.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
-                if (map.UsesX87) ctx.StoreX87(Interpreter.Fpu);
-                BlocksExecuted++;
-                LastRunBlocks++;
-                if (ctx.ExitReason == Ctx.ReasonFault)
+                ctx.Load(Cpu);
+                LastRunBlocks = 0;
+                for (var i = 0; i < maxBlocks; i++)
                 {
-                    ctx.Store(Cpu);
-                    RaiseFault(map.Pointer);
+                    BlockMap map;
+                    try { map = DisableBlockCache ? CompileTransient(ctx.Eip) : GetBlock(ctx.Eip, 0); }
+                    catch { ctx.Store(Cpu); throw; }
+                    try
+                    {
+                        if (map.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
+                        if (map.UsesX87) ctx.LoadX87(Interpreter.Fpu);
+                        JitFaults.SetExecution(Memory.HostBase, map.GuestEips.Length > 0 ? map.GuestEips[0] : ctx.Eip);
+                        try { map.Function(ctx.Pointer); }
+                        finally { JitFaults.ClearExecution(); }
+                        if (map.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
+                        if (map.UsesX87) ctx.StoreX87(Interpreter.Fpu);
+                        BlocksExecuted++;
+                        LastRunBlocks++;
+                        if (ctx.ExitReason == Ctx.ReasonFault)
+                        {
+                            ctx.Store(Cpu);
+                            RaiseFault(map.Pointer);
+                        }
+                        if (ctx.ExitReason == Ctx.ReasonFallback)
+                        {
+                            ctx.Store(Cpu);
+                            CountFallback();
+                            Interpreter.Step();
+                            InterpreterFallbacks++;
+                            return ctx.ExitReason;
+                        }
+                        if (ctx.Eip == stopEip || (ctx.Eip >= 0x7EF00000 && ctx.Eip < 0x7F000000)) break;
+                    }
+                    finally { if (DisableBlockCache) ReleaseBlock(map.Pointer); }
                 }
-                if (ctx.ExitReason == Ctx.ReasonFallback)
-                {
-                    ctx.Store(Cpu);
-                    CountFallback();
-                    Interpreter.Step();
-                    InterpreterFallbacks++;
-                    return ctx.ExitReason;
-                }
-                if (ctx.Eip == stopEip || (ctx.Eip >= 0x7EF00000 && ctx.Eip < 0x7F000000)) break;
+                ctx.Store(Cpu);
+                return ctx.ExitReason;
             }
-            ctx.Store(Cpu);
-            return ctx.ExitReason;
         }
 
         public int LastRunBlocks { get; private set; }
@@ -128,39 +143,48 @@ namespace Nativra.X86.Jit
         /// </summary>
         public bool RunToStop(uint stop, long maxBlocks = 1_000_000)
         {
-            for (long i = 0; i < maxBlocks; i++)
+            lock (cache)
             {
-                if (Cpu.Eip == stop) return true;
-                ctx.Load(Cpu);
-                var translator = new BlockTranslator();
-                var code = translator.Translate(Memory, Cpu.Eip, stop);
-                LastFullyTranslated = translator.FullyTranslated;
-                LastInstructionCount = translator.InstructionCount;
-                var block = Publish(code, translator);
-                if (translator.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
-                if (translator.UsesX87) ctx.LoadX87(Interpreter.Fpu);
-                DelegateFor(block)(ctx.Pointer);
-                if (translator.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
-                if (translator.UsesX87) ctx.StoreX87(Interpreter.Fpu);
-                BlocksCompiled++;
-                BlocksExecuted++;
-                ctx.Store(Cpu);
-                if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault(block);
-                if (ctx.ExitReason == Ctx.ReasonFallback)
+                for (long i = 0; i < maxBlocks; i++)
                 {
-                    CountFallback();
-                    Interpreter.Step();
-                    InterpreterFallbacks++;
+                    if (Cpu.Eip == stop) return true;
+                    ctx.Load(Cpu);
+                    var translator = new BlockTranslator { DisableX87Environment = DisableX87Environment, DisableJecxz = DisableJecxz };
+                    var code = translator.Translate(Memory, Cpu.Eip, stop);
+                    LastFullyTranslated = translator.FullyTranslated;
+                    LastInstructionCount = translator.InstructionCount;
+                    var block = Publish(code, translator);
+                    try
+                    {
+                        if (translator.UsesSse) ctx.LoadXmm(Interpreter.Fpu);
+                        if (translator.UsesX87) ctx.LoadX87(Interpreter.Fpu);
+                        JitFaults.SetExecution(Memory.HostBase, Cpu.Eip);
+                        try { DelegateFor(block)(ctx.Pointer); }
+                        finally { JitFaults.ClearExecution(); }
+                        if (translator.UsesSse) ctx.StoreXmm(Interpreter.Fpu);
+                        if (translator.UsesX87) ctx.StoreX87(Interpreter.Fpu);
+                        BlocksCompiled++;
+                        BlocksExecuted++;
+                        ctx.Store(Cpu);
+                        if (ctx.ExitReason == Ctx.ReasonFault) RaiseFault(block);
+                        if (ctx.ExitReason == Ctx.ReasonFallback)
+                        {
+                            CountFallback();
+                            Interpreter.Step();
+                            InterpreterFallbacks++;
+                        }
+                    }
+                    finally { ReleaseBlock(block); }
                 }
+                return Cpu.Eip == stop;
             }
-            return Cpu.Eip == stop;
         }
 
         private BlockMap GetBlock(uint eip, uint stopEip)
         {
             if (blocks.TryGetValue(eip, out var cached)) return cached;
 
-            var translator = new BlockTranslator();
+            var translator = new BlockTranslator { DisableX87Environment = DisableX87Environment, DisableJecxz = DisableJecxz };
             var code = translator.Translate(Memory, eip, stopEip);
             LastFullyTranslated = translator.FullyTranslated;
             LastInstructionCount = translator.InstructionCount;
@@ -172,6 +196,28 @@ namespace Nativra.X86.Jit
             if (!blocksByPage.TryGetValue(page, out var starts)) blocksByPage[page] = starts = new List<uint>();
             starts.Add(eip);
             return map;
+        }
+
+        private BlockMap CompileTransient(uint eip)
+        {
+            var translator = new BlockTranslator { DisableX87Environment = DisableX87Environment, DisableJecxz = DisableJecxz };
+            var code = translator.Translate(Memory, eip, 0);
+            LastFullyTranslated = translator.FullyTranslated;
+            LastInstructionCount = translator.InstructionCount;
+            var pointer = Publish(code, translator);
+            BlocksCompiled++;
+            return maps[pointer];
+        }
+
+        private void ReleaseBlock(IntPtr pointer)
+        {
+            lock (cache)
+            {
+                JitFaults.Unregister(pointer);
+                maps.Remove(pointer);
+                delegates.Remove(pointer);
+                cache.Release(pointer);
+            }
         }
 
         private void CountFallback()
@@ -222,28 +268,36 @@ namespace Nativra.X86.Jit
         /// </summary>
         public void Invalidate(uint address, uint size)
         {
-            if (size == 0 || blocksByPage.Count == 0) return;
-            var first = address >> GuestMemory.PageShift;
-            var last = (uint)(((ulong)address + size - 1) >> GuestMemory.PageShift);
-            if (first > 0) first--;
-            if ((ulong)(last - first) + 1 > (ulong)blocksByPage.Count)
+            lock (cache)
             {
-                // A range wider than the pages that hold blocks: walk those instead.
-                var affected = new List<uint>();
-                foreach (var page in blocksByPage.Keys)
-                    if (page >= first && page <= last) affected.Add(page);
-                foreach (var page in affected) DropBlocks(page);
-            }
-            else
-            {
-                for (var page = first; page <= last; page++) DropBlocks(page);
+                if (size == 0 || blocksByPage.Count == 0) return;
+                var first = address >> GuestMemory.PageShift;
+                var last = (uint)(((ulong)address + size - 1) >> GuestMemory.PageShift);
+                if (first > 0) first--;
+                if ((ulong)(last - first) + 1 > (ulong)blocksByPage.Count)
+                {
+                    // A range wider than the pages that hold blocks: walk those instead.
+                    var affected = new List<uint>();
+                    foreach (var page in blocksByPage.Keys)
+                        if (page >= first && page <= last) affected.Add(page);
+                    foreach (var page in affected) DropBlocks(page);
+                }
+                else
+                {
+                    for (var page = first; page <= last; page++) DropBlocks(page);
+                }
             }
         }
 
         private void DropBlocks(uint page)
         {
             if (!blocksByPage.TryGetValue(page, out var starts)) return;
-            foreach (var eip in starts) blocks.Remove(eip);
+            foreach (var eip in starts)
+            {
+                if (!blocks.TryGetValue(eip, out var map)) continue;
+                blocks.Remove(eip);
+                ReleaseBlock(map.Pointer);
+            }
             blocksByPage.Remove(page);
         }
 
@@ -259,7 +313,8 @@ namespace Nativra.X86.Jit
                 UsesSse = translator.UsesSse,
                 UsesX87 = translator.UsesX87,
             };
-            JitFaults.Register(block, code.Length, block + translator.FaultExitOffset);
+            JitFaults.Register(block, code.Length, block + translator.FaultExitOffset,
+                maps[block].HostOffsets, maps[block].GuestEips);
             return block;
         }
 
@@ -296,10 +351,13 @@ namespace Nativra.X86.Jit
 
         public void Dispose()
         {
-            Memory.PagesDiscarded -= Invalidate;
-            foreach (var block in maps.Keys) JitFaults.Unregister(block);
-            cache.Dispose();
-            ctx.Dispose();
+            lock (cache)
+            {
+                Memory.PagesDiscarded -= Invalidate;
+                foreach (var block in maps.Keys) JitFaults.Unregister(block);
+                cache.Dispose();
+                ctx.Dispose();
+            }
         }
     }
 }

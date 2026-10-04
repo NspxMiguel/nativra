@@ -109,6 +109,7 @@ namespace Kiosk.Native
                 using (var heartbeat = new X86Heartbeat(System.IO.Path.Combine(local.Path, "x86-heartbeat.txt"), process, memory, switches))
                 {
                     var kernel = new GuestKernel(process);
+                    kernel.ShaderCompiler = X86ShaderCompiler.Compile;
                     kernel.ExePath = folderPath.TrimEnd('\\') + "\\" + exeName;
                     kernel.SetCommandLine("\"" + kernel.ExePath + "\"");
                     var guestLog = new List<string>();

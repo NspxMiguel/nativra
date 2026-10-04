@@ -127,6 +127,7 @@ namespace Nativra.X86.Loader
         /// <summary>Registers every handler on the process's import table.</summary>
         public void Install()
         {
+            InstallShaderCompiler();
             var i = process.Imports;
             const string k = "kernel32.dll";
 

@@ -746,6 +746,76 @@ namespace
 {
 typedef HRESULT(WINAPI *CompileFn)(LPCVOID, SIZE_T, LPCSTR, const D3DXMACRO *, ID3DXInclude *, LPCSTR, LPCSTR, UINT,
                                    UINT, Blob **, Blob **);
+typedef HRESULT(WINAPI *HostCompileFn)(LPCSTR, UINT, LPCSTR, const D3DXMACRO *, LPCSTR, LPCSTR, UINT, UINT,
+                                       void *, UINT, UINT *, char *, UINT, UINT *);
+bool CompileOnHost(const char *source, UINT length, const char *name, const D3DXMACRO *macros,
+                   const char *entry, const char *profile, DWORD flags, ID3DXBuffer **shader,
+                   ID3DXBuffer **errors, HRESULT *result)
+{
+    HMODULE module = LoadLibraryW(L"nativra_host.dll");
+    if (!module)
+        return false;
+    HostCompileFn fn = (HostCompileFn)GetProcAddress(module, "HostD3DCompile");
+    if (!fn)
+    {
+        FreeLibrary(module);
+        return false;
+    }
+    UINT codeLength = 0, errorLength = 0;
+    HRESULT hr = fn(source, length, name, macros, entry, profile, flags, 0,
+                    nullptr, 0, &codeLength, nullptr, 0, &errorLength);
+    const HRESULT tooSmall = HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    if (hr != tooSmall)
+    {
+        *result = hr;
+        FreeLibrary(module);
+        return true;
+    }
+    void *code = malloc(codeLength ? codeLength : 1);
+    char *messages = (char *)malloc(errorLength ? errorLength : 1);
+    if (!code || !messages)
+    {
+        free(code);
+        free(messages);
+        *result = E_OUTOFMEMORY;
+        FreeLibrary(module);
+        return true;
+    }
+    UINT receivedCode = 0, receivedErrors = 0;
+    hr = fn(source, length, name, macros, entry, profile, flags, 0, code, codeLength, &receivedCode,
+            messages, errorLength, &receivedErrors);
+    if (hr == tooSmall || receivedCode > codeLength || receivedErrors > errorLength)
+        hr = tooSmall;
+    if (hr != tooSmall)
+    {
+        if (receivedCode && shader)
+        {
+            Buffer *buffer = new (std::nothrow) Buffer(code, receivedCode);
+            if (!buffer || !buffer->valid())
+            {
+                if (buffer) buffer->Release();
+                hr = E_OUTOFMEMORY;
+            }
+            else *shader = buffer;
+        }
+        if (receivedErrors && errors)
+        {
+            Buffer *buffer = new (std::nothrow) Buffer(messages, receivedErrors);
+            if (!buffer || !buffer->valid())
+            {
+                if (buffer) buffer->Release();
+                if (shader && *shader) { (*shader)->Release(); *shader = nullptr; }
+                hr = E_OUTOFMEMORY;
+            }
+            else *errors = buffer;
+        }
+    }
+    free(code);
+    free(messages);
+    FreeLibrary(module);
+    *result = hr;
+    return true;
+}
 HRESULT Compile(const char *source, UINT length, const char *name, const D3DXMACRO *macros, ID3DXInclude *include,
                 const char *entry, const char *profile, DWORD flags, ID3DXBuffer **shader, ID3DXBuffer **errors,
                 void **table)
@@ -758,6 +828,9 @@ HRESULT Compile(const char *source, UINT length, const char *name, const D3DXMAC
         *table = nullptr;
     if (!source || !length || !entry || !profile || !shader)
         return D3DERR_INVALIDCALL;
+    HRESULT hostResult = D3DERR_NOTAVAILABLE;
+    if (!include && CompileOnHost(source, length, name, macros, entry, profile, flags, shader, errors, &hostResult))
+        return hostResult;
     HMODULE module = LoadLibraryW(L"d3dcompiler_43.dll");
     if (!module)
         return D3DERR_NOTAVAILABLE;

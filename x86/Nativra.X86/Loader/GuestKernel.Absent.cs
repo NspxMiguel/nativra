@@ -7,7 +7,7 @@ namespace Nativra.X86.Loader
     {
         private void InstallAbsent(GuestImports i)
         {
-            // DirectInput 8: no device enumeration here; pads arrive through XInput.
+            // A fallback for runs without a packaged dinput8.dll (such as the Mac runner).
             // DirectInput8Create(hinst, version, riid, ppvOut, punkOuter).
             i.Register("dinput8.dll", "DirectInput8Create", CallConv.Stdcall, 5, c =>
             {

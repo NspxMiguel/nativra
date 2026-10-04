@@ -1,0 +1,8 @@
+LIBRARY dinput8
+EXPORTS
+    DirectInput8Create
+    c_dfDIKeyboard DATA
+    c_dfDIMouse DATA
+    c_dfDIMouse2 DATA
+    c_dfDIJoystick DATA
+    c_dfDIJoystick2 DATA

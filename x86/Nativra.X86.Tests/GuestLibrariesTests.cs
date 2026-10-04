@@ -81,6 +81,45 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void PackagedDirectInputOverridesTheAbsentFallbackForBothLoadingPaths()
+        {
+            var imageBytes = TestPe32.Minimal(dll: true);
+            var name = "DirectInput8Create";
+            var dataName = "c_dfDIKeyboard";
+            void Dword(int offset, uint value) => Array.Copy(BitConverter.GetBytes(value), 0, imageBytes, offset, 4);
+            void Text(int offset, string value)
+            {
+                for (var i = 0; i < value.Length; i++) imageBytes[offset + i] = (byte)value[i];
+            }
+            Dword(0x664 + 20, 2); // NumberOfFunctions
+            Dword(0x664 + 24, 2); // NumberOfNames
+            Dword(0x664 + 28, 0x20D0); // Export address table
+            Dword(0x664 + 32, 0x20D8); // Name pointer table
+            Dword(0x664 + 36, 0x20E0); // Ordinal table
+            Dword(0x6D0, 0x1000); Dword(0x6D4, 0x2140);
+            Dword(0x6D8, 0x2100); Dword(0x6DC, 0x2120);
+            Text(0x700, name); Text(0x720, dataName);
+            // The two ordinal entries are zero from TestPe32.Minimal.
+            imageBytes[0x6E2] = 1;
+            p.ModuleSource = module => module == "dinput8.dll" ? imageBytes : null;
+
+            var staticImport = p.ResolveImport("dinput8.dll", name, -1);
+            var staticData = p.ResolveImport("dinput8.dll", dataName, -1);
+            var image = p.FindModule("dinput8.dll");
+            Assert.NotNull(image);
+            Assert.Equal(image.Export(name), staticImport);
+            Assert.Equal(image.Export(dataName), staticData);
+            Assert.Equal(image.BaseAddress + 0x2140, staticData);
+            Assert.False(GuestImports.InRegion(staticImport));
+            Assert.False(GuestImports.InRegion(staticData));
+
+            var loaded = Call("kernel32.dll", "LoadLibraryA", Str("dinput8.dll"));
+            Assert.Equal(image.BaseAddress, loaded);
+            Assert.Equal(staticImport, Call("kernel32.dll", "GetProcAddress", loaded, Str(name)));
+            Assert.Equal(staticData, Call("kernel32.dll", "GetProcAddress", loaded, Str(dataName)));
+        }
+
+        [Fact]
         public void SecurityDllExposesAnSspiTableWithoutClaimingUnsupportedCredentials()
         {
             var module = Call("kernel32.dll", "LoadLibraryExA", Str("C:\\Windows\\system32\\security.dll"), 0, 8);

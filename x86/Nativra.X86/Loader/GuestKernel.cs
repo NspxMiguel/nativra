@@ -319,10 +319,9 @@ namespace Nativra.X86.Loader
             if (modules.TryGetValue(name, out var registered)) return registered;
             // A system DLL the host serves calls for gets a handle GetProcAddress
             // understands; a DLL that is nowhere is not there, as on Windows.
-            // dinput8 and winhttp answer a game that imports them (so the import binds and
-            // its calls fail cleanly), but are not there for a game that loads them by name:
-            // such code treats a missing library as "use the other path" (WAVESHAPER takes
-            // XInput), and treats a present one that fails as fatal.
+            // This fallback only applies if neither the game nor ModuleSource provided
+            // a real image. The packaged dinput8.dll is mapped above for both static
+            // imports and LoadLibrary; the Mac runner still reports it missing here.
             if (LoadLibraryAbsent.Contains(name) || (!IsAlwaysLoaded(name) && !process.Imports.KnowsModule(name)))
             {
                 process.LastError = ErrorModNotFound;

@@ -112,7 +112,13 @@ namespace Kiosk.Native
                     kernel.ExePath = folderPath.TrimEnd('\\') + "\\" + exeName;
                     kernel.SetCommandLine("\"" + kernel.ExePath + "\"");
                     var guestLog = new List<string>();
-                    kernel.Log = text => { if (guestLog.Count < LogLines) guestLog.Add(text); };
+                    // GetProcAddress lookups fill the head of every log and say little; the
+                    // lines after them (assertions, exceptions, file opens) are the news.
+                    kernel.Log = text =>
+                    {
+                        if (!text.StartsWith("GetProcAddress ", StringComparison.Ordinal) && guestLog.Count < LogLines)
+                            guestLog.Add(text);
+                    };
                     // The same input the 64-bit path reads (pad as mouse and keys),
                     // delivered as messages on the game's window.
                     kernel.Input = new ConsoleInput();

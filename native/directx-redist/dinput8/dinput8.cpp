@@ -7,6 +7,11 @@
 #include <new>
 #include <windows.h>
 
+// Newer SDKs dropped this flag from dinput.h; it is the high bit of the object-type word.
+#ifndef DIDFT_OPTIONAL
+#define DIDFT_OPTIONAL 0x80000000
+#endif
+
 namespace {
 constexpr DWORD kMaxObjects = 256;
 constexpr DWORD kMaxEvents = 512;

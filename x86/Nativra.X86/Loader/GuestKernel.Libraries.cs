@@ -795,6 +795,18 @@ namespace Nativra.X86.Loader
             i.Register(a, "EventWrite", CallConv.Stdcall, 5, c => 0);
             i.Register(a, "EventEnabled", CallConv.Stdcall, 3, c => 0);
             i.Register(a, "EventSetInformation", CallConv.Stdcall, 5, c => 0);
+            // Legacy ETW provider registration. The game probes these exports
+            // dynamically during CRT startup, before it has any trace session.
+            i.Register(a, "RegisterTraceGuidsW", CallConv.Stdcall, 8, c =>
+            {
+                if (c.Arg(7) != 0) memory.Write64(c.Arg(7), 1);
+                return 0;
+            });
+            i.Register(a, "UnregisterTraceGuids", CallConv.Stdcall, 2, c => 0);
+            i.Register(a, "TraceEvent", CallConv.Stdcall, 3, c => 0);
+            i.Register(a, "GetTraceLoggerHandle", CallConv.Stdcall, 1, c => 0);
+            i.Register(a, "GetTraceEnableLevel", CallConv.Stdcall, 2, c => 0);
+            i.Register(a, "GetTraceEnableFlags", CallConv.Stdcall, 2, c => 0);
         }
 
         private uint CountWithNul(uint sizePtr)

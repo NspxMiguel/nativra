@@ -321,6 +321,7 @@ namespace Nativra.X86.Loader
             if (LoadLibraryAbsent.Contains(name) || (!IsAlwaysLoaded(name) && !process.Imports.KnowsModule(name)))
             {
                 process.LastError = ErrorModNotFound;
+                Log?.Invoke("LoadLibrary " + raw + ": module not found");
                 return 0;
             }
             var standIn = FakeHandle(name);

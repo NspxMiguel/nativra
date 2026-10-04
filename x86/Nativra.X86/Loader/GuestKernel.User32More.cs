@@ -12,6 +12,7 @@ namespace Nativra.X86.Loader
     public sealed partial class GuestKernel
     {
         private uint nextUserHandle = 0x00E00010;
+        private readonly Dictionary<uint, string> windowStations = new Dictionary<uint, string>();
         private int caretBlink = 530;
 
         private uint NewUserHandle() { var h = nextUserHandle; nextUserHandle += 4; return h; }
@@ -326,6 +327,23 @@ namespace Nativra.X86.Loader
 
             // Desktops and window stations.
             i.Register(u, "GetProcessWindowStation", CallConv.Stdcall, 0, c => 0x00E00004);
+            foreach (var wide in new[] { false, true })
+            {
+                var isWide = wide;
+                i.Register(u, "CreateWindowStation" + (wide ? "W" : "A"), CallConv.Stdcall, 4, c =>
+                {
+                    var name = c.Arg(0) == 0 ? "" : ReadText(c.Arg(0), isWide);
+                    var handle = NewUserHandle();
+                    windowStations[handle] = name;
+                    return handle;
+                });
+            }
+            i.Register(u, "CloseWindowStation", CallConv.Stdcall, 1, c =>
+            {
+                if (windowStations.Remove(c.Arg(0))) return 1;
+                process.LastError = 6; // ERROR_INVALID_HANDLE
+                return 0;
+            });
             i.Register(u, "GetThreadDesktop", CallConv.Stdcall, 1, c => 0x00E00008);
             i.Register(u, "OpenInputDesktop", CallConv.Stdcall, 3, c => 0x00E00008);
             i.Register(u, "OpenDesktopA", CallConv.Stdcall, 4, c => 0x00E00008);

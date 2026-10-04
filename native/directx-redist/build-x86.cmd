@@ -23,7 +23,7 @@ cl /nologo /LD /EHsc /O2 /MT x3daudio1_7\x3daudio1_7.cpp /Fo:obj-x86\ /Fe:"%OUT%
 if errorlevel 1 exit /b 1
 cl /nologo /LD /EHsc /O2 /MT xapofx1_5\xapofx1_5.cpp /Fo:obj-x86\ /Fe:"%OUT%\xapofx1_5.dll" /link /APPCONTAINER /DEF:xapofx1_5\xapofx1_5.def xaudio2.lib
 if errorlevel 1 exit /b 1
-cl /nologo /LD /EHsc /O2 /MT d3dx9_43\d3dx9_43.cpp /Fo:obj-x86\ /Fe:"%OUT%\d3dx9_43.dll" /link /APPCONTAINER /DEF:d3dx9_43\d3dx9_43.def
+cl /nologo /LD /EHsc /GR- /O2 /MT d3dx9_43\d3dx9_43.cpp /Fo:obj-x86\ /Fe:"%OUT%\d3dx9_43.dll" /link /APPCONTAINER /DEF:d3dx9_43\d3dx9_43.def
 if errorlevel 1 exit /b 1
 del /q "%OUT%\*.exp" "%OUT%\*.lib" 2>nul
 
@@ -31,6 +31,7 @@ rem Every export must be reachable by its plain name.
 call :exports xaudio2_7 "DllGetClassObject DllCanUnloadNow" || exit /b 1
 call :exports x3daudio1_7 "X3DAudioInitialize X3DAudioCalculate" || exit /b 1
 call :exports xapofx1_5 "CreateFX" || exit /b 1
+rem The .def is the single export list, including the texture and shader entries.
 set "D3DX="
 for /f "skip=2 tokens=1" %%n in (d3dx9_43\d3dx9_43.def) do set "D3DX=!D3DX! %%n"
 call :exports d3dx9_43 "!D3DX!" || exit /b 1

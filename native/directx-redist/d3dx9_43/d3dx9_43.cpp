@@ -446,3 +446,5 @@ D3DXPLANE* WINAPI D3DXPlaneFromPointNormal(D3DXPLANE* out, const D3DXVECTOR3* p,
 }
 
 BOOL WINAPI DllMain(HINSTANCE, DWORD, LPVOID) { return TRUE; }
+
+#include "d3dx9_extra.cpp"

@@ -1,0 +1,4 @@
+stb_image.h and stb_image_write.h by Sean Barrett and contributors.
+These files are released into the public domain, or alternatively licensed
+under MIT. Their complete license notices are embedded at the end of each file.
+Source: https://github.com/nothings/stb

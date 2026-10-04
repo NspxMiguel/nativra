@@ -35,3 +35,22 @@ EXPORTS
     D3DXQuaternionSlerp
     D3DXPlaneNormalize
     D3DXPlaneFromPointNormal
+    D3DXCompileShader
+    D3DXCompileShaderFromFileA
+    D3DXCompileShaderFromFileW
+    D3DXCreateRenderToSurface
+    D3DXCreateTexture
+    D3DXCreateCubeTexture
+    D3DXCreateTextureFromFileA
+    D3DXCreateTextureFromFileW
+    D3DXCreateTextureFromFileExA
+    D3DXCreateTextureFromFileExW
+    D3DXCreateTextureFromFileInMemory
+    D3DXCreateTextureFromFileInMemoryEx
+    D3DXGetImageInfoFromFileA
+    D3DXGetImageInfoFromFileW
+    D3DXGetImageInfoFromFileInMemory
+    D3DXSaveTextureToFileA
+    D3DXSaveTextureToFileW
+    D3DXGetPixelShaderProfile
+    D3DXGetVertexShaderProfile

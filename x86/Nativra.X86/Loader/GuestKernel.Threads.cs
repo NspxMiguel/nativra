@@ -125,7 +125,50 @@ namespace Nativra.X86.Loader
             i.Register(k, "SetThreadPriority", CallConv.Stdcall, 2, c => 1);
             i.Register(k, "GetThreadPriority", CallConv.Stdcall, 1, c => 0);
             i.Register(k, "SetThreadPriorityBoost", CallConv.Stdcall, 2, c => 1);
-            i.Register(k, "SetThreadAffinityMask", CallConv.Stdcall, 2, c => 0xF);
+            i.Register(k, "SetThreadAffinityMask", CallConv.Stdcall, 2, c =>
+            {
+                var thread = ThreadFor(c.Arg(0));
+                var mask = c.Arg(1);
+                if (thread == null || mask == 0 || (mask & ~0xFu) != 0)
+                {
+                    process.LastError = thread == null ? ErrorInvalidHandle : ErrorInvalidParameter;
+                    return 0;
+                }
+                var previous = thread.AffinityMask;
+                thread.AffinityMask = mask;
+                return previous;
+            });
+            i.Register(k, "SetThreadGroupAffinity", CallConv.Stdcall, 3, c =>
+            {
+                var thread = ThreadFor(c.Arg(0));
+                if (thread == null) { process.LastError = ErrorInvalidHandle; return 0; }
+                var affinity = c.Arg(1);
+                if (affinity == 0 || memory.Read16(affinity + 4) != 0 ||
+                    memory.Read32(affinity) == 0 || (memory.Read32(affinity) & ~0xFu) != 0)
+                {
+                    process.LastError = ErrorInvalidParameter;
+                    return 0;
+                }
+                if (c.Arg(2) != 0) WriteGroupAffinity(c.Arg(2), thread.AffinityMask);
+                thread.AffinityMask = memory.Read32(affinity);
+                return 1;
+            });
+            i.Register(k, "GetThreadGroupAffinity", CallConv.Stdcall, 2, c =>
+            {
+                var thread = ThreadFor(c.Arg(0));
+                if (thread == null || c.Arg(1) == 0)
+                {
+                    process.LastError = thread == null ? ErrorInvalidHandle : ErrorInvalidParameter;
+                    return 0;
+                }
+                WriteGroupAffinity(c.Arg(1), thread.AffinityMask);
+                return 1;
+            });
+            i.Register(k, "GetCurrentProcessorNumberEx", CallConv.Stdcall, 1, c =>
+            {
+                if (c.Arg(0) != 0) memory.Write32(c.Arg(0), 0); // PROCESSOR_NUMBER: group 0, number 0, reserved 0
+                return 0;
+            });
             i.Register(k, "SetThreadIdealProcessor", CallConv.Stdcall, 2, c => 0);
             i.Register(k, "SetThreadDescription", CallConv.Stdcall, 2, c => 0);   // S_OK
             i.Register(k, "GetProcessAffinityMask", CallConv.Stdcall, 3, c =>
@@ -227,6 +270,12 @@ namespace Nativra.X86.Loader
         {
             if (handle == PseudoThread) return process.CurrentThread;
             return Object(handle) is ThreadObject t ? t.Thread : null;
+        }
+
+        private void WriteGroupAffinity(uint address, uint mask)
+        {
+            memory.WriteBytes(address, new byte[12]);
+            memory.Write32(address, mask);
         }
 
         /// <summary>DLL_THREAD_ATTACH for every module that wants it, on the new thread.</summary>

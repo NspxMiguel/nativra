@@ -19,6 +19,7 @@ namespace Nativra.X86.Loader
         public bool IsDone { get; internal set; }
         public uint ExitCode { get; internal set; } = StillActive;
         public int SuspendCount { get; internal set; }
+        internal uint AffinityMask = 0xF;
 
         /// <summary>Waiting inside its last import call (it re-asks when scheduled).</summary>
         public bool Blocked { get; internal set; }

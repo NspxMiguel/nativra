@@ -88,7 +88,7 @@ namespace Nativra.X86.Loader
         /// </summary>
         public IReadOnlyList<string> ProbedAbsent => probedAbsent;
 
-        public GuestKernel(GuestProcess process, uint heapBase = 0x30000000, uint heapSize = 0x30000000)
+        public GuestKernel(GuestProcess process, uint heapBase = 0x30000000, uint heapSize = 0x40000000)
         {
             this.process = process;
             memory = process.Memory;

@@ -741,6 +741,9 @@ namespace Nativra.X86.Loader
                         module = image.BaseAddress;
                         break;
                     }
+                if (module == 0 && process.Imports.TryResolve(nameOrAddress, out var import) &&
+                    fakeByName.TryGetValue(import.Module, out var hostModule))
+                    module = hostModule;
                 if (module == 0) process.LastError = ErrorModNotFound;
             }
             else module = ModuleHandle(nameOrAddress, wide);

@@ -249,7 +249,7 @@ namespace Nativra.X86.Loader
 
             var read = (access & (GenericRead | GenericAll | FileReadData)) != 0;
             var write = (access & (GenericWrite | GenericAll | FileWriteData | FileAppendData)) != 0;
-            var entry = Files.Stat(path);
+            var entry = ModuleFileEntry(path) ?? Files.Stat(path);
 
             if (entry != null && (entry.Attributes & FileAttributes.Directory) != 0)
             {
@@ -283,7 +283,10 @@ namespace Nativra.X86.Loader
             Stream stream;
             try
             {
-                stream = Files.Open(path, mode, fileAccess);
+                var module = ModuleFileHandle(path);
+                stream = module != 0 && mode == FileMode.Open && !write
+                    ? new MemoryStream(memory.ReadBytes(module, (int)StandInSize), false)
+                    : Files.Open(path, mode, fileAccess);
             }
             catch (FileNotFoundException) { FilesNotFound.Add(path); process.LastError = ErrorFileNotFound; return InvalidHandleValue; }
             catch (DirectoryNotFoundException) { FilesNotFound.Add(path); process.LastError = ErrorPathNotFound; return InvalidHandleValue; }
@@ -504,13 +507,32 @@ namespace Nativra.X86.Loader
 
         private GuestFileEntry StatOrFail(string path)
         {
-            var entry = Files.Stat(path);
+            var entry = ModuleFileEntry(path) ?? Files.Stat(path);
             if (entry == null)
             {
                 FilesNotFound.Add(path);
                 process.LastError = Files.Stat(Folder(path).TrimEnd('\\')) == null ? ErrorPathNotFound : ErrorFileNotFound;
             }
             return entry;
+        }
+
+        private uint ModuleFileHandle(string path)
+        {
+            foreach (var pair in fakeModulePaths)
+                if (path.Equals(pair.Value, StringComparison.OrdinalIgnoreCase)) return pair.Key;
+            return 0;
+        }
+
+        private GuestFileEntry ModuleFileEntry(string path)
+        {
+            if (ModuleFileHandle(path) == 0) return null;
+            return new GuestFileEntry
+            {
+                Name = Trim(path),
+                Attributes = FileAttributes.ReadOnly,
+                Size = StandInSize,
+                WriteTimeUtc = DateTime.UtcNow,
+            };
         }
 
         private uint FileAttributesOf(uint name, bool wide)

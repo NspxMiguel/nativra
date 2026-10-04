@@ -43,6 +43,7 @@ namespace Nativra.X86.Loader
         private readonly Dictionary<string, uint> modules =
             new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<uint, string> fakeHandles = new Dictionary<uint, string>();
+        private readonly Dictionary<uint, string> fakeModulePaths = new Dictionary<uint, string>();
         private readonly Dictionary<string, uint> fakeByName =
             new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> probedAbsent = new List<string>();
@@ -322,7 +323,9 @@ namespace Nativra.X86.Loader
                 process.LastError = ErrorModNotFound;
                 return 0;
             }
-            return FakeHandle(name);
+            var standIn = FakeHandle(name);
+            if (process.HostServed.Contains(name) && HasOwnFolder(raw)) fakeModulePaths[standIn] = raw;
+            return standIn;
         }
 
         /// <summary>GetProcAddress by name or ordinal (a "name" below 0x10000 is an ordinal).</summary>
@@ -363,6 +366,7 @@ namespace Nativra.X86.Loader
                 path = null;
                 foreach (var image in process.Images)
                     if (image.BaseAddress == module) { path = ModulePath(image.Name); break; }
+                if (path == null && fakeModulePaths.TryGetValue(module, out var loadedPath)) path = loadedPath;
                 if (path == null && fakeHandles.TryGetValue(module, out var system))
                     path = "C:\\Windows\\System32\\" + system;
                 if (path == null) { process.LastError = ErrorModNotFound; return 0; }

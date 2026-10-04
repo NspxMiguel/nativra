@@ -416,6 +416,7 @@ namespace Nativra.X86.Loader
             SetRegValue(key, "SteamPath", 1, Encoding.Unicode.GetBytes(path + "\0"), false);
             SetRegValue(key, "SteamExe", 1, Encoding.Unicode.GetBytes(path + "\\steam.exe\0"), false);
             SetRegValue(key + "\\ActiveProcess", "pid", 4, BitConverter.GetBytes(GuestProcess.ProcessId), false);
+            SetRegValue(key + "\\ActiveProcess", "SteamClientDll", 1, Encoding.Unicode.GetBytes(path + "\\steamclient.dll\0"), false);
             SetRegValue("HKLM\\SOFTWARE\\Valve\\Steam", "InstallPath", 1, Encoding.Unicode.GetBytes(path + "\0"), false);
         }
 

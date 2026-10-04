@@ -69,6 +69,7 @@ namespace Nativra.X86.Loader
     public sealed class GuestSteam
     {
         private const string Api = "steam_api.dll";
+        private const string Client = "steamclient.dll";
         private const string Objects = "nativra-steam.dll";
         private const int Slots = 128;
         private const uint HSteamUser = 1, HSteamPipe = 1;
@@ -147,6 +148,7 @@ namespace Nativra.X86.Loader
         {
             kernel.InstallSteamRegistry();
             process.HostServed.Add(Api);   // the game's own copy would look for a running Steam
+            process.HostServed.Add(Client);
             var i = process.Imports;
             void E(string name, int args, HostCall body)
             {
@@ -206,6 +208,14 @@ namespace Nativra.X86.Loader
                 E(name, 0, c => Interface(name));
             }
             E("SteamInternal_CreateInterface", 1, c => Interface(Read(c.Arg(0))));
+            i.Register(Client, "CreateInterface", CallConv.Cdecl, 2, c =>
+            {
+                Count("steamclient.dll!CreateInterface");
+                var version = Read(c.Arg(0));
+                var supported = version.StartsWith("SteamClient", StringComparison.Ordinal);
+                if (c.Arg(1) != 0) memory.Write32(c.Arg(1), supported ? 0u : 1u);
+                return supported ? Interface(version) : 0;
+            });
             E("SteamInternal_FindOrCreateUserInterface", 2, c => Interface(Read(c.Arg(1))));
             E("SteamInternal_FindOrCreateGameServerInterface", 2, c => 0);
             E("SteamInternal_ContextInit", 1, c =>

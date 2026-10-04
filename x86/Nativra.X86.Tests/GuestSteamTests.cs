@@ -83,6 +83,14 @@ namespace Nativra.X86.Tests
             return at;
         }
 
+        private uint Wide(string text)
+        {
+            var bytes = Encoding.Unicode.GetBytes(text + "\0");
+            var at = k.Heap.Alloc((uint)bytes.Length);
+            p.Memory.WriteBytes(at, bytes);
+            return at;
+        }
+
         [Fact]
         public void SteamRegistryExposesTheInstallAndActiveProcess()
         {
@@ -97,10 +105,57 @@ namespace Nativra.X86.Tests
             p.Memory.Write32(size, 4);
             Assert.Equal(0u, CallRegistry("RegQueryValueExA", p.Memory.Read32(handle), Str("pid"), 0, 0, path, size));
             Assert.Equal(GuestProcess.ProcessId, p.Memory.Read32(path));
+            p.Memory.Write32(size, 128);
+            Assert.Equal(0u, CallRegistry("RegQueryValueExA", p.Memory.Read32(handle), Str("SteamClientDll"), 0, 0, path, size));
+            Assert.Equal("C:\\Program Files (x86)\\Steam\\steamclient.dll", p.Memory.ReadAnsi(path));
             Assert.Equal(0u, CallRegistry("RegOpenKeyExA", 0x80000002, Str("SOFTWARE\\Valve\\Steam"), 0, 0x20019, handle));
             p.Memory.Write32(size, 128);
             Assert.Equal(0u, CallRegistry("RegQueryValueExA", p.Memory.Read32(handle), Str("InstallPath"), 0, 0, path, size));
             Assert.Equal("C:\\Program Files (x86)\\Steam", p.Memory.ReadAnsi(path));
+        }
+
+        [Fact]
+        public void SteamClientDllLoadsByRegistryPathAndReturnsTheSharedClientInterface()
+        {
+            var modulePath = "C:\\Program Files (x86)\\Steam\\steamclient.dll";
+            var load = p.Call(p.Imports.Bind("kernel32.dll", "LoadLibraryW", -1), out var module, 10_000_000, Wide(modulePath));
+            Assert.True(load.Ok, load.ToString());
+            Assert.NotEqual(0u, module);
+
+            var lookup = p.Call(p.Imports.Bind("kernel32.dll", "GetProcAddress", -1), out var factory, 10_000_000, module, Str("CreateInterface"));
+            Assert.True(lookup.Ok, lookup.ToString());
+            Assert.Equal(p.Imports.Bind("steamclient.dll", "CreateInterface", -1), factory);
+
+            var owner = k.Heap.Alloc(4);
+            var findOwner = p.Call(p.Imports.Bind("kernel32.dll", "GetModuleHandleExA", -1), out var found, 10_000_000, 6, factory, owner);
+            Assert.True(findOwner.Ok, findOwner.ToString());
+            Assert.Equal(1u, found);
+            Assert.Equal(module, p.Memory.Read32(owner));
+            var filename = k.Heap.Alloc(260 * 2);
+            var getFilename = p.Call(p.Imports.Bind("kernel32.dll", "GetModuleFileNameW", -1), out var length, 10_000_000, module, filename, 260);
+            Assert.True(getFilename.Ok, getFilename.ToString());
+            Assert.Equal((uint)modulePath.Length, length);
+            Assert.Equal(modulePath, p.Memory.ReadUnicode(filename));
+            var open = p.Call(p.Imports.Bind("kernel32.dll", "CreateFileW", -1), out var file, 10_000_000,
+                Wide(modulePath), 0x80000000, 1, 0, 3, 0, 0);
+            Assert.True(open.Ok, open.ToString());
+            Assert.NotEqual(0xFFFFFFFFu, file);
+            var header = k.Heap.Alloc(2);
+            var bytesRead = k.Heap.Alloc(4);
+            var read = p.Call(p.Imports.Bind("kernel32.dll", "ReadFile", -1), out var readOk, 10_000_000,
+                file, header, 2, bytesRead, 0);
+            Assert.True(read.Ok, read.ToString());
+            Assert.Equal(1u, readOk);
+            Assert.Equal((byte)'M', p.Memory.Read8(header));
+            Assert.Equal((byte)'Z', p.Memory.Read8(header + 1));
+
+            var resultCode = k.Heap.Alloc(4);
+            var call = p.Call(factory, out var client, 10_000_000, Str("SteamClient017"), resultCode);
+            Assert.True(call.Ok, call.ToString());
+            Assert.Equal(0u, p.Memory.Read32(resultCode));
+            Assert.Equal(Api("SteamClient"), client);
+            Assert.Equal(1u, M(client, 0)); // CreateSteamPipe
+            Assert.DoesNotContain(p.Images, image => image.Name.Equals("steamclient.dll", StringComparison.OrdinalIgnoreCase));
         }
 
         private uint CallRegistry(string name, params uint[] args)

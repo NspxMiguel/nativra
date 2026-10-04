@@ -328,7 +328,9 @@ namespace Kiosk.Native
                         "x86.guest-committed=" + guest + " bytes" + Environment.NewLine +
                         "x86.managed=" + managed + " bytes" + Environment.NewLine +
                         "x86.private-estimate=" + (guest + cache + managed) + " bytes" + Environment.NewLine +
-                        "x86.app-memory=" + appMemory + " bytes" + Environment.NewLine);
+                        "x86.app-memory=" + appMemory + " bytes" + Environment.NewLine +
+                        "x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())) + Environment.NewLine +
+                        "x86.recent=" + string.Join(" ", process.RecentImports) + Environment.NewLine);
                 }
                 catch (Exception) { }
             }

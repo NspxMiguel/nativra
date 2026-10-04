@@ -151,6 +151,7 @@
     <Compile Include="Native\X86Direct3D9.cs" />
     <Compile Include="Native\X86DirectSoundOutput.cs" />
     <Compile Include="Native\X86Launch.cs" />
+    <Compile Include="Native\X86ShaderCompiler.cs" />
     <Compile Include="Native\D3D9Bridge.cs" />
     <Compile Include="Texts.cs" />
     <Compile Include="Updater.cs" />

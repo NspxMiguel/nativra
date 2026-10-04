@@ -183,11 +183,16 @@ namespace Kiosk.Steam
                         long done = 0;
                         foreach (var file in manifest.Files)
                         {
-                            if (file.IsDirectory) continue;
-
                             var name = manifest.NamesEncrypted
                                 ? SteamDepot.DecryptName(file.Name, key)
                                 : file.Name;
+                            if (file.IsDirectory)
+                            {
+                                // Empty folders are part of the install too: a game
+                                // that writes its log into one fails if it is missing.
+                                await CreateFolderAsync(folder, name.Replace('\\', '/'));
+                                continue;
+                            }
                             var target = await CreateAsync(folder, name.Replace('\\', '/'));
 
                             var existing = await target.GetBasicPropertiesAsync();
@@ -319,6 +324,17 @@ namespace Kiosk.Steam
             var raw = await SteamDepot.FetchChunkAsync(servers, depotId, chunk.Sha);
             var plain = SteamDepot.Decompress(SteamDepot.Decrypt(raw, key));
             return new KeyValuePair<Chunk, byte[]>(chunk, plain);
+        }
+
+        /// <summary>Creates a folder and every folder on the way to it.</summary>
+        private static async Task CreateFolderAsync(StorageFolder root, string path)
+        {
+            var folder = root;
+            foreach (var part in path.Split('/'))
+            {
+                if (part.Length == 0) continue;
+                folder = await folder.CreateFolderAsync(part, CreationCollisionOption.OpenIfExists);
+            }
         }
 
         /// <summary>Creates a file and every folder on the way to it.</summary>

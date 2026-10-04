@@ -181,6 +181,25 @@ namespace Kiosk.Native
                                 : "interpreter"));
                             if (process.Jit != null) into.Add("x86.code-cache=" + process.Jit.CodeCacheBytes + " bytes");
                             into.Add("x86.recent=" + string.Join(" ", process.RecentImports));
+                            // Return-address candidates above ESP: who called the code that stopped.
+                            try
+                            {
+                                var callers = new List<string>();
+                                var top = process.Cpu.Esp;
+                                for (uint n = 0; n < 96 && callers.Count < 14; n++)
+                                {
+                                    if (!memory.IsMapped(top + n * 4)) break;
+                                    var word = memory.Read32(top + n * 4);
+                                    foreach (var image in process.Images)
+                                        if (word >= image.BaseAddress && word - image.BaseAddress < image.ImageSize)
+                                        {
+                                            callers.Add(image.Name + "+0x" + (word - image.BaseAddress).ToString("X"));
+                                            break;
+                                        }
+                                }
+                                into.Add("x86.stack=" + string.Join(" < ", callers));
+                            }
+                            catch (Exception) { }
                             // What still falls back to the interpreter, most frequent first: the next
                             // instructions worth translating for this game.
                             if (process.Jit != null && process.Jit.CollectFallbacks)

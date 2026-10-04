@@ -16,10 +16,19 @@ namespace Nativra.X86.Loader
     {
         private const uint StandInSize = FakeModuleStride;
         private const uint StandInExports = 0x400;
+        public byte[] SteamClientImage { get; set; }
 
         private void BuildStandIn(uint handle, string name)
         {
             if (!memory.IsFree(handle, StandInSize)) return;   // something else already lives there
+            if (name.Equals("steamclient.dll", StringComparison.OrdinalIgnoreCase) && SteamClientImage != null)
+            {
+                memory.ReserveImage(handle, StandInSize);
+                memory.Map(handle, StandInSize);
+                memory.WriteBytes(handle, SteamClientImage, 0, Math.Min(SteamClientImage.Length, (int)StandInSize));
+                memory.Protect(handle, StandInSize, Win32Memory.PageReadOnly, out _);
+                return;
+            }
             var names = process.Imports.NamesOf(name);
             names.Sort(string.CompareOrdinal);     // export names are binary-searched
             var functions = new uint[names.Count];

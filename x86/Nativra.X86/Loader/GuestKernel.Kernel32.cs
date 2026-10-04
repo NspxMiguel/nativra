@@ -24,6 +24,23 @@ namespace Nativra.X86.Loader
         private const string SystemFolder = "C:\\Windows\\system32";
 
         private readonly Dictionary<uint, FileMapping> mappings = new Dictionary<uint, FileMapping>();
+        private uint steamStartLock;
+        private uint steamStartMapping;
+        private uint steamStartAppId;
+
+        /// <summary>Expose Steam's launch IPC to the protected game's process.</summary>
+        public void InstallSteamStart(uint appId)
+        {
+            steamStartAppId = appId;
+            steamStartLock = CreateEvent(false, true);
+            steamStartMapping = NewHandle();
+            mappings[steamStartMapping] = new FileMapping
+            {
+                Name = "Local\\SteamStart_SharedMemFile",
+                Writable = true,
+                Size = 4096,
+            };
+        }
         private readonly Dictionary<uint, MappedView> views = new Dictionary<uint, MappedView>();
         private readonly Dictionary<string, ushort> atomsByName = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<ushort, string> atomNames = new Dictionary<ushort, string>();
@@ -296,10 +313,17 @@ namespace Nativra.X86.Loader
             i.Register(k, "SetHandleInformation", CallConv.Stdcall, 3, c => 1);
             i.Register(k, "GetSystemDefaultLocaleName", CallConv.Stdcall, 2, c => CopyPathResult("en-US", c.Arg(0), c.Arg(1), true) + 1);
 
-            // --- named objects (one process: nothing to open by name) ---------------------------
+            // --- named objects ---------------------------------------------------------------
             foreach (var name in new[] { "OpenEventA", "OpenEventW", "OpenMutexA", "OpenMutexW", "OpenSemaphoreA", "OpenSemaphoreW",
                                          "OpenWaitableTimerA", "OpenWaitableTimerW" })
-                i.Register(k, name, CallConv.Stdcall, 3, c => { process.LastError = ErrorFileNotFound; return 0; });
+                i.Register(k, name, CallConv.Stdcall, 3, c =>
+                {
+                    var objectName = ReadText(c.Arg(2), name.EndsWith("W", StringComparison.Ordinal));
+                    if (name.StartsWith("OpenEvent", StringComparison.Ordinal) && objectName == "Local\\SteamStart_SharedMemLock" && steamStartLock != 0)
+                        return steamStartLock;
+                    process.LastError = ErrorFileNotFound;
+                    return 0;
+                });
 
             // --- waitable timers -------------------------------------------------------------------
             i.Register(k, "CreateWaitableTimerA", CallConv.Stdcall, 3, c => CreateTimer(c.Arg(1) != 0));
@@ -805,7 +829,12 @@ namespace Nativra.X86.Loader
             if (mapping.File == 0)
             {
                 // Page-file memory: one block every view of the mapping shares.
-                if (mapping.Shared == 0) mapping.Shared = VirtualAlloc(0, (uint)mapping.Size, Win32Memory.MemMapped);
+                if (mapping.Shared == 0)
+                {
+                    mapping.Shared = VirtualAlloc(0, (uint)mapping.Size, Win32Memory.MemMapped);
+                    if (handle == steamStartMapping && mapping.Shared != 0)
+                        memory.Write32(mapping.Shared + 0x90, 2);
+                }
                 at = mapping.Shared + (uint)offset;
             }
             else

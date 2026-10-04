@@ -26,8 +26,23 @@ namespace Nativra.X86.Loader
         void StoreStats();
     }
 
+    /// <summary>A signed ownership ticket supplied by a Steam account session.</summary>
+    public sealed class AppOwnershipTicket
+    {
+        public byte[] Data { get; set; }
+        public uint AppIdOffset { get; set; }
+        public uint SteamIdOffset { get; set; }
+        public uint SignatureOffset { get; set; }
+        public uint SignatureLength { get; set; }
+    }
+
+    public interface IGuestSteamTicketSource
+    {
+        bool TryGetAppOwnershipTicket(uint appId, out AppOwnershipTicket ticket);
+    }
+
     /// <summary>An account kept in memory: the tests' backend, and a template for the app's.</summary>
-    public sealed class MemorySteamAccount : IGuestSteamAccount
+    public sealed class MemorySteamAccount : IGuestSteamAccount, IGuestSteamTicketSource
     {
         public ulong SteamId { get; set; } = 76561197960287930;
         public uint AppId { get; set; } = 480;
@@ -38,6 +53,12 @@ namespace Nativra.X86.Loader
         public readonly Dictionary<string, int> Ints = new Dictionary<string, int>();
         public readonly Dictionary<string, float> Floats = new Dictionary<string, float>();
         public int Stored;
+        public AppOwnershipTicket OwnershipTicket { get; set; }
+        public bool TryGetAppOwnershipTicket(uint appId, out AppOwnershipTicket ticket)
+        {
+            ticket = appId == AppId ? OwnershipTicket : null;
+            return ticket != null;
+        }
         public bool TryGetAchievement(string name, out uint unlockTime) => Achievements.TryGetValue(name, out unlockTime);
         public void SetAchievement(string name) { if (!Achievements.ContainsKey(name)) Achievements[name] = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
         public void ClearAchievement(string name) => Achievements.Remove(name);
@@ -147,6 +168,7 @@ namespace Nativra.X86.Loader
         public void Install()
         {
             kernel.InstallSteamRegistry();
+            kernel.InstallSteamStart(account.AppId);
             process.HostServed.Add(Api);   // the game's own copy would look for a running Steam
             process.HostServed.Add(Client);
             var i = process.Imports;
@@ -335,6 +357,7 @@ namespace Nativra.X86.Loader
             else if (version.StartsWith("SteamFriends", StringComparison.Ordinal)) { family = "ISteamFriends"; layout = FriendsLayout(VersionNumber(version)); methods = FriendsMethods(); }
             else if (version.StartsWith("SteamUtils", StringComparison.Ordinal)) { family = "ISteamUtils"; layout = UtilsLayout; methods = UtilsMethods(); }
             else if (version.StartsWith("STEAMAPPS_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamApps"; layout = AppsLayout; methods = AppsMethods(); }
+            else if (version.StartsWith("STEAMAPPTICKET_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamAppTicket"; layout = AppTicketLayout; methods = AppTicketMethods(); }
             else if (version.StartsWith("STEAMUSERSTATS_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamUserStats"; layout = StatsLayout; methods = StatsMethods(); }
             else if (version.StartsWith("STEAMREMOTESTORAGE_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamRemoteStorage"; layout = RemoteLayout; methods = RemoteMethods(VersionNumber(version)); }
             else if (version.StartsWith("STEAMSCREENSHOTS_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamScreenshots"; layout = ScreenshotsLayout(VersionNumber(version)); methods = new Dictionary<string, Method>(); }
@@ -533,6 +556,32 @@ namespace Nativra.X86.Loader
             "RequestAppProofOfPurchaseKey:1", "GetCurrentBetaName:2", "MarkContentCorrupt:1", "GetInstalledDepots:3",
             "GetAppInstallDir:3", "BIsAppInstalled:1", "GetAppOwner:0:S", "GetLaunchQueryParam:1", "GetDlcDownloadProgress:3",
             "GetAppBuildId:0", "RequestAllProofOfPurchaseKeys:0", "GetFileDetails:1:Q");
+
+        private static readonly Slot[] AppTicketLayout = Layout("GetAppOwnershipTicketData:7");
+
+        private Dictionary<string, Method> AppTicketMethods() => new Dictionary<string, Method>
+        {
+            ["GetAppOwnershipTicketData"] = c =>
+            {
+                if (c.Arg(0) != account.AppId || !(account is IGuestSteamTicketSource source) ||
+                    !source.TryGetAppOwnershipTicket(c.Arg(0), out var ticket) || ticket?.Data == null)
+                    return 0;
+                var data = ticket.Data;
+                if (data.Length < 12 || data.Length > c.Arg(2) || c.Arg(1) == 0 ||
+                    ticket.AppIdOffset > data.Length - 4 || ticket.SteamIdOffset > data.Length - 8 ||
+                    ticket.SignatureOffset > data.Length || ticket.SignatureLength == 0 ||
+                    ticket.SignatureLength > data.Length - ticket.SignatureOffset ||
+                    BitConverter.ToUInt32(data, (int)ticket.AppIdOffset) != account.AppId ||
+                    BitConverter.ToUInt64(data, (int)ticket.SteamIdOffset) != account.SteamId)
+                    return 0;
+                memory.WriteBytes(c.Arg(1), data);
+                if (c.Arg(3) != 0) memory.Write32(c.Arg(3), ticket.AppIdOffset);
+                if (c.Arg(4) != 0) memory.Write32(c.Arg(4), ticket.SteamIdOffset);
+                if (c.Arg(5) != 0) memory.Write32(c.Arg(5), ticket.SignatureOffset);
+                if (c.Arg(6) != 0) memory.Write32(c.Arg(6), ticket.SignatureLength);
+                return (uint)data.Length;
+            },
+        };
 
         private Dictionary<string, Method> AppsMethods() => new Dictionary<string, Method>
         {

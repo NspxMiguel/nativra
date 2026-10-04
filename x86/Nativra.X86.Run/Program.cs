@@ -20,13 +20,14 @@ namespace Nativra.X86.Run
     ///   --log N         guest log lines to keep (default 200)
     ///   --fallbacks N   print the N most frequent JIT fallback opcodes
     ///   --trace FILE    every served import call, with arguments and result
+    ///   --steam-client FILE  genuine 32-bit steamclient.dll for SteamStub validation
     /// </summary>
     public static class Program
     {
         public static int Main(string[] args)
         {
             if (args.Length == 1 && args[0] == "--microbench") return Microbenchmarks.Run();
-            string dlls = null, importsFile = null, traceFile = null;
+            string dlls = null, importsFile = null, traceFile = null, steamClientFile = null;
             var interp = false;
             long budget = 400_000_000, dllBudget = 0;
             uint steamApp = 0;
@@ -48,13 +49,14 @@ namespace Nativra.X86.Run
                     case "--trace": traceFile = args[++i]; break;
                     case "--dll-budget": dllBudget = long.Parse(args[++i]); break;
                     case "--steam": steamApp = uint.Parse(args[++i]); break;
+                    case "--steam-client": steamClientFile = args[++i]; break;
                     case "--until": until = args[++i]; break;
                     default: rest.Add(args[i]); break;
                 }
             }
             if (rest.Count < 2)
             {
-                Console.Error.WriteLine("usage: nativra-run [--dlls DIR] [--interp] [--budget N] [--fallbacks N] [--imports FILE] [--steam APPID] [--until TEXT] <folder> <exe> [arguments...]");
+                Console.Error.WriteLine("usage: nativra-run [--dlls DIR] [--interp] [--budget N] [--fallbacks N] [--imports FILE] [--steam APPID] [--steam-client FILE] [--until TEXT] <folder> <exe> [arguments...]");
                 return 2;
             }
             var folder = Path.GetFullPath(rest[0]);
@@ -100,7 +102,14 @@ namespace Nativra.X86.Run
                 // --steam APPID answers steam_api.dll as the console's bridge does, for a
                 // game that needs a signed-in account. Off by default: a dedicated server
                 // runs its own steamclient.dll, which is the code worth exercising here.
-                if (steamApp != 0) new GuestSteam(process, kernel, new MemorySteamAccount { AppId = steamApp }).Install();
+                if (steamApp != 0)
+                {
+                    kernel.SteamClientImage = (steamClientFile != null ? Read(steamClientFile) : null) ??
+                        Read(Path.Combine(folder, "steamclient.dll")) ??
+                        Read(Path.Combine(folder, "bin", "steamclient.dll")) ??
+                        (dlls != null ? Read(Path.Combine(dlls, "steamclient.dll")) : null);
+                    new GuestSteam(process, kernel, new MemorySteamAccount { AppId = steamApp }).Install();
+                }
                 using (var sound = new GuestDirectSound(process, kernel, new NullSoundOutput()))
                 {
                     sound.Install();

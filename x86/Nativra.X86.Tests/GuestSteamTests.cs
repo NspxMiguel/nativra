@@ -165,6 +165,84 @@ namespace Nativra.X86.Tests
             return value;
         }
 
+        private uint CallKernel(string name, params uint[] args)
+        {
+            var result = p.Call(p.Imports.Bind("kernel32.dll", name, -1), out var value, 10_000_000, args);
+            Assert.True(result.Ok, result.ToString());
+            return value;
+        }
+
+        [Fact]
+        public void SteamStartSignalsOnlyForTheOwnedApp()
+        {
+            var lockHandle = CallKernel("OpenEventA", 0x100000, 0, Str("Local\\SteamStart_SharedMemLock"));
+            var mapping = CallKernel("OpenFileMappingA", 2, 0, Str("Local\\SteamStart_SharedMemFile"));
+            Assert.NotEqual(0u, lockHandle);
+            Assert.NotEqual(0u, mapping);
+            Assert.Equal(0u, CallKernel("WaitForSingleObject", lockHandle, 0));
+            var view = CallKernel("MapViewOfFile", mapping, 2, 0, 0, 0);
+            Assert.Equal(2u, p.Memory.Read32(view + 0x90));
+            var reply = CallKernel("CreateEventA", 0, 0, 0, 0);
+            p.Memory.Write32(view + 0x94, 2);
+            p.Memory.Write32(view + 0x9C, reply);
+            p.Memory.Write32(view + 0xA0, 440);
+            Assert.Equal(0x102u, CallKernel("WaitForSingleObject", reply, 0));
+            p.Memory.Write32(view + 0xA0, account.AppId);
+            Assert.Equal(0u, CallKernel("WaitForSingleObject", reply, 0));
+            Assert.Equal(0u, p.Memory.Read32(view + 0x94));
+        }
+
+        [Fact]
+        public void AppTicketReturnsOnlyAnAccountSuppliedTicket()
+        {
+            var client = Api("SteamClient");
+            var ticketInterface = M(client, 12, 1, 1, Str("STEAMAPPTICKET_INTERFACE_VERSION001"));
+            var buffer = k.Heap.Alloc(64, zero: true);
+            var appOffset = k.Heap.Alloc(4);
+            var steamOffset = k.Heap.Alloc(4);
+            var signatureOffset = k.Heap.Alloc(4);
+            var signatureLength = k.Heap.Alloc(4);
+            Assert.Equal(0u, M(ticketInterface, 0, account.AppId, buffer, 64, appOffset, steamOffset, signatureOffset, signatureLength));
+            var bytes = new byte[32];
+            BitConverter.GetBytes(account.AppId).CopyTo(bytes, 4);
+            BitConverter.GetBytes(account.SteamId).CopyTo(bytes, 8);
+            bytes[16] = 0xAB;
+            account.OwnershipTicket = new AppOwnershipTicket
+            {
+                Data = bytes,
+                AppIdOffset = 4,
+                SteamIdOffset = 8,
+                SignatureOffset = 16,
+                SignatureLength = 16,
+            };
+            Assert.Equal(0u, M(ticketInterface, 0, 440, buffer, 64, appOffset, steamOffset, signatureOffset, signatureLength));
+            Assert.Equal(32u, M(ticketInterface, 0, account.AppId, buffer, 64, appOffset, steamOffset, signatureOffset, signatureLength));
+            Assert.Equal(account.AppId, p.Memory.Read32(buffer + 4));
+            Assert.Equal(account.SteamId, p.Memory.Read64(buffer + 8));
+            Assert.Equal(4u, p.Memory.Read32(appOffset));
+            Assert.Equal(8u, p.Memory.Read32(steamOffset));
+            Assert.Equal(16u, p.Memory.Read32(signatureOffset));
+            Assert.Equal(16u, p.Memory.Read32(signatureLength));
+        }
+
+        [Fact]
+        public void SuppliedClientImageIsVisibleThroughTheModuleAndFile()
+        {
+            var bytes = new byte[0x12000];
+            bytes[0] = (byte)'M'; bytes[1] = (byte)'Z';
+            bytes[0x40] = (byte)'V'; bytes[0x41] = (byte)'L'; bytes[0x42] = (byte)'V';
+            k.SteamClientImage = bytes;
+            var path = "C:\\Program Files (x86)\\Steam\\steamclient.dll";
+            var module = CallKernel("LoadLibraryW", Wide(path));
+            Assert.Equal((byte)'V', p.Memory.Read8(module + 0x40));
+            var file = CallKernel("CreateFileW", Wide(path), 0x80000000, 1, 0, 3, 0, 0);
+            Assert.Equal((uint)bytes.Length, CallKernel("GetFileSize", file, 0));
+            var buffer = k.Heap.Alloc(0x50);
+            var read = k.Heap.Alloc(4);
+            Assert.Equal(1u, CallKernel("ReadFile", file, buffer, 0x50, read, 0));
+            Assert.Equal((byte)'V', p.Memory.Read8(buffer + 0x40));
+        }
+
         [Fact]
         public void LoadLibraryReachesTheServedApiNotTheGamesOwnCopy()
         {

@@ -285,7 +285,8 @@ namespace Nativra.X86.Loader
             {
                 var module = ModuleFileHandle(path);
                 stream = module != 0 && mode == FileMode.Open && !write
-                    ? new MemoryStream(memory.ReadBytes(module, (int)StandInSize), false)
+                    ? new MemoryStream(SteamClientImage != null && path.EndsWith("\\steamclient.dll", StringComparison.OrdinalIgnoreCase)
+                        ? SteamClientImage : memory.ReadBytes(module, (int)StandInSize), false)
                     : Files.Open(path, mode, fileAccess);
             }
             catch (FileNotFoundException) { FilesNotFound.Add(path); process.LastError = ErrorFileNotFound; return InvalidHandleValue; }
@@ -461,6 +462,7 @@ namespace Nativra.X86.Loader
 
         private uint CloseHandle(uint handle)
         {
+            if (handle != 0 && (handle == steamStartLock || handle == steamStartMapping)) return 1;
             // A socket is a handle too: closing it closes the connection.
             if (sockets.TryGetValue(handle, out var socket)) { sockets.Remove(handle); ReleaseSocket(socket); return 1; }
             portBindings.Remove(handle);
@@ -530,7 +532,8 @@ namespace Nativra.X86.Loader
             {
                 Name = Trim(path),
                 Attributes = FileAttributes.ReadOnly,
-                Size = StandInSize,
+                Size = SteamClientImage != null && path.EndsWith("\\steamclient.dll", StringComparison.OrdinalIgnoreCase)
+                    ? (long)SteamClientImage.Length : StandInSize,
                 WriteTimeUtc = DateTime.UtcNow,
             };
         }

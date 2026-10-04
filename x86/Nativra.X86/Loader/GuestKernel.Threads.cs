@@ -481,6 +481,17 @@ namespace Nativra.X86.Loader
         /// </summary>
         private uint WaitAny(uint[] handles, bool all, uint timeout)
         {
+            if (steamStartMapping != 0 && mappings.TryGetValue(steamStartMapping, out var steamMap) && steamMap.Shared != 0 &&
+                handles.Length == 1 && handles[0] == memory.Read32(steamMap.Shared + 0x9C))
+            {
+                if (memory.Read32(steamMap.Shared + 0x94) == 2 &&
+                    memory.Read32(steamMap.Shared + 0xA0) == steamStartAppId)
+                {
+                    memory.Write32(steamMap.Shared + 0x94, 0);
+                    SignalEvent(handles[0], true);
+                    SignalEvent(steamStartLock, true);
+                }
+            }
             var me = Me;
             if (handles.Length == 0) { process.LastError = ErrorInvalidParameter; return WaitFailed; }
             PollAudio?.Invoke();

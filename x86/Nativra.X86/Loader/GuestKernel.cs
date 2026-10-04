@@ -88,7 +88,7 @@ namespace Nativra.X86.Loader
         /// </summary>
         public IReadOnlyList<string> ProbedAbsent => probedAbsent;
 
-        public GuestKernel(GuestProcess process, uint heapBase = 0x30000000, uint heapSize = 0x10000000)
+        public GuestKernel(GuestProcess process, uint heapBase = 0x30000000, uint heapSize = 0x30000000)
         {
             this.process = process;
             memory = process.Memory;
@@ -167,7 +167,11 @@ namespace Nativra.X86.Loader
 
             i.Register(k, "GetProcessHeap", CallConv.Stdcall, 0, c => ProcessHeapHandle);
             i.Register(k, "HeapAlloc", CallConv.Stdcall, 3, c =>
-                heap.Alloc(c.Arg(2), (c.Arg(1) & HeapZeroMemory) != 0));
+            {
+                var block = heap.Alloc(c.Arg(2), (c.Arg(1) & HeapZeroMemory) != 0);
+                if (block == 0) Log?.Invoke("HeapAlloc of " + c.Arg(2) + " bytes failed (heap exhausted)");
+                return block;
+            });
             i.Register(k, "HeapFree", CallConv.Stdcall, 3, c => heap.Free(c.Arg(2)) ? 1u : 0u);
             i.Register(k, "HeapReAlloc", CallConv.Stdcall, 4, c => heap.ReAlloc(c.Arg(2), c.Arg(3)));
             i.Register(k, "HeapSize", CallConv.Stdcall, 3, c => heap.SizeOf(c.Arg(2)));

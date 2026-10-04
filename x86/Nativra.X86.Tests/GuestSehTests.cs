@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Nativra.X86.Cpu;
 using Nativra.X86.Loader;
 using Xunit;
@@ -148,6 +149,79 @@ namespace Nativra.X86.Tests
             Assert.True(result.Ok, result.ToString());
             Assert.Equal(0x00010177u, eax);   // 0x77, one search call, one unwind call
             Assert.Equal(0xFFFFFFFFu, p.Memory.Read32(p.TebBase));
+        }
+
+        // The game's first C++ throw came from a failed GetProcAddress for the
+        // processor-group APIs. Its catch rethrew and the CRT then terminated.
+        // Resolve the same names from guest code under an SEH frame; a missing
+        // export raises an exception instead of silently passing the test.
+        [SkippableTheory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void ProcessorGroupLookupsDoNotEnterTheExceptionPath(bool jit)
+        {
+            var code = new List<byte>();
+            void Emit(params byte[] bytes) => code.AddRange(bytes);
+            void Push(uint value)
+            {
+                Emit(0x68);
+                Emit(BitConverter.GetBytes(value));
+            }
+            int Lookup(uint name)
+            {
+                Push(name);
+                Emit(0x53);                                  // push ebx: kernel32 handle
+                Emit(0xFF, 0x15, 0x08, 0x10, 0x60, 0x00);    // call [GetProcAddress]
+                Emit(0x85, 0xC0, 0x74, 0x00);                // test eax,eax; je fail
+                return code.Count - 1;
+            }
+
+            Emit(0x53);                                      // save ebx
+            Push(Code + 0x80);                               // SEH handler
+            Emit(0x64, 0xFF, 0x35, 0, 0, 0, 0);             // push fs:[0]
+            Emit(0x64, 0x89, 0x25, 0, 0, 0, 0);             // mov fs:[0],esp
+            Emit(0x8B, 0x1D, 0x20, 0x10, 0x60, 0x00);      // mov ebx,[kernel32 handle]
+            var first = Lookup(Data + 0x80);
+            var second = Lookup(Data + 0xA0);
+            Emit(0x64, 0x8F, 0x05, 0, 0, 0, 0);             // pop fs:[0]
+            Emit(0x83, 0xC4, 0x04, 0x5B);                   // discard handler; restore ebx
+            Emit(0xB8, 0x01, 0, 0, 0, 0xC3);                // return 1
+            var fail = code.Count;
+            Emit(0x6A, 0, 0x6A, 0, 0x6A, 0);              // exception arguments
+            Push(0xE0001234);
+            Emit(0xFF, 0x15, 0, 0x10, 0x60, 0, 0x0F, 0x0B); // RaiseException; ud2
+            code[first] = checked((byte)(fail - first - 1));
+            code[second] = checked((byte)(fail - second - 1));
+            while (code.Count < 0x80) Emit(0xCC);
+            Emit(0xB8, 0x01, 0, 0, 0, 0xC3);               // ContinueSearch
+
+            var p = Load(code.ToArray(), jit, out var kernel);
+            p.Memory.Write32(Data + 8, p.Imports.Bind("kernel32.dll", "GetProcAddress", -1));
+            var moduleName = kernel.Heap.Alloc(32);
+            p.Memory.WriteAnsi(moduleName, "kernel32.dll");
+            var load = p.Imports.Bind("kernel32.dll", "LoadLibraryA", -1);
+            var loaded = p.Call(load, out var module, 1000, moduleName);
+            Assert.True(loaded.Ok, loaded.ToString());
+            p.Memory.Write32(Data + 0x20, module);
+            p.Memory.WriteAnsi(Data + 0x80, "SetThreadGroupAffinity");
+            p.Memory.WriteAnsi(Data + 0xA0, "GetThreadGroupAffinity");
+
+            var result = p.Call(Code, out var eax, 100_000);
+            Assert.True(result.Ok, result.ToString());
+            Assert.Equal(1u, eax);
+            Assert.Empty(kernel.ExceptionsRaised);
+
+            var currentThread = p.Imports.Bind("kernel32.dll", "GetCurrentThread", -1);
+            Assert.True(p.Call(currentThread, out var thread, 1000).Ok);
+            var setAffinity = p.Imports.Bind("kernel32.dll", "SetThreadGroupAffinity", -1);
+            var getAffinity = p.Imports.Bind("kernel32.dll", "GetThreadGroupAffinity", -1);
+            p.Memory.Write32(Data + 0x40, 2);
+            Assert.True(p.Call(setAffinity, out var changed, 1000, thread, Data + 0x40, Data + 0x50).Ok);
+            Assert.Equal(1u, changed);
+            Assert.Equal(0xFu, p.Memory.Read32(Data + 0x50));
+            Assert.True(p.Call(getAffinity, out var queried, 1000, thread, Data + 0x60).Ok);
+            Assert.Equal(1u, queried);
+            Assert.Equal(2u, p.Memory.Read32(Data + 0x60));
         }
 
         // A frame whose handler records the code and the faulting address,

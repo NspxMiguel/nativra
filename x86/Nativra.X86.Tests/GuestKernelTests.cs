@@ -242,6 +242,21 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void CombaseRuntimeInitializationResolvesDynamically()
+        {
+            var p = NewProcess(out var kernel);
+            var combase = CallK(p, "LoadLibraryA", Ansi(kernel, p, "combase.dll"));
+            Assert.NotEqual(0u, combase);
+            var initialize = CallK(p, "GetProcAddress", combase, Ansi(kernel, p, "RoInitialize"));
+            var uninitialize = CallK(p, "GetProcAddress", combase, Ansi(kernel, p, "RoUninitialize"));
+            Assert.True(GuestImports.InRegion(initialize));
+            Assert.True(GuestImports.InRegion(uninitialize));
+            Assert.True(p.Call(initialize, out var hr, 1000, 1).Ok);
+            Assert.Equal(0u, hr);
+            Assert.True(p.Call(uninitialize, out _, 1000).Ok);
+        }
+
+        [Fact]
         public void GetModuleFileNameReportsTheProgramPathTruncatedToTheBuffer()
         {
             var p = NewProcess(out var kernel);

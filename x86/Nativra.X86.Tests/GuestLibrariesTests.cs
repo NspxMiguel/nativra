@@ -81,6 +81,36 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void SecurityDllExposesAnSspiTableWithoutClaimingUnsupportedCredentials()
+        {
+            var module = Call("kernel32.dll", "LoadLibraryExA", Str("C:\\Windows\\system32\\security.dll"), 0, 8);
+            Assert.NotEqual(0u, module);
+            var entry = Call("kernel32.dll", "GetProcAddress", module, Str("InitSecurityInterfaceA"));
+            Assert.True(GuestImports.InRegion(entry));
+            var table = p.Call(entry, out var pointer, 1_000_000);
+            Assert.True(table.Ok);
+            Assert.NotEqual(0u, pointer);
+            Assert.Equal(1u, p.Memory.Read32(pointer));
+            var acquireCredentials = p.Memory.Read32(pointer + 12);
+            Assert.True(GuestImports.InRegion(acquireCredentials));
+            var acquire = p.Call(acquireCredentials, out var status, 1_000_000,
+                0, 0, 0, 0, 0, 0, 0, 0, 0);
+            Assert.True(acquire.Ok);
+            Assert.Equal(0x80090302u, status); // SEC_E_UNSUPPORTED_FUNCTION
+            Assert.Equal(pointer, Call("security.dll", "InitSecurityInterfaceA"));
+        }
+
+        [Fact]
+        public void WindowStationHandlesCanBeCreatedAndClosed()
+        {
+            var station = Call("user32.dll", "CreateWindowStationA", Str("GameStation"), 0, 0, 0);
+            Assert.NotEqual(0u, station);
+            Assert.Equal(1u, Call("user32.dll", "CloseWindowStation", station));
+            Assert.Equal(0u, Call("user32.dll", "CloseWindowStation", station));
+            Assert.Equal(6u, Call("kernel32.dll", "GetLastError"));
+        }
+
+        [Fact]
         public void AbsentServicesFailTheWayWindowsDoes()
         {
             // DirectInput and WinHTTP are not offered: a game that probes them must

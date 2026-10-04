@@ -42,6 +42,7 @@ namespace Nativra.X86.Loader
             InstallRegistry(i);
             InstallAdvapi(i);
             InstallSecurity(i);
+            InstallSspi(i);
             InstallOle(i);
             InstallSetupApi(i);
             InstallCrypt32(i);

@@ -25,6 +25,8 @@ cl /nologo /LD /EHsc /O2 /MT xapofx1_5\xapofx1_5.cpp /Fo:obj-x86\ /Fe:"%OUT%\xap
 if errorlevel 1 exit /b 1
 cl /nologo /LD /EHsc /GR- /O2 /MT d3dx9_43\d3dx9_43.cpp /Fo:obj-x86\ /Fe:"%OUT%\d3dx9_43.dll" /link /APPCONTAINER /DEF:d3dx9_43\d3dx9_43.def
 if errorlevel 1 exit /b 1
+cl /nologo /LD /GR- /O2 /MT dinput8\dinput8.cpp /Fo:obj-x86\ /Fe:"%OUT%\dinput8.dll" /link /APPCONTAINER /DEF:dinput8\dinput8.def user32.lib kernel32.lib
+if errorlevel 1 exit /b 1
 del /q "%OUT%\*.exp" "%OUT%\*.lib" 2>nul
 
 rem Every export must be reachable by its plain name.
@@ -35,6 +37,7 @@ rem The .def is the single export list, including the texture and shader entries
 set "D3DX="
 for /f "skip=2 tokens=1" %%n in (d3dx9_43\d3dx9_43.def) do set "D3DX=!D3DX! %%n"
 call :exports d3dx9_43 "!D3DX!" || exit /b 1
+call :exports dinput8 "DirectInput8Create c_dfDIKeyboard c_dfDIMouse c_dfDIMouse2 c_dfDIJoystick c_dfDIJoystick2" || exit /b 1
 dir /b "%OUT%"
 exit /b 0
 

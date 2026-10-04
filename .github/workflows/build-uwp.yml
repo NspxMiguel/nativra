@@ -80,8 +80,8 @@ jobs:
         shell: cmd
         run: native\directx-redist\build-app.cmd
 
-      # 32-bit games run under the x86 layer, which maps DLLs into the guest
-      # rather than loading them: the 32-bit shims and the redistributable
+      # 32-bit games run under the x86 layer, which maps DLLs (including dinput8)
+      # into the guest rather than loading them: the 32-bit shims and the redistributable
       # 32-bit C runtime go to uwp\Redist\x86, packaged as x86\ and served to
       # the guest when the game does not carry its own copy.
       - name: Build the 32-bit guest DLLs for the package

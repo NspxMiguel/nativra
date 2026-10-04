@@ -114,8 +114,8 @@ namespace Nativra.X86.Loader
                 i.Register(u, "RegisterClass" + s, CallConv.Stdcall, 1, c => RegisterClass(c.Arg(0), false, w));
                 i.Register(u, "RegisterClassEx" + s, CallConv.Stdcall, 1, c => RegisterClass(c.Arg(0), true, w));
                 i.Register(u, "UnregisterClass" + s, CallConv.Stdcall, 2, c => 1);
-                i.Register(u, "GetClassInfo" + s, CallConv.Stdcall, 3, c => ClassFor(c.Arg(1), w) != null ? 1u : 0u);
-                i.Register(u, "GetClassInfoEx" + s, CallConv.Stdcall, 3, c => ClassFor(c.Arg(1), w) != null ? 1u : 0u);
+                i.Register(u, "GetClassInfo" + s, CallConv.Stdcall, 3, c => GetClassInfo(c, false, w));
+                i.Register(u, "GetClassInfoEx" + s, CallConv.Stdcall, 3, c => GetClassInfo(c, true, w));
                 i.Register(u, "CreateWindowEx" + s, CallConv.Stdcall, 12, c => CreateWindow(c, w));
                 i.Register(u, "DefWindowProc" + s, CallConv.Stdcall, 4, c => DefWindowProc(c.Arg(0), c.Arg(1), c.Arg(2), c.Arg(3)));
                 i.Register(u, "CallWindowProc" + s, CallConv.Stdcall, 5, c =>
@@ -464,6 +464,49 @@ namespace Nativra.X86.Loader
             windowClasses[name] = entry;
             classAtoms[entry.Atom] = entry;
             return entry.Atom;
+        }
+
+        /// <summary>Classes the system registers for every process; a program subclasses them by asking for their window procedure.</summary>
+        private static readonly string[] SystemClasses =
+        {
+            "BUTTON", "EDIT", "LISTBOX", "COMBOBOX", "COMBOLBOX", "STATIC", "SCROLLBAR", "MDICLIENT",
+            "SysTabControl32", "SysListView32", "SysTreeView32", "SysHeader32", "msctls_trackbar32",
+            "msctls_updown32", "msctls_progress32", "msctls_statusbar32", "ToolbarWindow32", "tooltips_class32",
+            "RichEdit20A", "RichEdit20W", "RICHEDIT",
+        };
+
+        /// <summary>
+        /// GetClassInfo(Ex): fills the caller's WNDCLASS(EX) for a class this process registered or
+        /// one the system provides, whose procedure is the default one (the controls' real behavior
+        /// is not modelled). Fails with ERROR_CLASS_DOES_NOT_EXIST (1411) otherwise.
+        /// </summary>
+        private uint GetClassInfo(GuestCall c, bool extended, bool wide)
+        {
+            var name = c.Arg(1);
+            var entry = ClassFor(name, wide);
+            var target = c.Arg(2);
+            var systemName = name >= 0x10000 ? ReadText(name, wide) : null;
+            var isSystem = entry == null && systemName != null &&
+                Array.Exists(SystemClasses, n => string.Equals(n, systemName, StringComparison.OrdinalIgnoreCase));
+            if (entry == null && !isSystem) { process.LastError = 1411; return 0; }
+            if (target == 0) return 1;
+
+            // WNDCLASS: style, proc, clsExtra, wndExtra, hInstance, hIcon, hCursor, hbrBackground, menu, class name;
+            // WNDCLASSEX has cbSize in front and hIconSm at the end.
+            var at = target + (extended ? 4u : 0u);
+            var procedure = entry != null ? entry.Procedure : process.Imports.Bind("user32.dll", wide ? "DefWindowProcW" : "DefWindowProcA", 0);
+            memory.Write32(at + 0, entry != null ? entry.Style : 0);
+            memory.Write32(at + 4, procedure);
+            memory.Write32(at + 8, 0);
+            memory.Write32(at + 12, entry != null ? (uint)entry.WindowExtra : 0);
+            memory.Write32(at + 16, entry != null ? entry.Instance : 0);
+            memory.Write32(at + 20, 0);
+            memory.Write32(at + 24, 0);
+            memory.Write32(at + 28, 0);
+            memory.Write32(at + 32, 0);
+            memory.Write32(at + 36, name);
+            if (extended) memory.Write32(target + 44, 0);
+            return 1;
         }
 
         private WindowClass ClassFor(uint nameOrAtom, bool wide)

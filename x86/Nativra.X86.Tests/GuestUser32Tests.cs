@@ -116,5 +116,29 @@ namespace Nativra.X86.Tests
             Assert.Equal(1080u, p.Memory.Read32(info + 16));
             Assert.Equal("\\\\.\\DISPLAY1", p.Memory.ReadUnicode(info + 40));
         }
+
+        [Fact]
+        public void GetClassInfoFillsSystemClassesWithTheDefaultProcedure()
+        {
+            var p = new GuestProcess(new GuestMemory(), useJit: false);
+            var kernel = new GuestKernel(p);
+            kernel.Install();
+            uint Call(string f, params uint[] args)
+            {
+                Assert.True(p.Call(p.Imports.Bind("user32.dll", f, -1), out var r, 100_000, args).Ok, f);
+                return r;
+            }
+            var name = kernel.Heap.Alloc(32, zero: true);
+            p.Memory.WriteUnicode(name, "BUTTON");
+            var info = kernel.Heap.Alloc(48, zero: true);
+            p.Memory.Write32(info, 48);
+            Assert.Equal(1u, Call("GetClassInfoExW", 0, name, info));
+            Assert.Equal(p.Imports.Bind("user32.dll", "DefWindowProcW", 0), p.Memory.Read32(info + 8));
+            Assert.Equal(name, p.Memory.Read32(info + 40));
+
+            p.Memory.WriteUnicode(name, "NoSuchClass");
+            Assert.Equal(0u, Call("GetClassInfoExW", 0, name, info));
+            Assert.Equal(1411u, p.LastError);
+        }
     }
 }

@@ -116,6 +116,7 @@ namespace Kiosk.Native
                     // lines after them (assertions, exceptions, file opens) are the news.
                     kernel.Log = text =>
                     {
+                        X86Heartbeat.Remember(text);
                         if (!text.StartsWith("GetProcAddress ", StringComparison.Ordinal) && guestLog.Count < LogLines)
                             guestLog.Add(text);
                     };
@@ -283,6 +284,29 @@ namespace Kiosk.Native
 
         private sealed class X86Heartbeat : IDisposable
         {
+            private static readonly List<string> Tail = new List<string>();
+
+            /// <summary>Keeps the guest's latest log lines so a game that never ends still shows what it said last.</summary>
+            public static void Remember(string text)
+            {
+                lock (Tail)
+                {
+                    if (text.StartsWith("GetProcAddress ", StringComparison.Ordinal)) return;
+                    Tail.Add(text.Length > 300 ? text.Substring(0, 300) : text);
+                    if (Tail.Count > 40) Tail.RemoveAt(0);
+                }
+            }
+
+            private static string TailText()
+            {
+                lock (Tail)
+                {
+                    var text = "";
+                    foreach (var line in Tail) text += "x86.log.tail=" + line.Replace('\r', ' ').Replace('\n', ' ') + Environment.NewLine;
+                    return text;
+                }
+            }
+
             private readonly string path;
             private readonly GuestProcess process;
             private readonly GuestMemory memory;
@@ -330,7 +354,8 @@ namespace Kiosk.Native
                         "x86.private-estimate=" + (guest + cache + managed) + " bytes" + Environment.NewLine +
                         "x86.app-memory=" + appMemory + " bytes" + Environment.NewLine +
                         "x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())) + Environment.NewLine +
-                        "x86.recent=" + string.Join(" ", process.RecentImports) + Environment.NewLine);
+                        "x86.recent=" + string.Join(" ", process.RecentImports) + Environment.NewLine +
+                        TailText());
                 }
                 catch (Exception) { }
             }

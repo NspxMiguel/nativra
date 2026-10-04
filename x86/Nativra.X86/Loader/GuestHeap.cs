@@ -29,6 +29,9 @@ namespace Nativra.X86.Loader
 
         public uint Base => regionBase;
 
+        /// <summary>Why the last allocation that returned 0 could not grow the heap.</summary>
+        public string LastFailure { get; private set; } = "";
+
         public GuestHeap(GuestMemory memory, uint regionBase, uint size)
         {
             this.memory = memory;
@@ -56,8 +59,8 @@ namespace Nativra.X86.Loader
 
             // Otherwise grow the break.
             var address = brk;
-            if ((ulong)address + need > regionEnd) return 0;
-            if (!EnsureCommitted(address + need)) return 0;
+            if ((ulong)address + need > regionEnd) { LastFailure = "region end 0x" + regionEnd.ToString("X8") + " at 0x" + address.ToString("X8"); return 0; }
+            if (!EnsureCommitted(address + need)) { LastFailure = "commit to 0x" + (address + need).ToString("X8") + " refused (committed 0x" + committed.ToString("X") + ")"; return 0; }
             brk = address + need;
             blocks[address] = new Block { Size = need, Free = false };
             if (zero) Zero(address, need);

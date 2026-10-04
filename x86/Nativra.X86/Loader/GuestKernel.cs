@@ -169,7 +169,7 @@ namespace Nativra.X86.Loader
             i.Register(k, "HeapAlloc", CallConv.Stdcall, 3, c =>
             {
                 var block = heap.Alloc(c.Arg(2), (c.Arg(1) & HeapZeroMemory) != 0);
-                if (block == 0) Log?.Invoke("HeapAlloc of " + c.Arg(2) + " bytes failed (heap exhausted)");
+                if (block == 0) Log?.Invoke("HeapAlloc of " + c.Arg(2) + " bytes failed: " + heap.LastFailure);
                 return block;
             });
             i.Register(k, "HeapFree", CallConv.Stdcall, 3, c => heap.Free(c.Arg(2)) ? 1u : 0u);

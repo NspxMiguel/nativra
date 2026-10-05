@@ -376,6 +376,7 @@ namespace Kiosk.Native
                         "x86.app-memory=" + appMemory + " bytes" + Environment.NewLine +
                         "x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())) + Environment.NewLine +
                         "x86.recent=" + string.Join(" ", process.RecentImports) + Environment.NewLine +
+                        "x86.com-calls=" + GuestCom.CallSummary() + Environment.NewLine +
                         TailText());
                 }
                 catch (Exception) { }

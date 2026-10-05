@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Nativra.X86.Cpu;
@@ -314,12 +315,22 @@ namespace Nativra.X86.Loader
         /// <summary>Where a failed host call is reported (the kernel's diagnostic log).</summary>
         public Action<string> Log { get; set; }
         private readonly Dictionary<string, int> Failures = new Dictionary<string, int>();
+        private static readonly Dictionary<string, int> CallCounts = new Dictionary<string, int>();
+
+        /// <summary>The busiest host calls so far ("Interface::Method=count"), for the heartbeat.</summary>
+        public static string CallSummary()
+        {
+            lock (CallCounts)
+                return string.Join(" ", CallCounts.OrderByDescending(p => p.Value).Take(60).Select(p => p.Key + "=" + p.Value));
+        }
+
 
         private unsafe ulong Invoke(GuestCall c, ComMethod method)
         {
             var self = c.Arg(0);
             if (!byGuest.TryGetValue(self, out var proxy)) return 0x80004003;   // E_POINTER
             var key = proxy.Interface.CallKeys[method.Slot];
+            lock (CallCounts) { CallCounts.TryGetValue(key, out var seen); CallCounts[key] = seen + 1; }
             Calls.TryGetValue(key, out var n);
             Calls[key] = n + 1;
             if (method.Skip) return 0;

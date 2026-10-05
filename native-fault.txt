@@ -1,0 +1,1 @@
+x86.switches=x86interp=False nojit-x87env=False nojit-jecxz=False nojit-blockcache=False nocom-fast=False nojit-newforms=False nojit-bits=False nojit-shld=False nojit-bsf=False nojit-lock=False nojit-xchg=False nojit-lahf=False nojit-highbyte=False nojit-nops=False nojit-retform=False nojit-strings=False nojit-x87=False nojit-mmx=False

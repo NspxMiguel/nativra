@@ -60,7 +60,7 @@ namespace Nativra.X86.Loader
             // Otherwise grow the break.
             var address = brk;
             if ((ulong)address + need > regionEnd) { LastFailure = "region end 0x" + regionEnd.ToString("X8") + " at 0x" + address.ToString("X8"); return 0; }
-            if (!EnsureCommitted(address + need)) { LastFailure = "commit to 0x" + (address + need).ToString("X8") + " refused (committed 0x" + committed.ToString("X") + ")"; return 0; }
+            if (!EnsureCommitted(address + need)) { LastFailure = "commit to 0x" + (address + need).ToString("X8") + " refused (committed 0x" + committed.ToString("X") + ")" + Blocker(regionBase + committed, address + need); return 0; }
             brk = address + need;
             blocks[address] = new Block { Size = need, Free = false };
             if (zero) Zero(address, need);
@@ -102,6 +102,14 @@ namespace Nativra.X86.Loader
             (ulong)address < regionEnd && (ulong)address + size > regionBase;
 
         public uint RegionEnd => regionEnd;
+
+        /// <summary>Names the first page already taken in [from, to), so a refused growth says what is in the way.</summary>
+        private string Blocker(uint from, uint to)
+        {
+            for (var page = from; page < to; page += GuestMemory.PageSize)
+                if (memory.IsMapped(page)) return "; page 0x" + page.ToString("X8") + " is already mapped";
+            return "; nothing mapped in the way";
+        }
 
         private bool EnsureCommitted(uint upTo)
         {

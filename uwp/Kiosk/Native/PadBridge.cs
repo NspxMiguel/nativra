@@ -20,6 +20,7 @@ namespace Kiosk.Native
     {
         private const int ERROR_SUCCESS = 0;
         private const int ERROR_DEVICE_NOT_CONNECTED = 1167;
+        private const int ERROR_CALL_NOT_IMPLEMENTED = 120;
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int StateDelegate(uint index, IntPtr state);
@@ -41,6 +42,7 @@ namespace Kiosk.Native
         private static CapabilitiesDelegate capabilities;
         private static EnableDelegate enable;
         private static BatteryDelegate battery;
+        private static VibrationDelegate unsupported;
 
         private static uint packet;
 
@@ -327,6 +329,11 @@ namespace Kiosk.Native
 
             enable = on => { };
 
+            // The guide-button and bus-information entries (ordinals 101-104 in xinput1_3/1_4): present so a
+            // library probe that insists on finding them (Rewired does) accepts this module, and honest
+            // about not supporting them.
+            unsupported = (index, argument) => ERROR_CALL_NOT_IMPLEMENTED;
+
             battery = (index, type, information) =>
             {
                 if (!Present(index, out _)) return ERROR_DEVICE_NOT_CONNECTED;
@@ -361,6 +368,11 @@ namespace Kiosk.Native
                 { "#4", Marshal.GetFunctionPointerForDelegate(capabilities) },
                 { "#5", Marshal.GetFunctionPointerForDelegate(enable) },
                 { "#7", Marshal.GetFunctionPointerForDelegate(battery) },
+                { "#101", Marshal.GetFunctionPointerForDelegate(unsupported) },
+                { "#102", Marshal.GetFunctionPointerForDelegate(unsupported) },
+                { "#103", Marshal.GetFunctionPointerForDelegate(unsupported) },
+                { "#104", Marshal.GetFunctionPointerForDelegate(unsupported) },
+                { "XInputGetStateEx", Marshal.GetFunctionPointerForDelegate(state) },
             };
 
             foreach (var module in new[]

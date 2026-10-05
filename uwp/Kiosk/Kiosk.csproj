@@ -213,7 +213,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Properties\Default.rd.xml" />
+    <EmbeddedResource Include="Properties\Default.rd.xml" />
   </ItemGroup>
 
   <ItemGroup>

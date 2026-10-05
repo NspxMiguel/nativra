@@ -22,8 +22,8 @@ idea, with one addition for games not tried yet.
 | Castle Crashers | 204360 | XNA-style C++ (32-bit PE32, D3D9, SteamStub) | ⛔ Not working | build 463, 2026-10-04 | The SteamStub wrapper wants a genuine `steamclient.dll` and a Steam-signed app ownership ticket; the host answers the client interfaces but cannot yet fetch the ticket. |
 | Super Meat Boy | 40800 | Custom C++ (32-bit PE32, D3D9, libcurl) | ⛔ Not working | build 463, 2026-10-04 | Creates its window and resource pool, then stops at the D3DX functions the bundled `d3dx9_43` shim does not have yet (shader compile, texture loading). |
 | POSTAL 2 | 223470 | Unreal Engine 2 (32-bit PE32) | ⛔ Not working | build 463, 2026-10-04 | Engine initialises (log, CPU detection, object subsystem) and then hangs after cleaning temporary load files. |
-| Cuphead | 268910 | Unity 2017.4 (Mono, x64, D3D11) | ⛔ Not working | build 458, 2026-10-04 | Window opens; the Mono assembly reload never finishes. |
-| Among Us | 945360 | Unity 2017.4 (Mono, x64, D3D11) | ⛔ Not working | build 456, 2026-10-04 | Mono loads and input starts, then the screen stays black. |
+| Cuphead | 268910 | Unity 2017.4 (Mono, x64, D3D11) | 🟡 Playable | build 479, 2026-10-05 | Reaches the title screen at 59.9 fps with the Rewired input stack running; takes about two minutes to load. Controller input is not confirmed yet: Rewired reports it cannot initialise XInput and falls back to raw HID. |
+| Among Us | 945360 | Unity 2017.4 (IL2CPP, x64, D3D11) | 🟡 Playable | build 479, 2026-10-05 | Shows the privacy-policy screen and menus at 34 fps; the game polls XInput. Pressing through the portal does not reach it (a real controller is needed to confirm gameplay). |
 
 Every other game in the library is sorted by how realistic it is today, with the missing
 piece behind each "not yet", in the planning catalog [LIBRARY.md](LIBRARY.md).

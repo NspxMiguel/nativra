@@ -40,3 +40,11 @@ biblioteca Steam pelo Nativra. As notas seguem a ideia do Steam Deck:
 **✅ Verificado** (roda e joga sem problema conhecido), **🟡 Jogável** (roda,
 com as exceções da tabela), **⛔ Não roda** (não chega ao jogo; a nota diz onde
 para) e **⬜ Não testado**. A tabela acima vale para as duas línguas.
+
+## Layered parity regression sweeps
+
+The [Proton/Wine parity matrix](PROTON-PARITY.md) tracks shared platform work.
+[The 2026-10-05 broad sweeps](progress/proton-parity-sweeps.md) record build 498
+startup screenshots and counters across four games, plus the build 502 x64 AOT
+metadata regression. These observations do not upgrade gameplay ratings; the
+57-of-114, no-workaround target remains unproven.

@@ -268,6 +268,28 @@ int main()
     Check(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_SURFACE, D3DFMT_D24S8) == D3D_OK,
           "D24S8 depth available");
 
+    Check(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_UNKNOWN, 0, D3DRTYPE_TEXTURE, D3DFMT_A8R8G8B8) == D3DERR_INVALIDCALL,
+          "format query rejects unknown adapter format");
+    Check(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_VERTEXBUFFER, D3DFMT_A8R8G8B8) == D3DERR_INVALIDCALL,
+          "format query rejects buffer resource types");
+    Check(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_DMAP, D3DRTYPE_TEXTURE, D3DFMT_A8R8G8B8) == D3DERR_NOTAVAILABLE,
+          "unimplemented displacement maps are not advertised");
+    Check(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_SURFACE, D3DFMT_D24S8) == D3DERR_NOTAVAILABLE,
+          "plain non-lockable depth surfaces are not advertised");
+    Check(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_SURFACE, D3DFMT_D16_LOCKABLE) == D3D_OK,
+          "plain lockable depth surfaces remain available");
+    DWORD quality = 99;
+    Check(d3d->CheckDeviceMultiSampleType(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, TRUE, D3DMULTISAMPLE_NONE, &quality) == D3D_OK && quality == 1,
+          "single sample query has one quality level");
+    Check(d3d->CheckDeviceMultiSampleType(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, TRUE, D3DMULTISAMPLE_NONMASKABLE, &quality) == D3DERR_NOTAVAILABLE && quality == 0,
+          "nonmaskable multisampling is not advertised as single sample");
+    Check(d3d->CheckDeviceMultiSampleType(0, D3DDEVTYPE_HAL, D3DFMT_UNKNOWN, TRUE, D3DMULTISAMPLE_NONE, &quality) == D3DERR_INVALIDCALL,
+          "multisample query validates the surface format");
+    Check(d3d->CheckDepthStencilMatch(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DFMT_DXT1, D3DFMT_D24S8) == D3DERR_NOTAVAILABLE,
+          "depth match rejects a compressed render target");
+    Check(d3d->CheckDepthStencilMatch(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DFMT_A8R8G8B8, D3DFMT_D24S8) == D3D_OK,
+          "depth match accepts a supported color and depth pair");
+
     D3DPRESENT_PARAMETERS pp = {};
     pp.BackBufferWidth = kSize;
     pp.BackBufferHeight = kSize;

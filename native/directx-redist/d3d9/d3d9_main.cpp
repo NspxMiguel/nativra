@@ -96,13 +96,22 @@ HRESULT Direct3D9::CheckDeviceType(UINT adapter, D3DDEVTYPE, D3DFORMAT display, 
     return IsDisplayFormat(backbuffer) || backbuffer == D3DFMT_A8R8G8B8 ? D3D_OK : D3DERR_NOTAVAILABLE;
 }
 
-HRESULT Direct3D9::CheckDeviceFormat(UINT adapter, D3DDEVTYPE, D3DFORMAT, DWORD usage, D3DRESOURCETYPE resource,
+HRESULT Direct3D9::CheckDeviceFormat(UINT adapter, D3DDEVTYPE, D3DFORMAT display, DWORD usage, D3DRESOURCETYPE resource,
                                      D3DFORMAT format)
 {
-    if (adapter != 0) return D3DERR_INVALIDCALL;
+    if (adapter != 0 || display == D3DFMT_UNKNOWN) return D3DERR_INVALIDCALL;
+    if (resource != D3DRTYPE_SURFACE && resource != D3DRTYPE_TEXTURE &&
+        resource != D3DRTYPE_CUBETEXTURE && resource != D3DRTYPE_VOLUMETEXTURE)
+        return D3DERR_INVALIDCALL;
+    if (!IsDisplayFormat(display)) return D3DERR_NOTAVAILABLE;
+    if (usage & D3DUSAGE_DMAP) return D3DERR_NOTAVAILABLE;
     const FormatInfo* f = GetFormat(format);
     if (!f) return D3DERR_NOTAVAILABLE;
     const bool depth = f->depth != DXGI_FORMAT_UNKNOWN;
+    // Plain depth surfaces are only available in lockable depth formats.
+    if (depth && resource == D3DRTYPE_SURFACE && !(usage & D3DUSAGE_DEPTHSTENCIL) &&
+        format != D3DFMT_D16_LOCKABLE && format != D3DFMT_D32F_LOCKABLE)
+        return D3DERR_NOTAVAILABLE;
     // D3D9 can neither render to a volume nor use one as a depth buffer.
     if ((resource == D3DRTYPE_VOLUMETEXTURE || resource == D3DRTYPE_VOLUME) &&
         (depth || (usage & (D3DUSAGE_RENDERTARGET | D3DUSAGE_DEPTHSTENCIL))))
@@ -118,12 +127,15 @@ HRESULT Direct3D9::CheckDeviceFormat(UINT adapter, D3DDEVTYPE, D3DFORMAT, DWORD 
     return D3D_OK;
 }
 
-HRESULT Direct3D9::CheckDeviceMultiSampleType(UINT adapter, D3DDEVTYPE, D3DFORMAT, BOOL, D3DMULTISAMPLE_TYPE ms,
+HRESULT Direct3D9::CheckDeviceMultiSampleType(UINT adapter, D3DDEVTYPE, D3DFORMAT format, BOOL, D3DMULTISAMPLE_TYPE ms,
                                               DWORD* quality)
 {
-    if (adapter != 0) return D3DERR_INVALIDCALL;
-    // Multisampling is not implemented yet; games fall back to none.
-    if (ms == D3DMULTISAMPLE_NONE || ms == D3DMULTISAMPLE_NONMASKABLE) {
+    if (quality) *quality = 0;
+    if (adapter != 0 || format == D3DFMT_UNKNOWN || static_cast<UINT>(ms) > 16)
+        return D3DERR_INVALIDCALL;
+    if (!GetFormat(format)) return D3DERR_NOTAVAILABLE;
+    // NONMASKABLE is still multisampling, not an alias for NONE.
+    if (ms == D3DMULTISAMPLE_NONE) {
         if (quality) *quality = 1;
         return D3D_OK;
     }
@@ -131,11 +143,12 @@ HRESULT Direct3D9::CheckDeviceMultiSampleType(UINT adapter, D3DDEVTYPE, D3DFORMA
     return D3DERR_NOTAVAILABLE;
 }
 
-HRESULT Direct3D9::CheckDepthStencilMatch(UINT adapter, D3DDEVTYPE, D3DFORMAT, D3DFORMAT, D3DFORMAT ds)
+HRESULT Direct3D9::CheckDepthStencilMatch(UINT adapter, D3DDEVTYPE, D3DFORMAT, D3DFORMAT target, D3DFORMAT ds)
 {
     if (adapter != 0) return D3DERR_INVALIDCALL;
     const FormatInfo* f = GetFormat(ds);
-    return f && f->depth != DXGI_FORMAT_UNKNOWN ? D3D_OK : D3DERR_NOTAVAILABLE;
+    return f && f->depth != DXGI_FORMAT_UNKNOWN && IsRenderable(target) && GetFormat(target)
+        ? D3D_OK : D3DERR_NOTAVAILABLE;
 }
 
 HRESULT Direct3D9::CheckDeviceFormatConversion(UINT adapter, D3DDEVTYPE, D3DFORMAT src, D3DFORMAT dst)

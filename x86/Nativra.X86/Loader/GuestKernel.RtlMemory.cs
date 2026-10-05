@@ -4,6 +4,7 @@ namespace Nativra.X86.Loader
     {
         private void InstallRtlMemoryFunctions(GuestImports imports)
         {
+            InstallRtlStringFunctions(imports);
             imports.Register("ntdll.dll", "RtlCompareMemory", CallConv.Stdcall, 3, c =>
             {
                 uint matched = 0;

@@ -38,6 +38,7 @@ namespace Nativra.X86.Loader
             this.regionBase = regionBase;
             regionEnd = regionBase + size;
             brk = regionBase;
+            memory.Avoid(regionBase, size);   // stacks, TEBs and rebased DLLs go elsewhere, so the heap can grow
         }
 
         /// <summary>Allocates <paramref name="size"/> bytes (optionally zeroed); 0 on exhaustion.</summary>

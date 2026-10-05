@@ -16,6 +16,17 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void TheRegionIsKeptFreeOfStacksAndOtherAllocations()
+        {
+            var heap = Fresh(out var memory);
+            // Without the guard the first free range from here is the heap's own unmapped region.
+            var found = memory.FindFree(0x10000, Base);
+            Assert.True(found >= Base + 0x00100000, "placed inside the heap region: 0x" + found.ToString("X8"));
+            var big = heap.Alloc(0x80000);
+            Assert.NotEqual(0u, big);
+        }
+
+        [Fact]
         public void AllocationsAreDistinctAndWritable()
         {
             var heap = Fresh(out var memory);

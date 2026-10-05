@@ -231,8 +231,30 @@ namespace Nativra.X86.Cpu
             var align = Math.Max(1u, alignment >> PageShift);
             var low = lowest >> PageShift;
             var high = highest == 0 ? (uint)PageCount : highest >> PageShift;
-            var found = topDown ? FindDown(pages, align, low, high) : FindUp(pages, align, low, high);
-            return found == NotFound ? 0 : found << PageShift;
+            while (true)
+            {
+                var found = topDown ? FindDown(pages, align, low, high) : FindUp(pages, align, low, high);
+                if (found == NotFound) return 0;
+                // A range kept for a later grower (the guest heap) is free in the page model but
+                // is not up for grabs: look again past it, or below it.
+                if (avoidPages == 0 || found + pages <= avoidFirst || found >= avoidFirst + avoidPages)
+                    return found << PageShift;
+                if (topDown) high = avoidFirst;
+                else low = avoidFirst + avoidPages;
+            }
+        }
+
+        private uint avoidFirst, avoidPages;
+
+        /// <summary>
+        /// Keeps a range out of what <see cref="FindRange"/> and <see cref="FindFree"/> hand out, without
+        /// claiming it: the heap maps its region as it grows, and until then anything placed there (a
+        /// thread stack, a rebased DLL) would cap it at that neighbour.
+        /// </summary>
+        public void Avoid(uint address, uint size)
+        {
+            avoidFirst = address >> PageShift;
+            avoidPages = (uint)PageSpan(address, size);
         }
 
         private uint FindUp(uint pages, uint align, uint low, uint high)

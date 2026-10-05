@@ -127,14 +127,28 @@ async function pushMarker(name: string, text: string): Promise<void> {
 async function download(appid: number, limitMs: number): Promise<boolean> {
   const dir = join(OUT, String(appid));
   await mkdir(dir, { recursive: true });
-  await xbdev(["stop", "Kiosk"]);
-  await waitStopped();
-  await xbdev(["rm", "Kiosk", "autoplay.txt", "--dir", "LocalState"]);
-  await pushMarker("autodownload.txt", String(appid));
-  const launch = await xbdev(["launch", "Kiosk"]);
-  await writeFile(join(dir, "launch.txt"), launch.out);
-  if (!launch.ok)
-    throw new Error(`${appid}: Kiosk launch failed; see launch.txt`);
+  await rm(join(dir, "autodownload.txt"), { force: true });
+  const marker = await xbdev(
+    ["pull", "Kiosk", "autodownload.txt", "LocalState"],
+    dir,
+  );
+  const previous = marker.ok
+    ? (await readFile(join(dir, "autodownload.txt"), "utf8")).trim()
+    : "";
+  // Renewing the console lease must not restart a large depot file: the app
+  // resumes completed files, but re-fetches every chunk of a partial file.
+  const continuing =
+    previous === String(appid) && (await xbdev(["running", "Kiosk"])).ok;
+  if (!continuing) {
+    await xbdev(["stop", "Kiosk"]);
+    await waitStopped();
+    await xbdev(["rm", "Kiosk", "autoplay.txt", "--dir", "LocalState"]);
+    await pushMarker("autodownload.txt", String(appid));
+    const launch = await xbdev(["launch", "Kiosk"]);
+    await writeFile(join(dir, "launch.txt"), launch.out);
+    if (!launch.ok)
+      throw new Error(`${appid}: Kiosk launch failed; see launch.txt`);
+  }
   const until = Date.now() + limitMs;
   await sleep(20_000);
   while (Date.now() < until) {
@@ -146,6 +160,9 @@ async function download(appid: number, limitMs: number): Promise<boolean> {
     if (!going) break;
     await sleep(30_000);
   }
+  // Leave the app downloading while the caller releases the lock. The next
+  // locked batch can monitor it without discarding partial-file progress.
+  if (Date.now() >= until) return false;
   await rm(join(dir, "download-error.txt"), { force: true });
   await xbdev(["pull", "Kiosk", "download-error.txt", "LocalState"], dir);
   await xbdev(["rm", "Kiosk", "autodownload.txt", "--dir", "LocalState"]);
@@ -229,7 +246,7 @@ if (import.meta.main) {
       );
     if (fetch && !(await download(appid, available)))
       throw new Error(
-        `${appid}: download incomplete; resume in the next lock window`,
+        `${appid}: download incomplete; leave app running and monitor in the next lock window`,
       );
     const v = await test(appid, seconds);
     const line = `| ${v.appid} | ${v.status} | ${v.frames} | ${v.fps} | ${v.detail.replace(/\|/g, "/")} | ${new Date().toISOString()} |`;

@@ -310,6 +310,10 @@ namespace Nativra.X86.Loader
             return offset > 0 && offset < 0x100000000L ? (uint)offset : 0;
         }
 
+        /// <summary>Where a failed host call is reported (the kernel's diagnostic log).</summary>
+        public Action<string> Log { get; set; }
+        private readonly Dictionary<string, int> Failures = new Dictionary<string, int>();
+
         private unsafe ulong Invoke(GuestCall c, ComMethod method)
         {
             var self = c.Arg(0);
@@ -507,6 +511,13 @@ namespace Nativra.X86.Loader
                 }
             }
             if (outs != null) foreach (var o in outs) o();
+            // A failed call is the first thing to read when a game then asserts or quits; the first few of each.
+            if ((int)(uint)result < 0)
+            {
+                Failures.TryGetValue(key, out var failed);
+                Failures[key] = failed + 1;
+                if (failed < 5) Log?.Invoke("COM " + key + " failed 0x" + ((uint)result).ToString("X8"));
+            }
             if (method.Name == "Release" && proxy.Interface.IsUnknown && (uint)result == 0) Forget(self);
             else if (!proxy.Interface.IsUnknown && method.Name == "DestroyVoice") Forget(self);
             return result;

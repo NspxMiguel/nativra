@@ -139,6 +139,7 @@ namespace Kiosk.Native
                     // Direct3D 9 through the packaged 64-bit layer.
                     if (process.Jit != null) process.Jit.CollectFallbacks = true;   // cheap: one dictionary bump per fallback
                     var com = new GuestCom(process, kernel);
+                    com.Log = text => kernel.Log?.Invoke(text);
                     com.UseHeapArguments = noComFast;
                     X86Direct3D9.Install(process, kernel, com);
                     using (var directSound = new GuestDirectSound(process, kernel, new X86DirectSoundOutput()))

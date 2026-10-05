@@ -44,6 +44,22 @@ namespace Kiosk.Native
         private static BatteryDelegate battery;
         private static VibrationDelegate unsupported;
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int AudioGuidsDelegate(uint index, IntPtr render, IntPtr capture);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int AudioIdsDelegate(uint index, IntPtr render, IntPtr renderCount, IntPtr capture, IntPtr captureCount);
+
+        private static CapabilitiesDelegate keystroke;
+        private static AudioGuidsDelegate audioGuids;
+        private static AudioIdsDelegate audioIds;
+        private static readonly object keystrokeGate = new object();
+        private static readonly Nativra.X86.Loader.XInputKeystrokes[] keystrokes =
+        {
+            new Nativra.X86.Loader.XInputKeystrokes(), new Nativra.X86.Loader.XInputKeystrokes(),
+            new Nativra.X86.Loader.XInputKeystrokes(), new Nativra.X86.Loader.XInputKeystrokes(),
+        };
+        private static IntPtr keystrokeState;
+
         private static uint packet;
 
         /// <summary>How many readings were taken, which proves input is live.</summary>
@@ -329,6 +345,52 @@ namespace Kiosk.Native
 
             enable = on => { };
 
+            keystrokeState = Marshal.AllocHGlobal(16);
+            keystroke = (index, reserved, target) =>
+            {
+                if ((index >= 4 && index != 255) || target == IntPtr.Zero) return 160; // ERROR_BAD_ARGUMENTS
+                lock (keystrokeGate)
+                {
+                    var first = index == 255 ? 0u : index;
+                    var last = index == 255 ? 3u : index;
+                    for (var slot = first; slot <= last; slot++)
+                    {
+                        var result = state(slot, keystrokeState);
+                        if (result != ERROR_SUCCESS)
+                        {
+                            if (index != 255) return result;
+                            continue;
+                        }
+                        if (!keystrokes[slot].Poll(unchecked((ushort)Marshal.ReadInt16(keystrokeState, 4)),
+                            Marshal.ReadByte(keystrokeState, 6), Marshal.ReadByte(keystrokeState, 7),
+                            Marshal.ReadInt16(keystrokeState, 8), Marshal.ReadInt16(keystrokeState, 10),
+                            Marshal.ReadInt16(keystrokeState, 12), Marshal.ReadInt16(keystrokeState, 14),
+                            out var key, out var flags)) continue;
+                        Marshal.WriteInt16(target, 0, (short)key);
+                        Marshal.WriteInt16(target, 2, 0); // Unicode is unused for gamepads.
+                        Marshal.WriteInt16(target, 4, (short)flags);
+                        Marshal.WriteByte(target, 6, (byte)slot);
+                        Marshal.WriteByte(target, 7, 0);
+                        return ERROR_SUCCESS;
+                    }
+                    return 4306; // ERROR_EMPTY: no transition pending.
+                }
+            };
+            audioGuids = (index, render, capture) =>
+            {
+                if (index >= 4 || render == IntPtr.Zero || capture == IntPtr.Zero) return 160;
+                if (!Present(index, out _)) return ERROR_DEVICE_NOT_CONNECTED;
+                return 50; // ERROR_NOT_SUPPORTED: no controller audio endpoint is exposed.
+            };
+            audioIds = (index, render, renderCount, capture, captureCount) =>
+            {
+                if (index >= 4 || renderCount == IntPtr.Zero || captureCount == IntPtr.Zero) return 160;
+                if (!Present(index, out _)) return ERROR_DEVICE_NOT_CONNECTED;
+                Marshal.WriteInt32(renderCount, 0);
+                Marshal.WriteInt32(captureCount, 0);
+                return ERROR_SUCCESS; // Connected controller, no audio endpoints.
+            };
+
             // The guide-button and bus-information entries (ordinals 101-104 in xinput1_3/1_4): present so a
             // library probe that insists on finding them (Rewired does) accepts this module, and honest
             // about not supporting them.
@@ -373,11 +435,18 @@ namespace Kiosk.Native
                 { "#103", Marshal.GetFunctionPointerForDelegate(unsupported) },
                 { "#104", Marshal.GetFunctionPointerForDelegate(unsupported) },
                 { "XInputGetStateEx", Marshal.GetFunctionPointerForDelegate(state) },
+                { "XInputGetKeystroke", Marshal.GetFunctionPointerForDelegate(keystroke) },
+                { "XInputGetDSoundAudioDeviceGuids", Marshal.GetFunctionPointerForDelegate(audioGuids) },
+                { "XInputGetAudioDeviceIds", Marshal.GetFunctionPointerForDelegate(audioIds) },
+                { "#6", Marshal.GetFunctionPointerForDelegate(audioGuids) },
+                { "#8", Marshal.GetFunctionPointerForDelegate(keystroke) },
+                { "#10", Marshal.GetFunctionPointerForDelegate(audioIds) },
             };
 
             foreach (var module in new[]
             {
                 "xinput1_4.dll", "XINPUT1_4.dll", "xinput1_3.dll", "XINPUT1_3.dll",
+                "xinput1_1.dll", "XINPUT1_1.dll", "xinput1_2.dll", "XINPUT1_2.dll",
                 "xinput9_1_0.dll", "XINPUT9_1_0.dll", "xinputuap.dll", "XINPUTUAP.dll",
             })
             {
@@ -399,7 +468,7 @@ namespace Kiosk.Native
             MakeHandlers();
             var host = process.Memory.HostBase;
             IntPtr At(uint guest) => guest == 0 ? IntPtr.Zero : new IntPtr(host.ToInt64() + guest);
-            foreach (var module in new[] { "xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll" })
+            foreach (var module in new[] { "xinput1_4.dll", "xinput1_3.dll", "xinput1_2.dll", "xinput1_1.dll", "xinput9_1_0.dll" })
             {
                 var i = process.Imports;
                 var cc = Nativra.X86.Loader.CallConv.Stdcall;
@@ -408,6 +477,14 @@ namespace Kiosk.Native
                 i.Register(module, "XInputGetCapabilities", cc, 3, c => (uint)capabilities(c.Arg(0), c.Arg(1), At(c.Arg(2))));
                 i.Register(module, "XInputEnable", cc, 1, c => { enable((int)c.Arg(0)); return 0; });
                 i.Register(module, "XInputGetBatteryInformation", cc, 3, c => (uint)battery(c.Arg(0), (byte)c.Arg(1), At(c.Arg(2))));
+                i.Register(module, "XInputGetStateEx", cc, 2, c => (uint)state(c.Arg(0), At(c.Arg(1))));
+                i.Register(module, "XInputGetKeystroke", cc, 3, c => (uint)keystroke(c.Arg(0), c.Arg(1), At(c.Arg(2))));
+                i.Register(module, "XInputGetDSoundAudioDeviceGuids", cc, 3, c => (uint)audioGuids(c.Arg(0), At(c.Arg(1)), At(c.Arg(2))));
+                i.Register(module, "XInputGetAudioDeviceIds", cc, 5, c => (uint)audioIds(c.Arg(0), At(c.Arg(1)), At(c.Arg(2)), At(c.Arg(3)), At(c.Arg(4))));
+                i.RegisterOrdinal(module, 6, cc, 3, c => (uint)audioGuids(c.Arg(0), At(c.Arg(1)), At(c.Arg(2))));
+                i.RegisterOrdinal(module, 7, cc, 3, c => (uint)battery(c.Arg(0), (byte)c.Arg(1), At(c.Arg(2))));
+                i.RegisterOrdinal(module, 8, cc, 3, c => (uint)keystroke(c.Arg(0), c.Arg(1), At(c.Arg(2))));
+                i.RegisterOrdinal(module, 10, cc, 5, c => (uint)audioIds(c.Arg(0), At(c.Arg(1)), At(c.Arg(2)), At(c.Arg(3)), At(c.Arg(4))));
                 // By number too, as the 64-bit table above; #100 is the reading with the guide button.
                 i.RegisterOrdinal(module, 2, cc, 2, c => (uint)state(c.Arg(0), At(c.Arg(1))));
                 i.RegisterOrdinal(module, 3, cc, 2, c => (uint)vibration(c.Arg(0), At(c.Arg(1))));

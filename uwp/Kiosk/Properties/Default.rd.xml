@@ -5,6 +5,11 @@
          run time (one per argument count); .NET Native strips the ones no code
          names statically, and the call then fails with MissingMetadataException. -->
     <Assembly Name="Nativra.X86" Dynamic="Required All" />
+    <!-- Bridge tables erase callback types to Delegate. Reflection metadata alone
+         does not preserve their reverse-P/Invoke marshaling stubs in .NET Native. -->
+    <Assembly Name="Kiosk">
+      <Namespace Name="Kiosk.Native" MarshalDelegate="Required All" />
+    </Assembly>
   
   </Application>
 </Directives>

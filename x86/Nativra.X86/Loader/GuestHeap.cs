@@ -26,6 +26,8 @@ namespace Nativra.X86.Loader
         private struct Block { public uint Size; public bool Free; }
         // Allocated/freed blocks keyed by payload address, in address order.
         private readonly SortedDictionary<uint, Block> blocks = new SortedDictionary<uint, Block>();
+        // Free blocks ordered by (size, address): the smallest one that fits is a single lookup.
+        private readonly SortedSet<ulong> freeBySize = new SortedSet<ulong>();
 
         public uint Base => regionBase;
 
@@ -46,15 +48,19 @@ namespace Nativra.X86.Loader
         {
             var need = Round(size == 0 ? 1 : size);
 
-            // Reuse the first free block big enough.
-            foreach (var pair in blocks)
+            // Reuse the smallest free block big enough (one lookup, however many blocks the heap holds).
+            if (freeBySize.Count > 0)
             {
-                var block = pair.Value;
-                if (block.Free && block.Size >= need)
+                var view = freeBySize.GetViewBetween((ulong)need << 32, ulong.MaxValue);
+                if (view.Count > 0)
                 {
-                    blocks[pair.Key] = new Block { Size = block.Size, Free = false };
-                    if (zero) Zero(pair.Key, block.Size);
-                    return pair.Key;
+                    var key = view.Min;
+                    freeBySize.Remove(key);
+                    var at = (uint)(key & 0xFFFFFFFF);
+                    var size0 = (uint)(key >> 32);
+                    blocks[at] = new Block { Size = size0, Free = false };
+                    if (zero) Zero(at, size0);
+                    return at;
                 }
             }
 
@@ -64,7 +70,7 @@ namespace Nativra.X86.Loader
             if (!EnsureCommitted(address + need)) { LastFailure = "commit to 0x" + (address + need).ToString("X8") + " refused (committed 0x" + committed.ToString("X") + ")" + Blocker(regionBase + committed, address + need); return 0; }
             brk = address + need;
             blocks[address] = new Block { Size = need, Free = false };
-            if (zero) Zero(address, need);
+            // Pages the heap has just grown into are zero already; only reused blocks need clearing.
             return address;
         }
 
@@ -74,6 +80,7 @@ namespace Nativra.X86.Loader
             if (address == 0) return true;
             if (!blocks.TryGetValue(address, out var block) || block.Free) return false;
             blocks[address] = new Block { Size = block.Size, Free = true };
+            freeBySize.Add(((ulong)block.Size << 32) | address);
             return true;
         }
 

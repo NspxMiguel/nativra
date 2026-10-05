@@ -384,10 +384,19 @@ namespace Kiosk.Native
             };
             audioIds = (index, render, renderCount, capture, captureCount) =>
             {
-                if (index >= 4 || renderCount == IntPtr.Zero || captureCount == IntPtr.Zero) return 160;
+                if (index >= 4 || (render != IntPtr.Zero && renderCount == IntPtr.Zero) ||
+                    (capture != IntPtr.Zero && captureCount == IntPtr.Zero)) return 160;
                 if (!Present(index, out _)) return ERROR_DEVICE_NOT_CONNECTED;
-                Marshal.WriteInt32(renderCount, 0);
-                Marshal.WriteInt32(captureCount, 0);
+                if (renderCount != IntPtr.Zero)
+                {
+                    if (render != IntPtr.Zero && Marshal.ReadInt32(renderCount) > 0) Marshal.WriteInt16(render, 0);
+                    Marshal.WriteInt32(renderCount, 0);
+                }
+                if (captureCount != IntPtr.Zero)
+                {
+                    if (capture != IntPtr.Zero && Marshal.ReadInt32(captureCount) > 0) Marshal.WriteInt16(capture, 0);
+                    Marshal.WriteInt32(captureCount, 0);
+                }
                 return ERROR_SUCCESS; // Connected controller, no audio endpoints.
             };
 

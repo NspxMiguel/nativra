@@ -10,6 +10,29 @@ namespace Nativra.X86.Tests
     public sealed class PadBridgeContractTests
     {
         [Fact]
+        public void AudioEndpointQueriesAllowOmittedDirectionsAndBoundOutputWrites()
+        {
+            PadBridge.Install(new SystemImports());
+            var handler = (Delegate)typeof(PadBridge).GetField("audioIds", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            var p = Marshal.AllocHGlobal(16);
+            try
+            {
+                Assert.Equal(0, (int)handler.DynamicInvoke(0u, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero));
+                Assert.Equal(1167, (int)handler.DynamicInvoke(3u, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero));
+                Marshal.WriteInt64(p, 0x1234567890ABCDEF);
+                Marshal.WriteInt32(p + 8, 1);
+                Assert.Equal(0, (int)handler.DynamicInvoke(0u, p, p + 8, IntPtr.Zero, IntPtr.Zero));
+                Assert.Equal(0, Marshal.ReadInt16(p));
+                Assert.Equal(0x1234567890AB0000, Marshal.ReadInt64(p));
+                Assert.Equal(0, Marshal.ReadInt32(p + 8));
+                Marshal.WriteInt16(p, 123);
+                Assert.Equal(0, (int)handler.DynamicInvoke(0u, p, p + 8, IntPtr.Zero, IntPtr.Zero));
+                Assert.Equal(123, Marshal.ReadInt16(p));
+            }
+            finally { Marshal.FreeHGlobal(p); }
+        }
+
+        [Fact]
         public void ExportDiscoveryAndKeystrokeAbiWorkWithoutAWindowsHost()
         {
             var imports = new SystemImports();

@@ -34,7 +34,7 @@ namespace Kiosk.Native
         // The game itself runs until it exits: a budget here ended games mid-play.
         private const long GameBudget = long.MaxValue;
         private static readonly TimeSpan SnapshotEvery = TimeSpan.FromSeconds(30);
-        private const int LogLines = 50;
+        private const int LogLines = 150;
 
         /// <summary>
         /// Loads and runs the program. True when the game ended by itself (it

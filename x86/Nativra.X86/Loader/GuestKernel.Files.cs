@@ -407,8 +407,12 @@ namespace Nativra.X86.Loader
             // file is buffered until it closes: mirror what is written into the diagnostic log.
             if (f.Path != null && f.Path.EndsWith(".log", StringComparison.OrdinalIgnoreCase) && logWritesMirrored < 400)
             {
-                logWritesMirrored++;
-                Say("[" + System.IO.Path.GetFileName(f.Path) + "] " + Ansi.Decode(memory.ReadBytes(buffer, (int)Math.Min(count, 300u))));
+                var written = Ansi.Decode(memory.ReadBytes(buffer, (int)Math.Min(count, 300u))).Trim();
+                if (written.Length > 0)
+                {
+                    logWritesMirrored++;
+                    Say("[" + System.IO.Path.GetFileName(f.Path) + "] " + written);
+                }
             }
 
             uint total = 0;

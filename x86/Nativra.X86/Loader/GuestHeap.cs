@@ -38,10 +38,6 @@ namespace Nativra.X86.Loader
             this.regionBase = regionBase;
             regionEnd = regionBase + size;
             brk = regionBase;
-            // Hold the whole region from the start so a DLL rebased on load (or any later
-            // allocation) cannot land in the middle and cap the heap at its neighbour. If
-            // something already sits there the heap simply ends at it, as before.
-            memory.Reserve(regionBase, size, Win32Memory.MemPrivate, Win32Memory.PageReadWrite);
         }
 
         /// <summary>Allocates <paramref name="size"/> bytes (optionally zeroed); 0 on exhaustion.</summary>

@@ -335,6 +335,7 @@ namespace Kiosk.Native
                 PlainAnswers.Install(imports);
                 ShellPath.Install(imports);
                 UserFolders.Install(imports, local.Path);
+                RegistryBridge.Install(imports, System.IO.Path.Combine(local.Path, "registry", appId + ".txt"));
                 CrtFiles.Install(imports);
                 DirectInputStub.Install(imports);
                 SspiStub.Install(imports);

@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../uwp/Kiosk/Native/RegistryBridge.cs" Link="Host/RegistryBridge.cs" />
     <Compile Include="../../uwp/Kiosk/Native/HidBridge.cs" Link="Host/HidBridge.cs" />
     <Compile Include="../../uwp/Kiosk/Native/ControllerConfiguration.cs" Link="Host/ControllerConfiguration.cs" />
     <Compile Include="../../uwp/Kiosk/Native/PadBridge.cs" Link="Host/PadBridge.cs" />

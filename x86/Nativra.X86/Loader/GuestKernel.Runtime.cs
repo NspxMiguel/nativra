@@ -771,7 +771,7 @@ namespace Nativra.X86.Loader
         /// with typographic characters in 0x80–0x9F. Written out so it does not
         /// depend on the platform's legacy encoding provider.
         /// </summary>
-        internal static class Ansi
+        public static class Ansi
         {
             private static readonly char[] High =
             {

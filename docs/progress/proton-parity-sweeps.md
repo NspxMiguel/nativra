@@ -41,8 +41,10 @@ The `.NET Native` build succeeded and the portable unit tests passed, but runtim
 marshalling metadata was absent. Commit `664934a` adds an explicit MarshalDelegate
 policy for native bridge callbacks. CI then exposed ILT0027: the project's
 `None` build action prevented the compiler from reading the directives at all.
-Commit `e3f588c` changes the build action to `EmbeddedResource`; Xbox retesting
-is required. The x86 launch path bypasses the affected x64 initialization.
+The intermediate `EmbeddedResource` attempt was also rejected because it
+contained an application-level directive. Commit `20a013b` changes the build
+action to `Content`, matching the compiler target's `AppxPackagePayload` input;
+build 508 compiled without ILT0027. Xbox retesting is required. The x86 launch path bypasses the affected x64 initialization.
 
 | AppID | Game | Presented frames / reported rate | Screenshot / result |
 | --- | --- | --- | --- |

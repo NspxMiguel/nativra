@@ -829,7 +829,9 @@ HRESULT Compile(const char *source, UINT length, const char *name, const D3DXMAC
     if (!source || !length || !entry || !profile || !shader)
         return D3DERR_INVALIDCALL;
     HRESULT hostResult = D3DERR_NOTAVAILABLE;
-    if (!include && CompileOnHost(source, length, name, macros, entry, profile, flags, shader, errors, &hostResult))
+    // A game that passes an include handler usually has no #include in the text (Super Meat Boy joins its
+    // sources itself); the host compiler gets the first try either way and reports an unresolved include.
+    if (CompileOnHost(source, length, name, macros, entry, profile, flags, shader, errors, &hostResult))
         return hostResult;
     HMODULE module = LoadLibraryW(L"d3dcompiler_43.dll");
     if (!module)

@@ -226,7 +226,9 @@ namespace Kiosk.Native
             Answer("SteamAPI_IsSteamRunning", (a, b, c, d) => True);
             Answer("SteamAPI_GetHSteamPipe", (a, b, c, d) => True);
             Answer("SteamAPI_GetHSteamUser", (a, b, c, d) => True);
-            Answer("SteamClient", (a, b, c, d) => Interface("SteamClient"));
+            // SteamClient() is NOT answered here: the classic table (SteamClassic) owns it, because a
+            // game using the legacy C++ wrapper (CSteamworks.dll) calls through the returned object's
+            // vtable. The flat exports ignore that pointer, so nothing flat depends on it being empty.
             Answer("SteamInternal_CreateInterface", (a, b, c, d) => Interface(Text(a)));
             Answer("SteamInternal_FindOrCreateUserInterface", (a, b, c, d) => Interface(Text(b)));
             Answer("SteamInternal_ContextInit", (a, b, c, d) => a);

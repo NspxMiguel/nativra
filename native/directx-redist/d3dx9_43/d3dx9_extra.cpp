@@ -277,6 +277,18 @@ HRESULT DecodeDDS(const unsigned char *data, size_t size, Image *image)
                                 : D3DFMT_X8R8G8B8;
     return S_OK;
 }
+// What a failed texture call saw, in the debugger channel the x86 host mirrors into its diagnostic log.
+void TraceFailure(const char *what, HRESULT hr, const void *bytes, UINT size, UINT a, UINT b)
+{
+    static int reported = 0;
+    if (reported++ >= 12)
+        return;
+    char line[200];
+    const unsigned char *d = (const unsigned char *)bytes;
+    wsprintfA(line, "D3DX %s failed hr=0x%08X size=%u head=%02X%02X%02X%02X args=%u,%u", what, (unsigned)hr, size,
+              d && size > 0 ? d[0] : 0, d && size > 1 ? d[1] : 0, d && size > 2 ? d[2] : 0, d && size > 3 ? d[3] : 0, a, b);
+    OutputDebugStringA(line);
+}
 HRESULT DecodeImage(const void *bytes, UINT size, Image *image)
 {
     if (!bytes || !size || size > 0x7fffffffu)
@@ -545,7 +557,10 @@ D3DX9API HRESULT WINAPI D3DXCreateTexture(IDirect3DDevice9 *device, UINT w, UINT
         mips = FullMips(w, h);
     if (format == D3DFMT_UNKNOWN || (DWORD)format == D3DX_DEFAULT)
         format = D3DFMT_A8R8G8B8;
-    return device->CreateTexture(w, h, mips, usage, format, pool, out, nullptr);
+    HRESULT created = device->CreateTexture(w, h, mips, usage, format, pool, out, nullptr);
+    if (FAILED(created))
+        TraceFailure("CreateTexture", created, nullptr, 0, w, h);
+    return created;
 }
 D3DX9API HRESULT WINAPI D3DXCreateCubeTexture(IDirect3DDevice9 *, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL,
                                               IDirect3DCubeTexture9 **out)
@@ -570,6 +585,8 @@ D3DX9API HRESULT WINAPI D3DXCreateTextureFromFileInMemoryEx(IDirect3DDevice9 *de
         hr = CreateFromImage(device, image, w, h, mips, usage, format, pool, key, info, out);
         stbi_image_free(image.rgba);
     }
+    if (FAILED(hr))
+        TraceFailure("CreateTextureFromFileInMemoryEx", hr, bytes, size, w, h);
     return hr;
 }
 D3DX9API HRESULT WINAPI D3DXCreateTextureFromFileInMemory(IDirect3DDevice9 *device, const void *bytes, UINT size,

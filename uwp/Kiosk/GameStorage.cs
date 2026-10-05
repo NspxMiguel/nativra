@@ -201,6 +201,49 @@ namespace Kiosk
         }
 
         /// <summary>
+        /// LocalState\export.txt lists files of installed games, one per line as
+        /// "appid/relative/path", copied into LocalState\export\ (flat, with the slashes turned into
+        /// underscores) so the Device Portal can pull them off a USB drive it cannot reach. The list
+        /// is deleted afterwards; a missing file is skipped.
+        /// </summary>
+        public static async Task ExportListedAsync()
+        {
+            var list = await ApplicationData.Current.LocalFolder.TryGetItemAsync("export.txt") as StorageFile;
+            if (list == null) return;
+            var target = await ApplicationData.Current.LocalFolder.CreateFolderAsync("export", CreationCollisionOption.OpenIfExists);
+            foreach (var line in (await FileIO.ReadTextAsync(list)).Split('\n'))
+            {
+                var path = line.Trim().Replace('\\', '/');
+                if (path.Length == 0) continue;
+                try
+                {
+                    var parts = path.Split('/');
+                    foreach (var place in await PlacesAsync())
+                    {
+                        var games = await GamesFolderAsync(place.Id, false);
+                        if (games == null) continue;
+                        IStorageItem item = games;
+                        foreach (var part in parts)
+                        {
+                            item = (item as StorageFolder) == null ? null : await ((StorageFolder)item).TryGetItemAsync(part);
+                            if (item == null) break;
+                        }
+                        if (item is StorageFile file)
+                        {
+                            await file.CopyAsync(target, path.Replace('/', '_'), NameCollisionOption.ReplaceExisting);
+                            break;
+                        }
+                    }
+                }
+                catch
+                {
+                    // One unreadable file does not stop the rest of the list.
+                }
+            }
+            await list.DeleteAsync(StorageDeleteOption.PermanentDelete);
+        }
+
+        /// <summary>
         /// Moves a game's folder to another place, file by file: each file is
         /// copied, then removed from where it was, so a move cut short leaves
         /// every file whole in one place or the other and can simply run

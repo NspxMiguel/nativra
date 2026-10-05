@@ -197,6 +197,7 @@ namespace Kiosk
             Native.PadBridge.Watch();
             DownloadManager.Changed += OnDownloadsChanged;
             if (DownloadManager.Active() == null) DownloadManager.ClearStaleMarker();
+            var export = GameStorage.ExportListedAsync();   // files listed in export.txt are copied where the portal can pull them
             var forget = GameStorage.ForgetListedAsync();   // games listed in forget.txt give their space back
             InitializeGameHost();
             InitializeDiagnostics();

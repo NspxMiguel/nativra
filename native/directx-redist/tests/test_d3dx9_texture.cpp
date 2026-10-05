@@ -60,14 +60,34 @@ int main()
             D3DSURFACE_DESC desc = {};
             ok = ok && SUCCEEDED(texture->GetLevelDesc(0, &desc)) && desc.Width == (mode ? 3u : 4u) &&
                  desc.Height == 2 && desc.Format == D3DFMT_A8R8G8B8 && texture->GetLevelCount() == 1;
+            // DEFAULT-pool textures cannot be read by locking their CPU shadow.
+            // Copy the GPU texture to a render target, then read it back.
+            IDirect3DSurface9 *source = nullptr, *target = nullptr, *readback = nullptr;
+            HRESULT copied = texture->GetSurfaceLevel(0, &source);
+            if (SUCCEEDED(copied))
+                copied = device->CreateRenderTarget(desc.Width, desc.Height, desc.Format, D3DMULTISAMPLE_NONE, 0, FALSE,
+                                                    &target, nullptr);
+            if (SUCCEEDED(copied))
+                copied = device->CreateOffscreenPlainSurface(desc.Width, desc.Height, desc.Format, D3DPOOL_SYSTEMMEM,
+                                                             &readback, nullptr);
+            if (SUCCEEDED(copied))
+                copied = device->StretchRect(source, nullptr, target, nullptr, D3DTEXF_NONE);
+            if (SUCCEEDED(copied))
+                copied = device->GetRenderTargetData(target, readback);
             D3DLOCKED_RECT rect = {};
-            HRESULT locked = texture->LockRect(0, &rect, nullptr, D3DLOCK_READONLY);
+            HRESULT locked = SUCCEEDED(copied) ? readback->LockRect(&rect, nullptr, D3DLOCK_READONLY) : copied;
             ok = ok && SUCCEEDED(locked);
             if (SUCCEEDED(locked))
             {
                 ok = ok && *static_cast<const uint32_t *>(rect.pBits) == 0x78123456u;
-                texture->UnlockRect(0);
+                readback->UnlockRect();
             }
+            if (readback)
+                readback->Release();
+            if (target)
+                target->Release();
+            if (source)
+                source->Release();
             texture->Release();
         }
         std::printf("%s FROM_FILE texture mode %d: 0x%08lX\n", ok ? "PASS" : "FAIL", mode,

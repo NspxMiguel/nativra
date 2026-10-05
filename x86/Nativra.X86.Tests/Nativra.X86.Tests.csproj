@@ -18,6 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../uwp/Kiosk/Native/HidBridge.cs" Link="Host/HidBridge.cs" />
+    <Compile Include="../../uwp/Kiosk/Native/ControllerConfiguration.cs" Link="Host/ControllerConfiguration.cs" />
     <Compile Include="../../uwp/Kiosk/Native/PadBridge.cs" Link="Host/PadBridge.cs" />
     <ProjectReference Include="..\Nativra.X86\Nativra.X86.csproj" />
   </ItemGroup>

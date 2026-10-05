@@ -45,6 +45,9 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int PropertyDelegate(IntPtr set, IntPtr info, uint property, IntPtr type, IntPtr buffer, uint size, IntPtr required);
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int InstanceIdDelegate(IntPtr set, IntPtr info, IntPtr buffer, uint size, IntPtr required);
+
         [DllImport("api-ms-win-core-errorhandling-l1-1-0.dll")]
         private static extern void SetLastError(uint error);
 
@@ -83,8 +86,8 @@ namespace Kiosk.Native
         {
             if (info == IntPtr.Zero) return;
             // SP_DEVINFO_DATA: cbSize, ClassGuid, DevInst, Reserved.
-            WriteGuid(info + 4, HidClass);
-            Marshal.WriteInt32(info, 20, 1);
+            WriteGuid(info + 4, new Guid("745a17a0-74d3-11d0-b6fe-00a0c90f57da"));
+            Marshal.WriteInt32(info, 20, (int)ControllerConfiguration.Controller);
             Marshal.WriteIntPtr(info, 24, IntPtr.Zero);
         }
 
@@ -98,8 +101,49 @@ namespace Kiosk.Native
             return 1;
         }
 
+        private static bool ValidDevice(IntPtr set, IntPtr info)
+        {
+            if (set == DeviceSet && info != IntPtr.Zero && Marshal.ReadInt32(info) == 32 &&
+                Marshal.ReadInt32(info, 20) == ControllerConfiguration.Controller) return true;
+            SetLastError(87);
+            return false;
+        }
+
+        private static int InstanceId(IntPtr set, IntPtr info, IntPtr buffer, uint size, IntPtr required, bool wide)
+        {
+            if (!ValidDevice(set, info)) return 0;
+            if (required != IntPtr.Zero) Marshal.WriteInt32(required, ControllerConfiguration.DeviceId.Length + 1);
+            var result = ControllerConfiguration.GetId(ControllerConfiguration.Controller, buffer, size, 0, wide);
+            if (result == 0) return 1;
+            SetLastError(ErrorInsufficientBuffer);
+            return 0;
+        }
+
+        private static int RegistryProperty(IntPtr set, IntPtr info, uint property, IntPtr type,
+            IntPtr buffer, uint size, IntPtr required, bool wide)
+        {
+            if (!ValidDevice(set, info)) return 0;
+            uint registryType;
+            var data = ControllerConfiguration.Property(property, wide, out registryType);
+            if (data == null)
+            {
+                SetLastError(ErrorInvalidData);
+                return 0;
+            }
+            if (type != IntPtr.Zero) Marshal.WriteInt32(type, (int)registryType);
+            if (required != IntPtr.Zero) Marshal.WriteInt32(required, data.Length);
+            if (buffer == IntPtr.Zero || size < data.Length)
+            {
+                SetLastError(ErrorInsufficientBuffer);
+                return 0;
+            }
+            Marshal.Copy(data, 0, buffer, data.Length);
+            return 1;
+        }
+
         public static void Install(SystemImports imports)
         {
+            ControllerConfiguration.Install(imports);
             preparsed = Marshal.AllocHGlobal(64);
             for (var i = 0; i < 64; i += 8) Marshal.WriteInt64(preparsed, i, 0);
 
@@ -153,20 +197,14 @@ namespace Kiosk.Native
                     return 1;
                 })),
                 ["SetupDiDestroyDeviceInfoList"] = Keep(new OneDelegate(set => 1)),
-                // Registry properties of the one device listed: none recorded, which is
-                // what Windows answers for a property a device does not have. Rewired
-                // (Cuphead) asks for them on every device and gave up on HID input
-                // entirely when the function itself was missing.
                 ["SetupDiGetDeviceRegistryPropertyA"] = Keep(new PropertyDelegate((set, info, property, type, buffer, size, required) =>
-                {
-                    SetLastError(ErrorInvalidData);
-                    return 0;
-                })),
+                    RegistryProperty(set, info, property, type, buffer, size, required, false))),
                 ["SetupDiGetDeviceRegistryPropertyW"] = Keep(new PropertyDelegate((set, info, property, type, buffer, size, required) =>
-                {
-                    SetLastError(ErrorInvalidData);
-                    return 0;
-                })),
+                    RegistryProperty(set, info, property, type, buffer, size, required, true))),
+                ["SetupDiGetDeviceInstanceIdA"] = Keep(new InstanceIdDelegate((set, info, buffer, size, required) =>
+                    InstanceId(set, info, buffer, size, required, false))),
+                ["SetupDiGetDeviceInstanceIdW"] = Keep(new InstanceIdDelegate((set, info, buffer, size, required) =>
+                    InstanceId(set, info, buffer, size, required, true))),
             };
             // Mono looks a P/Invoke up by its declared name before adding A or W.
             setup["SetupDiGetDeviceRegistryProperty"] = setup["SetupDiGetDeviceRegistryPropertyW"];

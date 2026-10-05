@@ -148,7 +148,7 @@ namespace Kiosk.Native
         private static readonly HashSet<string> NeverFromSystem =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "USER32.dll", "SETUPAPI.dll", "HID.DLL", "IMM32.dll", "dwmapi.dll",
+                "USER32.dll", "SETUPAPI.dll", "CFGMGR32.dll", "HID.DLL", "IMM32.dll", "dwmapi.dll",
             };
 
         public static string AppRuntimeName(string name)

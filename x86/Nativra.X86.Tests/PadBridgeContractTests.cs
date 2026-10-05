@@ -68,6 +68,10 @@ namespace Kiosk.Native
         public static readonly bool[] HostKeys = new bool[256];
         public static void PostDeviceChange() { }
     }
+    internal static class FileWatch
+    {
+        public static Func<IntPtr, IntPtr> Intercept;
+    }
     internal static class NativeProbe
     {
         public static bool GameRunning => false;

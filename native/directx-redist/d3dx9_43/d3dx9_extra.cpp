@@ -283,10 +283,22 @@ void TraceFailure(const char *what, HRESULT hr, const void *bytes, UINT size, UI
     static int reported = 0;
     if (reported++ >= 12)
         return;
+    // No CRT formatting here (the shim links nothing beyond kernel32): append by hand.
     char line[200];
+    int n = 0;
+    auto text = [&](const char *t) { while (*t && n < 190) line[n++] = *t++; };
+    auto number = [&](unsigned v, int base) {
+        char digits[16];
+        int k = 0;
+        do { digits[k++] = "0123456789ABCDEF"[v % base]; v /= base; } while (v && k < 15);
+        while (k > 0 && n < 190) line[n++] = digits[--k];
+    };
     const unsigned char *d = (const unsigned char *)bytes;
-    wsprintfA(line, "D3DX %s failed hr=0x%08X size=%u head=%02X%02X%02X%02X args=%u,%u", what, (unsigned)hr, size,
-              d && size > 0 ? d[0] : 0, d && size > 1 ? d[1] : 0, d && size > 2 ? d[2] : 0, d && size > 3 ? d[3] : 0, a, b);
+    text("D3DX "); text(what); text(" failed hr=0x"); number((unsigned)hr, 16);
+    text(" size="); number(size, 10); text(" head=");
+    for (UINT i = 0; i < 4; i++) { number(d && size > i ? d[i] : 0, 16); text(" "); }
+    text("args="); number(a, 10); text(","); number(b, 10);
+    line[n] = 0;
     OutputDebugStringA(line);
 }
 HRESULT DecodeImage(const void *bytes, UINT size, Image *image)

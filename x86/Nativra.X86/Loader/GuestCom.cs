@@ -516,7 +516,16 @@ namespace Nativra.X86.Loader
             {
                 Failures.TryGetValue(key, out var failed);
                 Failures[key] = failed + 1;
-                if (failed < 5) Log?.Invoke("COM " + key + " failed 0x" + ((uint)result).ToString("X8"));
+                if (failed < 5)
+                {
+                    var detail = "";
+                    // CreateSourceVoice(voice**, WAVEFORMATEX*, flags, maxRatio, ...): the format is what usually decides.
+                    if (method.Name == "CreateSourceVoice" && c.Arg(2) != 0)
+                        detail = " format tag=" + Memory.Read16(c.Arg(2)) + " channels=" + Memory.Read16(c.Arg(2) + 2) +
+                            " rate=" + Memory.Read32(c.Arg(2) + 4) + " bits=" + Memory.Read16(c.Arg(2) + 14) +
+                            " cb=" + Memory.Read16(c.Arg(2) + 16) + " flags=0x" + c.Arg(3).ToString("X") + " ratio=" + c.Arg(4);
+                    Log?.Invoke("COM " + key + " failed 0x" + ((uint)result).ToString("X8") + detail);
+                }
             }
             if (method.Name == "Release" && proxy.Interface.IsUnknown && (uint)result == 0) Forget(self);
             else if (!proxy.Interface.IsUnknown && method.Name == "DestroyVoice") Forget(self);

@@ -107,7 +107,12 @@ namespace Nativra.X86.Loader
         private string Blocker(uint from, uint to)
         {
             for (var page = from; page < to; page += GuestMemory.PageSize)
-                if (memory.IsMapped(page)) return "; page 0x" + page.ToString("X8") + " is already mapped";
+                if (memory.IsMapped(page))
+                {
+                    var region = memory.Query(page);
+                    return "; page 0x" + page.ToString("X8") + " is already mapped (allocation 0x" + region.AllocationBase.ToString("X8") +
+                        ", type 0x" + region.Type.ToString("X") + ", " + region.RegionSize / 1024 + " KB)";
+                }
             return "; nothing mapped in the way";
         }
 

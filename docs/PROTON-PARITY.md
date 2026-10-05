@@ -88,8 +88,8 @@ x86 exports from Wine's DLL specifications. It records Wine's export kind
 correctly. Host-only bridges, packaged native DLLs, ordinals and private exports
 are outside this inventory, so these numbers are not whole-app coverage scores.
 
-At the pinned Wine revision, after the heap layer: kernel32 573/1320, ntdll
-17/1209, user32 461/828, gdi32 182/532, advapi32 126/587, guest SetupAPI 13/617.
+At the pinned Wine revision, after the heap and memory-helper layers: kernel32 573/1320, ntdll
+20/1209, user32 461/828, gdi32 182/532, advapi32 126/587, guest SetupAPI 13/617.
 The x64 cfgmgr32 implementation is deliberately absent from this guest-only
 inventory. This audit identified the shared ntdll heap entry-point gap: six
 Rtl heap exports now share allocation state with kernel32, including zeroed
@@ -102,3 +102,8 @@ forwards ownership-ticket data to the actual client interface. Its
 modules. These are not substitutes for Nativra's missing signed-ticket source.
 The inspected `proton` script's forced NVAPI, address-space and atiadlxx choices
 are conditional; none is a safe global Xbox default merely because Proton has it.
+
+The ntdll memory-helper layer adds matching-prefix comparison and ULONG fill/
+comparison with x86 trailing-byte semantics. Seven import-dispatch cases cover
+unaligned buffers, canaries and zero-length unmapped pointers. These export counts
+still measure registered contracts, not library gameplay coverage.

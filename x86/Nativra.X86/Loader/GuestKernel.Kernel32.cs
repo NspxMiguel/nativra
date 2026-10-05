@@ -104,6 +104,7 @@ namespace Nativra.X86.Loader
                 i.Register(m, "RtlZeroMemory", CallConv.Stdcall, 2, c => { FillMemory(c.Arg(0), c.Arg(1), 0); return 0; });
                 i.Register(m, "RtlFillMemory", CallConv.Stdcall, 3, c => { FillMemory(c.Arg(0), c.Arg(1), (byte)c.Arg(2)); return 0; });
             }
+            InstallRtlMemoryFunctions(i);
             i.Register(k, "MulDiv", CallConv.Stdcall, 3, c => (uint)MulDiv((int)c.Arg(0), (int)c.Arg(1), (int)c.Arg(2)));
 
             // --- pointer probes ------------------------------------------------

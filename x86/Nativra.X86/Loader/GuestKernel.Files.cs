@@ -384,6 +384,8 @@ namespace Nativra.X86.Loader
             return 1;
         }
 
+        private int logWritesMirrored;
+
         private uint WriteFile(uint handle, uint buffer, uint count, uint writtenOut, uint overlapped = 0)
         {
             if (handle == StdOutput || handle == StdError)
@@ -399,6 +401,14 @@ namespace Nativra.X86.Loader
                 // Offset 0xFFFFFFFF:0xFFFFFFFF means "at the end".
                 var offset = OverlappedOffset(overlapped);
                 f.Stream.Position = offset == -1 ? f.Stream.Length : offset;
+            }
+
+            // A game's own log file is the best account of what it was doing when it stopped, and the
+            // file is buffered until it closes: mirror what is written into the diagnostic log.
+            if (f.Path != null && f.Path.EndsWith(".log", StringComparison.OrdinalIgnoreCase) && logWritesMirrored < 400)
+            {
+                logWritesMirrored++;
+                Say("[" + System.IO.Path.GetFileName(f.Path) + "] " + Ansi.Decode(memory.ReadBytes(buffer, (int)Math.Min(count, 300u))));
             }
 
             uint total = 0;

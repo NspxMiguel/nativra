@@ -90,3 +90,14 @@ test("Present can be the first heartbeat counter", () => {
   expect(v.frames).toBe(1800);
   expect(v.fps).toBe(30);
 });
+
+test("host initialization failures name the missing platform contract", () => {
+  const v = classify(
+    268910,
+    "",
+    "probe failed: delegate marshalling data is missing\n",
+    "",
+  );
+  expect(v.status).toBe("stops");
+  expect(v.detail).toBe("delegate marshalling data is missing");
+});

@@ -62,7 +62,9 @@ export function classify(
   const x86 =
     pick(/^x86\.run=(.*)$/m, probe) ??
     pick(/^x86\.init=(?!returned)(.*)$/m, probe);
-  const failed = pick(/^x86\.failed=(.{0,160})/m, probe);
+  const failed =
+    pick(/^x86\.failed=(.{0,160})/m, probe) ??
+    pick(/^probe failed: (.{0,240})/m, probe);
   const chain = pick(/chain=(.*)$/m, pulse);
   const crashed = crash.trim().split("\n").filter(Boolean).pop();
   if (!pulse && !probe && !heartbeat)

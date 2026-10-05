@@ -937,7 +937,14 @@ namespace Kiosk.Native
                 /* 22 BShutdownIfAllPipesClosed     */ stubTrue,
                 /* 23 GetISteamHTTP                 */ Keep(getEmpty),
                 /* 24 GetISteamUnifiedMessages      */ Keep(getEmpty),
-                /* 25 GetISteamController           */ Keep(getEmpty)
+                /* 25 GetISteamController           */ Keep(getEmpty),
+                // Later SDKs (ISteamClient017+) keep adding accessors (UGC, AppList, Music, HTMLSurface,
+                // Inventory, Video, ParentalSettings, callback hooks...). A wrapper compiled against one
+                // reads them all at start-up and gives up on a null, so every extra slot answers with the
+                // empty object; reading past the table used to hand back garbage (-1).
+                /* 26..39                          */ Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty),
+                Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty),
+                Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty)
             );
         }
     }

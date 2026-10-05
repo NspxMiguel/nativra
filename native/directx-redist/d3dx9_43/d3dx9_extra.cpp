@@ -12,6 +12,7 @@
 
 #define D3DX_DEFAULT 0xffffffffu
 #define D3DX_DEFAULT_NONPOW2 0xfffffffeu
+#define D3DX_FROM_FILE 0xfffffffdu
 #define D3DXERR_INVALIDDATA ((HRESULT)0x88760b59)
 
 struct D3DXIMAGE_INFO
@@ -397,7 +398,7 @@ UINT FullMips(UINT w, UINT h)
 }
 UINT DefaultDimension(UINT v, UINT source)
 {
-    if (v == D3DX_DEFAULT_NONPOW2)
+    if (v == D3DX_DEFAULT_NONPOW2 || v == D3DX_FROM_FILE)
         return source;
     if (v && v != D3DX_DEFAULT)
         return v;
@@ -418,6 +419,11 @@ HRESULT CreateFromImage(IDirect3DDevice9 *device, const Image &image, UINT width
     height = DefaultDimension(height, image.h);
     if (!width || !height || width > 16384 || height > 16384)
         return D3DERR_INVALIDCALL;
+    // FROM_FILE is a request for the decoded source metadata, not a D3D format.
+    if ((DWORD)format == D3DX_FROM_FILE)
+        format = image.format;
+    if (levels == D3DX_FROM_FILE)
+        levels = image.mips;
     if (format == D3DFMT_UNKNOWN || (DWORD)format == D3DX_DEFAULT)
         format = D3DFMT_A8R8G8B8;
     if (format != D3DFMT_A8R8G8B8 && format != D3DFMT_X8R8G8B8)

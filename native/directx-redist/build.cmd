@@ -109,4 +109,10 @@ cl /nologo /EHsc /O2 /MD /std:c++17 ^
    /link d3dcompiler.lib
 if errorlevel 1 exit /b 1
 bin\test_d3d9.exe
+if errorlevel 1 exit /b 1
+
+echo === tests: d3dx9 texture loading ===
+cl /nologo /EHsc /O2 /MD tests\test_d3dx9_texture.cpp /Fo:bin\ /Fe:bin\test_d3dx9_texture.exe
+if errorlevel 1 exit /b 1
+bin\test_d3dx9_texture.exe
 exit /b %errorlevel%

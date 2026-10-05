@@ -38,3 +38,25 @@ test("a 32-bit run never inherits the pulse's frames", () => {
   expect(v.frames).toBe(0);
   expect(v.status).not.toBe("renders");
 });
+
+
+test("live x86 heartbeat supplies Present counters before the guest exits", () => {
+  const heartbeat = "x86.eip=0x10001000\nx86.com-calls=IDirect3DDevice9::SetTexture=9000, IDirect3DDevice9::Present=3600\n";
+  const v = classify(40800, "frames=0 at 0.0 a second", "", "", heartbeat, 120);
+  expect(v.frames).toBe(3600);
+  expect(v.fps).toBe(30);
+  expect(v.detail).toContain("visual/gameplay unverified");
+});
+
+test("heartbeat without presents never borrows native pulse frames", () => {
+  const v = classify(223470, "frames=6000 at 60.0 a second", "", "", "x86.eip=0x10001000\nx86.com-calls=\n", 120);
+  expect(v.frames).toBe(0);
+  expect(v.status).not.toBe("renders");
+});
+
+
+test("Present can be the first heartbeat counter", () => {
+  const v = classify(40800, "", "", "", "x86.eip=0x1000\nx86.com-calls=IDirect3DDevice9::Present=1800\n", 60);
+  expect(v.frames).toBe(1800);
+  expect(v.fps).toBe(30);
+});

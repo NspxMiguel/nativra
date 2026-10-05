@@ -22,8 +22,10 @@ as the origin of a behavior. No upstream implementation has been vendored.
 | [vkd3d](https://codeberg.org/vkd3d/vkd3d) | `11551ec9e744ea6de3120bb43c6ffe7f1f6c2bdd` | `libs/vkd3d-shader`, `tests/vkd3d_api.c` |
 | [wine-mono](https://github.com/wine-mono/wine-mono) | `294d8d927f5cc059d30ce94ceffa7cb4ce8cc468` | runtime/FNA packaging and submodule inventory |
 
-Gecko source acquisition remains pending: attempted GitHub mirror names did not
-exist. Its browser integration is not interchangeable with Chromium/NW.js.
+| [wine-gecko](https://gitlab.winehq.org/wine/wine-gecko) | `6911b9d825f1a6e31dcfab5b6f0e587a01395e87` | Mozilla/Wine browser integration; 100-commit clone |
+
+Gecko was acquired from WineHQ after the guessed GitHub mirrors failed. Its
+browser integration is not interchangeable with Chromium/NW.js.
 
 History examples that guide the work: Wine `c000d95` normalizes device paths for
 DirectInput's cache; `f0181da` avoids reopening the current directory; `288e4ab`

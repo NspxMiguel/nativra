@@ -170,7 +170,6 @@ namespace Nativra.X86.Loader
             i.Register(k, "VerifyVersionInfoA", CallConv.Stdcall, 4, c => 1);
             i.Register(k, "IsThreadAFiber", CallConv.Stdcall, 0, c => 0);
             i.Register(k, "FlushProcessWriteBuffers", CallConv.Stdcall, 0, c => 0);
-            i.Register(k, "HeapValidate", CallConv.Stdcall, 3, c => 1);
             i.Register(k, "HeapCompact", CallConv.Stdcall, 2, c => 0x100000);
             i.Register(k, "HeapQueryInformation", CallConv.Stdcall, 5, c =>
             {

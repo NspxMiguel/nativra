@@ -231,7 +231,7 @@ namespace Nativra.X86.Tests
             // HeapAlloc has a handler: the address it hands back is callable.
             var heapAlloc = CallK(p, "GetProcAddress", kernel32, Ansi(kernel, p, "HeapAlloc"));
             Assert.True(GuestImports.InRegion(heapAlloc));
-            var result = p.Call(heapAlloc, out var ptr, 1000, 0, 0, 64);
+            var result = p.Call(heapAlloc, out var ptr, 1000, CallK(p, "GetProcessHeap"), 0, 64);
             Assert.True(result.Ok);
             Assert.True(kernel.Heap.Owns(ptr));
 

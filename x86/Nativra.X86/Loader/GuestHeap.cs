@@ -23,7 +23,7 @@ namespace Nativra.X86.Loader
         private uint committed;   // high-water mark of mapped bytes from regionBase
         private uint brk;         // next never-yet-allocated address
 
-        private struct Block { public uint Size; public bool Free; }
+        private struct Block { public uint Size; public uint Requested; public bool Free; }
         // Allocated/freed blocks keyed by payload address, in address order.
         private readonly SortedDictionary<uint, Block> blocks = new SortedDictionary<uint, Block>();
         // Free blocks ordered by (size, address): the smallest one that fits is a single lookup.
@@ -46,6 +46,11 @@ namespace Nativra.X86.Loader
         /// <summary>Allocates <paramref name="size"/> bytes (optionally zeroed); 0 on exhaustion.</summary>
         public uint Alloc(uint size, bool zero = false)
         {
+            if (size > uint.MaxValue - (Align - 1))
+            {
+                LastFailure = "allocation size overflows alignment";
+                return 0;
+            }
             var need = Round(size == 0 ? 1 : size);
 
             // Reuse the smallest free block big enough (one lookup, however many blocks the heap holds).
@@ -58,7 +63,7 @@ namespace Nativra.X86.Loader
                     freeBySize.Remove(key);
                     var at = (uint)(key & 0xFFFFFFFF);
                     var size0 = (uint)(key >> 32);
-                    blocks[at] = new Block { Size = size0, Free = false };
+                    blocks[at] = new Block { Size = size0, Requested = size, Free = false };
                     if (zero) Zero(at, size0);
                     return at;
                 }
@@ -69,7 +74,7 @@ namespace Nativra.X86.Loader
             if ((ulong)address + need > regionEnd) { LastFailure = "region end 0x" + regionEnd.ToString("X8") + " at 0x" + address.ToString("X8"); return 0; }
             if (!EnsureCommitted(address + need)) { LastFailure = "commit to 0x" + (address + need).ToString("X8") + " refused (committed 0x" + committed.ToString("X") + ")" + Blocker(regionBase + committed, address + need); return 0; }
             brk = address + need;
-            blocks[address] = new Block { Size = need, Free = false };
+            blocks[address] = new Block { Size = need, Requested = size, Free = false };
             // Pages the heap has just grown into are zero already; only reused blocks need clearing.
             return address;
         }
@@ -85,19 +90,31 @@ namespace Nativra.X86.Loader
         }
 
         /// <summary>Grows or shrinks a block, copying the payload when it must move.</summary>
-        public uint ReAlloc(uint address, uint size)
+        public uint ReAlloc(uint address, uint size, bool zero = false, bool inPlaceOnly = false)
         {
-            if (address == 0) return Alloc(size);
+            if (address == 0) return inPlaceOnly ? 0 : Alloc(size, zero);
+            if (size > uint.MaxValue - (Align - 1)) return 0;
             if (!blocks.TryGetValue(address, out var block) || block.Free) return 0;
             var need = Round(size == 0 ? 1 : size);
-            if (need <= block.Size) return address;
+            if (need <= block.Size)
+            {
+                if (zero && size > block.Requested) Zero(address + block.Requested, size - block.Requested);
+                block.Requested = size;
+                blocks[address] = block;
+                return address;
+            }
+            if (inPlaceOnly) return 0;
 
-            var moved = Alloc(size);
+            var moved = Alloc(size, zero);
             if (moved == 0) return 0;
-            for (uint i = 0; i < block.Size; i++) memory.Write8(moved + i, memory.Read8(address + i));
+            for (uint i = 0; i < block.Requested; i++) memory.Write8(moved + i, memory.Read8(address + i));
             Free(address);
             return moved;
         }
+
+        /// <summary>The requested allocation size, or UINT_MAX for an invalid block.</summary>
+        public uint RequestedSizeOf(uint address) =>
+            blocks.TryGetValue(address, out var block) && !block.Free ? block.Requested : uint.MaxValue;
 
         /// <summary>The usable size of a live block, or 0 if it is not one.</summary>
         public uint SizeOf(uint address) =>

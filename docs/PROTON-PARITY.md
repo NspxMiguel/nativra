@@ -21,7 +21,6 @@ as the origin of a behavior. No upstream implementation has been vendored.
 | [FAudio](https://github.com/FNA-XNA/FAudio) | `6839b88e304a046ae1a609ff14a085371e02a4e0` | `src/FAudio.c`, `src/F3DAudio.c` |
 | [vkd3d](https://codeberg.org/vkd3d/vkd3d) | `11551ec9e744ea6de3120bb43c6ffe7f1f6c2bdd` | `libs/vkd3d-shader`, `tests/vkd3d_api.c` |
 | [wine-mono](https://github.com/wine-mono/wine-mono) | `294d8d927f5cc059d30ce94ceffa7cb4ce8cc468` | runtime/FNA packaging and submodule inventory |
-
 | [wine-gecko](https://gitlab.winehq.org/wine/wine-gecko) | `6911b9d825f1a6e31dcfab5b6f0e587a01395e87` | Mozilla/Wine browser integration; 100-commit clone |
 
 Gecko was acquired from WineHQ after the guessed GitHub mirrors failed. Its
@@ -79,3 +78,27 @@ The starting compatibility table has one Verified entry and four Playable entrie
 several Playable notes still require input or long-session validation. **57/114
 has not been demonstrated.** Existing uncommitted console evidence predates this
 parity work and must retain its build numbers.
+
+## Reproducible guest import audit
+
+Run `~/.dotnet/dotnet run --project tools/wine-import-audit -- <wine-checkout> <output.tsv>`.
+This instantiates the real guest kernel registrations and compares named public
+x86 exports from Wine's DLL specifications. It records Wine's export kind
+(including `stub`) separately. Registered is not synonymous with implemented
+correctly. Host-only bridges, packaged native DLLs, ordinals and private exports
+are outside this inventory, so these numbers are not whole-app coverage scores.
+
+At the pinned Wine revision, after the heap layer: kernel32 573/1320, ntdll
+17/1209, user32 461/828, gdi32 182/532, advapi32 126/587, guest SetupAPI 13/617.
+The x64 cfgmgr32 implementation is deliberately absent from this guest-only
+inventory. This audit identified the shared ntdll heap entry-point gap: six
+Rtl heap exports now share allocation state with kernel32, including zeroed
+reallocation and in-place failure semantics. Heap exception-generation flags and
+independent heap arenas remain incomplete.
+
+Proton's `lsteamclient/cppISteamAppTicket_STEAMAPPTICKET_INTERFACE_VERSION001.cpp`
+forwards ownership-ticket data to the actual client interface. Its
+`steam_helper/steam.c` initializes the Steam/VR registry through their bridge
+modules. These are not substitutes for Nativra's missing signed-ticket source.
+The inspected `proton` script's forced NVAPI, address-space and atiadlxx choices
+are conditional; none is a safe global Xbox default merely because Proton has it.

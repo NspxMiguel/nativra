@@ -72,7 +72,11 @@ export function classify(
       detail: `chain=${chain ?? "?"}`,
     };
   const reason =
-    failed ?? x86 ?? crashed ?? (chain ? `chain=${chain}` : "no frame");
+    pick(/^probe failed: (.*)$/m, probe) ??
+    failed ??
+    x86 ??
+    crashed ??
+    (chain ? `chain=${chain}` : "no frame");
   if (/window=0x[1-9A-F]/i.test(probe) || frames > 0)
     return { appid, status: "starts", frames, fps, detail: reason };
   return { appid, status: "stops", frames, fps, detail: reason };

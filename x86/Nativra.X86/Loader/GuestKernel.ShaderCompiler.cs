@@ -52,7 +52,13 @@ namespace Nativra.X86.Loader
             // codeOut, codeCap, codeLen, errOut, errCap, errLen.
             if (call.Arg(0) == 0 || call.Arg(1) == 0 || call.Arg(1) > MaxShaderBytes ||
                 call.Arg(4) == 0 || call.Arg(5) == 0 || call.Arg(10) == 0 || call.Arg(13) == 0)
+            {
+                Log?.Invoke("HostD3DCompile: invalid arguments src=0x" + call.Arg(0).ToString("X") + " len=" + call.Arg(1) +
+                    " entry=0x" + call.Arg(4).ToString("X") + " target=0x" + call.Arg(5).ToString("X") +
+                    " codeLen=0x" + call.Arg(10).ToString("X") + " errLen=0x" + call.Arg(13).ToString("X"));
                 return InvalidArgument;
+            }
+            Log?.Invoke("HostD3DCompile " + call.Arg(1) + " bytes, cap " + call.Arg(9) + "/" + call.Arg(12));
             var macroPointer = call.Arg(3);
             ShaderMacro[] macros = null;
             if (macroPointer != 0)

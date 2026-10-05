@@ -107,7 +107,10 @@ namespace Kiosk.Native
         {
             lock (Asked)
             {
-                if (!Asked.Contains(name) && Asked.Count < 80) Asked.Add(name);
+                // Keep late runtime/plugin probes visible after engine startup.
+                Asked.Remove(name);
+                if (Asked.Count >= 80) Asked.RemoveAt(0);
+                Asked.Add(name);
             }
         }
 
@@ -343,6 +346,11 @@ namespace Kiosk.Native
                         if (imports.Overrides.TryGetValue(numbered, out var byNumber)) return byNumber;
                         var shipped = imports.Find(owner)?.Export("#" + name.ToInt64()) ?? IntPtr.Zero;
                         if (shipped != IntPtr.Zero) return shipped;
+                        if (Invented.TryGetValue(owner, out var synthetic) && synthetic == module)
+                        {
+                            Remember("missing " + numbered);
+                            return MissingProcedure();
+                        }
                     }
                     return GetProcAddressByOrdinal(module, name);
                 }

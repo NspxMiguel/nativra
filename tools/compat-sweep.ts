@@ -82,11 +82,26 @@ async function xbdev(
   args: string[],
   cwd = ROOT,
 ): Promise<{ ok: boolean; out: string }> {
+  const lock = await readFile("/tmp/xbox-console.lock", "utf8").catch(() => "");
+  const [owner, acquired] = lock.trim().split(/\s+/);
+  if (
+    owner !== "opus-x86" ||
+    !Number.isFinite(Number(acquired)) ||
+    Date.now() - Number(acquired) * 1000 >= 14 * 60_000
+  )
+    throw new Error(
+      "Console lease missing or nearing 15 minutes; release and reacquire before continuing",
+    );
   const run = await $`bun ${XBDEV} ${args}`.cwd(cwd).quiet().nothrow();
-  return {
-    ok: run.exitCode === 0,
-    out: run.stdout.toString() + run.stderr.toString(),
-  };
+  const out = run.stdout.toString() + run.stderr.toString();
+  if (/0x8004090a/i.test(out)) {
+    await writeFile(
+      join(OUT, "signed-out.txt"),
+      `${new Date().toISOString()} ${args[0]}: 0x8004090a\n`,
+    );
+    throw new Error("Xbox signed out (0x8004090a); console work stopped");
+  }
+  return { ok: run.exitCode === 0, out };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -106,8 +121,16 @@ async function pushMarker(name: string, text: string): Promise<void> {
 }
 
 async function download(appid: number, limitMs: number): Promise<boolean> {
+  const dir = join(OUT, String(appid));
+  await mkdir(dir, { recursive: true });
+  await xbdev(["stop", "Kiosk"]);
+  await waitStopped();
+  await xbdev(["rm", "Kiosk", "autoplay.txt", "--dir", "LocalState"]);
   await pushMarker("autodownload.txt", String(appid));
-  await xbdev(["launch", "Kiosk"]);
+  const launch = await xbdev(["launch", "Kiosk"]);
+  await writeFile(join(dir, "launch.txt"), launch.out);
+  if (!launch.ok)
+    throw new Error(`${appid}: Kiosk launch failed; see launch.txt`);
   const until = Date.now() + limitMs;
   await sleep(20_000);
   while (Date.now() < until) {
@@ -119,6 +142,8 @@ async function download(appid: number, limitMs: number): Promise<boolean> {
     if (!going) break;
     await sleep(30_000);
   }
+  await rm(join(dir, "download-error.txt"), { force: true });
+  await xbdev(["pull", "Kiosk", "download-error.txt", "LocalState"], dir);
   await xbdev(["rm", "Kiosk", "autodownload.txt", "--dir", "LocalState"]);
   await xbdev(["stop", "Kiosk"]);
   await waitStopped();
@@ -139,11 +164,16 @@ async function test(appid: number, seconds: number): Promise<Verdict> {
     "native-probe.txt",
     "unity.log",
     "x86-imports.txt",
+    "x86-heartbeat.txt",
+    "native-fault.txt",
     "--dir",
     "LocalState",
   ]);
   await pushMarker("autoplay.txt", String(appid));
-  await xbdev(["launch", "Kiosk"]);
+  const launch = await xbdev(["launch", "Kiosk"]);
+  await writeFile(join(dir, "launch.txt"), launch.out);
+  if (!launch.ok)
+    throw new Error(`${appid}: Kiosk launch failed; see launch.txt`);
   await sleep(seconds * 1000);
   // A pull that fails must not leave the previous game's report in place: it
   // was read back as this run's result.
@@ -152,6 +182,8 @@ async function test(appid: number, seconds: number): Promise<Verdict> {
     "native-probe.txt",
     "crash-log.txt",
     "x86-imports.txt",
+    "x86-heartbeat.txt",
+    "native-fault.txt",
     "unity.log",
   ]) {
     await rm(join(dir, file), { force: true });
@@ -184,9 +216,17 @@ if (import.meta.main) {
     process.exit(2);
   }
   await mkdir(OUT, { recursive: true });
+  const deadline = Date.now() + 13 * 60_000;
   for (const appid of ids) {
-    if (fetch && !(await download(appid, 3 * 60 * 60 * 1000)))
-      console.error(`${appid}: download did not finish`);
+    const available = deadline - Date.now() - (seconds + 60) * 1000;
+    if (available < 30_000)
+      throw new Error(
+        "Batch time budget exhausted; reacquire the lock for remaining games",
+      );
+    if (fetch && !(await download(appid, available)))
+      throw new Error(
+        `${appid}: download incomplete; resume in the next lock window`,
+      );
     const v = await test(appid, seconds);
     const line = `| ${v.appid} | ${v.status} | ${v.frames} | ${v.fps} | ${v.detail.replace(/\|/g, "/")} | ${new Date().toISOString()} |`;
     console.log(line);

@@ -28,8 +28,9 @@ upgraded by this sweep.
 ## Build 502: HID, D3D9 and heap layers
 
 CI artifact from run [37380504790](https://github.com/NspxMiguel/XboxDev/actions/runs/37380504790),
-commit `6dafde5`. A four-game sweep was started with Cuphead, WAVESHAPER, Super
-Meat Boy and Seraph's Last Stand.
+commit `6dafde5`. Four games completed at 150 seconds each; the console lock was released.
+Raw evidence is archived in `.cycle/sweep-build502/<appid>/`. Other app IDs
+in that archive are older runs; the table below identifies this sweep.
 
 The first x64 launch failed before game loading with:
 
@@ -38,6 +39,17 @@ The first x64 launch failed before game loading with:
 This is a Nativra AOT packaging regression, not a newly discovered game limitation.
 The `.NET Native` build succeeded and the portable unit tests passed, but runtime
 marshalling metadata was absent. Commit `664934a` adds an explicit MarshalDelegate
-policy for native bridge callbacks; Xbox retesting is required. The x86 launch
-path bypasses the affected x64 initialization, so its measurements are recorded
-separately when the sweep completes.
+policy for native bridge callbacks. CI then exposed ILT0027: the project's
+`None` build action prevented the compiler from reading the directives at all.
+Commit `e3f588c` changes the build action to `EmbeddedResource`; Xbox retesting
+is required. The x86 launch path bypasses the affected x64 initialization.
+
+| AppID | Game | Presented frames / reported rate | Screenshot / result |
+| --- | --- | --- | --- |
+| 268910 | Cuphead | 0 / 0 | Host initialization failed: missing delegate marshalling data |
+| 562260 | WAVESHAPER | 6,605 / 52.1 average | Title/menu logo; overlay ~59 presents/s; 7,472 XInput reads |
+| 40800 | Super Meat Boy | 2,869 / 22.7 average including startup | Intro text and character art; overlay ~55 presents/s; 1,299 XInput reads |
+| 1919460 | Seraph's Last Stand | 0 / 0 | Same host initialization failure |
+
+The shared x86 paths retained rendering, but build 502 regresses x64 startup
+and must not be promoted. No compatibility rating was upgraded.

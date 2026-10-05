@@ -83,6 +83,13 @@ namespace Nativra.X86.Loader
             try { result = ShaderCompiler(request); }
             catch (Exception error) { Log?.Invoke("HostD3DCompile: " + error.Message); return CompilerFailure; }
             if (result == null) return CompilerFailure;
+            if (result.HResult != 0)
+            {
+                // A failed compile is the first thing to read when a game then misbehaves.
+                var text = result.Errors == null ? "" : System.Text.Encoding.ASCII.GetString(result.Errors);
+                Log?.Invoke("HostD3DCompile " + request.Target + " " + request.Entry + " failed 0x" + result.HResult.ToString("X8") +
+                    ": " + (text.Length > 400 ? text.Substring(0, 400) : text).Replace('\n', ' ').Replace('\r', ' '));
+            }
             var code = result.Code ?? new byte[0];
             var errors = result.Errors ?? new byte[0];
             memory.Write32(call.Arg(10), (uint)code.Length);

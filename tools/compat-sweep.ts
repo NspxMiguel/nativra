@@ -174,6 +174,7 @@ async function download(appid: number, limitMs: number): Promise<boolean> {
 async function test(appid: number, seconds: number): Promise<Verdict> {
   const dir = join(OUT, String(appid));
   await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "installed-apps.txt"), (await xbdev(["apps"])).out);
   await xbdev(["stop", "Kiosk"]);
   await waitStopped();
   // The console keeps the last run's reports; a game that writes none must not

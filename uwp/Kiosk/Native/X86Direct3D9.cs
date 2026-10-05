@@ -17,8 +17,8 @@ namespace Kiosk.Native
     /// </summary>
     internal static class X86Direct3D9
     {
-        private const uint LockHeapBase = 0x40000000;
-        private const uint LockHeapSize = 0x30000000;
+        private const uint LockHeapBase = 0x70000000;   // above the main guest heap (0x30000000, 1 GB)
+        private const uint LockHeapSize = 0x0D000000;
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr CreateDelegate(uint sdkVersion);

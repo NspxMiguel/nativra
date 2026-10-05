@@ -456,7 +456,7 @@ namespace Kiosk.Native
                 }
             }
         }
-    
+
         /// <summary>
         /// The same pad for a 32-bit game: xinput1_3/1_4/9_1_0 served to the x86
         /// layer, whose structures are the guest's own bytes (XINPUT_STATE and

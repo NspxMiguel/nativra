@@ -92,6 +92,7 @@ namespace Nativra.X86.Loader
 
         private readonly Dictionary<string, WindowClass> windowClasses =
             new Dictionary<string, WindowClass>(StringComparer.OrdinalIgnoreCase);
+        private uint nextClassAtom;   // never reused, so an atom stays unique after UnregisterClass
         private readonly Dictionary<uint, WindowClass> classAtoms = new Dictionary<uint, WindowClass>();
         private readonly Dictionary<uint, Window> windows = new Dictionary<uint, Window>();
         private readonly Dictionary<uint, Queue<QueuedMessage>> queues = new Dictionary<uint, Queue<QueuedMessage>>();
@@ -113,7 +114,7 @@ namespace Nativra.X86.Loader
 
                 i.Register(u, "RegisterClass" + s, CallConv.Stdcall, 1, c => RegisterClass(c.Arg(0), false, w));
                 i.Register(u, "RegisterClassEx" + s, CallConv.Stdcall, 1, c => RegisterClass(c.Arg(0), true, w));
-                i.Register(u, "UnregisterClass" + s, CallConv.Stdcall, 2, c => 1);
+                i.Register(u, "UnregisterClass" + s, CallConv.Stdcall, 2, c => UnregisterClass(c.Arg(0), w));
                 i.Register(u, "GetClassInfo" + s, CallConv.Stdcall, 3, c => GetClassInfo(c, false, w));
                 i.Register(u, "GetClassInfoEx" + s, CallConv.Stdcall, 3, c => GetClassInfo(c, true, w));
                 i.Register(u, "CreateWindowEx" + s, CallConv.Stdcall, 12, c => CreateWindow(c, w));
@@ -443,6 +444,22 @@ namespace Nativra.X86.Loader
 
         // --- classes and windows ---------------------------------------------
 
+        /// <summary>
+        /// UnregisterClass: the class goes away so a program that re-creates its window (Super Meat Boy
+        /// does after its render test) can register the same name again; refused while a window of
+        /// the class still exists, as on Windows (ERROR_CLASS_HAS_WINDOWS).
+        /// </summary>
+        private uint UnregisterClass(uint nameOrAtom, bool wide)
+        {
+            var entry = ClassFor(nameOrAtom, wide);
+            if (entry == null) { process.LastError = 1411; return 0; }   // ERROR_CLASS_DOES_NOT_EXIST
+            foreach (var window in windows.Values)
+                if (window.Class == entry) { process.LastError = 1412; return 0; }
+            windowClasses.Remove(entry.Name);
+            classAtoms.Remove(entry.Atom);
+            return 1;
+        }
+
         private uint RegisterClass(uint description, bool extended, bool wide)
         {
             // WNDCLASS: style, lpfnWndProc, cbClsExtra, cbWndExtra, hInstance,
@@ -455,7 +472,7 @@ namespace Nativra.X86.Loader
             var entry = new WindowClass
             {
                 Name = name,
-                Atom = 0xC001 + (uint)windowClasses.Count,
+                Atom = 0xC001 + nextClassAtom++,
                 Style = memory.Read32(p),
                 Procedure = memory.Read32(p + 4),
                 WindowExtra = (int)memory.Read32(p + 12),

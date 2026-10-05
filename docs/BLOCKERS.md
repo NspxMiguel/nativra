@@ -17,3 +17,18 @@ a `MarshalDelegate` directive in `rd.xml`; this sweep does not modify engine cod
 A pre-existing `download-error.txt` dated 2026-10-02 concerns POSTAL 2 (223470)
 and disk exhaustion (`0x80070027`). It is stale and is not counted as a blocker
 for any game in this sweep.
+
+## Download-stage evidence (not counted as guest executions)
+
+| Blocker / layer | Games hit | Game | Evidence |
+| --- | --- | --- | --- |
+| Console storage exhaustion; app moving download to USB | 1 | Little Nightmares (424840) | Screenshot: `Little Nightmares — console full, moving to USB`, after 67% download progress. |
+
+Five old Nativra dumps (builds 453, 458 and 475) occupied 1,781,314,531 bytes.
+All were archived on the Mac with size/header verification and SHA-256 hashes
+before deletion from the console. A subsequent dump index was empty. This is
+storage maintenance, not evidence of a new crash in any swept game.
+
+The downloader restarts a partial file from its first chunk; only complete files
+are skipped (`uwp/Kiosk/Steam/SteamDownload.cs`). The sweep now preserves an
+active download across console-lock windows rather than repeatedly stopping it.

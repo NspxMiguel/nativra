@@ -20,6 +20,7 @@ namespace Nativra.X86.Tests
         private delegate int CreateSourceFn(IntPtr self, IntPtr voice, IntPtr format, uint flags, float ratio,
             IntPtr callback, IntPtr sends, IntPtr effects);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int SubmitFn(IntPtr self, IntPtr buffer, IntPtr wma);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate void StateFn(IntPtr self, IntPtr state);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate void ContextFn(IntPtr self, IntPtr context);
 
         private const uint Code = 0x00600000, Data = 0x00601000;
@@ -43,6 +44,80 @@ namespace Nativra.X86.Tests
         private float seenRatio;
         private int seenBytes;
         private long seenData, seenContext;
+
+        private static byte[] MsAdpcmFormat(int channels, int blockAlign, int samplesPerBlock)
+        {
+            var format = new byte[54];
+            void Put(int offset, int value) { format[offset] = (byte)value; format[offset + 1] = (byte)(value >> 8); }
+            Put(0, 2);
+            Put(2, channels);
+            BitConverter.GetBytes(32016).CopyTo(format, 4);
+            Put(12, blockAlign);
+            Put(14, 4);
+            Put(16, 36);
+            Put(18, samplesPerBlock);
+            Put(20, 7);
+            int[] coefficients = { 256, 0, 512, -256, 0, 0, 192, 64, 240, 0, 460, -208, 392, -232 };
+            for (var i = 0; i < coefficients.Length; i++) Put(22 + i * 2, coefficients[i]);
+            return format;
+        }
+
+        private static byte[] LinearRampBlock(int channels, int samples)
+        {
+            var block = new byte[channels * 7 + (samples - 2) * channels / 2];
+            for (var ch = 0; ch < channels; ch++)
+            {
+                block[ch] = 1; // predictor 512, -256 reproduces a linear ramp
+                BitConverter.GetBytes((ushort)16).CopyTo(block, channels + ch * 2);
+                BitConverter.GetBytes((short)(200 + ch * 100)).CopyTo(block, channels * 3 + ch * 2);
+                BitConverter.GetBytes((short)(100 + ch * 100)).CopyTo(block, channels * 5 + ch * 2);
+            }
+            // A reference encoder: prediction already equals each ramp sample,
+            // so the nearest signed quantization nibble is zero at every step.
+            for (var sample = 2; sample < samples; sample++)
+                for (var ch = 0; ch < channels; ch++)
+                {
+                    var predicted = 100 + ch * 100 + sample * 100;
+                    var actual = 100 + ch * 100 + sample * 100;
+                    var nibble = Math.Max(-8, Math.Min(7, (actual - predicted) / 16)) & 15;
+                    var nibbleIndex = (sample - 2) * channels + ch;
+                    block[channels * 7 + nibbleIndex / 2] |= (byte)(nibble << (nibbleIndex % 2 == 0 ? 4 : 0));
+                }
+            return block;
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        public void MsAdpcmDecoderReconstructsLinearRamp(int channels)
+        {
+            var samples = 8;
+            var block = LinearRampBlock(channels, samples);
+            var format = MsAdpcmFormat(channels, block.Length, samples);
+            var decoded = new AdpcmDecoder(format).Decode(block);
+            Assert.Equal(samples * channels * 2, decoded.Length);
+            for (var sample = 0; sample < samples; sample++)
+                for (var ch = 0; ch < channels; ch++)
+                    Assert.InRange(Math.Abs(BitConverter.ToInt16(decoded, (sample * channels + ch) * 2) -
+                        (100 + ch * 100 + sample * 100)), 0, 1);
+        }
+
+        [Fact]
+        public void ImaAdpcmDecoderReadsInitialSampleAndNibbles()
+        {
+            var format = new byte[20];
+            format[0] = 0x11;
+            format[2] = 1;
+            format[12] = 8;
+            format[14] = 4;
+            format[16] = 2;
+            format[18] = 9;
+            var block = new byte[] { 0xE8, 0x03, 0, 0, 0, 0, 0, 0 };
+            var decoded = new AdpcmDecoder(format).Decode(block);
+            Assert.Equal(18, decoded.Length);
+            for (var sample = 0; sample < 9; sample++)
+                Assert.Equal((short)1000, BitConverter.ToInt16(decoded, sample * 2));
+        }
 
         public XAudio27ComTests()
         {
@@ -162,6 +237,101 @@ namespace Nativra.X86.Tests
             onBufferEnd.DynamicInvoke(hostCallback, new IntPtr(0x77));
             Assert.Equal(0x77u, Call(Spin));
             Assert.Equal(1, xaudio.CallbacksDelivered);
+        }
+
+        [Fact]
+        public void AdpcmSourceCreatesPcmVoiceAndSubmitsDecodedSamples()
+        {
+            var noop = new SelfFn(self => 0);
+            var voiceMethods = new Delegate[29];
+            for (var n = 0; n < voiceMethods.Length; n++) voiceMethods[n] = noop;
+            byte[] received = null;
+            long token = 0;
+            voiceMethods[21] = new SubmitFn((self, buffer, wma) =>
+            {
+                seenBytes = Marshal.ReadInt32(buffer, 4);
+                seenData = Marshal.ReadInt64(buffer, 8);
+                Assert.Equal(2, Marshal.ReadInt32(buffer, 16));
+                Assert.Equal(4, Marshal.ReadInt32(buffer, 20));
+                Assert.Equal(1, Marshal.ReadInt32(buffer, 24));
+                Assert.Equal(3, Marshal.ReadInt32(buffer, 28));
+                token = Marshal.ReadInt64(buffer, 40);
+                received = new byte[seenBytes];
+                Marshal.Copy(Marshal.ReadIntPtr(buffer, 8), received, 0, seenBytes);
+                return 0;
+            });
+            voiceMethods[25] = new StateFn((self, state) =>
+            {
+                Marshal.WriteIntPtr(state, new IntPtr(token));
+                Marshal.WriteInt32(state, 8, 1);
+                Marshal.WriteInt64(state, 16, 3);
+            });
+            var voice = Object(voiceMethods);
+            var engineMethods = new Delegate[16];
+            for (var n = 0; n < engineMethods.Length; n++) engineMethods[n] = noop;
+            engineMethods[8] = new CreateSourceFn((self, slot, format, flags, ratio, callback, sends, effects) =>
+            {
+                Assert.Equal(1, Marshal.ReadInt16(format));
+                Assert.Equal(1, Marshal.ReadInt16(format, 2));
+                Assert.Equal(32016, Marshal.ReadInt32(format, 4));
+                Assert.Equal(64032, Marshal.ReadInt32(format, 8));
+                Assert.Equal(2, Marshal.ReadInt16(format, 12));
+                Assert.Equal(16, Marshal.ReadInt16(format, 14));
+                hostCallback = callback;
+                Marshal.WriteIntPtr(slot, voice);
+                return 0;
+            });
+            var engine = Object(engineMethods);
+            var com = new GuestCom(p, kernel);
+            var xaudio = new XAudio27Com(p, kernel, com);
+            xaudio.Install((clsid, iid, result) => { Marshal.WriteIntPtr(result, engine); return 0; });
+            var clsid = kernel.Heap.Alloc(16);
+            p.Memory.WriteBytes(clsid, XAudio27Com.ReleaseClass.ToByteArray());
+            var iid = kernel.Heap.Alloc(16);
+            p.Memory.WriteBytes(iid, com.Find("IXAudio2").Iid.ToByteArray());
+            var outEngine = kernel.Heap.Alloc(4);
+            Assert.Equal(0u, Call(p.Imports.Bind("ole32.dll", "CoCreateInstance", -1), clsid, 0, 1, iid, outEngine));
+            var guestEngine = p.Memory.Read32(outEngine);
+            var formatBytes = MsAdpcmFormat(1, 10, 8);
+            var format = kernel.Heap.Alloc((uint)formatBytes.Length);
+            p.Memory.WriteBytes(format, formatBytes);
+            var callbackTable = Data + 0x200;
+            uint[] entries = { Ret8, Ret4, Ret4, Ret8, OnBufferEnd, Ret8, Ret12 };
+            for (var n = 0; n < entries.Length; n++) p.Memory.Write32(callbackTable + (uint)n * 4, entries[n]);
+            var callback = Data + 0x100;
+            p.Memory.Write32(callback, callbackTable);
+            var voiceSlot = kernel.Heap.Alloc(4);
+            Assert.Equal(0u, Method(guestEngine, 8, voiceSlot, format, 0, 0x40000000, callback, 0, 0));
+            var guestVoice = p.Memory.Read32(voiceSlot);
+            var encoded = LinearRampBlock(1, 8);
+            var audio = kernel.Heap.Alloc((uint)encoded.Length);
+            p.Memory.WriteBytes(audio, encoded);
+            var buffer = kernel.Heap.Alloc(36, zero: true);
+            p.Memory.Write32(buffer + 4, (uint)encoded.Length);
+            p.Memory.Write32(buffer + 8, audio);
+            p.Memory.Write32(buffer + 12, 2); // PlayBegin is still measured in decoded samples.
+            p.Memory.Write32(buffer + 16, 4);
+            p.Memory.Write32(buffer + 20, 1);
+            p.Memory.Write32(buffer + 24, 3);
+            p.Memory.Write32(buffer + 32, 0x77);
+            Assert.Equal(0u, Method(guestVoice, 21, buffer, 0));
+            Assert.Equal(16, seenBytes);
+            var retained = new byte[seenBytes];
+            Marshal.Copy(new IntPtr(seenData), retained, 0, retained.Length);
+            Assert.Equal(received, retained);
+            Assert.NotEqual(0x77L, token);
+            Assert.NotNull(received);
+            var state = kernel.Heap.Alloc(16, zero: true);
+            Method(guestVoice, 25, state);
+            Assert.Equal(0x77u, p.Memory.Read32(state));
+            Assert.Equal(1u, p.Memory.Read32(state + 4));
+            Assert.Equal(3ul, p.Memory.Read64(state + 8));
+            for (var sample = 0; sample < 8; sample++)
+                Assert.Equal((short)(100 + sample * 100), BitConverter.ToInt16(received, sample * 2));
+            var onBufferEnd = Marshal.GetDelegateForFunctionPointer(
+                Marshal.ReadIntPtr(Marshal.ReadIntPtr(hostCallback), 4 * IntPtr.Size), typeof(ContextFn));
+            onBufferEnd.DynamicInvoke(hostCallback, new IntPtr(token));
+            Assert.Equal(0x77u, Call(Spin));
         }
     }
 }

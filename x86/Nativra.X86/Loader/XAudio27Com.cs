@@ -8,9 +8,8 @@ namespace Nativra.X86.Loader
     /// XAudio 2.7 for a 32-bit game, served by the 64-bit xaudio2_7 shim the
     /// app already carries (which runs on XAudio 2.9).
     ///
-    /// Audio data stays where the game put it: XAUDIO2_BUFFER.pAudioData is a
-    /// guest pointer, and guest memory is host memory at the host base, so the
-    /// engine reads it in place. What needs translating is the structures that
+    /// PCM audio stays in guest memory; ADPCM blocks are decoded into host-owned
+    /// buffers that survive until OnBufferEnd. The bridge also translates structures that
     /// hold pointers (buffers, send lists, voice state) and the voice
     /// callbacks, which run the other way: the host engine calls them on its
     /// own audio thread, where guest code cannot run. A host stand-in for each
@@ -36,6 +35,18 @@ namespace Nativra.X86.Loader
         private uint pumpSentinel;
         private GuestThread pump;
         private const int MaxPending = 4096;
+        private readonly Dictionary<IntPtr, AdpcmDecoder> sourceFormats = new Dictionary<IntPtr, AdpcmDecoder>();
+        private readonly Dictionary<long, DecodedBuffer> decodedBuffers = new Dictionary<long, DecodedBuffer>();
+        private long nextBufferId = 0x100000000L;
+        private AdpcmDecoder creatingFormat;
+        private IntPtr creatingPcm;
+
+        private sealed class DecodedBuffer
+        {
+            public IntPtr Data;
+            public IntPtr Voice;
+            public uint GuestContext;
+        }
 
         public long CallbacksDelivered { get; private set; }
         public long CallbacksDropped { get; private set; }
@@ -62,6 +73,7 @@ namespace Nativra.X86.Loader
         /// </summary>
         public void Install(GuestCom.ClassFactory create)
         {
+            com.XAudio27 = this;
             AddTranslators();
 
             var engine = com.Define("IXAudio2", new Guid("8bcf1f58-9fe7-4583-8ac6-e2adc465c8bb"), null, true,
@@ -148,7 +160,7 @@ namespace Nativra.X86.Loader
                 after.Add(() =>
                 {
                     var memory = process.Memory;
-                    memory.Write32(guest, (uint)Marshal.ReadInt64(host));
+                    memory.Write32(guest, GuestContext(Marshal.ReadIntPtr(host)));
                     memory.Write32(guest + 4, (uint)Marshal.ReadInt32(host, 8));
                     memory.Write64(guest + 8, (ulong)Marshal.ReadInt64(host, 16));
                 });
@@ -156,7 +168,107 @@ namespace Nativra.X86.Loader
             });
 
             // A guest IXAudio2VoiceCallback: a host stand-in that queues each call.
-            com.AddArgument('K', (guest, slot, after) => guest == 0 ? IntPtr.Zero : CallbackProxy(guest));
+            com.AddArgument('K', (guest, slot, after) => CallbackProxy(guest));
+        }
+
+        internal unsafe void PrepareSourceVoice(uint guestFormat, IntPtr* args)
+        {
+            creatingFormat = null;
+            creatingPcm = IntPtr.Zero;
+            if (guestFormat == 0) return;
+            var memory = process.Memory;
+            var tag = memory.Read16(guestFormat);
+            if (tag != 2 && tag != 0x11) return;
+            var length = 18 + memory.Read16(guestFormat + 16);
+            var decoder = new AdpcmDecoder(memory.ReadBytes(guestFormat, length));
+            var pcm = Marshal.AllocHGlobal(18);
+            Marshal.WriteInt16(pcm, 0, 1);
+            Marshal.WriteInt16(pcm, 2, (short)decoder.Channels);
+            var rate = memory.Read32(guestFormat + 4);
+            Marshal.WriteInt32(pcm, 4, (int)rate);
+            Marshal.WriteInt32(pcm, 8, checked((int)(rate * (uint)(decoder.Channels * 2))));
+            Marshal.WriteInt16(pcm, 12, (short)(decoder.Channels * 2));
+            Marshal.WriteInt16(pcm, 14, 16);
+            Marshal.WriteInt16(pcm, 16, 0);
+            args[2] = pcm;
+            creatingFormat = decoder;
+            creatingPcm = pcm;
+        }
+
+        internal unsafe void FinishSourceVoice(int result, IntPtr* args)
+        {
+            if (creatingPcm == IntPtr.Zero) return;
+            if (result >= 0)
+            {
+                var voice = Marshal.ReadIntPtr(args[1]);
+                if (voice != IntPtr.Zero) sourceFormats[voice] = creatingFormat;
+            }
+            Marshal.FreeHGlobal(creatingPcm);
+            creatingPcm = IntPtr.Zero;
+            creatingFormat = null;
+        }
+
+        internal unsafe void PrepareSourceBuffer(IntPtr voice, IntPtr* args)
+        {
+            if (!sourceFormats.TryGetValue(voice, out var format) || args[1] == IntPtr.Zero) return;
+            var buffer = args[1];
+            var length = Marshal.ReadInt32(buffer, 4);
+            if (length < 0) throw new ArgumentException("Invalid ADPCM buffer length");
+            var source = Marshal.ReadIntPtr(buffer, 8);
+            var encoded = new byte[length];
+            if (length != 0) Marshal.Copy(source, encoded, 0, length);
+            var pcm = format.Decode(encoded);
+            var data = Marshal.AllocHGlobal(Math.Max(1, pcm.Length));
+            if (pcm.Length != 0) Marshal.Copy(pcm, 0, data, pcm.Length);
+            var context = (uint)Marshal.ReadInt64(buffer, 40);
+            long token;
+            lock (decodedBuffers)
+            {
+                token = nextBufferId++;
+                decodedBuffers[token] = new DecodedBuffer { Data = data, Voice = voice, GuestContext = context };
+            }
+            Marshal.WriteInt32(buffer, 4, pcm.Length);
+            Marshal.WriteIntPtr(buffer, 8, data);
+            Marshal.WriteIntPtr(buffer, 40, new IntPtr(token));
+        }
+
+        internal unsafe void FinishSourceBuffer(int result, IntPtr* args)
+        {
+            if (result < 0 && args[1] != IntPtr.Zero) ReleaseDecoded(Marshal.ReadIntPtr(args[1], 40));
+        }
+
+        private uint GuestContext(IntPtr context)
+        {
+            lock (decodedBuffers)
+                return decodedBuffers.TryGetValue(context.ToInt64(), out var buffer)
+                    ? buffer.GuestContext : (uint)context.ToInt64();
+        }
+
+        private uint ReleaseDecoded(IntPtr context)
+        {
+            lock (decodedBuffers)
+            {
+                if (!decodedBuffers.TryGetValue(context.ToInt64(), out var buffer)) return (uint)context.ToInt64();
+                decodedBuffers.Remove(context.ToInt64());
+                Marshal.FreeHGlobal(buffer.Data);
+                return buffer.GuestContext;
+            }
+        }
+
+        internal void ForgetVoice(IntPtr voice)
+        {
+            sourceFormats.Remove(voice);
+            lock (decodedBuffers)
+            {
+                var tokens = new List<long>();
+                foreach (var entry in decodedBuffers)
+                    if (entry.Value.Voice == voice) tokens.Add(entry.Key);
+                foreach (var token in tokens)
+                {
+                    Marshal.FreeHGlobal(decodedBuffers[token].Data);
+                    decodedBuffers.Remove(token);
+                }
+            }
         }
 
         // --- voice callbacks ------------------------------------------------
@@ -170,7 +282,7 @@ namespace Nativra.X86.Loader
         {
             if (callbackProxies.TryGetValue(guest, out var known)) return known;
             if (callbackVtable == IntPtr.Zero) BuildCallbackVtable();
-            EnsurePump();
+            if (guest != 0) EnsurePump();
             var proxy = Marshal.AllocHGlobal(16);
             Marshal.WriteIntPtr(proxy, callbackVtable);
             Marshal.WriteInt64(proxy, 8, guest);
@@ -187,10 +299,10 @@ namespace Nativra.X86.Loader
                 new PassStart((self, bytes) => Queue(self, 0, 1, bytes, 0)),
                 new NoArgument(self => Queue(self, 1, 0, 0, 0)),
                 new NoArgument(self => Queue(self, 2, 0, 0, 0)),
-                new Context((self, context) => Queue(self, 3, 1, (uint)context.ToInt64(), 0)),
-                new Context((self, context) => Queue(self, 4, 1, (uint)context.ToInt64(), 0)),
-                new Context((self, context) => Queue(self, 5, 1, (uint)context.ToInt64(), 0)),
-                new Error((self, context, error) => Queue(self, 6, 2, (uint)context.ToInt64(), (uint)error)),
+                new Context((self, context) => Queue(self, 3, 1, GuestContext(context), 0)),
+                new Context((self, context) => Queue(self, 4, 1, ReleaseDecoded(context), 0)),
+                new Context((self, context) => Queue(self, 5, 1, GuestContext(context), 0)),
+                new Error((self, context, error) => Queue(self, 6, 2, GuestContext(context), (uint)error)),
             };
             keep.AddRange(methods);
             callbackVtable = Marshal.AllocHGlobal(methods.Length * IntPtr.Size);
@@ -202,6 +314,7 @@ namespace Nativra.X86.Loader
         private void Queue(IntPtr self, int slot, int arguments, uint a, uint b)
         {
             var target = (uint)Marshal.ReadInt64(self, 8);
+            if (target == 0) return;
             lock (pending)
             {
                 if (pending.Count >= MaxPending)

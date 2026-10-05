@@ -134,6 +134,7 @@ namespace Nativra.X86.Loader
         private readonly Dictionary<char, ArgumentTranslator> translators = new Dictionary<char, ArgumentTranslator>();
 
         public void AddArgument(char code, ArgumentTranslator translator) => translators[code] = translator;
+        internal XAudio27Com XAudio27 { get; set; }
 
         /// <summary>Calls made through proxies, by interface and method (the probe reports them).</summary>
         public Dictionary<string, long> Calls { get; } = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -466,6 +467,10 @@ namespace Nativra.X86.Loader
 
             if (argCount > 12) throw new InvalidOperationException("too many arguments for the COM bridge: " + argCount);
             ulong result;
+            if (XAudio27 != null && proxy.Interface.Name == "IXAudio2" && method.Name == "CreateSourceVoice")
+                XAudio27.PrepareSourceVoice(c.Arg(2), args);
+            if (XAudio27 != null && proxy.Interface.Name == "IXAudio2SourceVoice" && method.Name == "SubmitSourceBuffer")
+                XAudio27.PrepareSourceBuffer(host, args);
             if (UseHeapArguments)
             {
                 var copy = new IntPtr[argCount];
@@ -473,6 +478,12 @@ namespace Nativra.X86.Loader
                 fixed (IntPtr* heapArgs = copy) result = InvokeHost(function, heapArgs, argCount, method);
             }
             else result = InvokeHost(function, args, argCount, method);
+            if (XAudio27 != null && proxy.Interface.Name == "IXAudio2" && method.Name == "CreateSourceVoice")
+                XAudio27.FinishSourceVoice((int)result, args);
+            if (XAudio27 != null && proxy.Interface.Name == "IXAudio2SourceVoice" && method.Name == "SubmitSourceBuffer")
+                XAudio27.FinishSourceBuffer((int)result, args);
+            if (XAudio27 != null && proxy.Interface.Name == "IXAudio2SourceVoice" && method.Name == "DestroyVoice")
+                XAudio27.ForgetVoice(host);
 
             for (var a = 0; a < method.Args.Length; a++)
             {

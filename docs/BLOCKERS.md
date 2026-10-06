@@ -11,6 +11,7 @@ Screenshots and raw reports remain local under `.cycle/sweep/<appid>/`.
 | 1 | UWP delegate marshalling / native loader | 26 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910), My Summer Car (516750), Poly Bridge 2 (1062160), 9 Kings (2784470), Vampire Survivors (1794680), Graveyard Keeper (599140), Bloons TD 6 (960090), Seen (1069740), Sprocket (1674170), Virtual Cottage (1369320), Stick Fight: The Game (674940), 100% Orange Juice (282800), Kandidatos Kart (1415140), BROTHER!!! - Hardcore Platformer (1286560), My dream setup (2200780), Undercroft Warriors (2547140), Rat Quest (2952470), Paragnosia (3017580), LivingForest (3027490), Lost in Anomaly (3312020), Movie Night (1868410), Banana Hell: Mountain of Madness (2068520), Depths Of Horror: Mushroom Day (1590840), Internet Cafe Simulator (1136160) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
 | 2 | x86 SHLWAPI path functions | 3 | Poly Bridge (367450), ANOIX (840590), Kandidatos (1395560) | `x86.run=missing import shlwapi.dll!PathCanonicalizeW` |
 | 3 | x86 BCrypt random generation | 2 | 3D PUZZLE - Leafless (3651720), Super-Patriota Simulator (2089140) | `x86.run=missing import bcrypt.dll!BCryptGenRandom` |
+| 4 | x86 WinRT initialization / API-set forwarding | 1 | Pixel Strike 3D (915320) | `x86.run=missing import kernel32.dll!RoInitialize` |
 
 All 26 native-loader failure screenshots show the Nativra shelf with a game-start failure, not game
 frames. Menu, gameplay and input were not reached. The diagnostic asks for
@@ -43,6 +44,11 @@ attempt, and the current primary blocker is BCrypt (counted once above).
 
 Super-Patriota Simulator hits the same BCrypt import after 0.6 seconds of x86
 execution, also without a window, D3D9 request, pad reads or COM calls.
+
+Pixel Strike 3D selects its 32-bit Unity executable and stops after 0.6 seconds
+at `kernel32.dll!RoInitialize`; no window, D3D9 request, pad reads or COM calls.
+The import report also lists unserved WinRT API-set imports, but the runtime
+line above is the first observed blocker.
 
 The controller now clears old download errors before a new attempt and rejects
 errors matching the requested appid before launch (nine controller tests pass).

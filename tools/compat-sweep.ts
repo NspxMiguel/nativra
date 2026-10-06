@@ -179,18 +179,18 @@ async function test(appid: number, seconds: number): Promise<Verdict> {
   await waitStopped();
   // The console keeps the last run's reports; a game that writes none must not
   // inherit the previous game's frames.
-  await xbdev([
-    "rm",
-    "Kiosk",
+  const reports = [
     "native-pulse.txt",
     "native-probe.txt",
+    "crash-log.txt",
     "unity.log",
     "x86-imports.txt",
     "x86-heartbeat.txt",
     "native-fault.txt",
-    "--dir",
-    "LocalState",
-  ]);
+  ];
+  // A bulk removal stops at the first absent file, leaving later reports stale.
+  for (const file of reports)
+    await xbdev(["rm", "Kiosk", file, "--dir", "LocalState"]);
   await pushMarker("autoplay.txt", String(appid));
   const launch = await xbdev(["launch", "Kiosk"]);
   await writeFile(join(dir, "launch.txt"), launch.out);
@@ -199,15 +199,7 @@ async function test(appid: number, seconds: number): Promise<Verdict> {
   await sleep(seconds * 1000);
   // A pull that fails must not leave the previous game's report in place: it
   // was read back as this run's result.
-  for (const file of [
-    "native-pulse.txt",
-    "native-probe.txt",
-    "crash-log.txt",
-    "x86-imports.txt",
-    "x86-heartbeat.txt",
-    "native-fault.txt",
-    "unity.log",
-  ]) {
+  for (const file of reports) {
     await rm(join(dir, file), { force: true });
     await xbdev(["pull", "Kiosk", file, "LocalState"], dir);
   }

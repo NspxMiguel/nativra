@@ -29,6 +29,12 @@ for any game in this sweep.
 | Blocker / layer | Games hit | Game | Evidence |
 | --- | --- | --- | --- |
 | Console storage exhaustion; app moving downloads | 2 | Little Nightmares (424840), LEGO Jurassic World (352400) | Screenshots: `console full, moving to USB` (Little Nightmares, after 67%) and `console full, moving…` (LEGO, after the last observed 48%). |
+| Steam depot chunk decryption | 1 | 3D PUZZLE - Leafless (3651720) | `System.Security.Cryptography.CryptographicException: The input data is not a complete block.` Fresh error at 2026-10-06 03:11:22 UTC, 10%, `_Mac.app\Contents\Resources\Data\sharedassets1.assets.resS`. |
+
+The sweep incorrectly treated a failed download as completion for Leafless. Its
+subsequent launch selected the game folder but found no executable (`0x80070002`);
+the final screenshot still showed download progress (17%). This is an installation
+blocker, not evidence that a complete guest executable ran.
 
 Five old Nativra dumps (builds 453, 458 and 475) occupied 1,781,314,531 bytes.
 All were archived on the Mac with size/header verification and SHA-256 hashes

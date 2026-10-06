@@ -22,7 +22,7 @@ for any game in this sweep.
 
 | Blocker / layer | Games hit | Game | Evidence |
 | --- | --- | --- | --- |
-| Console storage exhaustion; app moving download to USB | 1 | Little Nightmares (424840) | Screenshot: `Little Nightmares — console full, moving to USB`, after 67% download progress. |
+| Console storage exhaustion; app moving downloads | 2 | Little Nightmares (424840), LEGO Jurassic World (352400) | Screenshots: `console full, moving to USB` (Little Nightmares, after 67%) and `console full, moving…` (LEGO, after the last observed 48%). |
 
 Five old Nativra dumps (builds 453, 458 and 475) occupied 1,781,314,531 bytes.
 All were archived on the Mac with size/header verification and SHA-256 hashes
@@ -32,3 +32,8 @@ storage maintenance, not evidence of a new crash in any swept game.
 The downloader restarts a partial file from its first chunk; only complete files
 are skipped (`uwp/Kiosk/Steam/SteamDownload.cs`). The sweep now preserves an
 active download across console-lock windows rather than repeatedly stopping it.
+
+After removing only the two partial installations created by this sweep through
+the app's `forget.txt`, a fresh drive probe (2026-10-06 00:07 UTC) reported
+11,194,597,376 bytes free on the USB drive. The catalog lists LEGO's download as
+15.3 GB. Both cases remain explicitly untested at the guest-runtime stage.

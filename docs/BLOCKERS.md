@@ -8,11 +8,11 @@ Screenshots and raw reports remain local under `.cycle/sweep/<appid>/`.
 
 | Rank | Blocker / layer | Games hit | Games | First concrete evidence |
 | --- | --- | --- | --- | --- |
-| 1 | UWP delegate marshalling / native loader | 25 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910), My Summer Car (516750), Poly Bridge 2 (1062160), 9 Kings (2784470), Vampire Survivors (1794680), Graveyard Keeper (599140), Bloons TD 6 (960090), Seen (1069740), Sprocket (1674170), Virtual Cottage (1369320), Stick Fight: The Game (674940), 100% Orange Juice (282800), Kandidatos Kart (1415140), BROTHER!!! - Hardcore Platformer (1286560), My dream setup (2200780), Undercroft Warriors (2547140), Rat Quest (2952470), Paragnosia (3017580), LivingForest (3027490), Lost in Anomaly (3312020), Movie Night (1868410), Banana Hell: Mountain of Madness (2068520), Depths Of Horror: Mushroom Day (1590840) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
+| 1 | UWP delegate marshalling / native loader | 26 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910), My Summer Car (516750), Poly Bridge 2 (1062160), 9 Kings (2784470), Vampire Survivors (1794680), Graveyard Keeper (599140), Bloons TD 6 (960090), Seen (1069740), Sprocket (1674170), Virtual Cottage (1369320), Stick Fight: The Game (674940), 100% Orange Juice (282800), Kandidatos Kart (1415140), BROTHER!!! - Hardcore Platformer (1286560), My dream setup (2200780), Undercroft Warriors (2547140), Rat Quest (2952470), Paragnosia (3017580), LivingForest (3027490), Lost in Anomaly (3312020), Movie Night (1868410), Banana Hell: Mountain of Madness (2068520), Depths Of Horror: Mushroom Day (1590840), Internet Cafe Simulator (1136160) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
 | 2 | x86 SHLWAPI path functions | 3 | Poly Bridge (367450), ANOIX (840590), Kandidatos (1395560) | `x86.run=missing import shlwapi.dll!PathCanonicalizeW` |
 | 3 | x86 BCrypt random generation | 2 | 3D PUZZLE - Leafless (3651720), Super-Patriota Simulator (2089140) | `x86.run=missing import bcrypt.dll!BCryptGenRandom` |
 
-All 25 native-loader failure screenshots show the Nativra shelf with a game-start failure, not game
+All 26 native-loader failure screenshots show the Nativra shelf with a game-start failure, not game
 frames. Menu, gameplay and input were not reached. The diagnostic asks for
 a `MarshalDelegate` directive in `rd.xml`; this sweep does not modify engine code.
 
@@ -70,8 +70,13 @@ were retained on the Mac.
 After batch 25, Internet Cafe Simulator hit a fresh disk-full error at 64%
 (`System.Exception: The disk is full. (Exception from HRESULT: 0x80070027)`,
 2026-10-06 03:57:24 UTC) while moving 177 MB to USB. This attempt is archived;
-its runtime result remains pending a retry. The app removed only the 14 completed
+the download recovered on retry and the subsequent 90-second attempt failed
+native delegate marshalling. The app removed only the 14 completed
 sweep-owned installations added since the previous cleanup through `forget.txt`.
 The marker disappeared and internal storage returned to its three baseline game
 IDs; the partial Internet Cafe installation was preserved and resumed. A fresh
 crash-dump index was empty. No baseline game or other data was selected.
+
+A fresh drive probe at 2026-10-06 04:12:18 UTC reported 6,993,346,560 bytes
+free on USB with the recovered Internet Cafe installation present. The drive
+probe marker was removed after collecting this measurement.

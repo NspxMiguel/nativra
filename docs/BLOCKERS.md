@@ -30,7 +30,7 @@ for any game in this sweep.
 
 | Blocker / layer | Games hit | Game | Evidence |
 | --- | --- | --- | --- |
-| Console storage exhaustion; app moving downloads | 2 | Little Nightmares (424840), LEGO Jurassic World (352400) | Screenshots: `console full, moving to USB` (Little Nightmares, after 67%) and `console full, moving…` (LEGO, after the last observed 48%). |
+| Console storage exhaustion; app moving downloads | 3 | Little Nightmares (424840), LEGO Jurassic World (352400), Amazing Frog ? 2 (1559680) | Screenshots: `console full, moving to USB` (Little Nightmares, after 67%) and `console full, moving…` (LEGO, after the last observed 48%). Amazing Frog failed at 35%, moving 6.4 GB to Console: `System.Exception: The disk is full. (Exception from HRESULT: 0x80070027)` at 04:35:45 UTC. |
 | Steam depot chunk decryption (recovered on retry) | 1 | 3D PUZZLE - Leafless (3651720) | `System.Security.Cryptography.CryptographicException: The input data is not a complete block.` Fresh error at 2026-10-06 03:11:22 UTC, 10%, `_Mac.app\Contents\Resources\Data\sharedassets1.assets.resS`. |
 | Steam job timeout (recovered on retry) | 1 | Movie Night (1868410) | `System.TimeoutException: Steam did not answer job:2`, 0%, 2026-10-06 03:14:09 UTC. Download succeeded on retry; primary runtime blocker is native delegate marshalling. |
 

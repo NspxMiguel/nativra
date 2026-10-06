@@ -66,3 +66,12 @@ After batch 18, the app removed 13 completed sweep-owned installations through
 02:29:59 UTC again reported 11,194,597,376 bytes free on USB, and internal
 games returned to the original three IDs. All diagnostic reports and screenshots
 were retained on the Mac.
+
+After batch 25, Internet Cafe Simulator hit a fresh disk-full error at 64%
+(`System.Exception: The disk is full. (Exception from HRESULT: 0x80070027)`,
+2026-10-06 03:57:24 UTC) while moving 177 MB to USB. This attempt is archived;
+its runtime result remains pending a retry. The app removed only the 14 completed
+sweep-owned installations added since the previous cleanup through `forget.txt`.
+The marker disappeared and internal storage returned to its three baseline game
+IDs; the partial Internet Cafe installation was preserved and resumed. A fresh
+crash-dump index was empty. No baseline game or other data was selected.

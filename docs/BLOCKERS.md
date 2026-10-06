@@ -9,10 +9,15 @@ Screenshots and raw reports remain local under `.cycle/sweep/<appid>/`.
 | Rank | Blocker / layer | Games hit | Games | First concrete evidence |
 | --- | --- | --- | --- | --- |
 | 1 | UWP delegate marshalling / native loader | 12 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910), My Summer Car (516750), Poly Bridge 2 (1062160), 9 Kings (2784470), Vampire Survivors (1794680), Graveyard Keeper (599140), Bloons TD 6 (960090), Seen (1069740), Sprocket (1674170), Virtual Cottage (1369320) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
+| 2 | x86 SHLWAPI path functions | 1 | Poly Bridge (367450) | `x86.run=missing import shlwapi.dll!PathCanonicalizeW` |
 
-All twelve screenshots show the Nativra shelf with a game-start failure, not game
+All twelve native-loader failure screenshots show the Nativra shelf with a game-start failure, not game
 frames. Menu, gameplay and input were not reached. The diagnostic asks for
 a `MarshalDelegate` directive in `rd.xml`; this sweep does not modify engine code.
+
+Poly Bridge selects a 32-bit `polybridge.exe` and runs the JIT for 7.8 seconds before
+the missing SHLWAPI import. It has no guest window, no D3D9 request, zero pad
+reads and empty heartbeat COM calls; no menu/gameplay/render or input test was reached.
 
 A pre-existing `download-error.txt` dated 2026-10-02 concerns POSTAL 2 (223470)
 and disk exhaustion (`0x80070027`). It is stale and is not counted as a blocker

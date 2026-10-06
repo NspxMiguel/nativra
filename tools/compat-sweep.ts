@@ -248,20 +248,30 @@ if (import.meta.main) {
     process.exit(2);
   }
   await mkdir(OUT, { recursive: true });
+  const leasePath = "/tmp/xbox-console.lock";
+  const lease = await readFile(leasePath, "utf8").catch(() => "");
   const deadline = Date.now() + 13 * 60_000;
-  for (const appid of ids) {
-    const available = deadline - Date.now() - (seconds + 60) * 1000;
-    if (available < 30_000)
-      throw new Error(
-        "Batch time budget exhausted; reacquire the lock for remaining games",
-      );
-    if (fetch && !(await download(appid, available)))
-      throw new Error(
-        `${appid}: download incomplete; leave app running and monitor in the next lock window`,
-      );
-    const v = await test(appid, seconds);
-    const line = `| ${v.appid} | ${v.status} | ${v.frames} | ${v.fps} | ${v.detail.replace(/\|/g, "/")} | ${new Date().toISOString()} |`;
-    console.log(line);
-    await appendFile(join(OUT, "summary.md"), line + "\n");
+  try {
+    for (const appid of ids) {
+      const available = deadline - Date.now() - (seconds + 60) * 1000;
+      if (available < 30_000)
+        throw new Error(
+          "Batch time budget exhausted; reacquire the lock for remaining games",
+        );
+      if (fetch && !(await download(appid, available)))
+        throw new Error(
+          `${appid}: download incomplete; leave app running and monitor in the next lock window`,
+        );
+      const v = await test(appid, seconds);
+      const line = `| ${v.appid} | ${v.status} | ${v.frames} | ${v.fps} | ${v.detail.replace(/\|/g, "/")} | ${new Date().toISOString()} |`;
+      console.log(line);
+      await appendFile(join(OUT, "summary.md"), line + "\n");
+    }
+  } finally {
+    // A delayed agent turn must not keep the console reserved after this batch.
+    // Never remove a lease acquired by another session or a newer batch.
+    const current = await readFile(leasePath, "utf8").catch(() => "");
+    if (lease.startsWith("opus-x86 ") && current === lease)
+      await rm(leasePath, { force: true });
   }
 }

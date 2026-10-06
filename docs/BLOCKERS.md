@@ -8,11 +8,11 @@ Screenshots and raw reports remain local under `.cycle/sweep/<appid>/`.
 
 | Rank | Blocker / layer | Games hit | Games | First concrete evidence |
 | --- | --- | --- | --- | --- |
-| 1 | UWP delegate marshalling / native loader | 22 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910), My Summer Car (516750), Poly Bridge 2 (1062160), 9 Kings (2784470), Vampire Survivors (1794680), Graveyard Keeper (599140), Bloons TD 6 (960090), Seen (1069740), Sprocket (1674170), Virtual Cottage (1369320), Stick Fight: The Game (674940), 100% Orange Juice (282800), Kandidatos Kart (1415140), BROTHER!!! - Hardcore Platformer (1286560), My dream setup (2200780), Undercroft Warriors (2547140), Rat Quest (2952470), Paragnosia (3017580), LivingForest (3027490), Lost in Anomaly (3312020) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
+| 1 | UWP delegate marshalling / native loader | 23 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910), My Summer Car (516750), Poly Bridge 2 (1062160), 9 Kings (2784470), Vampire Survivors (1794680), Graveyard Keeper (599140), Bloons TD 6 (960090), Seen (1069740), Sprocket (1674170), Virtual Cottage (1369320), Stick Fight: The Game (674940), 100% Orange Juice (282800), Kandidatos Kart (1415140), BROTHER!!! - Hardcore Platformer (1286560), My dream setup (2200780), Undercroft Warriors (2547140), Rat Quest (2952470), Paragnosia (3017580), LivingForest (3027490), Lost in Anomaly (3312020), Movie Night (1868410) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
 | 2 | x86 SHLWAPI path functions | 3 | Poly Bridge (367450), ANOIX (840590), Kandidatos (1395560) | `x86.run=missing import shlwapi.dll!PathCanonicalizeW` |
 | 3 | x86 BCrypt random generation | 1 | 3D PUZZLE - Leafless (3651720) | `x86.run=missing import bcrypt.dll!BCryptGenRandom` |
 
-All 22 native-loader failure screenshots show the Nativra shelf with a game-start failure, not game
+All 23 native-loader failure screenshots show the Nativra shelf with a game-start failure, not game
 frames. Menu, gameplay and input were not reached. The diagnostic asks for
 a `MarshalDelegate` directive in `rd.xml`; this sweep does not modify engine code.
 
@@ -31,6 +31,7 @@ for any game in this sweep.
 | --- | --- | --- | --- |
 | Console storage exhaustion; app moving downloads | 2 | Little Nightmares (424840), LEGO Jurassic World (352400) | Screenshots: `console full, moving to USB` (Little Nightmares, after 67%) and `console full, moving…` (LEGO, after the last observed 48%). |
 | Steam depot chunk decryption (recovered on retry) | 1 | 3D PUZZLE - Leafless (3651720) | `System.Security.Cryptography.CryptographicException: The input data is not a complete block.` Fresh error at 2026-10-06 03:11:22 UTC, 10%, `_Mac.app\Contents\Resources\Data\sharedassets1.assets.resS`. |
+| Steam job timeout (recovered on retry) | 1 | Movie Night (1868410) | `System.TimeoutException: Steam did not answer job:2`, 0%, 2026-10-06 03:14:09 UTC. Download succeeded on retry; primary runtime blocker is native delegate marshalling. |
 
 Leafless initially failed chunk decryption and then an incomplete launch found no
 executable (`0x80070002`); its screenshot still showed download at 17%. The app

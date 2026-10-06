@@ -86,3 +86,9 @@ crash-dump index was empty. No baseline game or other data was selected.
 A fresh drive probe at 2026-10-06 04:12:18 UTC reported 6,993,346,560 bytes
 free on USB with the recovered Internet Cafe installation present. The drive
 probe marker was removed after collecting this measurement.
+
+After the Amazing Frog capacity failure, the app removed that sweep partial and
+the completed Internet Cafe and Pixel Strike sweep installations. The fresh
+2026-10-06 04:38:24 UTC probe returned USB free space to 11,194,597,376 bytes,
+exactly the original baseline. Internal games also returned to the baseline IDs;
+no active download or forget marker remained, and the crash-dump index was empty.

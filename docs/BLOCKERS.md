@@ -8,9 +8,9 @@ Screenshots and raw reports remain local under `.cycle/sweep/<appid>/`.
 
 | Rank | Blocker / layer | Games hit | Games | First concrete evidence |
 | --- | --- | --- | --- | --- |
-| 1 | UWP delegate marshalling / native loader | 10 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910), My Summer Car (516750), Poly Bridge 2 (1062160), 9 Kings (2784470), Vampire Survivors (1794680), Graveyard Keeper (599140), Bloons TD 6 (960090), Seen (1069740) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
+| 1 | UWP delegate marshalling / native loader | 11 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910), My Summer Car (516750), Poly Bridge 2 (1062160), 9 Kings (2784470), Vampire Survivors (1794680), Graveyard Keeper (599140), Bloons TD 6 (960090), Seen (1069740), Sprocket (1674170) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
 
-All ten screenshots show the Nativra shelf with a game-start failure, not game
+All eleven screenshots show the Nativra shelf with a game-start failure, not game
 frames. Menu, gameplay and input were not reached. The diagnostic asks for
 a `MarshalDelegate` directive in `rd.xml`; this sweep does not modify engine code.
 

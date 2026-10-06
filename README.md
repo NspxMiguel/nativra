@@ -9,6 +9,7 @@
 ![Stage](https://img.shields.io/badge/stage-pre--alpha_proof_of_concept-f0a020)
 ![Platform](https://img.shields.io/badge/platform-Xbox_Dev_Mode-107c10)
 ![License](https://img.shields.io/badge/license-PolyForm_Noncommercial-lightgrey)
+[![Build](https://img.shields.io/github/actions/workflow/status/NspxMiguel/nativra/build-uwp.yml?branch=main&label=build)](https://github.com/NspxMiguel/nativra/actions/workflows/build-uwp.yml)
 
 </div>
 
@@ -39,6 +40,12 @@ Mode. Native PC-game execution is its main technical focus, not its whole purpos
 > not working yet while this core functionality takes priority. Their presence
 > in the interface or roadmap does not mean they are ready to use.
 
+[Screenshots](#pc-games-running-on-xbox) ·
+[Scope](#scope-versus-current-implementation) ·
+[What works](#what-works-today) ·
+[Compatibility](#compatibility) ·
+[Limits](#what-does-not-work-yet) ·
+[Using it](#using-it) ·
 [Game compatibility](docs/COMPATIBILITY.md) ·
 [First milestone](docs/progress/2026-09-23.md) ·
 [Releases](https://github.com/NspxMiguel/nativra/releases) ·
@@ -99,6 +106,9 @@ Listing an emulator here does not establish game compatibility or complete setup
 
 ## More than a PC-game loader
 
+<details>
+<summary>The long-term goal (roadmap, not shipped)</summary>
+
 The goal is a controller-first gaming environment with the convenience of
 SteamOS and the setup automation of EmuDeck: sit on the sofa, connect your drive,
 find a game, and play from one app. These are design references, not affiliations
@@ -123,6 +133,8 @@ or claims that Nativra already matches either project.
   accounts and model-specific compatibility reports are part of the roadmap.
   Steam achievements, friends, invitations and logout are requirements too.
 
+</details>
+
 ## Scope versus current implementation
 
 | Area | Current state |
@@ -141,6 +153,9 @@ their presence is not a compatibility guarantee.
 
 ## Why this is possible at all
 
+<details>
+<summary>How an Xbox can run a PC game</summary>
+
 An Xbox is not a different computer from a PC. It is the same architecture
 running the same kernel, with a different set of rules about what a program is
 allowed to do. A developer-mode console will run a packaged app, and a packaged
@@ -152,6 +167,8 @@ The remaining 178 are the project. They are not translation — nothing is being
 emulated — they are the handful of libraries a packaged app does not have
 loaded, answered by hand. The window system is the big one, because a console
 has no windows.
+
+</details>
 
 ## What works today
 
@@ -218,6 +235,9 @@ a lot of it needs no console.
 
 ## Using it
 
+<details>
+<summary>CLI commands, install and storage</summary>
+
     bun src/xbdev.ts connect      # point at the console once
     bun src/xbdev.ts install <package files>
     bun src/xbdev.ts steam games  # what the account owns
@@ -243,6 +263,8 @@ run from there. A download that fills its disk moves what it already has to
 the roomier drive and carries on, and an interrupted download resumes from
 where it stopped the next time the app opens. Games borrowed through Steam
 Families download like owned ones.
+
+</details>
 
 ## Licence
 

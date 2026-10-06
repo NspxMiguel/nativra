@@ -43,3 +43,9 @@ After removing only the two partial installations created by this sweep through
 the app's `forget.txt`, a fresh drive probe (2026-10-06 00:07 UTC) reported
 11,194,597,376 bytes free on the USB drive. The catalog lists LEGO's download as
 15.3 GB. Both cases remain explicitly untested at the guest-runtime stage.
+
+After batch 18, the app removed 13 completed sweep-owned installations through
+`forget.txt`; no baseline game was selected. A fresh probe at 2026-10-06
+02:29:59 UTC again reported 11,194,597,376 bytes free on USB, and internal
+games returned to the original three IDs. All diagnostic reports and screenshots
+were retained on the Mac.

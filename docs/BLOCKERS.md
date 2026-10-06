@@ -34,7 +34,10 @@ for any game in this sweep.
 The sweep incorrectly treated a failed download as completion for Leafless. Its
 subsequent launch selected the game folder but found no executable (`0x80070002`);
 the final screenshot still showed download progress (17%). This is an installation
-blocker, not evidence that a complete guest executable ran.
+blocker, not evidence that a complete guest executable ran. The controller now
+clears old download errors before a new attempt and rejects errors matching the
+requested appid before launch (nine controller tests pass). The app later resumed
+Leafless automatically; its runtime retest remains pending.
 
 Five old Nativra dumps (builds 453, 458 and 475) occupied 1,781,314,531 bytes.
 All were archived on the Mac with size/header verification and SHA-256 hashes

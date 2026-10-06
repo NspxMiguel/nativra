@@ -10,6 +10,12 @@ idea, with one addition for games not tried yet.
 | 🟡 **Playable** | Runs and can be played, with the exceptions listed. |
 | ⛔ **Not working** | Does not reach gameplay yet; the note says where it stops. |
 | ⬜ **Untested** | Not tried on the console yet. |
+| ⚠️ **Installation blocked** | Download/install failed; guest runtime remains untested. |
+
+The October 5–6 sweep uses 90-second launch attempts on build 502. Older build
+rows are historical results and are not counted toward this sweep. A host launch
+does not establish that the guest reached a menu, rendered or accepted input.
+Dates use the Mac clock; the console diagnostic clock differs.
 
 | Game | Steam app | Engine | Rating | Last tested | Notes |
 | --- | --- | --- | --- | --- | --- |

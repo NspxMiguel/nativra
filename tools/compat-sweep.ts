@@ -82,6 +82,15 @@ export function classify(
   return { appid, status: "stops", frames, fps, detail: reason };
 }
 
+export function downloadFailure(
+  appid: number,
+  report: string,
+): string | undefined {
+  const lines = report.trim().split(/\r?\n/);
+  if (!new RegExp(`\\bapp ${appid} at `).test(lines[0] ?? "")) return;
+  return lines[1]?.trim() || lines[0];
+}
+
 async function xbdev(
   args: string[],
   cwd = ROOT,
@@ -143,6 +152,7 @@ async function download(appid: number, limitMs: number): Promise<boolean> {
     await xbdev(["stop", "Kiosk"]);
     await waitStopped();
     await xbdev(["rm", "Kiosk", "autoplay.txt", "--dir", "LocalState"]);
+    await xbdev(["rm", "Kiosk", "download-error.txt", "--dir", "LocalState"]);
     await pushMarker("autodownload.txt", String(appid));
     const launch = await xbdev(["launch", "Kiosk"]);
     await writeFile(join(dir, "launch.txt"), launch.out);
@@ -168,6 +178,14 @@ async function download(appid: number, limitMs: number): Promise<boolean> {
   await xbdev(["rm", "Kiosk", "autodownload.txt", "--dir", "LocalState"]);
   await xbdev(["stop", "Kiosk"]);
   await waitStopped();
+  const failure = downloadFailure(
+    appid,
+    await readFile(join(dir, "download-error.txt"), "utf8").catch(() => ""),
+  );
+  if (failure)
+    throw new Error(
+      `${appid}: download failed; guest not launched: ${failure}`,
+    );
   return Date.now() < until;
 }
 

@@ -24,6 +24,7 @@ idea, with one addition for games not tried yet.
 | POSTAL 2 | 223470 | Unreal Engine 2 (32-bit PE32) | ⛔ Not working | build 463, 2026-10-04 | Engine initialises (log, CPU detection, object subsystem) and then hangs after cleaning temporary load files. |
 | Cuphead | 268910 | Unity 2017.4 (Mono, x64, D3D11) | ⛔ Not working | build 502, 2026-10-05 | Retest: installed USB copy found; Nativra launched, guest failed before menu/gameplay; screenshot shows shelf, no game rendering; input not testable. First failure: `probe failed: $BlockedFromReflection_1_27fa7786: EETypeRva:0x00031EE8 is missing delegate marshalling data`. Build 479 previously reached the title screen at 59.9 fps, controller unconfirmed. |
 | Among Us | 945360 | Unity 2017.4 (IL2CPP, x64, D3D11) | 🟡 Playable | build 479, 2026-10-05 | Shows the privacy-policy screen and menus at 34 fps; the game polls XInput. Pressing through the portal does not reach it (a real controller is needed to confirm gameplay). |
+| My Summer Car | 516750 | Unity (x64) | ⛔ Not working | build 502, 2026-10-05 | Downloaded to USB by the sweep; host launched, guest failed before menu/gameplay; screenshot shows shelf, no game rendering; input not testable. First failure: `probe failed: $BlockedFromReflection_1_f6578813: EETypeRva:0x00031EE8 is missing delegate marshalling data`. |
 
 Every other game in the library is sorted by how realistic it is today, with the missing
 piece behind each "not yet", in the planning catalog [LIBRARY.md](LIBRARY.md).

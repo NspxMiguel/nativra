@@ -8,7 +8,7 @@ Screenshots and raw reports remain local under `.cycle/sweep/<appid>/`.
 
 | Rank | Blocker / layer | Games hit | Games | First concrete evidence |
 | --- | --- | --- | --- | --- |
-| 1 | UWP delegate marshalling / native loader | 3 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
+| 1 | UWP delegate marshalling / native loader | 4 | Seraph's Last Stand (1919460), Hades (1145360), Cuphead (268910), My Summer Car (516750) | `probe failed: $BlockedFromReflection_1_5cd930df: EETypeRva:0x00031EE8 is missing delegate marshalling data` |
 
 The Seraph, Hades and Cuphead screenshots show the Nativra shelf with a game-start failure, not game
 frames. Menu, gameplay and input were not reached. The diagnostic asks for

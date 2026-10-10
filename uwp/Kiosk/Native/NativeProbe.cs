@@ -759,6 +759,9 @@ namespace Kiosk.Native
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);
                                     lock (LoaderStubs.InputAsked)
                                         beat.Add("xinput.loader=" + string.Join(";", LoaderStubs.InputAsked));
+                                    beat.Add("xinput.state calls=" + PadBridge.StateCalls + " null=" + PadBridge.NullStates
+                                        + " invalid=" + PadBridge.InvalidSlots + " failures=" + PadBridge.StateFailures
+                                        + " buttonreads=" + PadBridge.ButtonReads + " lastactive=" + PadBridge.LastActiveButtons);
                                     // Wider than the default 64: LEGO Jurassic
                                     // World's freeze needs a longer window to
                                     // catch what led up to it, not just the

@@ -21,6 +21,7 @@ namespace Kiosk.Native
         private const int ERROR_SUCCESS = 0;
         private const int ERROR_DEVICE_NOT_CONNECTED = 1167;
         private const int ERROR_CALL_NOT_IMPLEMENTED = 120;
+        private const int ERROR_BAD_ARGUMENTS = 160;
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int StateDelegate(uint index, IntPtr state);
@@ -66,6 +67,8 @@ namespace Kiosk.Native
         public static long ActiveReads;
         public static long Changes;
         public static int LastButtons;
+        public static long StateCalls, NullStates, InvalidSlots, StateFailures, ButtonReads;
+        public static int LastActiveButtons;
 
         /// <summary>Successful polls; active-state counters distinguish input from a neutral pad.</summary>
         public static long Reads;
@@ -210,6 +213,11 @@ namespace Kiosk.Native
                 Marshal.WriteInt16(target, 12, rx);
                 Marshal.WriteInt16(target, 14, ry);
                 LastButtons = pressed;
+                if (pressed != 0)
+                {
+                    LastActiveButtons = pressed;
+                    System.Threading.Interlocked.Increment(ref ButtonReads);
+                }
             }
             if (buttons != 0 || axes != 0) System.Threading.Interlocked.Increment(ref ActiveReads);
             if (keys != null) System.Threading.Interlocked.Increment(ref KeyReads);
@@ -259,7 +267,17 @@ namespace Kiosk.Native
             if (state != null) return;
             state = (index, target) =>
             {
-                if (target == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;
+                System.Threading.Interlocked.Increment(ref StateCalls);
+                if (target == IntPtr.Zero)
+                {
+                    System.Threading.Interlocked.Increment(ref NullStates);
+                    return ERROR_BAD_ARGUMENTS;
+                }
+                if (index >= 4)
+                {
+                    System.Threading.Interlocked.Increment(ref InvalidSlots);
+                    return ERROR_BAD_ARGUMENTS;
+                }
                 try
                 {
                     if (!Present(index, out var pads)) return ERROR_DEVICE_NOT_CONNECTED;
@@ -287,6 +305,7 @@ namespace Kiosk.Native
                 }
                 catch
                 {
+                    System.Threading.Interlocked.Increment(ref StateFailures);
                     return ERROR_DEVICE_NOT_CONNECTED;
                 }
             };

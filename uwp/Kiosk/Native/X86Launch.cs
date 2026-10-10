@@ -381,6 +381,7 @@ namespace Kiosk.Native
                             " changes " + PadBridge.Changes + " buttons " + PadBridge.LastButtons +
                             " probes " + PadBridge.Probes + " desktop " + ControllerMode.Desktop +
                             " held " + PointerBridge.HostKeys.Count(down => down) + Environment.NewLine +
+                        "x86.pad-buttons=reads " + PadBridge.ButtonReads + " lastactive " + PadBridge.LastActiveButtons + Environment.NewLine +
                         TailText());
                 }
                 catch (Exception) { }

@@ -9,6 +9,48 @@ namespace Nativra.X86.Tests
 {
     public sealed class PadBridgeContractTests
     {
+        [Fact]
+        public void ButtonEvidenceDoesNotConfuseAnalogActivityAndInvalidCalls()
+        {
+            PadBridge.Install(new SystemImports());
+            Windows.Gaming.Input.Gamepad.Gamepads = Array.Empty<Windows.Gaming.Input.Gamepad>();
+            ControllerMode.Desktop = false;
+            ControllerMode.SystemButtons = 0;
+            var handler = (Delegate)typeof(PadBridge).GetField("state", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            var target = Marshal.AllocHGlobal(24);
+            int Poll(uint index, IntPtr output) => (int)handler.DynamicInvoke(index, output);
+            try
+            {
+                Array.Clear(PointerBridge.HostKeys, 0, PointerBridge.HostKeys.Length);
+                var buttons = PadBridge.ButtonReads;
+                var active = PadBridge.ActiveReads;
+                var nulls = PadBridge.NullStates;
+                var invalid = PadBridge.InvalidSlots;
+                PointerBridge.HostKeys[213] = true;
+                Assert.Equal(0, Poll(0, target));
+                Assert.True(PadBridge.ActiveReads > active);
+                Assert.Equal(buttons, PadBridge.ButtonReads);
+                PointerBridge.HostKeys[195] = true;
+                Assert.Equal(0, Poll(0, target));
+                Assert.Equal(buttons + 1, PadBridge.ButtonReads);
+                Assert.Equal(0x1000, PadBridge.LastActiveButtons);
+                Array.Clear(PointerBridge.HostKeys, 0, PointerBridge.HostKeys.Length);
+                Assert.Equal(0, Poll(0, target));
+                Assert.Equal(0, PadBridge.LastButtons);
+                Assert.Equal(0x1000, PadBridge.LastActiveButtons);
+                Assert.Equal(160, Poll(0, IntPtr.Zero));
+                Assert.Equal(160, Poll(4, target));
+                Assert.Equal(nulls + 1, PadBridge.NullStates);
+                Assert.Equal(invalid + 1, PadBridge.InvalidSlots);
+            }
+            finally
+            {
+                Array.Clear(PointerBridge.HostKeys, 0, PointerBridge.HostKeys.Length);
+                ControllerMode.Desktop = false;
+                Marshal.FreeHGlobal(target);
+            }
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
@@ -39,7 +81,7 @@ namespace Nativra.X86.Tests
                 Assert.Equal(0, Poll());
                 Assert.Equal(unchecked(packet + 1), Marshal.ReadInt32(target));
                 Assert.Equal(0x1234567890ABCDEF, Marshal.ReadInt64(target, 16));
-                Assert.Equal(1167, Poll(4));
+                Assert.Equal(160, Poll(4));
                 ControllerMode.Desktop = true;
                 ControllerMode.SystemButtons = 0x10;
                 Assert.Equal(0, Poll());

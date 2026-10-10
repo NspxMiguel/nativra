@@ -754,7 +754,7 @@ namespace Kiosk.Native
                                         + " audio.activate=" + AudioBridge.ActivateTimedOut);
                                     beat.Add("steamcm.timedout=" + Steam.SteamCm.TimedOut);
                                     beat.Add("lock spin=" + LockWatch.SpinCount + " at 0x" + LockWatch.SpinningOn.ToInt64().ToString("X"));
-                                    beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " keyreads=" + PadBridge.KeyReads
+                                    beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " active=" + PadBridge.ActiveReads + " changes=" + PadBridge.Changes + " buttons=" + PadBridge.LastButtons + " keyreads=" + PadBridge.KeyReads
                                         + " desktop=" + ControllerMode.Desktop
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);
                                     // Wider than the default 64: LEGO Jurassic

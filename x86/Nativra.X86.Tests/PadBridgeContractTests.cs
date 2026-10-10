@@ -9,6 +9,78 @@ namespace Nativra.X86.Tests
 {
     public sealed class PadBridgeContractTests
     {
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void PortalStateMergesWithPhysicalInputAndPacketsOnlyChangeWithState(bool physical)
+        {
+            Windows.Gaming.Input.Gamepad.Gamepads = physical
+                ? new[] { new Windows.Gaming.Input.Gamepad { Reading = new Windows.Gaming.Input.GamepadReading { Buttons = Windows.Gaming.Input.GamepadButtons.B, LeftThumbstickY = 0.5 } } }
+                : Array.Empty<Windows.Gaming.Input.Gamepad>();
+            PadBridge.Install(new SystemImports());
+            var handler = (Delegate)typeof(PadBridge).GetField("state", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            var target = Marshal.AllocHGlobal(24);
+            int Poll(uint index = 0) => (int)handler.DynamicInvoke(index, target);
+            try
+            {
+                Marshal.WriteInt64(target, 16, 0x1234567890ABCDEF);
+                PointerBridge.HostKeys[195] = true;
+                PointerBridge.HostKeys[201] = true;
+                PointerBridge.HostKeys[213] = true;
+                Assert.Equal(0, Poll());
+                Assert.Equal(physical ? 0x3000 : 0x1000, (ushort)Marshal.ReadInt16(target, 4));
+                Assert.Equal(255, Marshal.ReadByte(target, 6));
+                Assert.Equal(32767, Marshal.ReadInt16(target, 8));
+                Assert.Equal(physical ? 16383 : 0, Marshal.ReadInt16(target, 10));
+                var packet = Marshal.ReadInt32(target);
+                Assert.Equal(0, Poll());
+                Assert.Equal(packet, Marshal.ReadInt32(target));
+                PointerBridge.HostKeys[195] = false;
+                Assert.Equal(0, Poll());
+                Assert.Equal(unchecked(packet + 1), Marshal.ReadInt32(target));
+                Assert.Equal(0x1234567890ABCDEF, Marshal.ReadInt64(target, 16));
+                Assert.Equal(1167, Poll(4));
+                ControllerMode.Desktop = true;
+                Assert.Equal(0, Poll());
+                Assert.Equal(0, Marshal.ReadInt32(target, 4));
+                Assert.Equal(0, Marshal.ReadInt64(target, 8));
+            }
+            finally
+            {
+                ControllerMode.Desktop = false;
+                Array.Clear(PointerBridge.HostKeys, 0, PointerBridge.HostKeys.Length);
+                Windows.Gaming.Input.Gamepad.Gamepads = Array.Empty<Windows.Gaming.Input.Gamepad>();
+                Marshal.FreeHGlobal(target);
+            }
+        }
+
+        [Fact]
+        public void GuestXInputDispatchWritesTheSameInjectedStateWithinSixteenBytes()
+        {
+            using (var process = new Nativra.X86.Loader.GuestProcess(new Nativra.X86.Cpu.GuestMemory(native: true), useJit: false))
+            {
+                new Nativra.X86.Loader.GuestKernel(process).Install();
+                PadBridge.InstallX86(process);
+                const uint target = 0x00601000;
+                process.Memory.Map(target, 0x1000);
+                process.Memory.Write32(target + 16, 0xC0FFEE);
+                PointerBridge.HostKeys[195] = true;
+                try
+                {
+                    foreach (var module in new[] { "xinput1_3.dll", "xinput1_4.dll", "xinput9_1_0.dll" })
+                    {
+                        var address = process.Imports.Bind(module, "XInputGetState", -1);
+                        var result = process.Call(address, out var eax, 1000, 0, target);
+                        Assert.True(result.Ok, result.ToString());
+                        Assert.Equal(0u, eax);
+                        Assert.Equal(0x1000, process.Memory.Read16(target + 4));
+                        Assert.Equal(0xC0FFEEu, process.Memory.Read32(target + 16));
+                    }
+                }
+                finally { PointerBridge.HostKeys[195] = false; }
+            }
+        }
+
         [Fact]
         public void AudioEndpointQueriesAllowOmittedDirectionsAndBoundOutputWrites()
         {
@@ -83,7 +155,7 @@ namespace Kiosk.Native
     }
     internal static class ControllerMode
     {
-        public static bool Desktop => false;
+        public static bool Desktop;
         public static int SystemButtons => 0;
     }
     internal static class PointerBridge
@@ -120,10 +192,11 @@ namespace Windows.Gaming.Input
     }
     public sealed class Gamepad
     {
-        public static IReadOnlyList<Gamepad> Gamepads => Array.Empty<Gamepad>();
+        public static IReadOnlyList<Gamepad> Gamepads { get; set; } = Array.Empty<Gamepad>();
         public static event Action<object, Gamepad> GamepadAdded { add { } remove { } }
         public static event Action<object, Gamepad> GamepadRemoved { add { } remove { } }
         public GamepadVibration Vibration { get; set; }
-        public GamepadReading GetCurrentReading() => default;
+        public GamepadReading Reading;
+        public GamepadReading GetCurrentReading() => Reading;
     }
 }

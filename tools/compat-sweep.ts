@@ -108,14 +108,18 @@ async function xbdev(
   const lock = await readFile("/tmp/xbox-console.lock", "utf8").catch(() => "");
   const [owner, acquired] = lock.trim().split(/\s+/);
   if (
-    owner !== "opus-x86" ||
+    owner !== (process.env.LOCK_OWNER ?? "opus-x86") ||
     !Number.isFinite(Number(acquired)) ||
     Date.now() - Number(acquired) * 1000 >= 14 * 60_000
   )
     throw new Error(
       "Console lease missing or nearing 15 minutes; release and reacquire before continuing",
     );
-  const run = await $`bun ${XBDEV} ${args}`.cwd(cwd).quiet().nothrow();
+  const run =
+    await $`bash ${join(ROOT, "tools/with-console.sh")} bun ${XBDEV} ${args}`
+      .cwd(cwd)
+      .quiet()
+      .nothrow();
   const out = run.stdout.toString() + run.stderr.toString();
   if (/0x8004090a/i.test(out)) {
     await writeFile(
@@ -283,7 +287,10 @@ if (import.meta.main) {
     // A delayed agent turn must not keep the console reserved after this batch.
     // Never remove a lease acquired by another session or a newer batch.
     const current = await readFile(leasePath, "utf8").catch(() => "");
-    if (lease.startsWith("opus-x86 ") && current === lease)
+    if (
+      lease.startsWith(`${process.env.LOCK_OWNER ?? "opus-x86"} `) &&
+      current === lease
+    )
       await rm(leasePath, { force: true });
   }
 }

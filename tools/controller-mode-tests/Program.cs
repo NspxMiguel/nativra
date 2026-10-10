@@ -97,3 +97,16 @@ try
 }
 finally { Marshal.FreeHGlobal(allocation); }
 Console.WriteLine("DXGI description behavioral checks passed.");
+
+ControllerMode.Update(false, false, 0.5);
+var requests = ControllerMode.QuickAccessRequests;
+ControllerMode.Update(false, true, 0.1);
+ControllerMode.Update(false, false, 0.01);
+Check(ControllerMode.QuickAccessRequests == requests + 1, "A short View tap requests quick access once");
+Check(ControllerMode.SystemButtons == 0, "A shell View tap must not reach the game");
+ControllerMode.Update(false, false, 0.5);
+Check(ControllerMode.QuickAccessRequests == requests + 1, "An idle pad must not repeat quick access");
+ControllerMode.Update(true, true, 0.4);
+ControllerMode.Update(false, false, 0.1);
+Check(ControllerMode.QuickAccessRequests == requests + 1, "The mode chord must not open quick access");
+Console.WriteLine("Quick access gesture behavioral checks passed.");

@@ -68,7 +68,7 @@ namespace Kiosk.Native
             // x86interp.txt in the app's folder runs the reference interpreter
             // only: the A/B check when a game behaves differently under the JIT.
             var local = ApplicationData.Current.LocalFolder;
-            var interpreterOnly = await local.TryGetItemAsync("x86interp.txt") != null;
+            var interpreterOnly = GameProfileStore.Current.ForceInterpreter || await local.TryGetItemAsync("x86interp.txt") != null;
             var noX87Environment = await local.TryGetItemAsync("nojit-x87env.txt") != null;
             var noJecxz = await local.TryGetItemAsync("nojit-jecxz.txt") != null;
             var noBlockCache = await local.TryGetItemAsync("nojit-blockcache.txt") != null;
@@ -108,7 +108,11 @@ namespace Kiosk.Native
                 }
                 using (var heartbeat = new X86Heartbeat(System.IO.Path.Combine(local.Path, "x86-heartbeat.txt"), process, memory, switches))
                 {
-                    var kernel = new GuestKernel(process);
+                    var kernel = new GuestKernel(process)
+                    {
+                        ScreenWidth = GameProfileStore.Current.ScreenWidth,
+                        ScreenHeight = GameProfileStore.Current.ScreenHeight,
+                    };
                     kernel.ShaderCompiler = X86ShaderCompiler.Compile;
                     kernel.ExePath = folderPath.TrimEnd('\\') + "\\" + exeName;
                     kernel.SetCommandLine("\"" + kernel.ExePath + "\"");
@@ -245,7 +249,7 @@ namespace Kiosk.Native
                                       " preferred=0x" + image.PreferredBase.ToString("X8") +
                                       " entry=0x" + image.EntryPoint.ToString("X8") +
                                       " size=0x" + image.ImageSize.ToString("X"));
-                            lines.Add("x86.jit=" + (process.UsesJit ? "on" : interpreterOnly ? "off (x86interp.txt)" : "unavailable"));
+                            lines.Add("x86.jit=" + (process.UsesJit ? "on" : interpreterOnly ? "off (forced interpreter)" : "unavailable"));
                             lines.Add("x86.modules=" + string.Join(",", process.Images.Select(i => i.Name)));
                             if (fromPackage.Count > 0) lines.Add("x86.packaged=" + string.Join(",", fromPackage));
                             ReportImports(process, lines);

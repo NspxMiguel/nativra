@@ -84,6 +84,7 @@ namespace Kiosk.Native
     internal static class ControllerMode
     {
         public static bool Desktop => false;
+        public static bool ShellOpen => false;
         public static int SystemButtons => 0;
     }
     internal static class PointerBridge

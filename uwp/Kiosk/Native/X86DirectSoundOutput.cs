@@ -59,6 +59,7 @@ namespace Kiosk.Native
             finally { Marshal.FreeHGlobal(format); }
             code = Method<VoiceStartDelegate>(source, 19)(source, 0, 0);
             if (code < 0) throw new COMException("SourceVoice.Start failed 0x" + code.ToString("X8"), code);
+            AudioBridge.GuestMixerActive = true;
         }
         private void State(out uint queued, out long played)
         {
@@ -93,7 +94,14 @@ namespace Kiosk.Native
             while (pending.Count > queued) Marshal.FreeHGlobal(pending.Dequeue());
             if (queued >= MaxQueued) return;   // the mixer asks again once the voice has played some
             var samples = Marshal.AllocHGlobal(stereo.Length * 4);
-            Marshal.Copy(stereo, 0, samples, stereo.Length);
+            var volume = AudioBridge.HostVolume;
+            if (volume == 1) Marshal.Copy(stereo, 0, samples, stereo.Length);
+            else
+            {
+                var adjusted = new float[stereo.Length];
+                for (var index = 0; index < stereo.Length; index++) adjusted[index] = stereo[index] * volume;
+                Marshal.Copy(adjusted, 0, samples, adjusted.Length);
+            }
             var buffer = Marshal.AllocHGlobal(48);
             try
             {
@@ -108,6 +116,7 @@ namespace Kiosk.Native
         }
         public void Stop()
         {
+            AudioBridge.GuestMixerActive = false;
             if (source != IntPtr.Zero)
             {
                 State(out _, out var played);

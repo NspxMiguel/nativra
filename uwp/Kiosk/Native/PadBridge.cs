@@ -250,7 +250,7 @@ namespace Kiosk.Native
                     if (!Present(index, out var pads)) return ERROR_DEVICE_NOT_CONNECTED;
                     System.Threading.Interlocked.Increment(ref Reads);
 
-                    if (!ControllerMode.Desktop && index == 0 && pads.Count == 0)
+                    if (!ControllerMode.ShellOpen && !ControllerMode.Desktop && index == 0 && pads.Count == 0)
                     {
                         // No pad listed, yet the window receives the pad's
                         // buttons as keys — the same channel desktop mode
@@ -259,7 +259,7 @@ namespace Kiosk.Native
                         return ERROR_SUCCESS;
                     }
 
-                    if (ControllerMode.Desktop || index >= (uint)pads.Count)
+                    if (ControllerMode.ShellOpen || ControllerMode.Desktop || index >= (uint)pads.Count)
                     {
                         // A resting pad: same packet number, nothing pressed.
                         Marshal.WriteInt32(target, 0, (int)packet);
@@ -297,7 +297,7 @@ namespace Kiosk.Native
                 try
                 {
                     if (source == IntPtr.Zero || !Present(index, out var pads)) return ERROR_DEVICE_NOT_CONNECTED;
-                    if (ControllerMode.Desktop || index >= (uint)pads.Count) return ERROR_SUCCESS;
+                    if (ControllerMode.ShellOpen || ControllerMode.Desktop || index >= (uint)pads.Count) return ERROR_SUCCESS;
                     // XINPUT_VIBRATION is two words, left motor then right.
                     var left = (ushort)Marshal.ReadInt16(source, 0) / 65535.0;
                     var right = (ushort)Marshal.ReadInt16(source, 2) / 65535.0;

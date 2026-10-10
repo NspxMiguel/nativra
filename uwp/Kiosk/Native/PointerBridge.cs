@@ -20,8 +20,8 @@ namespace Kiosk.Native
     /// </summary>
     public static class PointerBridge
     {
-        private const int Width = 1920;
-        private const int Height = 1080;
+        private static int Width => GameProfileStore.Current.ScreenWidth;
+        private static int Height => GameProfileStore.Current.ScreenHeight;
 
         private const int WM_MOUSEMOVE = 0x0200;
         private const int WM_LBUTTONDOWN = 0x0201;
@@ -237,6 +237,11 @@ namespace Kiosk.Native
         {
             try
             {
+                if (ControllerMode.ShellOpen)
+                {
+                    foreach (var key in Emulated) Key(key, false);
+                    return;
+                }
                 var pads = PadBridge.Pads;
                 var reading = pads.Count == 0 ? default(GamepadReading) : pads[0].GetCurrentReading();
                 var host = hostKeys;

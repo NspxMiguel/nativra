@@ -16,8 +16,8 @@ namespace Kiosk.Native
     /// </summary>
     public static class DisplayStubs
     {
-        private const int Width = 1920;
-        private const int Height = 1080;
+        private static int Width => GameProfileStore.Current.ScreenWidth;
+        private static int Height => GameProfileStore.Current.ScreenHeight;
         private const int Refresh = 60;
         private const int Depth = 32;
 

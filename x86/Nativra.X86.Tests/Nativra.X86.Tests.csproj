@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../uwp/Kiosk/GameProfile.cs" Link="Host/GameProfile.cs" />
     <Compile Include="../../uwp/Kiosk/Native/RegistryBridge.cs" Link="Host/RegistryBridge.cs" />
     <Compile Include="../../uwp/Kiosk/Native/HidBridge.cs" Link="Host/HidBridge.cs" />
     <Compile Include="../../uwp/Kiosk/Native/ControllerConfiguration.cs" Link="Host/ControllerConfiguration.cs" />

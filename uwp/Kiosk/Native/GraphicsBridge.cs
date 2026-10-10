@@ -285,7 +285,7 @@ namespace Kiosk.Native
         /// and a game that was written to take a whole machine does not know to
         /// leave anything. Zero lets it run as fast as it can.
         /// </summary>
-        public static int Ceiling;
+        public static volatile int Ceiling = 60;
 
         private static readonly System.Diagnostics.Stopwatch paceClock =
             System.Diagnostics.Stopwatch.StartNew();
@@ -701,8 +701,8 @@ namespace Kiosk.Native
             // Zero means "the size of the window" when there is a window. A
             // composed surface has no window to measure, so the screen is the
             // honest answer.
-            if (width <= 0) width = 1920;
-            if (height <= 0) height = 1080;
+            if (width <= 0) width = GameProfileStore.Current.ScreenWidth;
+            if (height <= 0) height = GameProfileStore.Current.ScreenHeight;
             if (Smaller)
             {
                 width = 1280;

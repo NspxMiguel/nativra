@@ -21,8 +21,8 @@ namespace Kiosk.Native
     /// </summary>
     public static class WindowStubs
     {
-        private const int Width = 1920;
-        private const int Height = 1080;
+        private static int Width => GameProfileStore.Current.ScreenWidth;
+        private static int Height => GameProfileStore.Current.ScreenHeight;
 
         private const long FakeWindow = 0x00BA5E11;
         private const long FakeMonitor = 0x00A0FF01;

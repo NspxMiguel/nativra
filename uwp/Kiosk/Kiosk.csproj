@@ -75,6 +75,10 @@
     <Compile Include="DriveProbe.cs" />
     <Compile Include="MemoryProbe.cs" />
     <Compile Include="GameStorage.cs" />
+    <Compile Include="GameProfile.cs" />
+    <Compile Include="GameProfileStore.cs" />
+    <Compile Include="CompatibilityCatalog.cs" />
+    <Compile Include="MainPage.QuickAccess.cs" />
     <Compile Include="GameNameCache.cs" />
     <Compile Include="MainPage.Mods.cs" />
     <Compile Include="EmulatorShop.cs" />
@@ -178,6 +182,7 @@
 
   <ItemGroup>
     <Content Include="Assets\Steam.png" />
+    <Content Include="Assets\compatibility.json" />
     <Content Include="Assets\controller-white.png" />
     <Content Include="Assets\screen-glow.png" />
     <Content Include="Assets\store-steam.png" />

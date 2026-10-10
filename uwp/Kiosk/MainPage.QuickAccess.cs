@@ -36,6 +36,8 @@ namespace Kiosk
             Native.PointerBridge.ReleaseHostKeys();
             try
             {
+                var cappedRate = Native.GraphicsBridge.Ceiling > 0 ? Native.GraphicsBridge.Ceiling
+                    : GameProfileStore.Current.FrameLimit == 30 ? 30 : 60;
                 var limit = new ToggleSwitch
                 {
                     Header = Texts.Get("quick.limit"),
@@ -43,7 +45,7 @@ namespace Kiosk
                     OnContent = Texts.Get("setup.on"),
                     OffContent = Texts.Get("setup.off"),
                 };
-                limit.Toggled += (s, args) => Native.GraphicsBridge.Ceiling = limit.IsOn ? 60 : 0;
+                limit.Toggled += (s, args) => Native.GraphicsBridge.Ceiling = limit.IsOn ? cappedRate : 0;
                 var stats = new ToggleSwitch
                 {
                     Header = Texts.Get("quick.stats"),

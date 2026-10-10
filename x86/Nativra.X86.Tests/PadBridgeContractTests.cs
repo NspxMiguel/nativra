@@ -10,6 +10,32 @@ namespace Nativra.X86.Tests
     public sealed class PadBridgeContractTests
     {
         [Fact]
+        public void ShellFocusSuppressesHostGamepadButtons()
+        {
+            PadBridge.Install(new SystemImports());
+            var handler = (Delegate)typeof(PadBridge).GetField("state", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            var target = Marshal.AllocHGlobal(16);
+            try
+            {
+                PointerBridge.HostKeys[195] = true; // GamepadA
+                Assert.Equal(0, (int)handler.DynamicInvoke(0u, target));
+                Assert.NotEqual(0, Marshal.ReadInt16(target, 4));
+                ControllerMode.ShellOpen = true;
+                Assert.Equal(0, (int)handler.DynamicInvoke(0u, target));
+                for (var offset = 4; offset < 16; offset += 4) Assert.Equal(0, Marshal.ReadInt32(target, offset));
+                ControllerMode.ShellOpen = false;
+                Assert.Equal(0, (int)handler.DynamicInvoke(0u, target));
+                Assert.NotEqual(0, Marshal.ReadInt16(target, 4));
+            }
+            finally
+            {
+                ControllerMode.ShellOpen = false;
+                PointerBridge.HostKeys[195] = false;
+                Marshal.FreeHGlobal(target);
+            }
+        }
+
+        [Fact]
         public void AudioEndpointQueriesAllowOmittedDirectionsAndBoundOutputWrites()
         {
             PadBridge.Install(new SystemImports());
@@ -84,7 +110,7 @@ namespace Kiosk.Native
     internal static class ControllerMode
     {
         public static bool Desktop => false;
-        public static bool ShellOpen => false;
+        public static bool ShellOpen;
         public static int SystemButtons => 0;
     }
     internal static class PointerBridge

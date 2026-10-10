@@ -13,7 +13,8 @@ namespace Kiosk
         private static readonly Dictionary<string, string> Pt = new Dictionary<string, string>
         {
             { "quick.title", "Acesso rápido" },
-            { "quick.limit", "Limitar a 60 FPS" },
+            { "quick.limit", "Limitar FPS" },
+            { "quick.limit.value", "{0} FPS" },
             { "quick.stats", "Mostrar estatísticas" },
             { "quick.volume", "Volume do jogo" },
             { "quick.volume.unavailable", "Este caminho de áudio exige o volume do sistema." },
@@ -189,7 +190,8 @@ namespace Kiosk
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
             { "quick.title", "Quick access" },
-            { "quick.limit", "Limit to 60 FPS" },
+            { "quick.limit", "Limit FPS" },
+            { "quick.limit.value", "{0} FPS" },
             { "quick.stats", "Show stats overlay" },
             { "quick.volume", "Game volume" },
             { "quick.volume.unavailable", "This audio path requires the system volume controls." },

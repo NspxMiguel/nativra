@@ -8,6 +8,24 @@ namespace Nativra.X86.Tests
     public sealed class ControllerConfigurationTests
     {
         [Fact]
+        public void DeviceSetsFilterSetupAndInterfaceClassesInsteadOfInventingUsbDevices()
+        {
+            var hidInterface = new Guid("4d1e55b2-f16f-11cf-88cb-001111000030");
+            var hidSetup = new Guid("745a17a0-74d3-11d0-b6fe-00a0c90f57da");
+            var usbSetup = new Guid("36fc9e60-c465-11cf-8056-444553540000");
+            Assert.Equal(1u, HidBridge.DeviceCount(HidBridge.SelectDevices(hidInterface, null, 0x12)));
+            Assert.Equal(1u, HidBridge.DeviceCount(HidBridge.SelectDevices(hidSetup, "hid", 2)));
+            Assert.Equal(1u, HidBridge.DeviceCount(HidBridge.SelectDevices(null, null, 6)));
+            Assert.Equal(1u, HidBridge.DeviceCount(HidBridge.SelectDevices(hidInterface, ControllerConfiguration.DeviceId, 0x12)));
+            Assert.Equal(0u, HidBridge.DeviceCount(HidBridge.SelectDevices(usbSetup, null, 2)));
+            Assert.Equal(0u, HidBridge.DeviceCount(HidBridge.SelectDevices(hidInterface, "USB", 0x12)));
+            Assert.Equal(0u, HidBridge.DeviceCount(HidBridge.SelectDevices(hidInterface, null, 2)));
+            Assert.Equal(0u, HidBridge.DeviceCount(HidBridge.SelectDevices(hidSetup, null, 0x12)));
+            Assert.Equal(new IntPtr(-1), HidBridge.SelectDevices(null, null, 2));
+            Assert.Equal(new IntPtr(-1), HidBridge.SelectDevices(hidSetup, null, 0x20));
+        }
+
+        [Fact]
         public void UnifiedPropertiesPreserveTypesAndExactBufferBounds()
         {
             var memory = Marshal.AllocHGlobal(512);

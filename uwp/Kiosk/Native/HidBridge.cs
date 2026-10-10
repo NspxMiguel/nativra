@@ -66,6 +66,8 @@ namespace Kiosk.Native
             @"\\?\hid#vid_045e&pid_02ff&ig_00#1&2&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}";
 
         private static readonly IntPtr DeviceSet = new IntPtr(0x4E1D0000);
+        private static readonly IntPtr EmptyDeviceSet = new IntPtr(0x4E1D0001);
+        private static readonly Guid HidSetupClass = new Guid("745a17a0-74d3-11d0-b6fe-00a0c90f57da");
         private static readonly IntPtr DeviceHandle = new IntPtr(0x4E1D0100);
         private static IntPtr preparsed;
         private static readonly List<Delegate> roots = new List<Delegate>();
@@ -89,9 +91,32 @@ namespace Kiosk.Native
         {
             if (info == IntPtr.Zero) return;
             // SP_DEVINFO_DATA: cbSize, ClassGuid, DevInst, Reserved.
-            WriteGuid(info + 4, new Guid("745a17a0-74d3-11d0-b6fe-00a0c90f57da"));
+            WriteGuid(info + 4, HidSetupClass);
             Marshal.WriteInt32(info, 20, (int)ControllerConfiguration.Controller);
             Marshal.WriteIntPtr(info, 24, IntPtr.Zero);
+        }
+
+        internal static IntPtr SelectDevices(Guid? requestedClass, string enumerator, uint flags)
+        {
+            if ((flags & ~0x1Fu) != 0 || (requestedClass == null && (flags & 4) == 0))
+                return new IntPtr(-1);
+            var matchesClass = (flags & 4) != 0 || requestedClass == ((flags & 16) != 0 ? HidClass : HidSetupClass);
+            var matchesEnumerator = string.IsNullOrEmpty(enumerator)
+                || enumerator.Equals("HID", StringComparison.OrdinalIgnoreCase)
+                || ((flags & 16) != 0 && enumerator.Equals(ControllerConfiguration.DeviceId, StringComparison.OrdinalIgnoreCase));
+            return matchesClass && matchesEnumerator ? DeviceSet : EmptyDeviceSet;
+        }
+
+        internal static uint DeviceCount(IntPtr set) => set == DeviceSet ? 1u : 0u;
+
+        private static IntPtr ClassDevices(IntPtr guid, IntPtr enumerator, uint flags, bool wide)
+        {
+            System.Threading.Interlocked.Increment(ref Listed);
+            var requested = guid == IntPtr.Zero ? (Guid?)null : Marshal.PtrToStructure<Guid>(guid);
+            var filter = enumerator == IntPtr.Zero ? null : wide ? Marshal.PtrToStringUni(enumerator) : Marshal.PtrToStringAnsi(enumerator);
+            var set = SelectDevices(requested, filter, flags);
+            if (set == new IntPtr(-1)) SetLastError(87);
+            return set;
         }
 
         private static int WriteWide(IntPtr buffer, uint bytes, string text)
@@ -152,19 +177,11 @@ namespace Kiosk.Native
 
             var setup = new Dictionary<string, IntPtr>
             {
-                ["SetupDiGetClassDevsA"] = Keep(new ClassDevsDelegate((guid, enumerator, parent, flags) =>
-                {
-                    System.Threading.Interlocked.Increment(ref Listed);
-                    return DeviceSet;
-                })),
-                ["SetupDiGetClassDevsW"] = Keep(new ClassDevsDelegate((guid, enumerator, parent, flags) =>
-                {
-                    System.Threading.Interlocked.Increment(ref Listed);
-                    return DeviceSet;
-                })),
+                ["SetupDiGetClassDevsA"] = Keep(new ClassDevsDelegate((guid, enumerator, parent, flags) => ClassDevices(guid, enumerator, flags, false))),
+                ["SetupDiGetClassDevsW"] = Keep(new ClassDevsDelegate((guid, enumerator, parent, flags) => ClassDevices(guid, enumerator, flags, true))),
                 ["SetupDiEnumDeviceInfo"] = Keep(new EnumInfoDelegate((set, index, info) =>
                 {
-                    if (set != DeviceSet || index > 0)
+                    if (index >= DeviceCount(set))
                     {
                         SetLastError(ErrorNoMoreItems);
                         return 0;
@@ -174,7 +191,7 @@ namespace Kiosk.Native
                 })),
                 ["SetupDiEnumDeviceInterfaces"] = Keep(new EnumInterfacesDelegate((set, info, guid, index, data) =>
                 {
-                    if (set != DeviceSet || index > 0 || data == IntPtr.Zero)
+                    if (index >= DeviceCount(set) || data == IntPtr.Zero || guid == IntPtr.Zero || Marshal.PtrToStructure<Guid>(guid) != HidClass)
                     {
                         SetLastError(ErrorNoMoreItems);
                         return 0;

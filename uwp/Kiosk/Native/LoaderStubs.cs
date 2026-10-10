@@ -107,7 +107,9 @@ namespace Kiosk.Native
 
         private static void Remember(string name)
         {
-            if (name.IndexOf("xinput", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (name.IndexOf("xinput", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("!LoadLibrary", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("!FreeLibrary", StringComparison.OrdinalIgnoreCase) >= 0)
                 lock (InputAsked)
                 {
                     InputAsked.Remove(name);
@@ -385,6 +387,7 @@ namespace Kiosk.Native
                     // links it end up in the same place.
                     if (imports.Overrides.TryGetValue(from + "!" + wanted, out var ours))
                     {
+                        Remember("served " + from + "!" + wanted + " nonzero=" + (ours != IntPtr.Zero));
                         return ours;
                     }
 

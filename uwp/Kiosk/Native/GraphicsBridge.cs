@@ -367,9 +367,12 @@ namespace Kiosk.Native
                 workSamples++;
                 if (work > workWorst) workWorst = work;
             }
-            if (Ceiling > 0)
+            // Quick access can change the cap on the UI thread during a present.
+            // Read it once so disabling the cap cannot turn the deadline infinite.
+            var ceiling = Ceiling;
+            if (ceiling > 0)
             {
-                var gap = 1000.0 / Ceiling;
+                var gap = 1000.0 / ceiling;
                 // A frame that ran late starts a new schedule instead of
                 // racing to catch up on the ones it missed.
                 if (nextDue <= 0 || now - nextDue > gap) nextDue = now;

@@ -415,6 +415,9 @@ namespace Kiosk
             }
         }
 
+        private long pointerMoves;
+        private int pointerMovedAt = -10000;
+
         private void InitializeGameHost()
         {
             // Bind the host before the shelf accepts input, never after network
@@ -436,7 +439,16 @@ namespace Kiosk
                 GameLoadingRing.IsActive = false;
                 GamePointerTransform.X = Native.PointerBridge.X;
                 GamePointerTransform.Y = Native.PointerBridge.Y;
-                GamePointer.Visibility = Native.ControllerMode.Desktop ? Visibility.Visible : Visibility.Collapsed;
+                // The pointer shows only while it is being moved: a game that is driven by
+                // the pad should not carry a cursor parked in the middle of its picture.
+                var moves = Native.PointerBridge.Moves;
+                if (moves != pointerMoves)
+                {
+                    pointerMoves = moves;
+                    pointerMovedAt = Environment.TickCount;
+                }
+                GamePointer.Visibility = Native.ControllerMode.Desktop && Environment.TickCount - pointerMovedAt < 3000
+                    ? Visibility.Visible : Visibility.Collapsed;
                 RecordingBadge.Visibility = Native.Recorder.Active ? Visibility.Visible : Visibility.Collapsed;
                 // The notice shows like a notification: the first 15 seconds of a
                 // game, and 5 seconds after each switch, unless turned off.

@@ -759,6 +759,7 @@ namespace Kiosk.Native
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);
                                     lock (LoaderStubs.InputAsked)
                                         beat.Add("xinput.loader=" + string.Join(";", LoaderStubs.InputAsked));
+                                    beat.Add("xinput.carriers=" + PadBridge.Carriers + " status=" + PadBridge.CarrierStatus);
                                     beat.Add("xinput.state calls=" + PadBridge.StateCalls + " null=" + PadBridge.NullStates
                                         + " invalid=" + PadBridge.InvalidSlots + " failures=" + PadBridge.StateFailures
                                         + " buttonreads=" + PadBridge.ButtonReads + " lastactive=" + PadBridge.LastActiveButtons);

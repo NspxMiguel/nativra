@@ -434,6 +434,43 @@ namespace Kiosk.Native
 
         }
 
+        [DllImport("api-ms-win-core-libraryloader-l2-1-0.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr LoadPackagedLibrary(string name, uint reserved);
+        [DllImport("api-ms-win-core-libraryloader-l1-2-0.dll", CharSet = CharSet.Ansi)]
+        private static extern IntPtr GetProcAddress(IntPtr module, string name);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int BindCarrierDelegate(IntPtr callbacks, uint count);
+
+        public static int Carriers;
+        public static string CarrierStatus = "not loaded";
+
+        private static void BindCarriers(Dictionary<string, IntPtr> handlers)
+        {
+            var names = new[] { "XInputGetState", "XInputSetState", "XInputGetCapabilities", "XInputEnable",
+                "XInputGetBatteryInformation", "XInputGetKeystroke", "XInputGetDSoundAudioDeviceGuids", "XInputGetAudioDeviceIds" };
+            var table = Marshal.AllocHGlobal(names.Length * IntPtr.Size);
+            try
+            {
+                for (var index = 0; index < names.Length; index++)
+                    Marshal.WriteIntPtr(table, index * IntPtr.Size, handlers[names[index]]);
+                foreach (var name in new[] { "xinput1_4.dll", "xinput1_3.dll", "xinput1_2.dll", "xinput1_1.dll", "xinput9_1_0.dll", "xinputuap.dll" })
+                {
+                    try
+                    {
+                        var module = LoadPackagedLibrary(name, 0);
+                        if (module == IntPtr.Zero) continue;
+                        var address = GetProcAddress(module, "NativraBindXInput");
+                        if (address == IntPtr.Zero) continue;
+                        if (Marshal.GetDelegateForFunctionPointer<BindCarrierDelegate>(address)(table, (uint)names.Length) != 0)
+                            Carriers++;
+                    }
+                    catch (Exception error) { CarrierStatus = error.GetType().Name; }
+                }
+                if (Carriers > 0) CarrierStatus = "bound";
+            }
+            finally { Marshal.FreeHGlobal(table); }
+        }
+
         public static void Install(SystemImports imports)
         {
             SteerSdl();
@@ -469,6 +506,8 @@ namespace Kiosk.Native
                 { "#8", Marshal.GetFunctionPointerForDelegate(keystroke) },
                 { "#10", Marshal.GetFunctionPointerForDelegate(audioIds) },
             };
+
+            BindCarriers(ours);
 
             foreach (var module in new[]
             {

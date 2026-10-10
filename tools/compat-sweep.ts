@@ -38,17 +38,22 @@ export function classify(
   const pick = (re: RegExp, text: string) => re.exec(text)?.[1]?.trim();
   // A 32-bit game draws through the D3D9 bridge, not the 64-bit pulse: its
   // frames are the Present calls the probe counts, over the seconds it ran.
-  const presents = Number(
-    pick(/^x86\.com (\d+)x IDirect3DDevice9::Present$/m, probe) ??
-      pick(
-        /(?:^x86\.com-calls=|[ ,])IDirect3DDevice9::Present=(\d+)/m,
-        heartbeat,
-      ) ??
-      0,
+  const probePresents = Number(
+    pick(/^x86\.com (\d+)x IDirect3DDevice9::Present$/m, probe) ?? 0,
   );
-  const seconds = Number(
-    pick(/^x86\.seconds=([\d.]+)/m, probe) ?? elapsedSeconds,
+  const heartbeatPresents = Number(
+    pick(
+      /(?:^x86\.com-calls=|[ ,])IDirect3DDevice9::Present=(\d+)/m,
+      heartbeat,
+    ) ?? 0,
   );
+  // Both reports belong to this cleared launch; counters only grow. A probe
+  // snapshot can precede frames still being drawn by live guest threads.
+  const presents = Math.max(probePresents, heartbeatPresents);
+  const seconds =
+    heartbeatPresents > probePresents && elapsedSeconds > 0
+      ? elapsedSeconds
+      : Number(pick(/^x86\.seconds=([\d.]+)/m, probe) ?? elapsedSeconds);
   const is32 =
     /^x86\.(image|run)=/m.test(probe) || /^x86\.eip=/m.test(heartbeat);
   const frames = is32 ? presents : frameLine ? Number(frameLine[1]) : 0;

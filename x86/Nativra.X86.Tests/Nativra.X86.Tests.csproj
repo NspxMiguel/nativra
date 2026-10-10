@@ -23,6 +23,7 @@
     <Compile Include="../../uwp/Kiosk/Native/ControllerConfiguration.cs" Link="Host/ControllerConfiguration.cs" />
     <Compile Include="../../uwp/Kiosk/Native/PadBridge.cs" Link="Host/PadBridge.cs" />
     <Compile Include="../../uwp/Kiosk/Native/ImportTracing.cs" Link="Host/ImportTracing.cs" />
+    <Compile Include="../../uwp/Kiosk/Native/ProcessModules.cs" Link="Host/ProcessModules.cs" />
     <ProjectReference Include="..\Nativra.X86\Nativra.X86.csproj" />
   </ItemGroup>
 

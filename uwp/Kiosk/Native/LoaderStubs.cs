@@ -76,6 +76,40 @@ namespace Kiosk.Native
             return null;
         }
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int EnumModulesDelegate(IntPtr process, IntPtr modules, uint size, IntPtr needed);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int EnumModulesExDelegate(IntPtr process, IntPtr modules, uint size, IntPtr needed, uint filter);
+
+        [DllImport("api-ms-win-core-errorhandling-l1-1-0.dll")]
+        private static extern void SetLastError(uint error);
+
+        private static EnumModulesDelegate enumerateModules;
+        private static EnumModulesExDelegate enumerateModulesEx;
+
+        private static int EnumerateModules(IntPtr process, IntPtr buffer, uint size, IntPtr needed, uint filter)
+        {
+            if (process != new IntPtr(-1)) { SetLastError(6); return 0; }
+            if (filter > 3 || needed == IntPtr.Zero || (buffer == IntPtr.Zero && size != 0))
+            {
+                SetLastError(87);
+                return 0;
+            }
+            var modules = new List<IntPtr>();
+            if (filter != 1)
+            {
+                foreach (var image in imports.LoadOrder()) modules.Add(image.BaseAddress);
+                // The app-container loader does not expose desktop Kernel32's
+                // full exports. Include the same library-loader module used by
+                // our overrides so Mono's process-wide P/Invoke search sees it.
+                foreach (var name in new[] { "kernel32.dll", "kernelbase.dll", "api-ms-win-core-libraryloader-l1-2-0.dll" })
+                    modules.Add(Open(name));
+                foreach (var address in named.Keys) modules.Add(new IntPtr(address));
+            }
+            return ProcessModules.Copy(modules, buffer, size, needed);
+        }
+
         private static LoadDelegate loadW;
         private static LoadDelegate loadA;
         private static LoadExDelegate loadExW;
@@ -529,6 +563,15 @@ namespace Kiosk.Native
                 {
                     system.Overrides[module + "!" + pair.Key] = pair.Value;
                 }
+            }
+
+            enumerateModules = (process, modules, size, needed) => EnumerateModules(process, modules, size, needed, 0);
+            enumerateModulesEx = EnumerateModules;
+            foreach (var module in new[] { "psapi.dll", "kernel32.dll", "kernelbase.dll" })
+            {
+                var prefix = module == "psapi.dll" ? "" : "K32";
+                system.Overrides[module + "!" + prefix + "EnumProcessModules"] = Marshal.GetFunctionPointerForDelegate(enumerateModules);
+                system.Overrides[module + "!" + prefix + "EnumProcessModulesEx"] = Marshal.GetFunctionPointerForDelegate(enumerateModulesEx);
             }
 
             // Measure whether the console already has the DirectX libraries

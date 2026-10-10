@@ -16,6 +16,7 @@ on:
       - "uwp/Kiosk/Native/ControllerConfiguration.cs"
       - "uwp/Kiosk/Native/PadBridge.cs"
       - "uwp/Kiosk/Native/ImportTracing.cs"
+      - "uwp/Kiosk/Native/ProcessModules.cs"
       - ".github/workflows/x86-harness.yml"
   pull_request:
     paths:
@@ -25,6 +26,7 @@ on:
       - "uwp/Kiosk/Native/ControllerConfiguration.cs"
       - "uwp/Kiosk/Native/PadBridge.cs"
       - "uwp/Kiosk/Native/ImportTracing.cs"
+      - "uwp/Kiosk/Native/ProcessModules.cs"
       - ".github/workflows/x86-harness.yml"
   workflow_dispatch:
 

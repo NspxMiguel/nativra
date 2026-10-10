@@ -47,6 +47,9 @@ namespace Kiosk.Native
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int InstanceIdDelegate(IntPtr set, IntPtr info, IntPtr buffer, uint size, IntPtr required);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int DevicePropertyDelegate(IntPtr set, IntPtr info, IntPtr key, IntPtr type,
+            IntPtr buffer, uint size, IntPtr required, uint flags);
 
         [DllImport("api-ms-win-core-errorhandling-l1-1-0.dll")]
         private static extern void SetLastError(uint error);
@@ -205,6 +208,13 @@ namespace Kiosk.Native
                     InstanceId(set, info, buffer, size, required, false))),
                 ["SetupDiGetDeviceInstanceIdW"] = Keep(new InstanceIdDelegate((set, info, buffer, size, required) =>
                     InstanceId(set, info, buffer, size, required, true))),
+                ["SetupDiGetDevicePropertyW"] = Keep(new DevicePropertyDelegate((set, info, key, type, buffer, size, required, flags) =>
+                {
+                    if (!ValidDevice(set, info)) return 0;
+                    var error = ControllerConfiguration.QueryDeviceProperty(key, type, buffer, size, required, flags);
+                    if (error != 0) SetLastError(error);
+                    return error == 0 ? 1 : 0;
+                })),
             };
             // Mono looks a P/Invoke up by its declared name before adding A or W.
             setup["SetupDiGetDeviceRegistryProperty"] = setup["SetupDiGetDeviceRegistryPropertyW"];

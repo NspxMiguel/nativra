@@ -8,6 +8,49 @@ namespace Nativra.X86.Tests
     public sealed class ControllerConfigurationTests
     {
         [Fact]
+        public void UnifiedPropertiesPreserveTypesAndExactBufferBounds()
+        {
+            var memory = Marshal.AllocHGlobal(512);
+            try
+            {
+                Marshal.Copy(new Guid("78c34fc8-104a-4aca-9ea4-524d52996e57").ToByteArray(), 0, memory, 16);
+                Marshal.WriteInt32(memory, 16, 256);
+                var type = memory + 24;
+                var required = memory + 28;
+                var buffer = memory + 32;
+                Assert.Equal(122u, ControllerConfiguration.QueryDeviceProperty(memory, type, IntPtr.Zero, 0, required, 0));
+                Assert.Equal(0x12, Marshal.ReadInt32(type));
+                var length = (uint)Marshal.ReadInt32(required);
+                Assert.Equal((ControllerConfiguration.DeviceId.Length + 1) * 2, (int)length);
+                Marshal.WriteInt64(buffer + (int)length, 0x1234567890ABCDEF);
+                Assert.Equal(122u, ControllerConfiguration.QueryDeviceProperty(memory, type, buffer, length - 1, required, 0));
+                Assert.Equal(0u, ControllerConfiguration.QueryDeviceProperty(memory, type, buffer, length, required, 0));
+                Assert.Equal(ControllerConfiguration.DeviceId, Marshal.PtrToStringUni(buffer));
+                Assert.Equal(0x1234567890ABCDEF, Marshal.ReadInt64(buffer + (int)length));
+                Assert.Equal(1004u, ControllerConfiguration.QueryDeviceProperty(memory, type, buffer, length, required, 1));
+                Assert.Equal(1784u, ControllerConfiguration.QueryDeviceProperty(memory, type, IntPtr.Zero, 1, required, 0));
+                Assert.Equal(87u, ControllerConfiguration.QueryDeviceProperty(memory, IntPtr.Zero, buffer, length, required, 0));
+                Marshal.WriteInt32(memory, 16, 999);
+                Assert.Equal(1168u, ControllerConfiguration.QueryDeviceProperty(memory, type, buffer, length, required, 0));
+                Assert.Equal(0, Marshal.ReadInt32(type));
+            }
+            finally { Marshal.FreeHGlobal(memory); }
+        }
+
+        [Fact]
+        public void UnifiedGuidAndHardwareListPropertiesUseBinaryAndMultiStringData()
+        {
+            var format = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0");
+            var data = ControllerConfiguration.DeviceProperty(format, 10, out var type);
+            Assert.Equal(0xDu, type);
+            Assert.Equal(new Guid("745a17a0-74d3-11d0-b6fe-00a0c90f57da"), new Guid(data));
+            data = ControllerConfiguration.DeviceProperty(format, 3, out type);
+            Assert.Equal(0x2012u, type);
+            Assert.EndsWith("\0\0", System.Text.Encoding.Unicode.GetString(data));
+            Assert.Null(ControllerConfiguration.DeviceProperty(Guid.Empty, 2, out type));
+        }
+
+        [Fact]
         public void DeviceTreeIsFiniteAndIdentityRoundTripsWithExactBufferSizes()
         {
             var p = Marshal.AllocHGlobal(256);

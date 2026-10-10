@@ -377,6 +377,10 @@ namespace Kiosk.Native
                         "x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())) + Environment.NewLine +
                         "x86.recent=" + string.Join(" ", process.RecentImports) + Environment.NewLine +
                         "x86.com-calls=" + GuestCom.CallSummary() + Environment.NewLine +
+                        "x86.pad=reads " + PadBridge.Reads + " active " + PadBridge.ActiveReads +
+                            " changes " + PadBridge.Changes + " buttons " + PadBridge.LastButtons +
+                            " probes " + PadBridge.Probes + " desktop " + ControllerMode.Desktop +
+                            " held " + PointerBridge.HostKeys.Count(down => down) + Environment.NewLine +
                         TailText());
                 }
                 catch (Exception) { }

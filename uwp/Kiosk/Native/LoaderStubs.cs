@@ -102,9 +102,18 @@ namespace Kiosk.Native
 
         /// <summary>Every library a game asked for by name, for the report.</summary>
         public static readonly List<string> Asked = new List<string>();
+        // Preserve controller-library probes even when later plugin requests fill Asked.
+        public static readonly List<string> InputAsked = new List<string>();
 
         private static void Remember(string name)
         {
+            if (name.IndexOf("xinput", StringComparison.OrdinalIgnoreCase) >= 0)
+                lock (InputAsked)
+                {
+                    InputAsked.Remove(name);
+                    if (InputAsked.Count >= 32) InputAsked.RemoveAt(0);
+                    InputAsked.Add(name);
+                }
             lock (Asked)
             {
                 // Keep late runtime/plugin probes visible after engine startup.

@@ -82,9 +82,6 @@ namespace Kiosk.Native
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int EnumModulesExDelegate(IntPtr process, IntPtr modules, uint size, IntPtr needed, uint filter);
 
-        [DllImport("api-ms-win-core-errorhandling-l1-1-0.dll")]
-        private static extern void SetLastError(uint error);
-
         private static EnumModulesDelegate enumerateModules;
         private static EnumModulesExDelegate enumerateModulesEx;
 

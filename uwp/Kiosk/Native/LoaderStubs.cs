@@ -48,6 +48,34 @@ namespace Kiosk.Native
             SetLastError = true)]
         private static extern IntPtr GetProcAddressByOrdinal(IntPtr module, IntPtr ordinal);
 
+        [DllImport("api-ms-win-core-libraryloader-l1-2-0.dll", CharSet = CharSet.Unicode)]
+        private static extern uint GetModuleFileNameW(IntPtr module, System.Text.StringBuilder name, uint size);
+
+        private static string ModuleName(IntPtr module)
+        {
+            if (named.TryGetValue(module.ToInt64(), out var name)) return name;
+            foreach (var image in imports.LoadOrder())
+                if (image.BaseAddress == module)
+                {
+                    named[module.ToInt64()] = image.Name;
+                    return image.Name;
+                }
+            try
+            {
+                var path = new System.Text.StringBuilder(512);
+                var length = GetModuleFileNameW(module, path, 512);
+                if (length > 0 && length < 512)
+                {
+                    name = BaseName(path.ToString());
+                    named[module.ToInt64()] = name;
+                    Remember("identified " + name);
+                    return name;
+                }
+            }
+            catch { }
+            return null;
+        }
+
         private static LoadDelegate loadW;
         private static LoadDelegate loadA;
         private static LoadExDelegate loadExW;
@@ -348,8 +376,7 @@ namespace Kiosk.Native
                     // The bridge answers some by number: SDL asks XInput for
                     // ordinal 100, XInputGetStateEx, before the named one, and
                     // the console's own copy of it never sees a pad.
-                    string owner;
-                    named.TryGetValue(module.ToInt64(), out owner);
+                    var owner = ModuleName(module);
                     if (owner != null)
                     {
                         var numbered = owner + "!#" + name.ToInt64();
@@ -369,8 +396,8 @@ namespace Kiosk.Native
                 var wanted = Marshal.PtrToStringAnsi(name);
                 if (string.IsNullOrEmpty(wanted)) return IntPtr.Zero;
 
-                string from;
-                named.TryGetValue(module.ToInt64(), out from);
+                var from = ModuleName(module);
+                if (from == null) Remember("untracked!" + wanted);
                 if (from != null)
                 {
                     Remember(from + "!" + wanted);

@@ -112,6 +112,7 @@
     <Compile Include="Native\ControllerConfiguration.cs" />
     <Compile Include="Native\RegistryBridge.cs" />
     <Compile Include="Native\PadBridge.cs" />
+    <Compile Include="Native\ImportTracing.cs" />
     <Compile Include="Native\ControllerMode.cs" />
     <Compile Include="Native\DxgiDescriptions.cs" />
     <Compile Include="Native\FaultWatch.cs" />

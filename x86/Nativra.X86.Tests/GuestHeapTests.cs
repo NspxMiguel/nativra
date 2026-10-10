@@ -21,7 +21,9 @@ namespace Nativra.X86.Tests
             var heap = Fresh(out var memory);
             // Without the guard the first free range from here is the heap's own unmapped region.
             var found = memory.FindFree(0x10000, Base);
-            Assert.True(found >= Base + 0x00100000, "placed inside the heap region: 0x" + found.ToString("X8"));
+            Assert.Equal(Base + 0x00100000, found);
+            Assert.True(memory.IsAvoided(Base + 0xFF000, 0x1000));
+            Assert.False(memory.IsAvoided(Base + 0x100000, 0x1000));
             var big = heap.Alloc(0x80000);
             Assert.NotEqual(0u, big);
         }

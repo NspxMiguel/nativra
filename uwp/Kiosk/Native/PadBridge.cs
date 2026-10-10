@@ -67,7 +67,7 @@ namespace Kiosk.Native
         public static long Changes;
         public static int LastButtons;
 
-        /// <summary>How many readings were taken, which proves input is live.</summary>
+        /// <summary>Successful polls; active-state counters distinguish input from a neutral pad.</summary>
         public static long Reads;
 
         private static readonly List<Gamepad> known = new List<Gamepad>();
@@ -180,7 +180,7 @@ namespace Kiosk.Native
 
         private static void WriteState(uint index, IntPtr target, GamepadReading reading, bool[] keys)
         {
-            var pressed = Buttons(reading.Buttons);
+            var pressed = ControllerMode.Desktop ? (ushort)0 : Buttons(reading.Buttons);
             if (keys != null) pressed |= KeyButtons(keys);
             var leftTrigger = (byte)Math.Max(reading.LeftTrigger * 255.0, keys != null && keys[KeyLeftTrigger] ? 255 : 0);
             var rightTrigger = (byte)Math.Max(reading.RightTrigger * 255.0, keys != null && keys[KeyRightTrigger] ? 255 : 0);
@@ -215,7 +215,7 @@ namespace Kiosk.Native
             if (keys != null) System.Threading.Interlocked.Increment(ref KeyReads);
         }
 
-        /// <summary>Readings built from window keys because no pad was listed.</summary>
+        /// <summary>Readings that include the window gamepad-key channel.</summary>
         public static long KeyReads;
 
         private static short Axis(double value)

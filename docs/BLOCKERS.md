@@ -1,5 +1,31 @@
 # Measured compatibility blockers
 
+## October 10 layer fixes: console verification pending
+
+The broad build 502 results below remain historical evidence. Build 511 later
+rendered Cuphead and Super Meat Boy, and Hades progressed to a D3D11 swap chain.
+These observations do not demonstrate gameplay or controller delivery.
+
+| Layer | Concrete evidence | Branch correction | Remaining verification |
+| --- | --- | --- | --- |
+| Controller discovery and state | Build 511 Cuphead: UWP pads 0, XInput probes/reads 0, HID lists 2, opens 0, desktop mode. Super Meat Boy renders, input unverified. | Shared x64/x86 XInput now merges portal triggers/stick keys with a physical pad, tracks per-slot state packets and reports active-state reads/changes/buttons. Guest import-dispatch tests verify injected state and output bounds. | Fresh Rewired/HID discovery log; injected state observed by each game; controller-driven gameplay. Poll counts alone are insufficient. |
+| Native import tracing / data ABI | October 8 Hades pulse: 1920x1080 chain, zero Presents, AV at EngineWin64s+0x3A2921. Static disassembly identifies a read of imported MSVCP140 std::cout from IAT RVA 0x4A28E0. | System export tracing now queries page protection and wraps only executable addresses. Data and unclassified addresses retain their original pointer. | Fresh Hades probe/pulse and screenshot. Data-export tracing is the leading explanation of this fault; first frames are not yet proven. No Vulkan execution is evidenced in this launch. |
+| x86 SHLWAPI | Three historical PathCanonicalizeW failures below. | PathCanonicalizeA/W registered; drive/UNC roots, dot segments, literal forward slashes, in-place calls and MAX_PATH bounds tested. | Retest Poly Bridge, ANOIX and Kandidatos; record the next actual blocker. |
+| x86 BCrypt | Two historical BCryptGenRandom failures below. | System RNG, RNG pseudo-handle and explicit RNG provider lifecycle implemented using cryptographic host RNG with bounded allocations. | Retest Leafless and Super-Patriota; record actual progress. |
+| x86 WinRT / API sets | Pixel Strike import report lists Ro initialization/activation and HSTRING exports. | WinRT API sets route to combase; per-thread COM/WinRT apartment state and HSTRING lifetime implemented. Missing activation classes return REGDB_E_CLASSNOTREG with null outputs. | Retest Pixel Strike. Guest WinRT class factories remain absent; successful import resolution is not object support. |
+
+References for guest contracts:
+[PathCanonicalizeW](https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-pathcanonicalizew),
+[BCryptGenRandom](https://learn.microsoft.com/en-us/windows/win32/api/bcrypt/nf-bcrypt-bcryptgenrandom),
+[RoInitialize](https://learn.microsoft.com/en-us/windows/win32/api/roapi/nf-roapi-roinitialize),
+[HSTRING creation](https://learn.microsoft.com/en-us/windows/win32/api/winstring/nf-winstring-windowscreatestring),
+[fast-pass references](https://learn.microsoft.com/en-us/windows/win32/api/winstring/nf-winstring-windowscreatestringreference)
+and [duplication](https://learn.microsoft.com/en-us/windows/win32/api/winstring/nf-winstring-windowsduplicatestring).
+Wine behavior was inspected at the pinned revision in [PROTON-PARITY.md](PROTON-PARITY.md).
+No game binaries or upstream implementation were committed.
+
+## Historical broad sweep
+
 Sweep dates: 2026-10-05–06. Installed build: 502. The newest public release was
 495; Windows rejected its installation because 502 was already installed.
 Counts below cover only newly measured games, not the planning estimates in

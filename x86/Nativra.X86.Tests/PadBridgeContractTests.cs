@@ -41,6 +41,7 @@ namespace Nativra.X86.Tests
                 Assert.Equal(0x1234567890ABCDEF, Marshal.ReadInt64(target, 16));
                 Assert.Equal(1167, Poll(4));
                 ControllerMode.Desktop = true;
+                ControllerMode.SystemButtons = 0x10;
                 Assert.Equal(0, Poll());
                 Assert.Equal(0, Marshal.ReadInt32(target, 4));
                 Assert.Equal(0, Marshal.ReadInt64(target, 8));
@@ -48,6 +49,7 @@ namespace Nativra.X86.Tests
             finally
             {
                 ControllerMode.Desktop = false;
+                ControllerMode.SystemButtons = 0;
                 Array.Clear(PointerBridge.HostKeys, 0, PointerBridge.HostKeys.Length);
                 Windows.Gaming.Input.Gamepad.Gamepads = Array.Empty<Windows.Gaming.Input.Gamepad>();
                 Marshal.FreeHGlobal(target);
@@ -156,7 +158,7 @@ namespace Kiosk.Native
     internal static class ControllerMode
     {
         public static bool Desktop;
-        public static int SystemButtons => 0;
+        public static int SystemButtons;
     }
     internal static class PointerBridge
     {

@@ -265,6 +265,7 @@ namespace Nativra.X86.Loader
             if (string.IsNullOrEmpty(module)) return "";
             var m = module.ToLowerInvariant();
             if (m.StartsWith("api-ms-win-crt-", StringComparison.Ordinal)) return "ucrtbase.dll";
+            if (m.StartsWith("api-ms-win-core-winrt-", StringComparison.Ordinal)) return "combase.dll";
             if (m.StartsWith("api-ms-win-core-", StringComparison.Ordinal) ||
                 m.StartsWith("api-ms-win-eventing-", StringComparison.Ordinal) ||
                 m.StartsWith("api-ms-win-security-base", StringComparison.Ordinal) ||

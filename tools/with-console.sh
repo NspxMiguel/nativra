@@ -6,6 +6,10 @@ lock=/tmp/xbox-console.lock
 nested=false
 if [ -f "$lock" ]; then
   read -r who since <"$lock"
+  if [ "$who" != "$owner" ]; then
+    echo "console busy: $who; not running" >&2
+    exit 75
+  fi
   if [ "$who" = "$owner" ]; then
     age=$(($(date +%s) - ${since:-0}))
     if [ "$age" -ge 900 ]; then

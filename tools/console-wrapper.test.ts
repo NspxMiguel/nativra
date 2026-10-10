@@ -45,6 +45,11 @@ test("console wrapper preserves nested leases and refuses other or expired owner
     await writeFile(lock, `another-session ${since}\n`);
     expect((await run(["printf", "unsafe"])).code).toBe(75);
     expect(await readFile(lock, "utf8")).toBe(`another-session ${since}\n`);
+    await writeFile(lock, `another-session ${since - 3600}\n`);
+    expect((await run(["printf", "stale-foreign"])).code).toBe(75);
+    expect(await readFile(lock, "utf8")).toBe(
+      `another-session ${since - 3600}\n`,
+    );
     await writeFile(lock, `test-session ${since - 900}\n`);
     expect((await run(["printf", "expired"])).code).toBe(75);
     await rm(lock);

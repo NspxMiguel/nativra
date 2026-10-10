@@ -746,14 +746,21 @@ namespace Kiosk
         private async Task<List<Tile>> DownloadedTilesAsync(HashSet<uint> skip)
         {
             var list = new List<Tile>();
+            var inventory = new List<string> { "at=" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") };
+            var scanned = false;
             try
             {
                 var found = new List<uint>();
                 foreach (var place in await GameStorage.GamesFoldersAsync())
                     foreach (var folder in await place.Value.GetFoldersAsync())
-                        if (uint.TryParse(folder.Name, out var appId) && !skip.Contains(appId) && !found.Contains(appId)
-                            && (await GameStorage.IsReadyAsync(folder) || DownloadManager.Find(appId)?.Running == true))
-                            found.Add(appId);
+                        if (uint.TryParse(folder.Name, out var appId))
+                        {
+                            var ready = await GameStorage.IsReadyAsync(folder);
+                            inventory.Add("app=" + appId + " source=" + place.Key + " ready=" + ready);
+                            if (!skip.Contains(appId) && !found.Contains(appId)
+                                && (ready || DownloadManager.Find(appId)?.Running == true)) found.Add(appId);
+                        }
+                scanned = true;
                 // A download started this session has a tile from its first
                 // moment, with its progress on it.
                 foreach (var job in DownloadManager.Snapshot())
@@ -777,6 +784,19 @@ namespace Kiosk
             catch
             {
                 // A drive that went away takes its games off the shelf, nothing more.
+            }
+            finally
+            {
+                try
+                {
+                    // The app can inspect USB game folders that Device Portal cannot list.
+                    // A partial enumeration must never be mistaken for a complete library.
+                    inventory.Insert(1, "complete=" + scanned);
+                    var report = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                        "installed-games.txt", CreationCollisionOption.ReplaceExisting);
+                    await FileIO.WriteLinesAsync(report, inventory);
+                }
+                catch { }
             }
             return list;
         }

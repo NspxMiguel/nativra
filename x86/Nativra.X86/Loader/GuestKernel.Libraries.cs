@@ -738,6 +738,7 @@ namespace Nativra.X86.Loader
 
         private void InstallAdvapi(GuestImports i)
         {
+            InstallBcrypt(i);
             const string a = "advapi32.dll";
             i.Register(a, "GetUserNameA", CallConv.Stdcall, 2, c => NameInto("Player", c.Arg(0), c.Arg(1), false) != 0 ? CountWithNul(c.Arg(1)) : 0u);
             i.Register(a, "GetUserNameW", CallConv.Stdcall, 2, c => NameInto("Player", c.Arg(0), c.Arg(1), true) != 0 ? CountWithNul(c.Arg(1)) : 0u);

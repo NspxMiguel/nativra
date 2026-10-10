@@ -255,6 +255,7 @@ namespace Nativra.X86.Loader
             {
                 var w = wide;
                 i.Register(s, "SHDeleteKey" + (wide ? "W" : "A"), CallConv.Stdcall, 2, c => DeleteKeyTree(c.Arg(0), c.Arg(1), w));
+                i.Register(s, "PathCanonicalize" + (wide ? "W" : "A"), CallConv.Stdcall, 2, c => CanonicalizePath(c.Arg(0), c.Arg(1), w));
             }
         }
 

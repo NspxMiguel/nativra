@@ -11,10 +11,20 @@ on:
   push:
     paths:
       - "x86/**"
+      - "uwp/Kiosk/Native/RegistryBridge.cs"
+      - "uwp/Kiosk/Native/HidBridge.cs"
+      - "uwp/Kiosk/Native/ControllerConfiguration.cs"
+      - "uwp/Kiosk/Native/PadBridge.cs"
+      - "uwp/Kiosk/Native/ImportTracing.cs"
       - ".github/workflows/x86-harness.yml"
   pull_request:
     paths:
       - "x86/**"
+      - "uwp/Kiosk/Native/RegistryBridge.cs"
+      - "uwp/Kiosk/Native/HidBridge.cs"
+      - "uwp/Kiosk/Native/ControllerConfiguration.cs"
+      - "uwp/Kiosk/Native/PadBridge.cs"
+      - "uwp/Kiosk/Native/ImportTracing.cs"
       - ".github/workflows/x86-harness.yml"
   workflow_dispatch:
 

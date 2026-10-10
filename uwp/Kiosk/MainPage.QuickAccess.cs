@@ -128,16 +128,15 @@ namespace Kiosk
                 !(anchor?.Tag is Tile tile) || tile.SteamAppId == 0) return;
             var menu = new MenuFlyout();
             var profile = new MenuFlyoutItem { Text = Texts.Get("profile.title") };
-            profile.Click += (s, args) => EditGameProfile(tile.SteamAppId);
+            profile.Click += (s, args) => EditGameProfile(tile.SteamAppId, anchor as Control);
             menu.Items.Add(profile);
             menu.ShowAt(anchor);
         }
 
-        private async void EditGameProfile(uint appId)
+        private async void EditGameProfile(uint appId, Control focus)
         {
             if (setupOpen || quickAccessOpen || gameLaunchPending || Native.NativeProbe.GameRunning) return;
             setupOpen = true;
-            var focus = FocusManager.GetFocusedElement() as Control;
             try
             {
                 var profile = await GameProfileStore.LoadAsync(appId);

@@ -406,6 +406,27 @@ export class DevicePortal {
     remoteDir = "",
     knownFolderId = "LocalAppData",
   ): Promise<void> {
+    if (
+      !fileName ||
+      /[\\/]/.test(fileName) ||
+      fileName === "." ||
+      fileName === ".."
+    ) {
+      throw new PortalError("delete requires a single file name");
+    }
+    const items = await this.listFiles(
+      packageFullName,
+      remoteDir,
+      knownFolderId,
+    );
+    const item = items.find(
+      (entry) =>
+        String(entry.Name ?? "").toLowerCase() === fileName.toLowerCase(),
+    );
+    if (!item) return;
+    if ((Number(item.Type) & 16) !== 0) {
+      throw new PortalError(`refusing to delete directory ${fileName}`);
+    }
     const query = new URLSearchParams({
       knownfolderid: knownFolderId,
       packagefullname: packageFullName,

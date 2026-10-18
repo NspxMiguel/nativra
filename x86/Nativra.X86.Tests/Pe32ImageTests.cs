@@ -51,6 +51,20 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void PreferredImageBaseCannotCapAnUncommittedGrowingHeap()
+        {
+            var memory = new GuestMemory();
+            var heap = new GuestHeap(memory, PreferredBase - 0x10000, 0x80000);
+            var image = Pe32Image.Load("bridge.dll", BuildPe32(), memory, (m, f, o) => 0xF0000000);
+            Assert.False(heap.Overlaps(image.BaseAddress, image.ImageSize));
+            Assert.Equal(image.BaseAddress + MarkerRva, memory.Read32(image.BaseAddress + MarkerRva));
+            var block = heap.Alloc(0x60000);
+            Assert.NotEqual(0u, block);
+            memory.Write32(block + 0x5FFFC, 0x12345678);
+            Assert.Equal(0x12345678u, memory.Read32(block + 0x5FFFC));
+        }
+
+        [Fact]
         public void BindsImportsByNameAndOrdinalIntoTheIat()
         {
             var memory = new GuestMemory();

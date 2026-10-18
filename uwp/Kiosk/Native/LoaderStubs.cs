@@ -48,6 +48,65 @@ namespace Kiosk.Native
             SetLastError = true)]
         private static extern IntPtr GetProcAddressByOrdinal(IntPtr module, IntPtr ordinal);
 
+        [DllImport("api-ms-win-core-libraryloader-l1-2-0.dll", CharSet = CharSet.Unicode)]
+        private static extern uint GetModuleFileNameW(IntPtr module, System.Text.StringBuilder name, uint size);
+
+        private static string ModuleName(IntPtr module)
+        {
+            if (named.TryGetValue(module.ToInt64(), out var name)) return name;
+            foreach (var image in imports.LoadOrder())
+                if (image.BaseAddress == module)
+                {
+                    named[module.ToInt64()] = image.Name;
+                    return image.Name;
+                }
+            try
+            {
+                var path = new System.Text.StringBuilder(512);
+                var length = GetModuleFileNameW(module, path, 512);
+                if (length > 0 && length < 512)
+                {
+                    name = BaseName(path.ToString());
+                    named[module.ToInt64()] = name;
+                    Remember("identified " + name);
+                    return name;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int EnumModulesDelegate(IntPtr process, IntPtr modules, uint size, IntPtr needed);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int EnumModulesExDelegate(IntPtr process, IntPtr modules, uint size, IntPtr needed, uint filter);
+
+        private static EnumModulesDelegate enumerateModules;
+        private static EnumModulesExDelegate enumerateModulesEx;
+
+        private static int EnumerateModules(IntPtr process, IntPtr buffer, uint size, IntPtr needed, uint filter)
+        {
+            if (process != new IntPtr(-1)) { SetLastError(6); return 0; }
+            if (filter > 3 || needed == IntPtr.Zero || (buffer == IntPtr.Zero && size != 0))
+            {
+                SetLastError(87);
+                return 0;
+            }
+            var modules = new List<IntPtr>();
+            if (filter != 1)
+            {
+                foreach (var image in imports.LoadOrder()) modules.Add(image.BaseAddress);
+                // The app-container loader does not expose desktop Kernel32's
+                // full exports. Include the same library-loader module used by
+                // our overrides so Mono's process-wide P/Invoke search sees it.
+                foreach (var name in new[] { "kernel32.dll", "kernelbase.dll", "api-ms-win-core-libraryloader-l1-2-0.dll" })
+                    modules.Add(Open(name));
+                foreach (var address in named.Keys) modules.Add(new IntPtr(address));
+            }
+            return ProcessModules.Copy(modules, buffer, size, needed);
+        }
+
         private static LoadDelegate loadW;
         private static LoadDelegate loadA;
         private static LoadExDelegate loadExW;
@@ -102,9 +161,20 @@ namespace Kiosk.Native
 
         /// <summary>Every library a game asked for by name, for the report.</summary>
         public static readonly List<string> Asked = new List<string>();
+        // Preserve controller-library probes even when later plugin requests fill Asked.
+        public static readonly List<string> InputAsked = new List<string>();
 
         private static void Remember(string name)
         {
+            if (name.IndexOf("xinput", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("!LoadLibrary", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("!FreeLibrary", StringComparison.OrdinalIgnoreCase) >= 0)
+                lock (InputAsked)
+                {
+                    InputAsked.Remove(name);
+                    if (InputAsked.Count >= 32) InputAsked.RemoveAt(0);
+                    InputAsked.Add(name);
+                }
             lock (Asked)
             {
                 // Keep late runtime/plugin probes visible after engine startup.
@@ -337,8 +407,7 @@ namespace Kiosk.Native
                     // The bridge answers some by number: SDL asks XInput for
                     // ordinal 100, XInputGetStateEx, before the named one, and
                     // the console's own copy of it never sees a pad.
-                    string owner;
-                    named.TryGetValue(module.ToInt64(), out owner);
+                    var owner = ModuleName(module);
                     if (owner != null)
                     {
                         var numbered = owner + "!#" + name.ToInt64();
@@ -358,8 +427,8 @@ namespace Kiosk.Native
                 var wanted = Marshal.PtrToStringAnsi(name);
                 if (string.IsNullOrEmpty(wanted)) return IntPtr.Zero;
 
-                string from;
-                named.TryGetValue(module.ToInt64(), out from);
+                var from = ModuleName(module);
+                if (from == null) Remember("untracked!" + wanted);
                 if (from != null)
                 {
                     Remember(from + "!" + wanted);
@@ -376,6 +445,7 @@ namespace Kiosk.Native
                     // links it end up in the same place.
                     if (imports.Overrides.TryGetValue(from + "!" + wanted, out var ours))
                     {
+                        Remember("served " + from + "!" + wanted + " nonzero=" + (ours != IntPtr.Zero));
                         return ours;
                     }
 
@@ -490,6 +560,15 @@ namespace Kiosk.Native
                 {
                     system.Overrides[module + "!" + pair.Key] = pair.Value;
                 }
+            }
+
+            enumerateModules = (process, modules, size, needed) => EnumerateModules(process, modules, size, needed, 0);
+            enumerateModulesEx = EnumerateModules;
+            foreach (var module in new[] { "psapi.dll", "kernel32.dll", "kernelbase.dll" })
+            {
+                var prefix = module == "psapi.dll" ? "" : "K32";
+                system.Overrides[module + "!" + prefix + "EnumProcessModules"] = Marshal.GetFunctionPointerForDelegate(enumerateModules);
+                system.Overrides[module + "!" + prefix + "EnumProcessModulesEx"] = Marshal.GetFunctionPointerForDelegate(enumerateModulesEx);
             }
 
             // Measure whether the console already has the DirectX libraries

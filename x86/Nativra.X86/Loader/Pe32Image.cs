@@ -284,7 +284,7 @@ namespace Nativra.X86.Loader
             if (address == 0) return false;
             if ((ulong)address + size > 0xFFFFFFFFul) return false;
             // Reserved address space is as taken as committed memory.
-            return memory.IsFree(address, size);
+            return memory.IsFree(address, size) && !memory.IsAvoided(address, size);
         }
 
         // --- relocation ----------------------------------------------------

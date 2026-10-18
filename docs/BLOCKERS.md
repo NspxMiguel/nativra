@@ -1,5 +1,40 @@
 # Measured compatibility blockers
 
+## October 10 layer fixes and bounded console verification
+
+The broad build 502 results below remain historical evidence. Build 511 later
+rendered Cuphead and Super Meat Boy, and Hades progressed to a D3D11 swap chain.
+These observations do not demonstrate gameplay or controller delivery.
+
+| Layer | Concrete evidence | Branch correction | Remaining verification |
+| --- | --- | --- | --- |
+| Controller discovery and state | Build 532 Cuphead enters GetState after process-module enumeration: calls 2337 -> 5148; injected A gives 273 button reads/mask 0x1000. Title still visible, navigation unverified. Super Meat Boy 526 gives 48 A reads; Seraph 529 gives 47 and changes Start to combat; Hades 529 gives 122 and opens save-slot selection. | Shared x64/x86 XInput merges injected state with the pad, preserves packets and exposes failure/button counters. Typed SetupAPI property queries and class filters remove observed discovery errors. Native carriers bind to the same callbacks. PSAPI/K32 module enumeration exposes mapped guest and known bridge modules, enabling Mono process-wide native symbol lookup. | Controller-state delivery proven in x86 and x64 Unity. Verify Cuphead navigation, sustained gameplay, physical pad behavior and audio. Menu FPS and injected reads do not establish full playability. |
+| Native import tracing / data ABI | October 8 Hades pulse: 1920x1080 chain, zero Presents, AV at EngineWin64s+0x3A2921. Static disassembly identifies a read of imported MSVCP140 std::cout from IAT RVA 0x4A28E0. | System export tracing now queries page protection and wraps only executable addresses. Data and unclassified addresses retain their original pointer. | Build 520 retest now shows the main menu: 4079 frames at 60.1 Presents/s; previous AV absent. Build 529 injected A opens save-slot selection (122 button reads, 0x1000); gameplay still unverified; renderer label is Microsoft Basic Render Driver. No Vulkan path observed. A subsequent launch stalled loading BasecampBugReporter.Native.dll before frames; retain both outcomes. |
+| x86 image placement / growing heap | Build 520 Super Meat Boy: heap allocation of 397065836 bytes refused at image page 0x3B400000, then null-address ReadFile fault, zero Presents. | Preferred PE32 image bases now honor the same heap avoidance used for relocated bases; avoidance stores a page count rather than an end-page index. Regression loads a relocated image and grows the heap across its old preferred base. | Build 522 allocation/intro retest succeeds: 2183 Presents in latest heartbeat, Team Meat logo visible, 39 XInput reads in overlay. Build 526 exact A-state delivery proven by button-only counter/mask; gameplay remains unverified. Steam session still absent. |
+| x86 SHLWAPI | Three historical PathCanonicalizeW failures below. | PathCanonicalizeA/W registered; drive/UNC roots, dot segments, literal forward slashes, in-place calls and MAX_PATH bounds tested. | Retest Poly Bridge, ANOIX and Kandidatos; record the next actual blocker. |
+| x86 BCrypt | Two historical BCryptGenRandom failures below. | System RNG, RNG pseudo-handle and explicit RNG provider lifecycle implemented using cryptographic host RNG with bounded allocations. | Retest Leafless and Super-Patriota; record actual progress. |
+| x86 WinRT / API sets | Pixel Strike import report lists Ro initialization/activation and HSTRING exports. | WinRT API sets route to combase; per-thread COM/WinRT apartment state and HSTRING lifetime implemented. Missing activation classes return REGDB_E_CLASSNOTREG with null outputs. | Retest Pixel Strike. Guest WinRT class factories remain absent; successful import resolution is not object support. |
+
+Seraph build 529 reaches equipment/Start and then a combat scene after guarded A
+injection: 6786 frames at 60/s, 47 button reads with retained mask 0x1000.
+The historical build 502 marshalling error is absent. This proves shared x64
+input delivery and a short gameplay transition, not sustained playability
+(.cycle/seraph-529-input).
+
+References for guest contracts:
+[SetupDiGetClassDevsW](https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetclassdevsw),
+[SetupDiGetDevicePropertyW](https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdevicepropertyw),
+[PathCanonicalizeW](https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-pathcanonicalizew),
+[BCryptGenRandom](https://learn.microsoft.com/en-us/windows/win32/api/bcrypt/nf-bcrypt-bcryptgenrandom),
+[RoInitialize](https://learn.microsoft.com/en-us/windows/win32/api/roapi/nf-roapi-roinitialize),
+[HSTRING creation](https://learn.microsoft.com/en-us/windows/win32/api/winstring/nf-winstring-windowscreatestring),
+[fast-pass references](https://learn.microsoft.com/en-us/windows/win32/api/winstring/nf-winstring-windowscreatestringreference)
+and [duplication](https://learn.microsoft.com/en-us/windows/win32/api/winstring/nf-winstring-windowsduplicatestring).
+Wine behavior was inspected at the pinned revision in [PROTON-PARITY.md](PROTON-PARITY.md).
+No game binaries or upstream implementation were committed.
+
+## Historical broad sweep
+
 Sweep dates: 2026-10-05–06. Installed build: 502. The newest public release was
 495; Windows rejected its installation because 502 was already installed.
 Counts below cover only newly measured games, not the planning estimates in

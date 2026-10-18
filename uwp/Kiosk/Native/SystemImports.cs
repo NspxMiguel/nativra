@@ -305,12 +305,11 @@ namespace Kiosk.Native
                 if (address != IntPtr.Zero)
                 {
                     System.Threading.Interlocked.Increment(ref fromSystem);
-                    if (!Trace) return address;
-                    // The handful a stuck program spends its life in are worth
-                    // the extra instruction that says who called them.
-                    return Watched.Contains(function)
-                        ? Shim.CallerFor(module + "!" + function, address)
-                        : Shim.TraceFor(module + "!" + function, address);
+                    // An import can be an object such as std::cout, not a function.
+                    // Replacing a data address with a tracing thunk corrupts its ABI.
+                    return ImportTracing.Resolve(address, Trace, target => Watched.Contains(function)
+                        ? Shim.CallerFor(module + "!" + function, target)
+                        : Shim.TraceFor(module + "!" + function, target));
                 }
             }
 

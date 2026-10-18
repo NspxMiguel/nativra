@@ -35,9 +35,9 @@ test("the pad is listed through SetupAPI so Unity reads XInput", () => {
 });
 
 test("slot 0 stays present and pads are followed through GamepadAdded", () => {
-  expect(pad).toContain("return index == 0 || index < (uint)pads.Count;");
+  expect(pad).toContain("return index < 4 && (index == 0 || index < (uint)pads.Count);");
   expect(pad).toContain("Gamepad.GamepadAdded +=");
-  expect(pad).toContain("pressed |= KeyButtons(PointerBridge.HostKeys)");
+  expect(pad).toContain("if (keys != null) pressed |= KeyButtons(keys)");
 });
 
 test("the Steam bridge answers only Steam's own exports", () => {

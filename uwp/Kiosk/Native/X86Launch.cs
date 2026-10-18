@@ -215,7 +215,7 @@ namespace Kiosk.Native
                             into.Add("x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())));
                             into.Add("x86.window=0x" + kernel.InputWindow.ToString("X") + " dispatched=" + kernel.MessagesDispatched);
                             // Whether the pad reaches the game: its XInput polls, and the keys the host window holds.
-                            into.Add("x86.pad=reads " + PadBridge.Reads + " probes " + PadBridge.Probes +
+                            into.Add("x86.pad=reads " + PadBridge.Reads + " active " + PadBridge.ActiveReads + " changes " + PadBridge.Changes + " buttons " + PadBridge.LastButtons + " probes " + PadBridge.Probes +
                                      " held " + PointerBridge.HostKeys.Count(down => down));
                             into.Add("x86.d3d9=" + X86Direct3D9.Note + " lockheap=" + (X86Direct3D9.LockBytes >> 20) + "MB proxies=" + com.ProxyCount);
                             into.Add("x86.dsound=buffers " + directSound.BuffersCreated + " frames " + directSound.FramesMixed +
@@ -377,6 +377,11 @@ namespace Kiosk.Native
                         "x86.threads=" + string.Join(",", process.Threads.Select(t => t.ToString())) + Environment.NewLine +
                         "x86.recent=" + string.Join(" ", process.RecentImports) + Environment.NewLine +
                         "x86.com-calls=" + GuestCom.CallSummary() + Environment.NewLine +
+                        "x86.pad=reads " + PadBridge.Reads + " active " + PadBridge.ActiveReads +
+                            " changes " + PadBridge.Changes + " buttons " + PadBridge.LastButtons +
+                            " probes " + PadBridge.Probes + " desktop " + ControllerMode.Desktop +
+                            " held " + PointerBridge.HostKeys.Count(down => down) + Environment.NewLine +
+                        "x86.pad-buttons=reads " + PadBridge.ButtonReads + " lastactive " + PadBridge.LastActiveButtons + Environment.NewLine +
                         TailText());
                 }
                 catch (Exception) { }

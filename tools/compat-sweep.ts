@@ -38,17 +38,22 @@ export function classify(
   const pick = (re: RegExp, text: string) => re.exec(text)?.[1]?.trim();
   // A 32-bit game draws through the D3D9 bridge, not the 64-bit pulse: its
   // frames are the Present calls the probe counts, over the seconds it ran.
-  const presents = Number(
-    pick(/^x86\.com (\d+)x IDirect3DDevice9::Present$/m, probe) ??
-      pick(
-        /(?:^x86\.com-calls=|[ ,])IDirect3DDevice9::Present=(\d+)/m,
-        heartbeat,
-      ) ??
-      0,
+  const probePresents = Number(
+    pick(/^x86\.com (\d+)x IDirect3DDevice9::Present$/m, probe) ?? 0,
   );
-  const seconds = Number(
-    pick(/^x86\.seconds=([\d.]+)/m, probe) ?? elapsedSeconds,
+  const heartbeatPresents = Number(
+    pick(
+      /(?:^x86\.com-calls=|[ ,])IDirect3DDevice9::Present=(\d+)/m,
+      heartbeat,
+    ) ?? 0,
   );
+  // Both reports belong to this cleared launch; counters only grow. A probe
+  // snapshot can precede frames still being drawn by live guest threads.
+  const presents = Math.max(probePresents, heartbeatPresents);
+  const seconds =
+    heartbeatPresents > probePresents && elapsedSeconds > 0
+      ? elapsedSeconds
+      : Number(pick(/^x86\.seconds=([\d.]+)/m, probe) ?? elapsedSeconds);
   const is32 =
     /^x86\.(image|run)=/m.test(probe) || /^x86\.eip=/m.test(heartbeat);
   const frames = is32 ? presents : frameLine ? Number(frameLine[1]) : 0;
@@ -108,14 +113,18 @@ async function xbdev(
   const lock = await readFile("/tmp/xbox-console.lock", "utf8").catch(() => "");
   const [owner, acquired] = lock.trim().split(/\s+/);
   if (
-    owner !== "opus-x86" ||
+    owner !== (process.env.LOCK_OWNER ?? "opus-x86") ||
     !Number.isFinite(Number(acquired)) ||
     Date.now() - Number(acquired) * 1000 >= 14 * 60_000
   )
     throw new Error(
       "Console lease missing or nearing 15 minutes; release and reacquire before continuing",
     );
-  const run = await $`bun ${XBDEV} ${args}`.cwd(cwd).quiet().nothrow();
+  const run =
+    await $`bash ${join(ROOT, "tools/with-console.sh")} bun ${XBDEV} ${args}`
+      .cwd(cwd)
+      .quiet()
+      .nothrow();
   const out = run.stdout.toString() + run.stderr.toString();
   if (/0x8004090a/i.test(out)) {
     await writeFile(
@@ -260,30 +269,22 @@ if (import.meta.main) {
     process.exit(2);
   }
   await mkdir(OUT, { recursive: true });
-  const leasePath = "/tmp/xbox-console.lock";
-  const lease = await readFile(leasePath, "utf8").catch(() => "");
+  // The outer with-console.sh owns and releases the lease. A nested sweep
+  // must not remove that lease before its caller finishes a bounded batch.
   const deadline = Date.now() + 13 * 60_000;
-  try {
-    for (const appid of ids) {
-      const available = deadline - Date.now() - (seconds + 60) * 1000;
-      if (available < 30_000)
-        throw new Error(
-          "Batch time budget exhausted; reacquire the lock for remaining games",
-        );
-      if (fetch && !(await download(appid, available)))
-        throw new Error(
-          `${appid}: download incomplete; leave app running and monitor in the next lock window`,
-        );
-      const v = await test(appid, seconds);
-      const line = `| ${v.appid} | ${v.status} | ${v.frames} | ${v.fps} | ${v.detail.replace(/\|/g, "/")} | ${new Date().toISOString()} |`;
-      console.log(line);
-      await appendFile(join(OUT, "summary.md"), line + "\n");
-    }
-  } finally {
-    // A delayed agent turn must not keep the console reserved after this batch.
-    // Never remove a lease acquired by another session or a newer batch.
-    const current = await readFile(leasePath, "utf8").catch(() => "");
-    if (lease.startsWith("opus-x86 ") && current === lease)
-      await rm(leasePath, { force: true });
+  for (const appid of ids) {
+    const available = deadline - Date.now() - (seconds + 60) * 1000;
+    if (available < 30_000)
+      throw new Error(
+        "Batch time budget exhausted; reacquire the lock for remaining games",
+      );
+    if (fetch && !(await download(appid, available)))
+      throw new Error(
+        `${appid}: download incomplete; leave app running and monitor in the next lock window`,
+      );
+    const v = await test(appid, seconds);
+    const line = `| ${v.appid} | ${v.status} | ${v.frames} | ${v.fps} | ${v.detail.replace(/\|/g, "/")} | ${new Date().toISOString()} |`;
+    console.log(line);
+    await appendFile(join(OUT, "summary.md"), line + "\n");
   }
 }

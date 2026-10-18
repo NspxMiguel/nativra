@@ -19,10 +19,7 @@ namespace Nativra.X86.Loader
 
         private void InstallProcess(GuestImports i)
         {
-            // C++/WinRT resolves these from combase at start-up even when no
-            // Windows Runtime objects are created afterwards.
-            i.Register("combase.dll", "RoInitialize", CallConv.Stdcall, 1, c => 0);
-            i.Register("combase.dll", "RoUninitialize", CallConv.Stdcall, 0, c => 0);
+            InstallWinrt(i);
             foreach (var module in new[] { "psapi.dll", "kernel32.dll" })
             {
                 var k32 = module == "kernel32.dll" ? "K32" : "";

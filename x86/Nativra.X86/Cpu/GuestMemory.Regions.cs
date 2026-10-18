@@ -254,8 +254,24 @@ namespace Nativra.X86.Cpu
         /// claiming it: the heap maps its region as it grows, and until then anything placed there (a
         /// thread stack, a rebased DLL) would cap it at that neighbour.
         /// </summary>
-        public void Avoid(uint address, uint size) =>
-            avoided.Add(new AvoidedRange { First = address >> PageShift, Pages = (uint)PageSpan(address, size) });
+        public void Avoid(uint address, uint size)
+        {
+            if (size == 0) return;
+            var first = address >> PageShift;
+            var end = Math.Min(PageSpan(address, size), (ulong)PageCount);
+            avoided.Add(new AvoidedRange { First = first, Pages = (uint)(end - first) });
+        }
+
+        /// <summary>Whether image placement would overlap a range kept for a growing heap.</summary>
+        public bool IsAvoided(uint address, uint size)
+        {
+            if (size == 0) return false;
+            var first = address >> PageShift;
+            var end = PageSpan(address, size);
+            foreach (var range in avoided)
+                if (end > range.First && first < (ulong)range.First + range.Pages) return true;
+            return false;
+        }
 
         private uint FindUp(uint pages, uint align, uint low, uint high)
         {

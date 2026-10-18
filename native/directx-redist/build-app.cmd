@@ -28,5 +28,13 @@ cl /nologo /LD /EHsc /O2 /MT /std:c++17 d3d9\d3d9_main.cpp d3d9\d3d9_device.cpp 
    d3d9\d3d9_resources.cpp d3d9\d3d9_ff.cpp d3d9\d3d9_format.cpp d3d9\dxso.cpp ^
    /Fo:obj-app\ /Fe:"%OUT%\d3d9.dll" /link /APPCONTAINER /DEF:d3d9\d3d9.def d3d11.lib d3dcompiler.lib dxguid.lib uuid.lib
 if errorlevel 1 exit /b 1
+rem Native XInput carriers share the managed pad bridge, including portal input.
+cl /nologo /LD /O2 /MT xinput\xinput.cpp /Fo:obj-app\ /Fe:"%OUT%\xinput1_4.dll" /link /APPCONTAINER /DEF:xinput\xinput.def
+if errorlevel 1 exit /b 1
+cl /nologo /EHsc /O2 /MT xinput\xinput.cpp tests\test_xinput.cpp /Fo:obj-app\ /Fe:obj-app\test_xinput.exe
+if errorlevel 1 exit /b 1
+obj-app\test_xinput.exe
+if errorlevel 1 exit /b 1
+for %%n in (xinput1_3 xinput1_2 xinput1_1 xinput9_1_0 xinputuap) do copy /y "%OUT%\xinput1_4.dll" "%OUT%\%%n.dll" >nul
 del /q "%OUT%\*.exp" "%OUT%\*.lib" 2>nul
 dir /b "%OUT%"

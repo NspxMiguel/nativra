@@ -78,6 +78,33 @@ test("heartbeat without presents never borrows native pulse frames", () => {
   expect(v.status).not.toBe("renders");
 });
 
+test("a live heartbeat advances an earlier probe snapshot", () => {
+  const v = classify(
+    40800,
+    "",
+    "x86.run=running\nx86.com 11x IDirect3DDevice9::Present\nx86.seconds=66.8\n",
+    "",
+    "x86.eip=0x4F8FFA\nx86.com-calls=IDirect3DDevice9::Present=2183\n",
+    120,
+  );
+  expect(v.frames).toBe(2183);
+  expect(v.fps).toBe(18.2);
+  expect(v.status).toBe("renders");
+});
+
+test("a final probe retains its own duration after an earlier heartbeat", () => {
+  const v = classify(
+    40800,
+    "",
+    "x86.run=returned\nx86.com 2400x IDirect3DDevice9::Present\nx86.seconds=60\n",
+    "",
+    "x86.eip=0x4F8FFA\nx86.com-calls=IDirect3DDevice9::Present=1800\n",
+    120,
+  );
+  expect(v.frames).toBe(2400);
+  expect(v.fps).toBe(40);
+});
+
 test("Present can be the first heartbeat counter", () => {
   const v = classify(
     40800,

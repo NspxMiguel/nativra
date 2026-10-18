@@ -75,7 +75,32 @@ namespace Nativra.X86.Loader
         private uint unhandledFilter;
         private uint nextHandle = 0x100;
 
-        private int comInitialized;
+        private sealed class Apartment
+        {
+            public uint Mode;
+            public uint Count;
+        }
+        private readonly Dictionary<uint, Apartment> apartments = new Dictionary<uint, Apartment>();
+
+        private uint InitializeApartment(uint mode)
+        {
+            var thread = process.CurrentThread.Id;
+            if (apartments.TryGetValue(thread, out var apartment))
+            {
+                if (apartment.Mode != mode) return 0x80010106; // RPC_E_CHANGED_MODE
+                apartment.Count++;
+                return 1; // S_FALSE
+            }
+            apartments[thread] = new Apartment { Mode = mode, Count = 1 };
+            return 0;
+        }
+
+        private uint UninitializeApartment()
+        {
+            var thread = process.CurrentThread.Id;
+            if (apartments.TryGetValue(thread, out var apartment) && --apartment.Count == 0) apartments.Remove(thread);
+            return 0;
+        }
 
         /// <summary>CoCreateInstance(clsid, iid, ppv): the COM bridge installs itself here.</summary>
         public Func<uint, uint, uint, uint> CoCreateInstance { get; set; } = (clsid, iid, result) => 0x80040154;   // REGDB_E_CLASSNOTREG
@@ -383,14 +408,13 @@ namespace Nativra.X86.Loader
             i.Register(k, "lstrcmpiW", CallConv.Stdcall, 2, c =>
                 Sign(string.Compare(ReadText(c.Arg(0), true), ReadText(c.Arg(1), true), StringComparison.OrdinalIgnoreCase)));
 
-            // ole32: apartments are a formality here; classes come from the
-            // COM bridge (CoCreateInstance), memory from the process heap.
+            // COM and WinRT share the current guest thread's apartment mode.
             const string o = "ole32.dll";
-            i.Register(o, "CoInitialize", CallConv.Stdcall, 1, c => comInitialized++ == 0 ? 0u : 1u);
-            i.Register(o, "CoInitializeEx", CallConv.Stdcall, 2, c => comInitialized++ == 0 ? 0u : 1u);
-            i.Register(o, "OleInitialize", CallConv.Stdcall, 1, c => comInitialized++ == 0 ? 0u : 1u);
-            i.Register(o, "CoUninitialize", CallConv.Stdcall, 0, c => { if (comInitialized > 0) comInitialized--; return 0; });
-            i.Register(o, "OleUninitialize", CallConv.Stdcall, 0, c => { if (comInitialized > 0) comInitialized--; return 0; });
+            i.Register(o, "CoInitialize", CallConv.Stdcall, 1, c => InitializeApartment(0));
+            i.Register(o, "CoInitializeEx", CallConv.Stdcall, 2, c => (c.Arg(1) & ~14u) != 0 ? 0x80070057u : InitializeApartment((c.Arg(1) & 2) != 0 ? 0u : 1u));
+            i.Register(o, "OleInitialize", CallConv.Stdcall, 1, c => InitializeApartment(0));
+            i.Register(o, "CoUninitialize", CallConv.Stdcall, 0, c => UninitializeApartment());
+            i.Register(o, "OleUninitialize", CallConv.Stdcall, 0, c => UninitializeApartment());
             i.Register(o, "CoCreateInstance", CallConv.Stdcall, 5, c => CoCreateInstance(c.Arg(0), c.Arg(3), c.Arg(4)));
             i.Register(o, "CoTaskMemAlloc", CallConv.Stdcall, 1, c => heap.Alloc(Math.Max(c.Arg(0), 1u)));
             i.Register(o, "CoTaskMemRealloc", CallConv.Stdcall, 2, c => heap.ReAlloc(c.Arg(0), c.Arg(1)));

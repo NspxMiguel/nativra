@@ -754,9 +754,15 @@ namespace Kiosk.Native
                                         + " audio.activate=" + AudioBridge.ActivateTimedOut);
                                     beat.Add("steamcm.timedout=" + Steam.SteamCm.TimedOut);
                                     beat.Add("lock spin=" + LockWatch.SpinCount + " at 0x" + LockWatch.SpinningOn.ToInt64().ToString("X"));
-                                    beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " keyreads=" + PadBridge.KeyReads
+                                    beat.Add("pad count=" + PadBridge.Pads.Count + " probes=" + PadBridge.Probes + " reads=" + PadBridge.Reads + " active=" + PadBridge.ActiveReads + " changes=" + PadBridge.Changes + " buttons=" + PadBridge.LastButtons + " keyreads=" + PadBridge.KeyReads
                                         + " desktop=" + ControllerMode.Desktop
                                         + " hid.listed=" + HidBridge.Listed + " hid.opened=" + HidBridge.Opened);
+                                    lock (LoaderStubs.InputAsked)
+                                        beat.Add("xinput.loader=" + string.Join(";", LoaderStubs.InputAsked));
+                                    beat.Add("xinput.carriers=" + PadBridge.Carriers + " status=" + PadBridge.CarrierStatus);
+                                    beat.Add("xinput.state calls=" + PadBridge.StateCalls + " null=" + PadBridge.NullStates
+                                        + " invalid=" + PadBridge.InvalidSlots + " failures=" + PadBridge.StateFailures
+                                        + " buttonreads=" + PadBridge.ButtonReads + " lastactive=" + PadBridge.LastActiveButtons);
                                     // Wider than the default 64: LEGO Jurassic
                                     // World's freeze needs a longer window to
                                     // catch what led up to it, not just the

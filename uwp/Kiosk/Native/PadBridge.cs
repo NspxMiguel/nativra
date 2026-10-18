@@ -21,6 +21,7 @@ namespace Kiosk.Native
         private const int ERROR_SUCCESS = 0;
         private const int ERROR_DEVICE_NOT_CONNECTED = 1167;
         private const int ERROR_CALL_NOT_IMPLEMENTED = 120;
+        private const int ERROR_BAD_ARGUMENTS = 160;
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int StateDelegate(uint index, IntPtr state);
@@ -60,9 +61,16 @@ namespace Kiosk.Native
         };
         private static IntPtr keystrokeState;
 
-        private static uint packet;
+        private static readonly object stateGate = new object();
+        private static readonly ulong[] lastButtons = new ulong[4], lastAxes = new ulong[4];
+        private static readonly uint[] packets = new uint[4];
+        public static long ActiveReads;
+        public static long Changes;
+        public static int LastButtons;
+        public static long StateCalls, NullStates, InvalidSlots, StateFailures, ButtonReads;
+        public static int LastActiveButtons;
 
-        /// <summary>How many readings were taken, which proves input is live.</summary>
+        /// <summary>Successful polls; active-state counters distinguish input from a neutral pad.</summary>
         public static long Reads;
 
         private static readonly List<Gamepad> known = new List<Gamepad>();
@@ -119,7 +127,7 @@ namespace Kiosk.Native
         private static bool Present(uint index, out IReadOnlyList<Gamepad> pads)
         {
             pads = Pads;
-            return index == 0 || index < (uint)pads.Count;
+            return index < 4 && (index == 0 || index < (uint)pads.Count);
         }
 
         /// <summary>XInput button bits, in the order the console reports them.</summary>
@@ -173,34 +181,49 @@ namespace Kiosk.Native
             return bits;
         }
 
-        private static void WriteFromKeys(IntPtr target, bool[] keys)
+        private static void WriteState(uint index, IntPtr target, GamepadReading reading, bool[] keys)
         {
-            ushort bits = 0;
-            if (keys[KeyUp]) bits |= 0x0001;
-            if (keys[KeyDown]) bits |= 0x0002;
-            if (keys[KeyLeft]) bits |= 0x0004;
-            if (keys[KeyRight]) bits |= 0x0008;
-            bits |= (ushort)ControllerMode.SystemButtons;
-            if (keys[KeyLeftStick]) bits |= 0x0040;
-            if (keys[KeyRightStick]) bits |= 0x0080;
-            if (keys[KeyLeftShoulder]) bits |= 0x0100;
-            if (keys[KeyRightShoulder]) bits |= 0x0200;
-            if (keys[KeyA]) bits |= 0x1000;
-            if (keys[KeyB]) bits |= 0x2000;
-            if (keys[KeyX]) bits |= 0x4000;
-            if (keys[KeyY]) bits |= 0x8000;
-            Marshal.WriteInt32(target, 0, (int)(++packet));
-            Marshal.WriteInt16(target, 4, (short)bits);
-            Marshal.WriteByte(target, 6, (byte)(keys[KeyLeftTrigger] ? 255 : 0));
-            Marshal.WriteByte(target, 7, (byte)(keys[KeyRightTrigger] ? 255 : 0));
-            Marshal.WriteInt16(target, 8, Digital(keys, KeyLeftStickRight, KeyLeftStickLeft));
-            Marshal.WriteInt16(target, 10, Digital(keys, KeyLeftStickUp, KeyLeftStickDown));
-            Marshal.WriteInt16(target, 12, Digital(keys, KeyRightStickRight, KeyRightStickLeft));
-            Marshal.WriteInt16(target, 14, Digital(keys, KeyRightStickUp, KeyRightStickDown));
-            System.Threading.Interlocked.Increment(ref KeyReads);
+            var pressed = ControllerMode.Desktop ? (ushort)0 : Buttons(reading.Buttons);
+            if (keys != null) pressed |= KeyButtons(keys);
+            var leftTrigger = (byte)Math.Max(reading.LeftTrigger * 255.0, keys != null && keys[KeyLeftTrigger] ? 255 : 0);
+            var rightTrigger = (byte)Math.Max(reading.RightTrigger * 255.0, keys != null && keys[KeyRightTrigger] ? 255 : 0);
+            short Merge(double physical, int positive, int negative) => keys != null && (keys[positive] || keys[negative])
+                ? Digital(keys, positive, negative) : Axis(physical);
+            var lx = Merge(reading.LeftThumbstickX, KeyLeftStickRight, KeyLeftStickLeft);
+            var ly = Merge(reading.LeftThumbstickY, KeyLeftStickUp, KeyLeftStickDown);
+            var rx = Merge(reading.RightThumbstickX, KeyRightStickRight, KeyRightStickLeft);
+            var ry = Merge(reading.RightThumbstickY, KeyRightStickUp, KeyRightStickDown);
+            var buttons = (ulong)pressed | ((ulong)leftTrigger << 16) | ((ulong)rightTrigger << 24);
+            var axes = (ulong)(ushort)lx | ((ulong)(ushort)ly << 16) | ((ulong)(ushort)rx << 32) | ((ulong)(ushort)ry << 48);
+            lock (stateGate)
+            {
+                if (lastButtons[index] != buttons || lastAxes[index] != axes)
+                {
+                    lastButtons[index] = buttons;
+                    lastAxes[index] = axes;
+                    packets[index]++;
+                    System.Threading.Interlocked.Increment(ref Changes);
+                }
+                Marshal.WriteInt32(target, 0, (int)packets[index]);
+                Marshal.WriteInt16(target, 4, (short)pressed);
+                Marshal.WriteByte(target, 6, leftTrigger);
+                Marshal.WriteByte(target, 7, rightTrigger);
+                Marshal.WriteInt16(target, 8, lx);
+                Marshal.WriteInt16(target, 10, ly);
+                Marshal.WriteInt16(target, 12, rx);
+                Marshal.WriteInt16(target, 14, ry);
+                LastButtons = pressed;
+                if (pressed != 0)
+                {
+                    LastActiveButtons = pressed;
+                    System.Threading.Interlocked.Increment(ref ButtonReads);
+                }
+            }
+            if (buttons != 0 || axes != 0) System.Threading.Interlocked.Increment(ref ActiveReads);
+            if (keys != null) System.Threading.Interlocked.Increment(ref KeyReads);
         }
 
-        /// <summary>Readings built from window keys because no pad was listed.</summary>
+        /// <summary>Readings that include the window gamepad-key channel.</summary>
         public static long KeyReads;
 
         private static short Axis(double value)
@@ -244,7 +267,17 @@ namespace Kiosk.Native
             if (state != null) return;
             state = (index, target) =>
             {
-                if (target == IntPtr.Zero) return ERROR_DEVICE_NOT_CONNECTED;
+                System.Threading.Interlocked.Increment(ref StateCalls);
+                if (target == IntPtr.Zero)
+                {
+                    System.Threading.Interlocked.Increment(ref NullStates);
+                    return ERROR_BAD_ARGUMENTS;
+                }
+                if (index >= 4)
+                {
+                    System.Threading.Interlocked.Increment(ref InvalidSlots);
+                    return ERROR_BAD_ARGUMENTS;
+                }
                 try
                 {
                     if (!Present(index, out var pads)) return ERROR_DEVICE_NOT_CONNECTED;
@@ -255,39 +288,24 @@ namespace Kiosk.Native
                         // No pad listed, yet the window receives the pad's
                         // buttons as keys — the same channel desktop mode
                         // runs on, and the one Device Portal input uses.
-                        WriteFromKeys(target, PointerBridge.HostKeys);
+                        WriteState(index, target, default(GamepadReading), PointerBridge.HostKeys);
                         return ERROR_SUCCESS;
                     }
 
                     if (ControllerMode.Desktop || index >= (uint)pads.Count)
                     {
-                        // A resting pad: same packet number, nothing pressed.
-                        Marshal.WriteInt32(target, 0, (int)packet);
-                        for (var offset = 4; offset < 16; offset += 4) Marshal.WriteInt32(target, offset, 0);
+                        WriteState(index, target, default(GamepadReading), null);
                         return ERROR_SUCCESS;
                     }
 
-                    var reading = pads[(int)index].GetCurrentReading();
-
-                    // The packet number only has to change when the reading
-                    // does; a game that compares it to skip work is right to.
-                    Marshal.WriteInt32(target, 0, (int)(++packet));
-                    // Buttons that reach the window as keys count too: Device
-                    // Portal input and any pad the list missed, merged with
-                    // the physical reading rather than hidden behind it.
-                    var pressed = Buttons(reading.Buttons);
-                    if (index == 0) pressed |= KeyButtons(PointerBridge.HostKeys);
-                    Marshal.WriteInt16(target, 4, (short)pressed);
-                    Marshal.WriteByte(target, 6, (byte)(reading.LeftTrigger * 255.0));
-                    Marshal.WriteByte(target, 7, (byte)(reading.RightTrigger * 255.0));
-                    Marshal.WriteInt16(target, 8, Axis(reading.LeftThumbstickX));
-                    Marshal.WriteInt16(target, 10, Axis(reading.LeftThumbstickY));
-                    Marshal.WriteInt16(target, 12, Axis(reading.RightThumbstickX));
-                    Marshal.WriteInt16(target, 14, Axis(reading.RightThumbstickY));
+                    // Portal buttons, triggers and stick keys merge with a physical pad.
+                    WriteState(index, target, pads[(int)index].GetCurrentReading(),
+                        index == 0 ? PointerBridge.HostKeys : null);
                     return ERROR_SUCCESS;
                 }
                 catch
                 {
+                    System.Threading.Interlocked.Increment(ref StateFailures);
                     return ERROR_DEVICE_NOT_CONNECTED;
                 }
             };
@@ -416,6 +434,43 @@ namespace Kiosk.Native
 
         }
 
+        [DllImport("api-ms-win-core-libraryloader-l2-1-0.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr LoadPackagedLibrary(string name, uint reserved);
+        [DllImport("api-ms-win-core-libraryloader-l1-2-0.dll", CharSet = CharSet.Ansi)]
+        private static extern IntPtr GetProcAddress(IntPtr module, string name);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int BindCarrierDelegate(IntPtr callbacks, uint count);
+
+        public static int Carriers;
+        public static string CarrierStatus = "not loaded";
+
+        private static void BindCarriers(Dictionary<string, IntPtr> handlers)
+        {
+            var names = new[] { "XInputGetState", "XInputSetState", "XInputGetCapabilities", "XInputEnable",
+                "XInputGetBatteryInformation", "XInputGetKeystroke", "XInputGetDSoundAudioDeviceGuids", "XInputGetAudioDeviceIds" };
+            var table = Marshal.AllocHGlobal(names.Length * IntPtr.Size);
+            try
+            {
+                for (var index = 0; index < names.Length; index++)
+                    Marshal.WriteIntPtr(table, index * IntPtr.Size, handlers[names[index]]);
+                foreach (var name in new[] { "xinput1_4.dll", "xinput1_3.dll", "xinput1_2.dll", "xinput1_1.dll", "xinput9_1_0.dll", "xinputuap.dll" })
+                {
+                    try
+                    {
+                        var module = LoadPackagedLibrary(name, 0);
+                        if (module == IntPtr.Zero) continue;
+                        var address = GetProcAddress(module, "NativraBindXInput");
+                        if (address == IntPtr.Zero) continue;
+                        if (Marshal.GetDelegateForFunctionPointer<BindCarrierDelegate>(address)(table, (uint)names.Length) != 0)
+                            Carriers++;
+                    }
+                    catch (Exception error) { CarrierStatus = error.GetType().Name; }
+                }
+                if (Carriers > 0) CarrierStatus = "bound";
+            }
+            finally { Marshal.FreeHGlobal(table); }
+        }
+
         public static void Install(SystemImports imports)
         {
             SteerSdl();
@@ -451,6 +506,8 @@ namespace Kiosk.Native
                 { "#8", Marshal.GetFunctionPointerForDelegate(keystroke) },
                 { "#10", Marshal.GetFunctionPointerForDelegate(audioIds) },
             };
+
+            BindCarriers(ours);
 
             foreach (var module in new[]
             {

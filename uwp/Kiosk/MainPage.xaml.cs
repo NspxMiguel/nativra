@@ -396,6 +396,14 @@ namespace Kiosk
             // A test harness: a file naming an app id makes the console fetch
             // that game itself. It is how a build gets something to load
             // without a hundred megabytes crossing the network by hand.
+            // A remote helper asks for the Steam sign-in screen (its QR code) without
+            // walking the shelf with button presses.
+            if (await ApplicationData.Current.LocalFolder.TryGetItemAsync("signin.txt") is StorageFile signIn)
+            {
+                await signIn.DeleteAsync();
+                await LaunchAsync(new Tile { Route = "steam", Title = Texts.Get("tile.steam") });
+                return;
+            }
             await AutoDownloadAsync();
             await ResumeInterruptedAsync();
             await DriveProbe.RunAsync();

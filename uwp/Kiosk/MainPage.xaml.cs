@@ -61,6 +61,8 @@ namespace Kiosk
         public uint SteamAppId { get; set; }
 
         /// <summary>Whether he has asked for this on the shelf.</summary>
+        public string CompatibilityLabel => Texts.Get("compatibility." + CompatibilityCatalog.Rating(SteamAppId));
+        public Visibility CompatibilityShown => SteamAppId != 0 && !IsAllGames ? Visibility.Visible : Visibility.Collapsed;
         public bool OnShelf { get; set; }
         public string ShelfAction =>
             OnShelf ? Texts.Get("emu.remove") : Texts.Get("emu.add");
@@ -201,6 +203,7 @@ namespace Kiosk
             var forget = GameStorage.ForgetListedAsync();   // games listed in forget.txt give their space back
             InitializeGameHost();
             InitializeDiagnostics();
+            InitializeQuickAccess();
             ApplyStaticText();
             StartClock();
             Loaded += async (s, e) => await LoadAppsAsync();
@@ -215,6 +218,14 @@ namespace Kiosk
 
         private void OnGameKeyDown(object sender, KeyRoutedEventArgs e)
         {
+            if (Native.ControllerMode.ShellOpen) return;
+            if (!Native.NativeProbe.GameRunning && !gameLaunchPending && !setupOpen &&
+                e.OriginalKey == VirtualKey.GamepadView)
+            {
+                OnQuickAccessClicked(QuickAccessButton, null);
+                e.Handled = true;
+                return;
+            }
             if (gameLaunchPending && !Native.NativeProbe.GameRunning)
             {
                 e.Handled = true;
@@ -239,7 +250,7 @@ namespace Kiosk
         private void OnGameKeyUp(object sender, KeyRoutedEventArgs e)
         {
             Native.PointerBridge.HostKey((int)e.OriginalKey, false);
-            if (Native.NativeProbe.GameRunning) e.Handled = true;
+            if (Native.NativeProbe.GameRunning && !Native.ControllerMode.ShellOpen) e.Handled = true;
         }
 
         private void ApplyStaticText()
@@ -286,6 +297,7 @@ namespace Kiosk
         {
             StatusText.Text = Texts.Get("status.reading");
             await Settings.LoadAsync();
+            await CompatibilityCatalog.LoadAsync();
             // The invitation to sign in is only for someone who has not.
             try
             {
@@ -437,8 +449,8 @@ namespace Kiosk
             {
                 GameLoading.Visibility = Visibility.Collapsed;
                 GameLoadingRing.IsActive = false;
-                GamePointerTransform.X = Native.PointerBridge.X;
-                GamePointerTransform.Y = Native.PointerBridge.Y;
+                GamePointerTransform.X = Native.PointerBridge.X * 1920.0 / GameProfileStore.Current.ScreenWidth;
+                GamePointerTransform.Y = Native.PointerBridge.Y * 1080.0 / GameProfileStore.Current.ScreenHeight;
                 // The pointer shows only while it is being moved: a game that is driven by
                 // the pad should not carry a cursor parked in the middle of its picture.
                 var moves = Native.PointerBridge.Moves;
@@ -501,8 +513,6 @@ namespace Kiosk
         {
             if (gameLaunchPending || Native.NativeProbe.GameRunning) return;
             if (setupOpen) return;
-            Native.ControllerMode.Desktop = Settings.DesktopInput;
-            Native.ControllerMode.Changes++;
             gameLaunchPending = true;
             // The pad's A reaches this page too, and XAML answered it with the
             // console's navigation click over the game's own sound. The game
@@ -513,6 +523,7 @@ namespace Kiosk
             var started = false;
             try
             {
+                await GameProfileStore.ApplyAsync(appId);
                 await Native.NativeProbe.RunAsync(appId);
                 started = true;
             }
@@ -1403,7 +1414,15 @@ namespace Kiosk
 
         private async void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            if (setupOpen) return;
+            if (setupOpen || Native.ControllerMode.ShellOpen || e.Handled) return;
+            if (e.OriginalKey == VirtualKey.GamepadView) return;
+            if ((e.OriginalKey == VirtualKey.GamepadMenu || e.Key == VirtualKey.F10) &&
+                (FocusManager.GetFocusedElement() as FrameworkElement)?.Tag is Tile contextTile && contextTile.SteamAppId != 0)
+            {
+                ShowGameContext(FocusManager.GetFocusedElement() as FrameworkElement);
+                e.Handled = true;
+                return;
+            }
             // A game on screen has the controller. Ours is still behind it and
             // still focused, and without this the player would be walking
             // through a menu they cannot see while they play.
@@ -1419,7 +1438,7 @@ namespace Kiosk
             if (e.Key == Windows.System.VirtualKey.GamepadDPadDown ||
                 e.Key == Windows.System.VirtualKey.Down)
             {
-                if (FocusManager.GetFocusedElement() == SetupButton) FocusShelf();
+                if (FocusManager.GetFocusedElement() == SetupButton || FocusManager.GetFocusedElement() == QuickAccessButton) FocusShelf();
                 else DockLibrary.Focus(FocusState.Programmatic);
                 e.Handled = true;
                 return;

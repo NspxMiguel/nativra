@@ -10,6 +10,8 @@ namespace Kiosk.Native
         public static volatile bool Desktop = true;
         public static volatile int SystemButtons;
         public static int Changes;
+        public static volatile bool ShellOpen;
+        public static int QuickAccessRequests;
         private const double HoldSeconds = 0.35;
         private static double held;
         private static int pending;
@@ -64,8 +66,13 @@ namespace Kiosk.Native
             // briefly lets the two-button gesture be consumed as one action.
             if (pending != 0 && held < HoldSeconds)
             {
-                SystemButtons = tapButtons = pending;
-                tapRemaining = 0.1;
+                if (pending == 0x20)
+                    System.Threading.Interlocked.Increment(ref QuickAccessRequests);
+                else
+                {
+                    SystemButtons = tapButtons = pending;
+                    tapRemaining = 0.1;
+                }
             }
             pending = 0;
             held = 0;

@@ -356,6 +356,38 @@ namespace Kiosk.Native
             }
         }
 
+        public static async System.Threading.Tasks.Task<string> SaveScreenshotAsync()
+        {
+            if (!Running || picture == null) throw new InvalidOperationException("No mirrored frame available");
+            var capturedWidth = picture.PixelWidth;
+            var capturedHeight = picture.PixelHeight;
+            var pixels = new byte[capturedWidth * capturedHeight * 4];
+            using (var buffer = picture.PixelBuffer.AsStream())
+            {
+                var offset = 0;
+                while (offset < pixels.Length)
+                {
+                    var count = buffer.Read(pixels, offset, pixels.Length - offset);
+                    if (count == 0) throw new System.IO.EndOfStreamException();
+                    offset += count;
+                }
+            }
+            var folder = await Windows.Storage.ApplicationData.Current.LocalFolder.CreateFolderAsync(
+                "screenshots", Windows.Storage.CreationCollisionOption.OpenIfExists);
+            var name = "game-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".png";
+            var file = await folder.CreateFileAsync(name, Windows.Storage.CreationCollisionOption.GenerateUniqueName);
+            using (var stream = await file.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite))
+            {
+                var encoder = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
+                    Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, stream);
+                encoder.SetPixelData(Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                    Windows.Graphics.Imaging.BitmapAlphaMode.Ignore, (uint)capturedWidth, (uint)capturedHeight,
+                    96, 96, pixels);
+                await encoder.FlushAsync();
+            }
+            return file.Name;
+        }
+
         public static void Take()
         {
             lock (frameGate) TakeLocked();

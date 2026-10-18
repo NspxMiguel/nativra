@@ -168,7 +168,7 @@ namespace Kiosk.Native
                 // the hardware allows, which here means copying a screen a
                 // thousand times a second and drowning everything else.
                 GraphicsBridge.Ceiling =
-                    await local.TryGetItemAsync("slow.txt") != null ? 30 : 60;
+                    await local.TryGetItemAsync("slow.txt") != null ? 30 : GameProfileStore.Current.FrameLimit;
                 lines.Add("audio.bridge=" + AudioBridge.Enabled);
                 // Steamworks answered with his account instead of a missing
                 // client. On whenever he is signed in: without it a Steam game

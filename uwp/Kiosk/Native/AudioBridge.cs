@@ -106,6 +106,43 @@ namespace Kiosk.Native
         private static readonly ComProxy Proxy = new ComProxy();
         private static IntPtr enumerator;
         private static IntPtr device;
+        private static IntPtr volumeClient;
+        private static readonly object volumeGate = new object();
+        public static volatile float HostVolume = 1;
+        public static volatile bool GuestMixerActive;
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ServiceDelegate(IntPtr self, ref Guid id, out IntPtr service);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int VolumeDelegate(IntPtr self, float volume, IntPtr context);
+
+        public static bool TrySetHostVolume(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value)) return false;
+            value = Math.Max(0, Math.Min(1, value));
+            var applied = GuestMixerActive;
+            lock (volumeGate)
+            {
+                if (volumeClient != IntPtr.Zero)
+                {
+                    var service = IntPtr.Zero;
+                    try
+                    {
+                        var id = new Guid("87CE5498-68D6-44E5-9215-6DA47EF883D8"); // ISimpleAudioVolume
+                        var get = Marshal.GetDelegateForFunctionPointer<ServiceDelegate>(ComProxy.Method(volumeClient, 14));
+                        if (get(volumeClient, ref id, out service) >= 0 && service != IntPtr.Zero)
+                        {
+                            var set = Marshal.GetDelegateForFunctionPointer<VolumeDelegate>(ComProxy.Method(service, 3));
+                            applied |= set(service, value, IntPtr.Zero) >= 0;
+                        }
+                    }
+                    catch { /* An audio path without session volume keeps the system controls. */ }
+                    finally { if (service != IntPtr.Zero) Marshal.Release(service); }
+                }
+            }
+            if (applied) HostVolume = value;
+            return applied;
+        }
 
 
         private const string StoreInterface = "886d8eeb-8cf2-4446-8d02-cdba1dbdcf99";
@@ -284,6 +321,15 @@ namespace Kiosk.Native
                     Note("activate " + wanted);
                     var client = RealClient(wanted);
                     if (client == IntPtr.Zero) return E_FAIL;
+                    if (wanted == new Guid("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2")) // IAudioClient
+                    {
+                        lock (volumeGate)
+                        {
+                            Marshal.AddRef(client);
+                            if (volumeClient != IntPtr.Zero) Marshal.Release(volumeClient);
+                            volumeClient = client;
+                        }
+                    }
                     Marshal.WriteIntPtr(result, client);
                     return S_OK;
                 }

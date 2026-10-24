@@ -1,7 +1,7 @@
 # WP03 installation recovery
 
 Date: 2026-10-24. Scope: installation only. Status: **awaiting hardware evidence**.
-No console access, account sign-in, game download or game execution was performed.
+No console access, owner account sign-in, library download or hardware game execution was performed.
 
 ## Input evidence and stage record
 
@@ -60,9 +60,10 @@ not another percentage or a managed-runtime guess. Leafless's historical
 ## Verification boundary
 
 `DownloadCheckpointTests` exercises stream/hash/capacity contracts.
-`DownloadIntegrationTests` links the production `SteamDownload.cs`,
+The dedicated `tools/download-fixtures/Nativra.Download.Tests.csproj` links the production `SteamDownload.cs`,
 `SteamDepot.cs`, `SteamVdf.cs`, `Proto.cs` and `GameStorage.cs` into the portable
-suite. Fixtures replace only WinRT storage adapters and Steam CM transport, use
+suite; only the platform-independent helper is linked into the x86 test project.
+Fixtures replace only WinRT storage adapters and Steam CM transport, use
 local temporary files and an in-memory HTTP handler, and generate owned AES/ZIP/
 protobuf depot content. Tests exercise actual RunAsync/repair/fetch/decrypt/
 decompress/ready/move orchestration, including restart at 49/50/51%, changed

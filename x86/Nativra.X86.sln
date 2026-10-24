@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nativra.X86.Tests", "Nativr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nativra.X86.Run", "Nativra.X86.Run\Nativra.X86.Run.csproj", "{4A16C11C-090C-4191-986A-D823C161C380}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nativra.Download.Tests", "..\tools\download-fixtures\Nativra.Download.Tests.csproj", "{2832A66A-8F4D-4657-93D1-23F7BDB657AA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{4A16C11C-090C-4191-986A-D823C161C380}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4A16C11C-090C-4191-986A-D823C161C380}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4A16C11C-090C-4191-986A-D823C161C380}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2832A66A-8F4D-4657-93D1-23F7BDB657AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2832A66A-8F4D-4657-93D1-23F7BDB657AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2832A66A-8F4D-4657-93D1-23F7BDB657AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2832A66A-8F4D-4657-93D1-23F7BDB657AA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

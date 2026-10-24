@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.6" />
+    <PackageReference Include="SharpCompress" Version="0.37.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../uwp/Kiosk/Steam/DownloadCheckpoint.cs" Link="Host/DownloadCheckpoint.cs" />
+    <Compile Include="../../uwp/Kiosk/Steam/SteamDownload.cs" Link="Host/SteamDownload.cs" />
+    <Compile Include="../../uwp/Kiosk/Steam/SteamDepot.cs" Link="Host/SteamDepot.cs" />
+    <Compile Include="../../uwp/Kiosk/Steam/SteamVdf.cs" Link="Host/SteamVdf.cs" />
+    <Compile Include="../../uwp/Kiosk/Steam/Proto.cs" Link="Host/Proto.cs" />
+    <Compile Include="../../uwp/Kiosk/GameStorage.cs" Link="Host/GameStorage.cs" />
+  </ItemGroup>
+</Project>

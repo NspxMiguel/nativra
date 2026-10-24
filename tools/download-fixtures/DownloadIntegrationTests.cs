@@ -232,6 +232,13 @@ namespace Nativra.X86.Tests
             Assert.True(Directory.Exists(Game));
         }
 
+        [Fact]
+        public void WindowsDepotSelectionExcludesMacLinuxAndSharedDepots()
+        {
+            var app = KeyValue.Parse(Encoding.UTF8.GetBytes("\"appinfo\" { \"depots\" { \"1\" { \"config\" { \"oslist\" \"windows\" } \"manifests\" { \"public\" \"101\" } } \"2\" { \"config\" { \"oslist\" \"macos\" } \"manifests\" { \"public\" \"102\" } } \"3\" { \"config\" { \"oslist\" \"linux\" } \"manifests\" { \"public\" \"103\" } } \"4\" { \"depotfromapp\" \"99\" \"manifests\" { \"public\" \"104\" } } } }"));
+            Assert.Equal(1U, Assert.Single(Depots.ForWindows(app)).Id);
+        }
+
         private sealed class FixtureCdn : HttpMessageHandler
         {
             public readonly Dictionary<string, byte[]> Chunks = new Dictionary<string, byte[]>();

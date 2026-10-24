@@ -181,7 +181,10 @@ namespace Kiosk.Steam
                         var identity = DownloadCheckpoint.Identity(appId, plan.Depot.Id, plan.Depot.ManifestId, name);
                         var progress = new DownloadProgress
                         {
-                            File = name, Identity = identity, Done = done, Total = plan.Manifest.TotalBytes,
+                            File = name,
+                            Identity = identity,
+                            Done = done,
+                            Total = plan.Manifest.TotalBytes,
                         };
                         onProgress?.Invoke(progress);
                         try

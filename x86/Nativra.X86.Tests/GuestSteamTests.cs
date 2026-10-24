@@ -357,6 +357,25 @@ namespace Nativra.X86.Tests
         }
 
         [Fact]
+        public void ShutdownCancelsGuestCallbacksAndRetainsInterfacePointersForReinit()
+        {
+            p.Memory.WriteBytes(Code, new byte[] { 0xC7, 0x05, 0x00, 0x10, 0x60, 0x00, 1, 0, 0, 0, 0xC2, 4, 0 });
+            var vtable = Data + 0x100;
+            p.Memory.Write32(vtable + 4, Code);
+            var callback = Data + 0x200;
+            p.Memory.Write32(callback, vtable);
+            Api("SteamAPI_RegisterCallback", callback, 1101);
+            var stats = Api("SteamUserStats");
+            M(stats, 0);
+            Api("SteamAPI_Shutdown");
+            Assert.Equal(0, p.Memory.Read8(callback + 4));
+            Api("SteamAPI_Init");
+            Assert.Equal(stats, Api("SteamUserStats"));
+            Api("SteamAPI_RunCallbacks");
+            Assert.Equal(0u, p.Memory.Read32(Data));
+        }
+
+        [Fact]
         public void LeaderboardCallResultIsDeliveredToItsListener()
         {
             // Run(void*, bool, SteamAPICall_t) is slot 0: store the board handle's low half; ret 16

@@ -192,7 +192,7 @@ namespace Nativra.X86.Loader
                 if (c.Arg(0) != 0) memory.Write8(c.Arg(0), 0);
                 return 0;
             });
-            E("SteamAPI_Shutdown", 0, c => 0);
+            E("SteamAPI_Shutdown", 0, c => { Shutdown(); return 0; });
             E("SteamAPI_RestartAppIfNecessary", 1, c => 0);   // already running as that app
             E("SteamAPI_IsSteamRunning", 0, c => 1);
             E("SteamAPI_GetHSteamUser", 0, c => HSteamUser);
@@ -286,6 +286,15 @@ namespace Nativra.X86.Loader
             return call;
         }
 
+        private void Shutdown()
+        {
+            foreach (var callback in callbacks.ToArray()) UnregisterCallback(callback);
+            posted.Clear();
+            results.Clear();
+            resultListeners.Clear();
+            asyncReads.Clear();
+        }
+
         private void RunCallbacks()
         {
             while (posted.Count > 0)
@@ -295,7 +304,7 @@ namespace Nativra.X86.Loader
                 memory.WriteBytes(buffer, message.Value);
                 foreach (var callback in callbacks.ToArray())
                 {
-                    if ((int)memory.Read32(callback + 8) != message.Key) continue;
+                    if (!callbacks.Contains(callback) || (int)memory.Read32(callback + 8) != message.Key) continue;
                     kernel.CallGuestThis(memory.Read32(memory.Read32(callback) + 4), callback, buffer);
                 }
                 kernel.Heap.Free(buffer);

@@ -63,6 +63,58 @@ namespace Kiosk.Native
         [return: MarshalAs(UnmanagedType.I1)]
         internal delegate bool EncryptedTicket(IntPtr self, IntPtr ticket, int capacity, IntPtr written);
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private delegate bool ReleasePipe(IntPtr self, int pipe);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ConnectUser(IntPtr self, int pipe);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int LocalUser(IntPtr self, IntPtr pipe, int accountType);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void ReleaseUser(IntPtr self, int pipe, int user);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate IntPtr ClientInterface(IntPtr self, int user, int pipe, IntPtr version);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate IntPtr UtilsInterface(IntPtr self, int pipe, IntPtr version);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void WarningHook(IntPtr self, IntPtr callback);
+
+        internal static IntPtr[] Client012(Func<Delegate, IntPtr> keep,
+            Func<string, IntPtr> resolve, Func<IntPtr, string> text)
+        {
+            Func<string, IntPtr> getter = expected => keep(new ClientInterface((self, user, pipe, version) =>
+                user == 1 && pipe == 1 && expected != null && text(version) == expected
+                    ? resolve(expected) : IntPtr.Zero));
+            var unsupported = getter(null);
+            return new[]
+            {
+                keep(new Integer(self => 1)),
+                keep(new ReleasePipe((self, pipe) => pipe == 1)),
+                keep(new ConnectUser((self, pipe) => pipe == 1 ? 1 : 0)),
+                keep(new LocalUser((self, pipe, accountType) => { ClearCount(pipe); return 0; })),
+                keep(new ReleaseUser((self, pipe, user) => { })),
+                getter("SteamUser016"),
+                unsupported,
+                keep(new Disconnect((self, ip, port) => { })),
+                getter("SteamFriends011"),
+                keep(new UtilsInterface((self, pipe, version) =>
+                    pipe == 1 && text(version) == "SteamUtils005" ? resolve("SteamUtils005") : IntPtr.Zero)),
+                unsupported, unsupported, unsupported,
+                getter("STEAMUSERSTATS_INTERFACE_VERSION010"),
+                unsupported,
+                getter("STEAMAPPS_INTERFACE_VERSION005"),
+                unsupported,
+                getter("STEAMREMOTESTORAGE_INTERFACE_VERSION006"),
+                unsupported,
+                keep(new Nothing(self => { })),
+                keep(new Integer(self => 0)),
+                keep(new WarningHook((self, callback) => { })),
+                keep(new Boolean(self => false)),
+                unsupported, unsupported, unsupported,
+                unsupported // Slot 26: GetISteamUGC, present in SteamClient012.
+            };
+        }
+
         private static void ClearCount(IntPtr output)
         {
             if (output != IntPtr.Zero) Marshal.WriteInt32(output, 0);

@@ -186,7 +186,13 @@ namespace Nativra.X86.Tests
             {
                 var run = Marshal.GetDelegateForFunctionPointer<NativeProbe>(NativeLibrary.GetExport(library, "probe_user016"));
                 var user = User();
-                Assert.Equal(0, run(user, UserId));
+                for (var iteration = 0; iteration < 3; iteration++)
+                {
+                    GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+                    Assert.Equal(0, run(user, UserId));
+                    SteamClassic.Shutdown();
+                    Assert.Equal(user, User());
+                }
                 var factories = Marshal.GetDelegateForFunctionPointer<FactoryProbe>(NativeLibrary.GetExport(library, "probe_factories"));
                 Assert.Equal(0, factories(
                     SteamBridge.Resolve("SteamInternal_CreateInterface"),

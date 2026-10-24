@@ -99,6 +99,61 @@ extern "C"
   return 0;
 }
 
+// Exercise all 27 SteamClient012 slots using independent native signatures.
+static int probe_client012(void *client, void *expectedUser) {
+  CHECK(client != nullptr);
+  auto **slots = *static_cast<void ***>(client);
+  using Integer = int(__fastcall *)(void *);
+  using Boolean = bool(__fastcall *)(void *);
+  using PipeBoolean = bool(__fastcall *)(void *, int);
+  using Connect = int(__fastcall *)(void *, int);
+  using Local = int(__fastcall *)(void *, int *, int);
+  using Release = void(__fastcall *)(void *, int, int);
+  using Binding = void(__fastcall *)(void *, unsigned, unsigned short);
+  using Getter = void *(__fastcall *)(void *, int, int, const char *);
+  using Utils = void *(__fastcall *)(void *, int, const char *);
+  using Nothing = void(__fastcall *)(void *);
+  using Hook = void(__fastcall *)(void *, void *);
+  CHECK(reinterpret_cast<Integer>(slots[0])(client) == 1);
+  CHECK(reinterpret_cast<PipeBoolean>(slots[1])(client, 1));
+  CHECK(reinterpret_cast<Connect>(slots[2])(client, 1) == 1);
+  Count pipe;
+  CHECK(reinterpret_cast<Local>(slots[3])(
+            client, reinterpret_cast<int *>(&pipe.value), 1) == 0);
+  CHECK(pipe.cleared());
+  reinterpret_cast<Release>(slots[4])(client, 1, 1);
+  CHECK(reinterpret_cast<Getter>(slots[5])(client, 1, 1, "SteamUser016") ==
+        expectedUser);
+  CHECK(reinterpret_cast<Getter>(slots[5])(client, 1, 1, "SteamUser999") ==
+        nullptr);
+  CHECK(reinterpret_cast<Getter>(slots[5])(client, 1, 1, "SteamFriends011") ==
+        nullptr);
+  reinterpret_cast<Binding>(slots[7])(client, 0, 0);
+  CHECK(reinterpret_cast<Utils>(slots[9])(client, 1, "SteamUtils005") !=
+        nullptr);
+  const int getters[] = {6,  8,  10, 11, 12, 13, 14, 15,
+                         16, 17, 18, 23, 24, 25, 26};
+  for (int slot : getters) {
+    const char *version = "Unsupported999";
+    if (slot == 8)
+      version = "SteamFriends011";
+    if (slot == 13)
+      version = "STEAMUSERSTATS_INTERFACE_VERSION010";
+    if (slot == 15)
+      version = "STEAMAPPS_INTERFACE_VERSION005";
+    if (slot == 17)
+      version = "STEAMREMOTESTORAGE_INTERFACE_VERSION006";
+    auto *result = reinterpret_cast<Getter>(slots[slot])(client, 1, 1, version);
+    CHECK((result != nullptr) ==
+          (slot == 8 || slot == 13 || slot == 15 || slot == 17));
+  }
+  reinterpret_cast<Nothing>(slots[19])(client);
+  CHECK(reinterpret_cast<Integer>(slots[20])(client) == 0);
+  reinterpret_cast<Hook>(slots[21])(client, nullptr);
+  CHECK(!reinterpret_cast<Boolean>(slots[22])(client));
+  return 0;
+}
+
 using Factory = void *(__cdecl *)(const char *);
 using FindUser = void *(__cdecl *)(int, const char *);
 using FlatId = std::uint64_t(__cdecl *)(void *);
@@ -112,5 +167,6 @@ probe_factories(Factory create, FindUser find, FlatId flat, Accessor classic,
   CHECK(create("SteamUser999") == nullptr);
   CHECK(find(1, "SteamUser016suffix") == nullptr);
   CHECK(flat(user) == expected);
+  CHECK(probe_client012(create("SteamClient012"), user) == 0);
   return probe_user016(static_cast<User016 *>(user), expected);
 }

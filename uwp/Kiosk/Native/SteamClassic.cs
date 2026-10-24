@@ -290,6 +290,8 @@ namespace Kiosk.Native
         private const int CallbackIdOffset = 12;
         private const int RunSlotIndex = 1;
 
+        private static long callbackGeneration;
+
         private static readonly List<IntPtr> registered = new List<IntPtr>();
         private static readonly Queue<KeyValuePair<int, byte[]>> pending = new Queue<KeyValuePair<int, byte[]>>();
 
@@ -322,6 +324,7 @@ namespace Kiosk.Native
             // Cancel delivery while callback objects still belong to the caller.
             lock (registered)
             {
+                callbackGeneration++;
                 foreach (var callback in registered)
                 {
                     var flags = Marshal.ReadByte(callback, CallbackFlagsOffset);
@@ -341,14 +344,19 @@ namespace Kiosk.Native
         private static void RunPendingCallbacks()
         {
             List<KeyValuePair<int, byte[]>> batch;
-            lock (pending)
-            {
-                if (pending.Count == 0) return;
-                batch = new List<KeyValuePair<int, byte[]>>(pending);
-                pending.Clear();
-            }
             List<IntPtr> targets;
-            lock (registered) targets = new List<IntPtr>(registered);
+            long generation;
+            lock (registered)
+            {
+                generation = callbackGeneration;
+                targets = new List<IntPtr>(registered);
+                lock (pending)
+                {
+                    if (pending.Count == 0) return;
+                    batch = new List<KeyValuePair<int, byte[]>>(pending);
+                    pending.Clear();
+                }
+            }
             foreach (var message in batch)
             {
                 var length = Math.Max(message.Value.Length, 1);
@@ -358,7 +366,7 @@ namespace Kiosk.Native
                 {
                     lock (registered)
                     {
-                        if (!registered.Contains(callback)) continue;
+                        if (generation != callbackGeneration || !registered.Contains(callback)) continue;
                         int iCallback;
                         try { iCallback = Marshal.ReadInt32(callback, CallbackIdOffset); }
                         catch { continue; }
@@ -877,57 +885,10 @@ namespace Kiosk.Native
         }
 
         // ---- ISteamClient012 -----------------------------------------------------
-        // 26 slots. Not in LEGO Jurassic World's static import table (it calls
-        // SteamUser()/SteamFriends()/... directly), built for completeness and
-        // for any classic game that goes through SteamInternal_CreateInterface
-        // instead. Get*() accessors validate the requested version and family;
-        // unsupported versions return null, without padding newer client slots.
-
+        // 27 slots, including GetISteamUGC at slot 26. No newer-version padding.
         private static IntPtr BuildClient()
         {
-            Fn getUser = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
-                Text(version) == "SteamUser016" ? Interface("SteamUser016") : Zero;
-            Fn getFriends = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
-                Text(version) == "SteamFriends011" ? Interface("SteamFriends011") : Zero;
-            Fn getUtils = (self, pipe, version, a3, a4, a5, a6, a7, a8, a9) =>
-                Text(version) == "SteamUtils005" ? Utils() : Zero;
-            Fn getApps = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
-                Text(version) == "STEAMAPPS_INTERFACE_VERSION005" ? Interface("STEAMAPPS_INTERFACE_VERSION005") : Zero;
-            Fn getUserStats = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
-                Text(version) == "STEAMUSERSTATS_INTERFACE_VERSION010" ? Interface("STEAMUSERSTATS_INTERFACE_VERSION010") : Zero;
-            Fn getRemoteStorage = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
-                Text(version) == "STEAMREMOTESTORAGE_INTERFACE_VERSION006" ? Interface("STEAMREMOTESTORAGE_INTERFACE_VERSION006") : Zero;
-            Fn getEmpty = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => Zero;
-
-            return Table("SteamClient012",
-                /* 0  CreateSteamPipe               */ stubTrue,
-                /* 1  BReleaseSteamPipe             */ stubTrue,
-                /* 2  ConnectToGlobalUser           */ stubTrue,
-                /* 3  CreateLocalUser               */ stubZero,
-                /* 4  ReleaseUser                   */ stubZero,
-                /* 5  GetISteamUser                 */ Keep(getUser),
-                /* 6  GetISteamGameServer           */ Keep(getEmpty),
-                /* 7  SetLocalIPBinding             */ stubZero,
-                /* 8  GetISteamFriends              */ Keep(getFriends),
-                /* 9  GetISteamUtils                */ Keep(getUtils),
-                /* 10 GetISteamMatchmaking          */ Keep(getEmpty),
-                /* 11 GetISteamMatchmakingServers   */ Keep(getEmpty),
-                /* 12 GetISteamGenericInterface     */ Keep(getEmpty),
-                /* 13 GetISteamUserStats            */ Keep(getUserStats),
-                /* 14 GetISteamGameServerStats      */ Keep(getEmpty),
-                /* 15 GetISteamApps                 */ Keep(getApps),
-                /* 16 GetISteamNetworking           */ Keep(getEmpty),
-                /* 17 GetISteamRemoteStorage        */ Keep(getRemoteStorage),
-                /* 18 GetISteamScreenshots          */ Keep(getEmpty),
-                /* 19 RunFrame                      */ stubZero,
-                /* 20 GetIPCCallCount               */ stubZero,
-                /* 21 SetWarningMessageHook         */ stubZero,
-                /* 22 BShutdownIfAllPipesClosed     */ stubTrue,
-                /* 23 GetISteamHTTP                 */ Keep(getEmpty),
-                /* 24 GetISteamUnifiedMessages      */ Keep(getEmpty),
-                /* 25 GetISteamController           */ Keep(getEmpty)
-
-            );
+            return Table("SteamClient012", SteamInterfaceContracts.Client012(Keep, Interface, Text));
         }
     }
 }

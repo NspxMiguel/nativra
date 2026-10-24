@@ -3,7 +3,7 @@
 `build.cmd` uses MSVC x64 to build a test DLL. The Windows x86 harness workflow
 sets `NATIVRA_STEAM_ABI_FIXTURE` and runs `SteamInterfaceContractTests`, passing
 production reverse-P/Invoke pointers into this caller. It invokes every
-SteamUser016 slot plus flat factories, the bare classic accessor and the flat
+SteamUser016 and SteamClient012 slot plus flat factories, the bare classic accessor and the flat
 64-bit SteamID return. It checks output canaries, failure results and the MSVC
 hidden class-return convention. No Steam SDK headers, runtime, account or game
 binaries are required or redistributed.

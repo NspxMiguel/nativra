@@ -142,8 +142,8 @@ namespace Kiosk.Steam
                     var code = await SteamDepot.ManifestCodeAsync(cm, appId, depot.Id, depot.ManifestId);
                     var manifest = SteamDepot.ParseManifest(
                         await SteamDepot.FetchManifestAsync(servers, depot.Id, depot.ManifestId, code));
-                    if (manifest.DepotId != depot.Id)
-                        throw new DownloadFailure("manifest", false, "depot identity mismatch");
+                    if (manifest.DepotId != depot.Id || manifest.ManifestId.ToString() != depot.ManifestId)
+                        throw new DownloadFailure("manifest", false, $"app={appId} depot={depot.Id} manifest={depot.ManifestId} identity mismatch");
                     plans.Add(new DepotPlan { Depot = depot, Manifest = manifest, Key = key });
                 }
                 if (plans.Count == 0) throw new DownloadFailure("license", false, "no licensed Windows depot");

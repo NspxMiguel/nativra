@@ -60,7 +60,7 @@ namespace Nativra.X86.Tests
             using (var writer = new BinaryWriter(body))
             {
                 var files = new ProtoWriter().Bytes(1, mapping.Finish()).Finish();
-                var metadata = new ProtoWriter().Uint(1, 1).Uint(4, 0).Finish();
+                var metadata = new ProtoWriter().Uint(1, 1).Uint(2, ulong.Parse(manifest)).Uint(4, 0).Finish();
                 writer.Write(0x71F617D0U); writer.Write(files.Length); writer.Write(files);
                 writer.Write(0x1F4812BEU); writer.Write(metadata.Length); writer.Write(metadata);
                 writer.Write(0x32C415ABU); writer.Write(0);
@@ -98,6 +98,19 @@ namespace Nativra.X86.Tests
         {
             await SteamDownload.RunAsync(new SteamSession(), 312530, "local", progress, cancellation: cancellation);
             completed++;
+        }
+
+        [Fact]
+        public async Task ResponseManifestIdentityMustMatchRequestedManifestBeforeReuse()
+        {
+            var previous = cdn.Manifest;
+            ConfigureManifest("102");
+            cdn.Manifest = previous;
+            var error = await Assert.ThrowsAsync<DownloadFailure>(() => RunAsync());
+            Assert.Equal("manifest", error.Category);
+            Assert.Contains("manifest=102", error.Message);
+            Assert.Equal(0, cdn.ChunkRequests);
+            Assert.Equal(0, completed);
         }
 
         [Theory]

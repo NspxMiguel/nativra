@@ -34,6 +34,7 @@ namespace Kiosk.Steam
     public sealed class Manifest
     {
         public uint DepotId { get; set; }
+        public ulong ManifestId { get; set; }
         public long TotalBytes { get; set; }
         public bool NamesEncrypted { get; set; }
         public List<ManifestFile> Files { get; } = new List<ManifestFile>();
@@ -206,6 +207,7 @@ namespace Kiosk.Steam
             var manifest = new Manifest
             {
                 DepotId = (uint)metadata.Num(1),
+                ManifestId = metadata.Num(2),
                 NamesEncrypted = metadata.Num(4) == 1,
             };
 

@@ -21,7 +21,8 @@ not another percentage or a managed-runtime guess. Leafless's historical
 ## Implemented contracts
 
 - The actual C# downloader resolves Windows/shared-platform depots and licensed
-  manifests before planning space. Only explicit access-denied depot-key replies
+  manifests before planning space. Embedded depot/manifest IDs must match the
+  requested identity before checkpoint reuse. Only explicit access-denied depot-key replies
   can omit an optional depot; a job timeout cannot silently omit game content.
 - Each current app/depot/manifest/file context verifies length and SHA-1 of every
   existing chunk. The payload itself is the persistent checkpoint: no sidecar

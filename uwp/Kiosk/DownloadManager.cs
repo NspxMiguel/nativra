@@ -154,9 +154,8 @@ namespace Kiosk
         }
 
         /// <summary>
-        /// download-error.txt: the whole exception, with the file it was on.
-        /// The screen has room for one line; finding why a download stops
-        /// at the same file every time needs the stack.
+        /// download-error.txt: sanitized installation context and categorized failure.
+        /// Raw exceptions may contain authenticated URLs or session data.
         /// </summary>
         private static async Task RecordAsync(DownloadJob job, Exception error)
         {
@@ -183,7 +182,11 @@ namespace Kiosk
             {
                 var existing = Find(appId);
                 if (existing != null && existing.Running) return existing;
-                job = new DownloadJob { AppId = appId, Name = name, Running = true };
+                job = new DownloadJob
+                {
+                    AppId = appId, Name = name, Running = true,
+                    Diagnostic = $"identity={appId}/unknown/unknown/unknown chunk=unknown done=0 total=unknown stage=install",
+                };
                 jobs.Add(job);
             }
             Raise();
@@ -232,7 +235,7 @@ namespace Kiosk
                 }
                 catch (Exception error)
                 {
-                    job.Error = error is Steam.DownloadFailure ? error.Message : $"Installation failed ({Steam.DownloadCheckpoint.Category(error)})";
+                    job.Error = Texts.Get("steam.installfailed");
                     await RecordAsync(job, error);
                 }
                 finally

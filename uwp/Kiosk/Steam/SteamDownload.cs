@@ -193,7 +193,8 @@ namespace Kiosk.Steam
                             // One chunk at a time bounds buffers independently of depot size.
                             // Rehashing the current file binds every reused range to the
                             // app/depot/manifest/file context, including legacy checkpoints.
-                            using (var stream = await target.OpenStreamForWriteAsync())
+                            using (var access = await target.OpenAsync(FileAccessMode.ReadWrite))
+                            using (var stream = access.AsStream())
                             {
                                 await RepairAsync(stream, file, servers, plan.Depot.Id, plan.Key,
                                     async growth => DownloadCheckpoint.RequireCapacity(await FreeBytesAsync(folder), growth),

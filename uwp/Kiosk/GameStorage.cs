@@ -293,7 +293,8 @@ namespace Kiosk
             {
                 var copy = await target.CreateFileAsync(file.Name, CreationCollisionOption.ReplaceExisting);
                 using (var input = await file.OpenStreamForReadAsync())
-                using (var output = await copy.OpenStreamForWriteAsync())
+                using (var access = await copy.OpenAsync(FileAccessMode.ReadWrite))
+                using (var output = access.AsStream())
                     await Steam.DownloadCheckpoint.CopyVerifiedAsync(input, output);
                 onFile((await file.GetBasicPropertiesAsync()).Size);
             }

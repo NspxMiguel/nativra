@@ -10,6 +10,14 @@ using Kiosk.Steam;
 
 namespace Windows.Storage
 {
+    public enum FileAccessMode { ReadWrite }
+    public sealed class FixtureRandomAccessStream : IDisposable
+    {
+        private readonly Stream stream;
+        public FixtureRandomAccessStream(Stream stream) { this.stream = stream; }
+        public Stream AsStream() => stream;
+        public void Dispose() => stream.Dispose();
+    }
     public enum CreationCollisionOption { OpenIfExists, ReplaceExisting }
     public enum NameCollisionOption { ReplaceExisting, FailIfExists }
     public enum StorageDeleteOption { PermanentDelete }
@@ -86,7 +94,8 @@ namespace Windows.Storage
                 return base.WriteAsync(buffer, offset, count, token);
             }
         }
-        public Task<Stream> OpenStreamForWriteAsync() => Task.FromResult<Stream>(new BudgetStream(Path));
+        public Task<FixtureRandomAccessStream> OpenAsync(FileAccessMode mode) =>
+            Task.FromResult(new FixtureRandomAccessStream(new BudgetStream(Path)));
         public Task DeleteAsync() { File.Delete(Path); return Task.CompletedTask; }
         public Task DeleteAsync(StorageDeleteOption option) => DeleteAsync();
         public Task CopyAsync(StorageFolder folder, string name, NameCollisionOption option)

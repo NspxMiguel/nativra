@@ -51,10 +51,13 @@ namespace Kiosk.Steam
             if (path.Length == 0 || path.StartsWith("/", StringComparison.Ordinal))
                 throw new DownloadFailure("manifest", false, "invalid relative file path");
             var top = path.Split('/')[0];
-            if (top.StartsWith(".", StringComparison.Ordinal))
+            if (top.Equals(".downloaded", StringComparison.OrdinalIgnoreCase) ||
+                top.Equals(".downloading", StringComparison.OrdinalIgnoreCase) ||
+                top.Equals(".ordered", StringComparison.OrdinalIgnoreCase))
                 throw new DownloadFailure("manifest", false, "reserved install metadata path");
             foreach (var part in path.Split('/'))
-                if (part == ".." || part == "." || part.Length == 0 || part.IndexOfAny(new[] { ':', '\r', '\n', '\0' }) >= 0)
+                if (part == ".." || part == "." || part.Length == 0 || part.EndsWith(".", StringComparison.Ordinal) || part.EndsWith(" ", StringComparison.Ordinal) ||
+                    part.IndexOfAny(new[] { ':', '\r', '\n', '\0' }) >= 0)
                     throw new DownloadFailure("manifest", false, "invalid relative file path");
             return path;
         }

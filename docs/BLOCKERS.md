@@ -25,6 +25,9 @@ These are contract corrections, **not an identified Dokimon crash fix**. Other
 legacy interface families still contain generic shims and require their own
 trace-driven audit. Local contracts and the synthetic Windows native caller
 are described in [the ABI fixture](../native/tests/steam-abi/README.md).
+The final code passed the Windows native caller (all 22 User016 and 27 Client012
+slots), the x86 harness and the Release .NET Native package build; exact runs are
+recorded in `.codex-report.md`. This does not establish packaged runtime behavior.
 The complete WP04 diagnosis gate remains open: import an authorized sanitized
 call trace or disassembly for the extension fault, identify its actual contract,
 then reproduce that contract in a fixture before attributing a fix. Future

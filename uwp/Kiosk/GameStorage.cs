@@ -152,15 +152,14 @@ namespace Kiosk
         }
 
         /// <summary>
-        /// A game folder that can be played: its download finished and none is
-        /// half-way. Folders from before the completion marker count when they
-        /// hold the game's program.
+        /// A verified install with no pending transaction. Legacy markers and
+        /// executable presence alone do not establish payload completeness.
         /// </summary>
         public static async Task<bool> IsReadyAsync(StorageFolder folder)
         {
             if (await folder.TryGetItemAsync(".downloading") != null) return false;
-            if (await folder.TryGetItemAsync(".downloaded") != null) return true;
-            return await ExecutableAsync(folder) != null;
+            var marker = await folder.TryGetItemAsync(".downloaded") as StorageFile;
+            return marker != null && await FileIO.ReadTextAsync(marker) == "verified-v1";
         }
 
         /// <summary>
@@ -243,40 +242,65 @@ namespace Kiosk
             await list.DeleteAsync(StorageDeleteOption.PermanentDelete);
         }
 
-        /// <summary>
-        /// Moves a game's folder to another place, file by file: each file is
-        /// copied, then removed from where it was, so a move cut short leaves
-        /// every file whole in one place or the other and can simply run
-        /// again. Reports bytes moved.
-        /// </summary>
+        /// <summary>Copy into hidden staging, verify, publish, then remove the intact source.</summary>
         public static async Task<StorageFolder> MoveAsync(
             StorageFolder source, string place, Action<ulong> onMoved)
         {
             var games = await GamesFolderAsync(place, true);
-            var target = await games.CreateFolderAsync(source.Name, CreationCollisionOption.OpenIfExists);
+            if (await games.TryGetItemAsync(source.Name) != null)
+                throw new Steam.DownloadFailure("move-conflict", true, "destination already contains this app; source retained");
+            var name = source.Name;
+            if (await games.TryGetItemAsync(".move-" + name) is StorageFolder abandoned)
+                await abandoned.DeleteAsync(StorageDeleteOption.PermanentDelete);
+            var bytes = await TreeBytesAsync(source);
+            Steam.DownloadCheckpoint.RequireCapacity(await Steam.SteamDownload.FreeBytesAsync(games), 0, bytes);
+            var staging = await games.CreateFolderAsync(".move-" + source.Name, CreationCollisionOption.OpenIfExists);
             ulong moved = 0;
-            await MoveTreeAsync(source, target, bytes =>
+            try
             {
-                moved += bytes;
-                onMoved?.Invoke(moved);
-            });
+                await CopyTreeAsync(source, staging, count =>
+                {
+                    moved += count;
+                    onMoved?.Invoke(moved);
+                });
+                // Rename on the same volume is the commit; failures leave source intact.
+                await staging.RenameAsync(source.Name, NameCollisionOption.FailIfExists);
+            }
+            catch (Exception error)
+            {
+                // Only our hidden staging tree is rolled back. Never delete the source.
+                try { await staging.DeleteAsync(StorageDeleteOption.PermanentDelete); } catch { }
+                if (Steam.DownloadCheckpoint.IsDiskFull(error))
+                    throw new Steam.DiskFullException($"move required={bytes} available={(await Steam.SteamDownload.FreeBytesAsync(games))?.ToString() ?? "unknown"} source retained");
+                throw;
+            }
             await source.DeleteAsync(StorageDeleteOption.PermanentDelete);
-            return target;
+            return await games.GetFolderAsync(name);
         }
 
-        private static async Task MoveTreeAsync(StorageFolder source, StorageFolder target, Action<ulong> onFile)
+        private static async Task<ulong> TreeBytesAsync(StorageFolder folder)
+        {
+            ulong total = 0;
+            foreach (var file in await folder.GetFilesAsync())
+                total = checked(total + (await file.GetBasicPropertiesAsync()).Size);
+            foreach (var child in await folder.GetFoldersAsync()) total = checked(total + await TreeBytesAsync(child));
+            return total;
+        }
+
+        private static async Task CopyTreeAsync(StorageFolder source, StorageFolder target, Action<ulong> onFile)
         {
             foreach (var file in await source.GetFilesAsync())
             {
-                var size = (await file.GetBasicPropertiesAsync()).Size;
-                await file.CopyAsync(target, file.Name, NameCollisionOption.ReplaceExisting);
-                await file.DeleteAsync(StorageDeleteOption.PermanentDelete);
-                onFile(size);
+                var copy = await target.CreateFileAsync(file.Name, CreationCollisionOption.ReplaceExisting);
+                using (var input = await file.OpenStreamForReadAsync())
+                using (var output = await copy.OpenStreamForWriteAsync())
+                    await Steam.DownloadCheckpoint.CopyVerifiedAsync(input, output);
+                onFile((await file.GetBasicPropertiesAsync()).Size);
             }
             foreach (var child in await source.GetFoldersAsync())
             {
                 var into = await target.CreateFolderAsync(child.Name, CreationCollisionOption.OpenIfExists);
-                await MoveTreeAsync(child, into, onFile);
+                await CopyTreeAsync(child, into, onFile);
             }
         }
 
@@ -312,7 +336,8 @@ namespace Kiosk
                     {
                         files = await folder.GetFilesAsync();
                         foreach (var sub in await folder.GetFoldersAsync())
-                            if (!sub.Name.StartsWith(".", StringComparison.Ordinal)) next.Add(sub);
+                            if (!sub.Name.StartsWith(".", StringComparison.Ordinal) &&
+                                !sub.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase)) next.Add(sub);
                     }
                     catch
                     {

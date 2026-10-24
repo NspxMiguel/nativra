@@ -10,3 +10,13 @@ test("a failed depot download must not become a guest startup verdict", () => {
   expect(downloadFailure(1868410, report)).toBeUndefined();
   expect(downloadFailure(3651720, "")).toBeUndefined();
 });
+
+test("categorized installation diagnostics remain separate from runtime failures", () => {
+  const report =
+    "2026-10-24T12:00:00Z app 312530 at 50% game.exe\r\ncategory=short-encrypted-chunk recoverable=True identity=312530/1/101/game.exe chunk=51200 done=51200 total=102400 stage=install\r\n";
+  expect(downloadFailure(312530, report)).toContain(
+    "category=short-encrypted-chunk",
+  );
+  expect(downloadFailure(312530, report)).toContain("stage=install");
+  expect(downloadFailure(424840, report)).toBeUndefined();
+});

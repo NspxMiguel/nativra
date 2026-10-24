@@ -46,7 +46,7 @@ namespace Kiosk.Steam
     /// </summary>
     public static class SteamDepot
     {
-        private static readonly HttpClient Http = new HttpClient();
+        internal static HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         private static int rotation;
 
         public static async Task<List<ContentServer>> ServersAsync(SteamCm cm)
@@ -91,27 +91,43 @@ namespace Kiosk.Steam
         private static async Task<byte[]> FetchAsync(
             List<ContentServer> servers, string path, int attempts = 6)
         {
-            Exception last = null;
-            var tries = Math.Min(attempts, Math.Max(1, servers.Count));
-            for (var i = 0; i < tries; i++)
+            if (servers.Count == 0) throw new DownloadFailure("network", true, "no content servers");
+            var limit = path.IndexOf("/chunk/", StringComparison.Ordinal) >= 0
+                ? DownloadCheckpoint.MaxPayloadBytes : 32 * 1024 * 1024;
+            for (var i = 0; i < Math.Min(attempts, servers.Count); i++)
             {
-                var server = servers[(rotation++ + i) % servers.Count];
+                var index = (uint)System.Threading.Interlocked.Increment(ref rotation) % (uint)servers.Count;
+                var server = servers[(int)index];
                 try
                 {
-                    var response = await Http.GetAsync($"https://{server.Host}{path}");
-                    if (!response.IsSuccessStatusCode)
+                    using (var response = await Http.GetAsync($"https://{server.Host}{path}", HttpCompletionOption.ResponseHeadersRead))
                     {
-                        last = new Exception($"HTTP {(int)response.StatusCode} from {server.Host}");
-                        continue;
+                        if (!response.IsSuccessStatusCode) continue;
+                        if (response.Content.Headers.ContentLength > limit)
+                            throw new DownloadFailure("cdn-payload", false, "payload exceeds buffer limit");
+                        using (var input = await response.Content.ReadAsStreamAsync())
+                        using (var output = new MemoryStream())
+                        using (var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30)))
+                        {
+                            var buffer = new byte[64 * 1024];
+                            int count;
+                            while ((count = await input.ReadAsync(buffer, 0, buffer.Length, timeout.Token)) != 0)
+                            {
+                                if (output.Length + count > limit)
+                                    throw new DownloadFailure("cdn-payload", false, "payload exceeds buffer limit");
+                                output.Write(buffer, 0, count);
+                            }
+                            return output.ToArray();
+                        }
                     }
-                    return await response.Content.ReadAsByteArrayAsync();
                 }
-                catch (Exception error)
+                catch (DownloadFailure) { throw; }
+                catch (Exception error) when (error is HttpRequestException || error is OperationCanceledException || error is IOException)
                 {
-                    last = error;
+                    // Endpoint URLs can contain request codes; never preserve them in diagnostics.
                 }
             }
-            throw last ?? new Exception("no content server answered " + path);
+            throw new DownloadFailure("network", true, "content server attempts exhausted");
         }
 
         public static Task<byte[]> FetchManifestAsync(
@@ -138,15 +154,18 @@ namespace Kiosk.Steam
         /// <summary>A zip holding one entry; reading the header beats a library.</summary>
         private static byte[] UnzipSingle(byte[] buffer)
         {
-            if (BitConverter.ToUInt32(buffer, 0) != 0x04034B50)
+            if (buffer.Length < 30 || BitConverter.ToUInt32(buffer, 0) != 0x04034B50)
             {
-                throw new Exception("not a zip");
+                throw new InvalidDataException("short or invalid zip");
             }
             var method = BitConverter.ToUInt16(buffer, 8);
             var compressed = (int)BitConverter.ToUInt32(buffer, 18);
             var nameLength = BitConverter.ToUInt16(buffer, 26);
             var extraLength = BitConverter.ToUInt16(buffer, 28);
             var start = 30 + nameLength + extraLength;
+            var declared = BitConverter.ToUInt32(buffer, 22);
+            if (declared > 32 * 1024 * 1024 || compressed < 0 || start > buffer.Length - compressed)
+                throw new InvalidDataException("zip length exceeds payload or limit");
 
             if (method == 0)
             {
@@ -159,7 +178,7 @@ namespace Kiosk.Steam
             using (var deflate = new DeflateStream(input, CompressionMode.Decompress))
             using (var output = new MemoryStream())
             {
-                deflate.CopyTo(output);
+                CopyBounded(deflate, output, (int)declared);
                 return output.ToArray();
             }
         }
@@ -176,6 +195,8 @@ namespace Kiosk.Steam
                 var magic = BitConverter.ToUInt32(buffer, at);
                 if (magic == MagicEnd) break;
                 var length = (int)BitConverter.ToUInt32(buffer, at + 4);
+                if (length < 0 || length > buffer.Length - at - 8)
+                    throw new InvalidDataException("short manifest block");
                 if (magic == MagicPayload) payload = ProtoMessage.Read(buffer, at + 8, length);
                 else if (magic == MagicMetadata) metadata = ProtoMessage.Read(buffer, at + 8, length);
                 at += 8 + length;
@@ -221,6 +242,8 @@ namespace Kiosk.Steam
         /// </summary>
         public static byte[] Decrypt(byte[] data, byte[] key)
         {
+            if (data.Length < 32 || data.Length % 16 != 0)
+                throw new DownloadFailure("short-encrypted-chunk", true, "encrypted payload is not complete AES blocks");
             using (var aes = Aes.Create())
             {
                 aes.Key = key;
@@ -257,10 +280,16 @@ namespace Kiosk.Steam
         /// </summary>
         public static byte[] Decompress(byte[] data)
         {
-            if (data.Length > 2 && data[0] == 0x50 && data[1] == 0x4B) return UnzipSingle(data);
+            if (data.Length > 2 && data[0] == 0x50 && data[1] == 0x4B)
+            {
+                if (data.Length < 30) throw new InvalidDataException("short zip chunk");
+                CheckDeclared((int)BitConverter.ToUInt32(data, 22));
+                return UnzipSingle(data);
+            }
             if (data.Length > 24 && data[0] == 0x56 && data[1] == 0x53)
             {
                 var declared = (int)BitConverter.ToUInt32(data, data.Length - 11);
+                CheckDeclared(declared);
                 var payload = new byte[data.Length - 8 - 15];
                 Array.Copy(data, 8, payload, 0, payload.Length);
                 var plain = new byte[declared];
@@ -275,8 +304,7 @@ namespace Kiosk.Steam
                 return plain;
             }
             if (data.Length > 24 && data[0] == 0x56 && data[1] == 0x5A) return Unlzma(data);
-            throw new Exception(
-                "unknown chunk container " + (char)data[0] + (char)data[1]);
+            throw new InvalidDataException("short or unknown chunk container");
         }
 
         /// <summary>
@@ -284,11 +312,29 @@ namespace Kiosk.Steam
         /// checksum, the five property bytes LZMA needs, the stream, and a
         /// ten-byte footer whose second word is the size it comes to.
         /// </summary>
+        private static void CheckDeclared(int declared)
+        {
+            if (declared < 0 || declared > DownloadCheckpoint.MaxChunkBytes)
+                throw new InvalidDataException("chunk declared length exceeds buffer limit");
+        }
+
+        private static void CopyBounded(Stream input, Stream output, int limit)
+        {
+            var buffer = new byte[64 * 1024];
+            int count;
+            while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
+            {
+                if (output.Length + count > limit) throw new InvalidDataException("decoded length exceeds limit");
+                output.Write(buffer, 0, count);
+            }
+        }
+
         private static byte[] Unlzma(byte[] data)
         {
             var properties = new byte[5];
             Array.Copy(data, 7, properties, 0, 5);
             var declared = (int)BitConverter.ToUInt32(data, data.Length - 6);
+            CheckDeclared(declared);
             var payloadLength = data.Length - 12 - 10;
 
             using (var input = new MemoryStream(data, 12, payloadLength))
@@ -296,7 +342,7 @@ namespace Kiosk.Steam
                 properties, input, payloadLength, declared))
             using (var output = new MemoryStream(declared))
             {
-                lzma.CopyTo(output);
+                CopyBounded(lzma, output, declared);
                 var plain = output.ToArray();
                 if (plain.Length != declared)
                 {

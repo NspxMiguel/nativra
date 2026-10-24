@@ -11,6 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.6" />
+    <PackageReference Include="SharpCompress" Version="0.37.2" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
@@ -18,6 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../uwp/Kiosk/Steam/SteamDownload.cs" Link="Host/SteamDownload.cs" />
+    <Compile Include="../../uwp/Kiosk/Steam/SteamDepot.cs" Link="Host/SteamDepot.cs" />
+    <Compile Include="../../uwp/Kiosk/Steam/Proto.cs" Link="Host/Proto.cs" />
+    <Compile Include="../../uwp/Kiosk/GameStorage.cs" Link="Host/GameStorage.cs" />
+    <Compile Include="../../uwp/Kiosk/Steam/DownloadCheckpoint.cs" Link="Host/DownloadCheckpoint.cs" />
+    <Compile Include="../../uwp/Kiosk/Steam/SteamVdf.cs" Link="Host/SteamVdf.cs" />
     <Compile Include="../../uwp/Kiosk/GameProfile.cs" Link="Host/GameProfile.cs" />
     <Compile Include="../../uwp/Kiosk/Native/RegistryBridge.cs" Link="Host/RegistryBridge.cs" />
     <Compile Include="../../uwp/Kiosk/Native/HidBridge.cs" Link="Host/HidBridge.cs" />

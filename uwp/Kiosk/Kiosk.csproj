@@ -98,6 +98,7 @@
     </Compile>
     <Compile Include="Steam\Proto.cs" />
     <Compile Include="Steam\SteamDownload.cs" />
+    <Compile Include="Steam\DownloadCheckpoint.cs" />
     <Compile Include="Steam\SteamStats.cs" />
     <Compile Include="Steam\SteamCm.cs" />
     <Compile Include="Steam\SteamVdf.cs" />

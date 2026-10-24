@@ -1,5 +1,11 @@
 # Game compatibility
 
+WP03 adds verified chunk resume, capacity planning and transactional storage moves.
+Portable C# fixtures are implementation evidence only: **awaiting hardware evidence**
+for Duck Game, Little Nightmares, LEGO Jurassic World and Amazing Frog ? 2.
+Their installation/runtime ratings are unchanged; Duck's reported 50% failure
+has no supplied first-error log. See [WP03 evidence](progress/wp03-installation.md).
+
 Tested on an Xbox Series X in Developer Mode, with games downloaded from the
 owner's own Steam library by Nativra itself. Ratings follow the Steam Deck
 idea, with one addition for games not tried yet.

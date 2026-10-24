@@ -13,6 +13,11 @@ using Windows.Storage.Streams;
 
 namespace Kiosk.Steam
 {
+    public sealed class DepotLicenseException : Exception
+    {
+        public DepotLicenseException(uint depot) : base($"depot {depot} license refused") { }
+    }
+
     public sealed class SteamLogOnException : Exception
     {
         public int Result { get; }
@@ -360,10 +365,10 @@ namespace Kiosk.Steam
             await SendAsync(EMsgGetDepotDecryptionKey, body, header);
 
             var response = await waiting;
-            if ((int)response.Num(1, 2) != 1)
-            {
-                throw new Exception($"no depot key for {depotId}");
-            }
+            var result = (int)response.Num(1, 2);
+            if (result == 15) throw new DepotLicenseException(depotId);
+            if (result != 1)
+                throw new DownloadFailure("depot-key", false, $"depot={depotId} result={result}");
             var depotKey = response.Raw(3);
             if (depotKey == null) throw new Exception($"empty depot key for {depotId}");
             return depotKey;

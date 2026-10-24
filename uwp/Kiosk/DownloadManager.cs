@@ -16,6 +16,7 @@ namespace Kiosk
         public bool Moving;
         public bool Finished;
         public string Error;
+        public string Diagnostic;
     }
 
     /// <summary>
@@ -114,22 +115,15 @@ namespace Kiosk
         /// </summary>
         private static async Task GatherAsync(DownloadJob job, uint appId, string place)
         {
-            try
+            var target = new GamePlace { Id = place, Name = place };
+            foreach (var candidate in await GameStorage.PlacesAsync())
+                if (candidate.Id == place) target = candidate;
+            foreach (var pair in await GameStorage.GamesFoldersAsync())
             {
-                var target = new GamePlace { Id = place, Name = place };
-                foreach (var candidate in await GameStorage.PlacesAsync())
-                    if (candidate.Id == place) target = candidate;
-                foreach (var pair in await GameStorage.GamesFoldersAsync())
-                {
-                    if (pair.Key == place) continue;
-                    if (!(await pair.Value.TryGetItemAsync(appId.ToString()) is Windows.Storage.StorageFolder stray)) continue;
-                    if (await stray.TryGetItemAsync(".downloaded") != null) continue;
-                    await MoveAsync(job, appId, pair.Key, target);
-                }
-            }
-            catch
-            {
-                // Gathering is tidying; the download itself still runs.
+                if (pair.Key == place) continue;
+                if (!(await pair.Value.TryGetItemAsync(appId.ToString()) is Windows.Storage.StorageFolder stray)) continue;
+                if (await stray.TryGetItemAsync(".downloaded") != null) continue;
+                await MoveAsync(job, appId, pair.Key, target);
             }
         }
 
@@ -171,7 +165,7 @@ namespace Kiosk
                 var file = await Windows.Storage.ApplicationData.Current.LocalFolder.CreateFileAsync(
                     "download-error.txt", Windows.Storage.CreationCollisionOption.ReplaceExisting);
                 await Windows.Storage.FileIO.WriteTextAsync(file,
-                    $"{DateTime.UtcNow:o} app {job.AppId} at {job.Percent}% {job.File}\r\n{error}\r\n");
+                    $"{DateTime.UtcNow:o} app {job.AppId} at {job.Percent}% {job.File}\r\ncategory={Steam.DownloadCheckpoint.Category(error)} recoverable={(error is Steam.DownloadFailure failure ? failure.Recoverable : true)} {job.Diagnostic} type={error.GetType().Name}\r\n{(error is Steam.DownloadFailure ? error.Message : "installation failed; raw exception omitted")}\r\n");
             }
             catch
             {
@@ -208,6 +202,7 @@ namespace Kiosk
                             {
                                 job.Percent = progress.Percent;
                                 job.File = progress.File ?? string.Empty;
+                                job.Diagnostic = $"identity={progress.Identity} chunk={progress.ChunkOffset} done={progress.Done} total={progress.Total} stage={progress.Stage}";
                                 // Enough to move a bar, not a flood of redraws.
                                 var now = Environment.TickCount;
                                 if (now - lastRaised < 500) return;
@@ -215,6 +210,11 @@ namespace Kiosk
                                 Raise();
                             });
                             break;
+                        }
+                        catch (Exception error) when (attempt < 2 &&
+                            (error is TimeoutException || error is System.Net.Http.HttpRequestException))
+                        {
+                            await Task.Delay(1000 * (attempt + 1));
                         }
                         catch (Steam.DiskFullException) when (attempt == 0)
                         {
@@ -232,7 +232,7 @@ namespace Kiosk
                 }
                 catch (Exception error)
                 {
-                    job.Error = error.Message;
+                    job.Error = error is Steam.DownloadFailure ? error.Message : $"Installation failed ({Steam.DownloadCheckpoint.Category(error)})";
                     await RecordAsync(job, error);
                 }
                 finally

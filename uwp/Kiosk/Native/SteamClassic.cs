@@ -103,11 +103,16 @@ namespace Kiosk.Native
         /// </summary>
         public static Func<string, IntPtr, IntPtr> Tracer;
 
-        private static IntPtr Table(string name, params IntPtr[] slots)
+        internal static IntPtr Table(string name, params IntPtr[] slots)
         {
             var tracer = Tracer;
             if (tracer != null)
+            {
+                // Traced slots can call a recorder owned by the tracer's captured
+                // loader. Keep that owner alive as long as the cached vtable.
+                lock (keep) keep.Add(tracer);
                 for (var i = 0; i < slots.Length; i++) slots[i] = tracer(name + "#" + i, slots[i]);
+            }
             var table = Marshal.AllocHGlobal(IntPtr.Size * slots.Length);
             for (var i = 0; i < slots.Length; i++) Marshal.WriteIntPtr(table, i * IntPtr.Size, slots[i]);
             var obj = Marshal.AllocHGlobal(IntPtr.Size);

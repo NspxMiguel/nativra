@@ -24,6 +24,29 @@ namespace Nativra.X86.Tests
         private static T Slot<T>(IntPtr obj, int slot) where T : Delegate =>
             Marshal.GetDelegateForFunctionPointer<T>(Marshal.ReadIntPtr(Marshal.ReadIntPtr(obj), slot * IntPtr.Size));
 
+        private sealed class TraceOwner
+        {
+            internal IntPtr Wrap(string name, IntPtr target) => target;
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static WeakReference CreateTracedTable()
+        {
+            var owner = new TraceOwner();
+            SteamClassic.Tracer = owner.Wrap;
+            try { SteamClassic.Table("SyntheticLifetime", new IntPtr(1)); }
+            finally { SteamClassic.Tracer = null; }
+            return new WeakReference(owner);
+        }
+
+        [Fact]
+        public void CachedTracedTablesKeepTheirRecorderOwnerAlive()
+        {
+            var owner = CreateTracedTable();
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            Assert.True(owner.IsAlive);
+        }
+
         [Fact]
         public void FactoriesRejectUnknownVersionsAndNeverManufactureExports()
         {

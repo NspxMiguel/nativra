@@ -184,7 +184,9 @@ namespace Kiosk
                 if (existing != null && existing.Running) return existing;
                 job = new DownloadJob
                 {
-                    AppId = appId, Name = name, Running = true,
+                    AppId = appId,
+                    Name = name,
+                    Running = true,
                     Diagnostic = $"identity={appId}/unknown/unknown/unknown chunk=unknown done=0 total=unknown stage=install",
                 };
                 jobs.Add(job);

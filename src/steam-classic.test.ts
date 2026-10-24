@@ -20,11 +20,11 @@ test("a statically imported steam_api64 reaches the bridge before anything else"
   expect(method).toContain("SteamBridge.Resolve(function)");
 });
 
-test("the flat resolver falls through to the classic API before caching an unknown export as dead", () => {
+test("the flat resolver falls through to the classic API before rejecting an unknown export", () => {
   const method = bridge.slice(bridge.indexOf("public static IntPtr Resolve(string export)"));
   const knownCheck = method.indexOf("answers.TryGetValue(export, out var known)");
   const classicCheck = method.indexOf("SteamClassic.Resolve(export)");
-  const catchAll = method.indexOf("Answer(export, (a, b, c, d) => IntPtr.Zero)");
+  const catchAll = method.indexOf('Count("unsupported-export:" + export)');
   expect(knownCheck).toBeGreaterThan(-1);
   expect(classicCheck).toBeGreaterThan(knownCheck);
   expect(classicCheck).toBeLessThan(catchAll);
@@ -61,18 +61,11 @@ test("SteamClassic answers the flat SteamAPI_ exports the classic loop needs, an
     expect(classic).toContain(`case "${name}": return Accessor(export, ${make});`);
     expect(classic).not.toContain(`case "${name}": return ${make}();`);
   }
-  expect(classic).toContain("Fn call = (a0, a1, a2, a3, a4, a5, a6, a7, a8, a9) => make();");
+  expect(classic).toContain("GetObject call = () => make();");
 });
 
-test("GetSteamID writes through the hidden return pointer rather than returning a value directly", () => {
-  const build = classic.slice(classic.indexOf("private static IntPtr BuildUser()"), classic.indexOf("private static IntPtr BuildFriends()"));
-  // 'result' is argument position two -- right after 'this' -- per the MSVC
-  // x64 ABI for a class returned by value, and GetSteamID must write the id
-  // into it and hand the same pointer back rather than returning the id.
-  const getSteamId = build.slice(build.indexOf("Fn getSteamId ="));
-  expect(getSteamId).toContain("Marshal.WriteInt64(result, 0, (long)SteamBridge.SteamId)");
-  expect(getSteamId.indexOf("return result;")).toBeGreaterThan(-1);
-  expect(classic).toContain("/* 2  GetSteamID                  */ Keep(getSteamId),");
+test("the classic user table delegates to the tested typed ABI contract", () => {
+  expect(classic).toContain("SteamInterfaceContracts.User016(Keep,");
 });
 
 test("every hidden-pointer-return friend/clan slot answers through the same shared helper", () => {

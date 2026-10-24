@@ -85,6 +85,11 @@ Performance note: Xbox Developer Mode runs sideloaded apps as *apps* unless
 restart). As an app Nativra gets a fraction of the CPU and GPU; a console
 system update can turn the setting off again.
 
+WP04's offline Steam ABI tests do not change these ratings. Dokimon's exact
+faulting export/interface/slot remains unknown from the supplied report; the
+branch's factory, user ABI and callback corrections are **awaiting hardware
+evidence** for Dokimon and Cuphead. See [the open diagnosis gate](BLOCKERS.md#wp04-offline-steam-abi-hardening-2026-10-24).
+
 ## Compatibilidade de jogos (pt-BR)
 
 Testado num Xbox Series X em Modo Desenvolvedor, com jogos baixados da própria

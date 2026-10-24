@@ -261,6 +261,42 @@ namespace Nativra.X86.Tests
             Assert.DoesNotContain(p.Images, image => image.Name.Equals("steam_api.dll", StringComparison.OrdinalIgnoreCase));
         }
 
+        [Theory]
+        [InlineData("SteamUser016", 22)]
+        [InlineData("SteamUser017", 24)]
+        [InlineData("SteamUser018", 25)]
+        [InlineData("SteamUser019", 29)]
+        public void UserVersionsPreserveThiscallReturnsAndFailAuthenticationWithBoundedOutputs(string version, int slots)
+        {
+            var user = Api("SteamInternal_CreateInterface", Str(version));
+            var output = k.Heap.Alloc(24);
+            p.Memory.Write64(output, ulong.MaxValue);
+            p.Memory.Write64(output + 8, ulong.MaxValue);
+            p.Memory.Write64(output + 16, ulong.MaxValue);
+            Assert.Equal(output + 8, M(user, 2, output + 8));
+            Assert.Equal(account.SteamId, p.Memory.Read64(output + 8));
+            Assert.Equal(ulong.MaxValue, p.Memory.Read64(output));
+            Assert.Equal(ulong.MaxValue, p.Memory.Read64(output + 16));
+            p.Memory.Write64(output + 8, ulong.MaxValue);
+            Assert.Equal(0u, M(user, 13, 0, 0, output + 8));
+            Assert.Equal(0u, p.Memory.Read32(output + 8));
+            Assert.Equal(0xFFFFFFFFu, p.Memory.Read32(output + 12));
+            Assert.Equal(1u, M(user, 14, 0, 0, 42, 0));
+            Assert.Equal(2u, M(user, 17, 42, 0, account.AppId));
+            Assert.Equal(GuestStop.HostError, Method(user, slots, out _).Stop);
+        }
+
+        [Theory]
+        [InlineData("SteamUser999")]
+        [InlineData("SteamUser019suffix")]
+        [InlineData("SteamClient999")]
+        [InlineData("SteamUGC999")]
+        public void UnknownVersionsReturnNullInsteadOfFabricatedObjects(string version)
+        {
+            Assert.Equal(0u, Api("SteamInternal_CreateInterface", Str(version)));
+            Assert.Equal(0u, M(Api("SteamClient"), 5, 1, 1, Str(version)));
+        }
+
         [Fact]
         public void InitSafeThenInterfacesByVersionAnswerWithTheAccount()
         {
@@ -277,7 +313,7 @@ namespace Nativra.X86.Tests
             var id = k.Heap.Alloc(8);
             Assert.Equal(id, M(user, 2, id));                           // GetSteamID: hidden result pointer
             Assert.Equal(account.SteamId, p.Memory.Read64(id));
-            Assert.Equal(1u, M(user, 1));                                // BLoggedOn
+            Assert.Equal(0u, M(user, 1));                                // BLoggedOn: offline
             Assert.Equal(562260u, M(utils, 9));                          // GetAppID
             Assert.Equal("Ada", p.Memory.ReadAnsi(M(friends, 0)));       // GetPersonaName
 
@@ -384,7 +420,7 @@ namespace Nativra.X86.Tests
             Assert.Contains("slot 7", result.ToString());
 
             var video = Api("SteamVideo");                 // an interface not served at all
-            Assert.Equal(GuestStop.HostError, Method(video, 0, out _).Stop);
+            Assert.Equal(0u, video);
         }
     }
 }

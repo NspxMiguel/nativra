@@ -149,6 +149,7 @@
     <Compile Include="Native\X86Steam.cs" />
     <Compile Include="Native\SteamBridge.cs" />
     <Compile Include="Native\SteamClassic.cs" />
+    <Compile Include="Native\SteamInterfaceContracts.cs" />
     <Compile Include="Native\SuspendWatch.cs" />
     <Compile Include="Native\ThreadTls.cs" />
     <Compile Include="Native\SurfaceBridge.cs" />

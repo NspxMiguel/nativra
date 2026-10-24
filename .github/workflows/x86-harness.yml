@@ -11,6 +11,8 @@ on:
   push:
     paths:
       - "x86/**"
+      - "uwp/Kiosk/Native/Steam*.cs"
+      - "native/tests/steam-abi/**"
       - "uwp/Kiosk/Native/RegistryBridge.cs"
       - "uwp/Kiosk/Native/HidBridge.cs"
       - "uwp/Kiosk/Native/ControllerConfiguration.cs"
@@ -21,6 +23,8 @@ on:
   pull_request:
     paths:
       - "x86/**"
+      - "uwp/Kiosk/Native/Steam*.cs"
+      - "native/tests/steam-abi/**"
       - "uwp/Kiosk/Native/RegistryBridge.cs"
       - "uwp/Kiosk/Native/HidBridge.cs"
       - "uwp/Kiosk/Native/ControllerConfiguration.cs"
@@ -69,6 +73,14 @@ jobs:
           name: guest-programs
           path: x86/harness/guests/bin/*.exe
           retention-days: 7
+
+      - name: Build and run the native Steam ABI caller
+        shell: cmd
+        run: |
+          call native\tests\steam-abi\build.cmd
+          if errorlevel 1 exit /b %errorlevel%
+          set "NATIVRA_STEAM_ABI_FIXTURE=%CD%\native\tests\steam-abi\bin\steam-abi.dll"
+          dotnet test x86/Nativra.X86.Tests -c Release --filter FullyQualifiedName~SteamInterfaceContractTests
 
       - name: Restore
         run: dotnet restore x86/Nativra.X86.sln

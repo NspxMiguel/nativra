@@ -64,3 +64,5 @@ artifacts/
 # Agent worktrees (local only)
 .claude/
 .install/
+
+/native/tests/steam-abi/bin/

@@ -1,5 +1,36 @@
 # Measured compatibility blockers
 
+## WP04 offline Steam ABI hardening (2026-10-24)
+
+Status: **awaiting hardware evidence**. Dokimon's build-535 fault is a
+community report, not a reproduced bridge call. The supplied evidence identifies
+`Steamworks_x64.dll+0x2EDD`, caller `Dokimon.exe+0x25FA20`, and an invalid read
+at all-ones. It contains no requested export, interface version, slot,
+register/stack snapshot or disassembly. Those fields remain unknown; assigning
+this crash to SteamUser016 or any other slot would be inference. No Xbox was
+accessed for this work.
+
+Independent shared defects are reproducible without a game: versioned x64
+factories previously returned zero-filled buffers with null vtables, and client
+getters ignored version strings. The branch replaces these with exact legacy
+version dispatch, rejects unknown exports and versions, removes padded newer
+client slots, and types the 22 SteamUser016 slots. Flat SteamID returns a scalar;
+classic SteamID writes an eight-byte hidden result. Offline user calls return
+explicit auth failures and initialize output counts. Callback payloads remain
+valid until explicit release; shutdown cancels pending delivery without freeing
+cached interface pointers. x86 user versions 016–019 retain their version-specific
+lengths and thiscall cleanup; unsupported factories return null.
+
+These are contract corrections, **not an identified Dokimon crash fix**. Other
+legacy interface families still contain generic shims and require their own
+trace-driven audit. Local contracts and the synthetic Windows native caller
+are described in [the ABI fixture](../native/tests/steam-abi/README.md).
+The complete WP04 diagnosis gate remains open: import an authorized sanitized
+call trace or disassembly for the extension fault, identify its actual contract,
+then reproduce that contract in a fixture before attributing a fix. Future
+hardware gates remain Dokimon's next observed stage and a Cuphead regression run,
+including physical input/audio/save evidence; no compatibility rating changes.
+
 ## October 10 layer fixes and bounded console verification
 
 The broad build 502 results below remain historical evidence. Build 511 later

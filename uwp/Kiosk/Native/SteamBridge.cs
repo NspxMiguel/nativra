@@ -15,10 +15,9 @@ namespace Kiosk.Native
     /// up by name through our loader — so the answers can come from here,
     /// backed by the session the application already holds.
     ///
-    /// Anything not implemented answers zero (false, null, empty), which is
-    /// what the SDK itself returns when a feature is unavailable. Nothing is
-    /// ever forwarded to the real DLL once the bridge is active: the real
-    /// functions would dereference our stand-in interface pointers.
+    /// Unknown exports are rejected: their return and output ABI is unknown.
+    /// Versioned factories return only implemented classic objects, never a
+    /// readable buffer masquerading as a C++ interface.
     /// </summary>
     internal static class SteamBridge
     {
@@ -48,14 +47,11 @@ namespace Kiosk.Native
         private static readonly Dictionary<string, IntPtr> answers = new Dictionary<string, IntPtr>();
         private static readonly List<Delegate> keep = new List<Delegate>();
         private static readonly Dictionary<string, IntPtr> strings = new Dictionary<string, IntPtr>();
-        private static readonly Dictionary<string, IntPtr> interfaces = new Dictionary<string, IntPtr>();
         private static readonly Queue<KeyValuePair<int, byte[]>> pending = new Queue<KeyValuePair<int, byte[]>>();
         private static readonly Dictionary<string, long> achieved = new Dictionary<string, long>();
         private static readonly Dictionary<string, int> intStats = new Dictionary<string, int>();
         private static readonly Dictionary<string, float> floatStats = new Dictionary<string, float>();
         private static IntPtr delivered;
-        private static IntPtr zero;
-        private static IntPtr empty;
 
         private const int UserStatsReceived = 1101;
         private const int UserStatsStored = 1102;
@@ -96,22 +92,26 @@ namespace Kiosk.Native
             return Encoding.UTF8.GetString(bytes);
         }
 
-        /// <summary>A distinct, readable stand-in for an interface object.</summary>
+        /// <summary>Only exact implemented versions may become C++ objects.</summary>
         private static IntPtr Interface(string name)
         {
-            lock (interfaces)
-            {
-                if (interfaces.TryGetValue(name, out var kept)) return kept;
-                var memory = Marshal.AllocHGlobal(64);
-                for (var i = 0; i < 64; i += 8) Marshal.WriteInt64(memory, i, 0);
-                interfaces[name] = memory;
-                return memory;
-            }
+            Count("interface:" + name);
+            return SteamClassic.Interface(name);
         }
 
         private static void Post(int id, byte[] payload)
         {
             lock (pending) pending.Enqueue(new KeyValuePair<int, byte[]>(id, payload));
+        }
+
+        internal static void CancelCallbacks()
+        {
+            lock (pending)
+            {
+                pending.Clear();
+                if (delivered != IntPtr.Zero) Marshal.FreeHGlobal(delivered);
+                delivered = IntPtr.Zero;
+            }
         }
 
         internal static byte[] StatsReceived()
@@ -152,6 +152,12 @@ namespace Kiosk.Native
             answers[name] = Marshal.GetFunctionPointerForDelegate(counted);
         }
 
+        private static void KeepAnswer(string name, Delegate function)
+        {
+            keep.Add(function);
+            answers[name] = Marshal.GetFunctionPointerForDelegate(function);
+        }
+
         private static IntPtr True => new IntPtr(1);
 
         /// <summary>The address to hand the game for one steam_api64 export.</summary>
@@ -189,35 +195,14 @@ namespace Kiosk.Native
                     return classic;
                 }
 
-                // Interface getters must never answer null: Steamworks.NET
-                // refuses to initialise when any of them does.
-                if (export.StartsWith("SteamAPI_ISteamClient_GetISteam", StringComparison.Ordinal))
-                {
-                    var name = export.Substring("SteamAPI_ISteamClient_Get".Length);
-                    Answer(export, (a, b, c, d) => Interface(name));
-                    return answers[export];
-                }
-
-                // Names and text come back as an empty string rather than
-                // null, which managed wrappers turn into exceptions.
-                if (export.Contains("Name") || export.Contains("Language") ||
-                    export.Contains("Country") || export.Contains("RichPresence") ||
-                    export.Contains("String") || export.Contains("Path"))
-                {
-                    Answer(export, (a, b, c, d) => empty);
-                    return answers[export];
-                }
-
-                Answer(export, (a, b, c, d) => IntPtr.Zero);
-                return answers[export];
+                // Unknown signatures cannot safely be replaced by a generic return shim.
+                Count("unsupported-export:" + export);
+                return IntPtr.Zero;
             }
         }
 
         private static void Build()
         {
-            zero = Marshal.AllocHGlobal(16);
-            for (var i = 0; i < 16; i += 8) Marshal.WriteInt64(zero, i, 0);
-            empty = zero;
             delivered = IntPtr.Zero;
             Load();
 
@@ -229,36 +214,68 @@ namespace Kiosk.Native
             // SteamClient() is NOT answered here: the classic table (SteamClassic) owns it, because a
             // game using the legacy C++ wrapper (CSteamworks.dll) calls through the returned object's
             // vtable. The flat exports ignore that pointer, so nothing flat depends on it being empty.
-            Answer("SteamInternal_CreateInterface", (a, b, c, d) => Interface(Text(a)));
-            Answer("SteamInternal_FindOrCreateUserInterface", (a, b, c, d) => Interface(Text(b)));
+            KeepAnswer("SteamInternal_CreateInterface", new SteamInterfaceContracts.Factory(version => Interface(Text(version))));
+            KeepAnswer("SteamInternal_FindOrCreateUserInterface", new SteamInterfaceContracts.UserFactory((user, version) => Interface(Text(version))));
             Answer("SteamInternal_ContextInit", (a, b, c, d) => a);
             Answer("SteamAPI_ISteamClient_CreateSteamPipe", (a, b, c, d) => True);
             Answer("SteamAPI_ISteamClient_ConnectToGlobalUser", (a, b, c, d) => True);
+
+            foreach (var pair in new Dictionary<string, string>
+            {
+                { "User", "SteamUser016" }, { "Friends", "SteamFriends011" },
+                { "Apps", "STEAMAPPS_INTERFACE_VERSION005" },
+                { "UserStats", "STEAMUSERSTATS_INTERFACE_VERSION010" },
+                { "RemoteStorage", "STEAMREMOTESTORAGE_INTERFACE_VERSION006" }
+            })
+            {
+                var versionName = pair.Value;
+                KeepAnswer("SteamAPI_ISteamClient_GetISteam" + pair.Key,
+                    new SteamInterfaceContracts.ClientUserFactory((self, user, pipe, version) =>
+                        Text(version) == versionName ? Interface(versionName) : IntPtr.Zero));
+            }
+            KeepAnswer("SteamAPI_ISteamClient_GetISteamUtils",
+                new SteamInterfaceContracts.ClientUtilsFactory((self, pipe, version) =>
+                    Text(version) == "SteamUtils005" ? Interface("SteamUtils005") : IntPtr.Zero));
 
             // Callbacks, the way Steamworks.NET 20 collects them.
             Answer("SteamAPI_ManualDispatch_GetNextCallback", (pipe, message, c, d) =>
             {
                 if (message == IntPtr.Zero) return IntPtr.Zero;
-                KeyValuePair<int, byte[]> next;
                 lock (pending)
                 {
-                    if (pending.Count == 0) return IntPtr.Zero;
-                    next = pending.Dequeue();
+                    // A payload belongs to the caller until FreeLastCallback.
+                    // Never free it implicitly during another poll.
+                    Marshal.WriteInt32(message, 0, 0);
+                    Marshal.WriteInt32(message, 4, 0);
+                    Marshal.WriteIntPtr(message, 8, IntPtr.Zero);
+                    Marshal.WriteInt32(message, 16, 0);
+                    if (pending.Count == 0 || delivered != IntPtr.Zero) return IntPtr.Zero;
+                    var next = pending.Dequeue();
+                    delivered = Marshal.AllocHGlobal(Math.Max(next.Value.Length, 1));
+                    Marshal.Copy(next.Value, 0, delivered, next.Value.Length);
+                    Marshal.WriteInt32(message, 0, 1);
+                    Marshal.WriteInt32(message, 4, next.Key);
+                    Marshal.WriteIntPtr(message, 8, delivered);
+                    Marshal.WriteInt32(message, 16, next.Value.Length);
+                    return True;
                 }
-                if (delivered != IntPtr.Zero) Marshal.FreeHGlobal(delivered);
-                delivered = Marshal.AllocHGlobal(next.Value.Length);
-                Marshal.Copy(next.Value, 0, delivered, next.Value.Length);
-                // CallbackMsg_t: user, callback id, parameter, parameter size.
-                Marshal.WriteInt32(message, 0, 1);
-                Marshal.WriteInt32(message, 4, next.Key);
-                Marshal.WriteIntPtr(message, 8, delivered);
-                Marshal.WriteInt32(message, 16, next.Value.Length);
-                return True;
             });
 
+            Answer("SteamAPI_ManualDispatch_FreeLastCallback", (pipe, b, c, d) =>
+            {
+                lock (pending)
+                {
+                    if (delivered != IntPtr.Zero) Marshal.FreeHGlobal(delivered);
+                    delivered = IntPtr.Zero;
+                }
+                return IntPtr.Zero;
+            });
+            Answer("SteamAPI_ManualDispatch_Init", (a, b, c, d) => IntPtr.Zero);
+            Answer("SteamAPI_ManualDispatch_RunFrame", (a, b, c, d) => IntPtr.Zero);
+
             // Who is playing.
-            Answer("SteamAPI_ISteamUser_GetSteamID", (a, b, c, d) => new IntPtr((long)SteamId));
-            Answer("SteamAPI_ISteamUser_BLoggedOn", (a, b, c, d) => True);
+            KeepAnswer("SteamAPI_ISteamUser_GetSteamID", new SteamInterfaceContracts.ScalarSteamId(self => SteamId));
+            KeepAnswer("SteamAPI_ISteamUser_BLoggedOn", new SteamInterfaceContracts.Boolean(self => false));
             Answer("SteamAPI_ISteamUser_GetHSteamUser", (a, b, c, d) => True);
             Answer("SteamAPI_ISteamUser_GetPlayerSteamLevel", (a, b, c, d) => IntPtr.Zero);
             Answer("SteamAPI_ISteamFriends_GetPersonaName", (a, b, c, d) =>

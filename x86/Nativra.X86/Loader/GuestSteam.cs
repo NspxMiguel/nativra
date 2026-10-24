@@ -234,7 +234,7 @@ namespace Nativra.X86.Loader
             {
                 Count("steamclient.dll!CreateInterface");
                 var version = Read(c.Arg(0));
-                var supported = version.StartsWith("SteamClient", StringComparison.Ordinal);
+                var supported = version == "SteamClient017";
                 if (c.Arg(1) != 0) memory.Write32(c.Arg(1), supported ? 0u : 1u);
                 return supported ? Interface(version) : 0;
             });
@@ -342,6 +342,15 @@ namespace Nativra.X86.Loader
             return n < version.Length ? int.Parse(version.Substring(n), CultureInfo.InvariantCulture) : 0;
         }
 
+        private static readonly HashSet<string> supportedVersions = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "SteamClient017", "SteamUser016", "SteamUser017", "SteamUser018", "SteamUser019", "SteamFriends015", "SteamUtils009",
+            "STEAMAPPS_INTERFACE_VERSION008", "STEAMAPPTICKET_INTERFACE_VERSION001",
+            "STEAMUSERSTATS_INTERFACE_VERSION011", "STEAMREMOTESTORAGE_INTERFACE_VERSION014",
+            "STEAMSCREENSHOTS_INTERFACE_VERSION002", "STEAMSCREENSHOTS_INTERFACE_VERSION003",
+            "STEAMUGC_INTERFACE_VERSION007"
+        };
+
         /// <summary>The guest object for an interface version, built once.</summary>
         private uint Interface(string version)
         {
@@ -349,11 +358,13 @@ namespace Nativra.X86.Loader
             Versions.Add(version);
             kernel.Log?.Invoke("x86: steam interface " + version);
 
+            if (!supportedVersions.Contains(version)) return 0;
+
             Slot[] layout;
             Dictionary<string, Method> methods;
             string family;
             if (version.StartsWith("SteamClient", StringComparison.Ordinal)) { family = "ISteamClient"; layout = ClientLayout; methods = ClientMethods(); }
-            else if (version.StartsWith("SteamUser0", StringComparison.Ordinal)) { family = "ISteamUser"; layout = UserLayout; methods = UserMethods(); }
+            else if (version.StartsWith("SteamUser0", StringComparison.Ordinal)) { family = "ISteamUser"; layout = UserLayoutFor(VersionNumber(version)); methods = UserMethods(); }
             else if (version.StartsWith("SteamFriends", StringComparison.Ordinal)) { family = "ISteamFriends"; layout = FriendsLayout(VersionNumber(version)); methods = FriendsMethods(); }
             else if (version.StartsWith("SteamUtils", StringComparison.Ordinal)) { family = "ISteamUtils"; layout = UtilsLayout; methods = UtilsMethods(); }
             else if (version.StartsWith("STEAMAPPS_INTERFACE_VERSION", StringComparison.Ordinal)) { family = "ISteamApps"; layout = AppsLayout; methods = AppsMethods(); }
@@ -456,20 +467,37 @@ namespace Nativra.X86.Loader
             "RequestStoreAuthURL:1:Q", "BIsPhoneVerified:0", "BIsTwoFactorEnabled:0", "BIsPhoneIdentifying:0",
             "BIsPhoneRequiringVerification:0");
 
+        private void ClearUserCount(uint output)
+        {
+            if (output != 0) memory.Write32(output, 0);
+        }
+
+        private static Slot[] UserLayoutFor(int version)
+        {
+            var count = version == 16 ? 22 : version == 17 ? 24 : version == 18 ? 25 : 29;
+            var layout = new Slot[count];
+            Array.Copy(UserLayout, layout, count);
+            return layout;
+        }
+
         private Dictionary<string, Method> UserMethods() => new Dictionary<string, Method>
         {
             ["GetHSteamUser"] = c => HSteamUser,
-            ["BLoggedOn"] = c => 1,
+            ["BLoggedOn"] = c => 0,
             ["GetSteamID"] = c => { memory.Write64(c.Arg(0), account.SteamId); return c.Arg(0); },
             ["GetUserDataFolder"] = c =>
             {
                 WriteString(c.Arg(0), c.Arg(1), GuestKernel.GuestProfile + "\\AppData\\Local\\Steam\\userdata\\" + account.AppId);
                 return 1;
             },
-            ["GetAvailableVoice"] = c => 2,   // k_EVoiceResultNotRecording
-            ["GetVoice"] = c => 2,
-            ["DecompressVoice"] = c => 2,
-            ["UserHasLicenseForApp"] = c => c.Arg(2) == account.AppId ? 0u : 1u,   // HasLicense / DoesNotHaveLicense
+            ["GetAvailableVoice"] = c => { ClearUserCount(c.Arg(0)); ClearUserCount(c.Arg(1)); return 1; },
+            ["GetVoice"] = c => { ClearUserCount(c.Arg(3)); ClearUserCount(c.Arg(7)); return 1; },
+            ["DecompressVoice"] = c => { ClearUserCount(c.Arg(4)); return 1; },
+            ["GetAuthSessionTicket"] = c => { ClearUserCount(c.Arg(2)); return 0; },
+            ["GetEncryptedAppTicket"] = c => { ClearUserCount(c.Arg(2)); return 0; },
+            ["BeginAuthSession"] = c => 1, // InvalidTicket; there is no authenticated service.
+
+            ["UserHasLicenseForApp"] = c => 2, // NoAuth
             ["GetPlayerSteamLevel"] = c => 1,
         };
 

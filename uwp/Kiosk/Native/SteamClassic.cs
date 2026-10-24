@@ -38,16 +38,8 @@ namespace Kiosk.Native
     /// </summary>
     internal static class SteamClassic
     {
-        // One shape covers every vtable slot in every interface here: 'this'
-        // plus up to nine more IntPtr-sized arguments, which is as wide as
-        // the widest real method (ISteamUser::GetVoice takes nine). A real
-        // call that passes fewer arguments simply leaves the extra positions
-        // holding whatever was already in that register or stack slot; slots
-        // that ignore their arguments never look at them, so the extra width
-        // is harmless. Anything passed in a floating-point register (a bare
-        // float/double parameter, not a pointer to one) needs its own shape,
-        // since x64 puts those in XMM registers rather than the integer ones
-        // this delegate reads -- see WithFloat.
+        // Legacy interfaces outside SteamUser016 still use this x64-only shim.
+        // Do not reuse it for new versioned contracts or x86 thiscall methods.
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr Fn(IntPtr a0, IntPtr a1, IntPtr a2, IntPtr a3, IntPtr a4,
             IntPtr a5, IntPtr a6, IntPtr a7, IntPtr a8, IntPtr a9);
@@ -56,7 +48,7 @@ namespace Kiosk.Native
         private delegate IntPtr WithFloat(IntPtr self, IntPtr name, float value);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate void RunCallback(IntPtr self, IntPtr pvParam);
+        internal delegate void RunCallback(IntPtr self, IntPtr pvParam);
 
         private static readonly List<Delegate> keep = new List<Delegate>();
         private static readonly object gate = new object();
@@ -134,7 +126,7 @@ namespace Kiosk.Native
 
         // ---- object caches -------------------------------------------------
 
-        private static IntPtr userObj, friendsObj, utilsObj, appsObj, statsObj, storageObj, emptyObj, clientObj;
+        private static IntPtr userObj, friendsObj, utilsObj, appsObj, statsObj, storageObj, clientObj;
 
         /// <summary>
         /// Builds every object now. Traced slots are thunks in the loader's
@@ -143,7 +135,7 @@ namespace Kiosk.Native
         /// </summary>
         public static void Prebuild()
         {
-            User(); Friends(); Utils(); Apps(); UserStats(); RemoteStorage(); Client(); Empty();
+            User(); Friends(); Utils(); Apps(); UserStats(); RemoteStorage(); Client();
         }
 
         private static IntPtr User()
@@ -176,26 +168,25 @@ namespace Kiosk.Native
             lock (gate) return storageObj != IntPtr.Zero ? storageObj : (storageObj = BuildRemoteStorage());
         }
 
-        /// <summary>
-        /// A generously wide object (matchmaking, networking, screenshots,
-        /// HTTP, and the parts of ISteamClient012 nothing here implements)
-        /// that answers every slot with zero. Real interfaces top out well
-        /// under 80 virtual methods, so this is never short.
-        /// </summary>
-        private static IntPtr Empty()
-        {
-            lock (gate)
-            {
-                if (emptyObj != IntPtr.Zero) return emptyObj;
-                var slots = new IntPtr[80];
-                for (var i = 0; i < slots.Length; i++) slots[i] = stubZero;
-                return emptyObj = Table("SteamEmpty", slots);
-            }
-        }
-
         private static IntPtr Client()
         {
             lock (gate) return clientObj != IntPtr.Zero ? clientObj : (clientObj = BuildClient());
+        }
+
+        /// <summary>No prefix matching: different versions can have different slot layouts.</summary>
+        internal static IntPtr Interface(string version)
+        {
+            switch (version)
+            {
+                case "SteamClient012": return Client();
+                case "SteamUser016": return User();
+                case "SteamFriends011": return Friends();
+                case "SteamUtils005": return Utils();
+                case "STEAMAPPS_INTERFACE_VERSION005": return Apps();
+                case "STEAMUSERSTATS_INTERFACE_VERSION010": return UserStats();
+                case "STEAMREMOTESTORAGE_INTERFACE_VERSION006": return RemoteStorage();
+                default: return IntPtr.Zero;
+            }
         }
 
         // ---- SteamAPI_* flat exports classic games call directly -----------
@@ -208,12 +199,15 @@ namespace Kiosk.Native
         private static readonly Dictionary<string, IntPtr> accessors = new Dictionary<string, IntPtr>(StringComparer.Ordinal);
 
         /// <summary>A function taking nothing and returning the object, kept once per name.</summary>
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate IntPtr GetObject();
+
         private static IntPtr Accessor(string export, Func<IntPtr> make)
         {
             lock (accessors)
             {
                 if (accessors.TryGetValue(export, out var known)) return known;
-                Fn call = (a0, a1, a2, a3, a4, a5, a6, a7, a8, a9) => make();
+                GetObject call = () => make();
                 var pointer = Keep(call);
                 accessors[export] = pointer;
                 return pointer;
@@ -238,7 +232,7 @@ namespace Kiosk.Native
                 case "SteamNetworking":
                 case "SteamScreenshots":
                 case "SteamHTTP":
-                    return Accessor(export, Empty);
+                    return Accessor(export, () => IntPtr.Zero);
                 case "SteamClient":
                     return Accessor(export, Client);
 
@@ -248,6 +242,7 @@ namespace Kiosk.Native
                 case "SteamAPI_InitSafe":
                     return exportInit;
                 case "SteamAPI_Shutdown":
+                    return Accessor(export, () => { Shutdown(); return IntPtr.Zero; });
                 case "SteamAPI_RegisterCallResult":
                 case "SteamAPI_UnregisterCallResult":
                     return stubZero;
@@ -301,18 +296,41 @@ namespace Kiosk.Native
         private static void RegisterCallback(IntPtr callback, int iCallback)
         {
             if (callback == IntPtr.Zero) return;
-            var flags = Marshal.ReadByte(callback, CallbackFlagsOffset);
-            Marshal.WriteByte(callback, CallbackFlagsOffset, (byte)(flags | CallbackFlagRegistered));
-            Marshal.WriteInt32(callback, CallbackIdOffset, iCallback);
-            lock (registered) if (!registered.Contains(callback)) registered.Add(callback);
+            lock (registered)
+            {
+                var flags = Marshal.ReadByte(callback, CallbackFlagsOffset);
+                Marshal.WriteByte(callback, CallbackFlagsOffset, (byte)(flags | CallbackFlagRegistered));
+                Marshal.WriteInt32(callback, CallbackIdOffset, iCallback);
+                if (!registered.Contains(callback)) registered.Add(callback);
+            }
         }
 
         private static void UnregisterCallback(IntPtr callback)
         {
             if (callback == IntPtr.Zero) return;
-            var flags = Marshal.ReadByte(callback, CallbackFlagsOffset);
-            Marshal.WriteByte(callback, CallbackFlagsOffset, (byte)(flags & ~CallbackFlagRegistered));
-            lock (registered) registered.Remove(callback);
+            lock (registered)
+            {
+                var flags = Marshal.ReadByte(callback, CallbackFlagsOffset);
+                Marshal.WriteByte(callback, CallbackFlagsOffset, (byte)(flags & ~CallbackFlagRegistered));
+                registered.Remove(callback);
+            }
+        }
+
+        internal static void Shutdown()
+        {
+            // Keep objects, vtables and strings valid for cached guest pointers.
+            // Cancel delivery while callback objects still belong to the caller.
+            lock (registered)
+            {
+                foreach (var callback in registered)
+                {
+                    var flags = Marshal.ReadByte(callback, CallbackFlagsOffset);
+                    Marshal.WriteByte(callback, CallbackFlagsOffset, (byte)(flags & ~CallbackFlagRegistered));
+                }
+                registered.Clear();
+                lock (pending) pending.Clear();
+            }
+            SteamBridge.CancelCallbacks();
         }
 
         private static void Post(int callbackId, byte[] payload)
@@ -338,21 +356,25 @@ namespace Kiosk.Native
                 Marshal.Copy(message.Value, 0, buffer, message.Value.Length);
                 foreach (var callback in targets)
                 {
-                    int iCallback;
-                    try { iCallback = Marshal.ReadInt32(callback, CallbackIdOffset); }
-                    catch { continue; }
-                    if (iCallback != message.Key) continue;
-                    try
+                    lock (registered)
                     {
-                        var vtable = Marshal.ReadIntPtr(callback);
-                        var slot = Marshal.ReadIntPtr(vtable, RunSlotIndex * IntPtr.Size);
-                        var run = Marshal.GetDelegateForFunctionPointer<RunCallback>(slot);
-                        run(callback, buffer);
-                    }
-                    catch
-                    {
-                        // A misbehaving callback object must not take the rest
-                        // of the delivery, or the game itself, down with it.
+                        if (!registered.Contains(callback)) continue;
+                        int iCallback;
+                        try { iCallback = Marshal.ReadInt32(callback, CallbackIdOffset); }
+                        catch { continue; }
+                        if (iCallback != message.Key) continue;
+                        try
+                        {
+                            var vtable = Marshal.ReadIntPtr(callback);
+                            var slot = Marshal.ReadIntPtr(vtable, RunSlotIndex * IntPtr.Size);
+                            var run = Marshal.GetDelegateForFunctionPointer<RunCallback>(slot);
+                            run(callback, buffer);
+                        }
+                        catch
+                        {
+                            // A misbehaving callback object must not take the rest
+                            // of the delivery, or the game itself, down with it.
+                        }
                     }
                 }
                 Marshal.FreeHGlobal(buffer);
@@ -374,48 +396,8 @@ namespace Kiosk.Native
 
         private static IntPtr BuildUser()
         {
-            Fn getSteamId = (self, result, a2, a3, a4, a5, a6, a7, a8, a9) =>
-            {
-                if (result != IntPtr.Zero) Marshal.WriteInt64(result, 0, (long)SteamBridge.SteamId);
-                return result;
-            };
-            Fn getUserDataFolder = (self, buffer, capacity, a3, a4, a5, a6, a7, a8, a9) =>
-            {
-                try
-                {
-                    var root = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
-                    var path = System.IO.Path.Combine(root, "profile", "steam-userdata", SteamBridge.AppId.ToString());
-                    System.IO.Directory.CreateDirectory(path);
-                    WriteCString(buffer, (int)capacity.ToInt64(), path);
-                    return True;
-                }
-                catch { return Zero; }
-            };
-
-            return Table("ISteamUser016",
-                /* 0  GetHSteamUser              */ stubTrue,
-                /* 1  BLoggedOn                   */ stubTrue,
-                /* 2  GetSteamID                  */ Keep(getSteamId),
-                /* 3  InitiateGameConnection      */ stubZero,
-                /* 4  TerminateGameConnection     */ stubZero,
-                /* 5  TrackAppUsageEvent          */ stubZero,
-                /* 6  GetUserDataFolder           */ Keep(getUserDataFolder),
-                /* 7  StartVoiceRecording         */ stubZero,
-                /* 8  StopVoiceRecording          */ stubZero,
-                /* 9  GetAvailableVoice           */ Stub(new IntPtr(1)), // k_EVoiceResultNotInitialized
-                /* 10 GetVoice                    */ Stub(new IntPtr(1)),
-                /* 11 DecompressVoice             */ Stub(new IntPtr(1)),
-                /* 12 GetVoiceOptimalSampleRate   */ stubZero,
-                /* 13 GetAuthSessionTicket        */ stubZero,
-                /* 14 BeginAuthSession            */ stubZero,
-                /* 15 EndAuthSession              */ stubZero,
-                /* 16 CancelAuthTicket            */ stubZero,
-                /* 17 UserHasLicenseForApp        */ stubZero,
-                /* 18 BIsBehindNAT                */ stubZero,
-                /* 19 AdvertiseGame               */ stubZero,
-                /* 20 RequestEncryptedAppTicket   */ stubZero,
-                /* 21 GetEncryptedAppTicket       */ stubZero
-            );
+            return Table("SteamUser016", SteamInterfaceContracts.User016(Keep,
+                () => SteamBridge.SteamId));
         }
 
         // ---- ISteamFriends011 -------------------------------------------------
@@ -898,18 +880,24 @@ namespace Kiosk.Native
         // 26 slots. Not in LEGO Jurassic World's static import table (it calls
         // SteamUser()/SteamFriends()/... directly), built for completeness and
         // for any classic game that goes through SteamInternal_CreateInterface
-        // instead. The Get*() accessors ignore hSteamUser/hSteamPipe/pchVersion
-        // and hand back the same singleton objects the direct accessors do.
+        // instead. Get*() accessors validate the requested version and family;
+        // unsupported versions return null, without padding newer client slots.
 
         private static IntPtr BuildClient()
         {
-            Fn getUser = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => User();
-            Fn getFriends = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => Friends();
-            Fn getUtils = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => Utils();
-            Fn getApps = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => Apps();
-            Fn getUserStats = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => UserStats();
-            Fn getRemoteStorage = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => RemoteStorage();
-            Fn getEmpty = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => Empty();
+            Fn getUser = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
+                Text(version) == "SteamUser016" ? Interface("SteamUser016") : Zero;
+            Fn getFriends = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
+                Text(version) == "SteamFriends011" ? Interface("SteamFriends011") : Zero;
+            Fn getUtils = (self, pipe, version, a3, a4, a5, a6, a7, a8, a9) =>
+                Text(version) == "SteamUtils005" ? Utils() : Zero;
+            Fn getApps = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
+                Text(version) == "STEAMAPPS_INTERFACE_VERSION005" ? Interface("STEAMAPPS_INTERFACE_VERSION005") : Zero;
+            Fn getUserStats = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
+                Text(version) == "STEAMUSERSTATS_INTERFACE_VERSION010" ? Interface("STEAMUSERSTATS_INTERFACE_VERSION010") : Zero;
+            Fn getRemoteStorage = (self, user, pipe, version, a4, a5, a6, a7, a8, a9) =>
+                Text(version) == "STEAMREMOTESTORAGE_INTERFACE_VERSION006" ? Interface("STEAMREMOTESTORAGE_INTERFACE_VERSION006") : Zero;
+            Fn getEmpty = (self, a1, a2, a3, a4, a5, a6, a7, a8, a9) => Zero;
 
             return Table("SteamClient012",
                 /* 0  CreateSteamPipe               */ stubTrue,
@@ -937,14 +925,8 @@ namespace Kiosk.Native
                 /* 22 BShutdownIfAllPipesClosed     */ stubTrue,
                 /* 23 GetISteamHTTP                 */ Keep(getEmpty),
                 /* 24 GetISteamUnifiedMessages      */ Keep(getEmpty),
-                /* 25 GetISteamController           */ Keep(getEmpty),
-                // Later SDKs (ISteamClient017+) keep adding accessors (UGC, AppList, Music, HTMLSurface,
-                // Inventory, Video, ParentalSettings, callback hooks...). A wrapper compiled against one
-                // reads them all at start-up and gives up on a null, so every extra slot answers with the
-                // empty object; reading past the table used to hand back garbage (-1).
-                /* 26..39                          */ Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty),
-                Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty),
-                Keep(getEmpty), Keep(getEmpty), Keep(getEmpty), Keep(getEmpty)
+                /* 25 GetISteamController           */ Keep(getEmpty)
+
             );
         }
     }

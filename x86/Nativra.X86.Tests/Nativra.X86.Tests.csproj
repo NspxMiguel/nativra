@@ -25,6 +25,9 @@
     <Compile Include="../../uwp/Kiosk/Native/PadBridge.cs" Link="Host/PadBridge.cs" />
     <Compile Include="../../uwp/Kiosk/Native/ImportTracing.cs" Link="Host/ImportTracing.cs" />
     <Compile Include="../../uwp/Kiosk/Native/ProcessModules.cs" Link="Host/ProcessModules.cs" />
+    <Compile Include="../../uwp/Kiosk/Native/SteamInterfaceContracts.cs" Link="Host/SteamInterfaceContracts.cs" />
+    <Compile Include="../../uwp/Kiosk/Native/SteamBridge.cs" Link="Host/SteamBridge.cs" />
+    <Compile Include="../../uwp/Kiosk/Native/SteamClassic.cs" Link="Host/SteamClassic.cs" />
     <ProjectReference Include="..\Nativra.X86\Nativra.X86.csproj" />
   </ItemGroup>
 
